@@ -1,0 +1,327 @@
+-- Manufacturing ERP - Core Schema
+-- MySQL 8, InnoDB, utf8mb4
+-- Pass 1: Database Schema
+
+SET NAMES utf8mb4;
+SET FOREIGN_KEY_CHECKS = 0;
+
+-- ============================================================
+-- SYSTEM: Number series (custom prefix per document type, sequential)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS number_series (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    doc_type        VARCHAR(30)  NOT NULL UNIQUE,   -- e.g. 'ORDER', 'QUOTATION', 'PRODUCTION_BATCH'
+    prefix          VARCHAR(10)  NOT NULL,          -- e.g. 'ORD', 'QTN', 'PB'
+    next_number     INT UNSIGNED NOT NULL DEFAULT 1,
+    padding         TINYINT UNSIGNED NOT NULL DEFAULT 5, -- zero-padding width, e.g. ORD-00001
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- SYSTEM: Field-level audit log (old_value -> new_value per change)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS audit_log (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    table_name      VARCHAR(64)  NOT NULL,
+    record_id       BIGINT UNSIGNED NOT NULL,
+    action          ENUM('CREATE','UPDATE','DELETE','RESTORE') NOT NULL,
+    field_name      VARCHAR(64)  NULL,      -- NULL for CREATE/DELETE/RESTORE whole-row events
+    old_value       TEXT NULL,
+    new_value       TEXT NULL,
+    changed_by      BIGINT UNSIGNED NULL,   -- users.id, nullable for system actions
+    changed_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_audit_table_record (table_name, record_id),
+    INDEX idx_audit_changed_at (changed_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- USERS & AUTH
+-- ============================================================
+CREATE TABLE IF NOT EXISTS users (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    username        VARCHAR(50)  NOT NULL UNIQUE,
+    email           VARCHAR(120) NOT NULL UNIQUE,
+    password_hash   VARCHAR(255) NOT NULL,
+    full_name       VARCHAR(120) NOT NULL,
+    role            ENUM('admin','manager','staff','viewer') NOT NULL DEFAULT 'staff',
+    is_active       TINYINT(1)   NOT NULL DEFAULT 1,
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    INDEX idx_users_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- CUSTOMERS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS customers (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(30)  NOT NULL UNIQUE,
+    name            VARCHAR(150) NOT NULL,
+    contact_person  VARCHAR(120) NULL,
+    email           VARCHAR(120) NULL,
+    phone           VARCHAR(30)  NULL,
+    billing_address VARCHAR(255) NULL,
+    shipping_address VARCHAR(255) NULL,
+    city            VARCHAR(80)  NULL,
+    country         VARCHAR(80)  NULL,
+    tax_id          VARCHAR(50)  NULL,
+    credit_limit    DECIMAL(14,2) NOT NULL DEFAULT 0,
+    payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+    status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    notes           TEXT NULL,
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    INDEX idx_customers_deleted_at (deleted_at),
+    INDEX idx_customers_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- SUPPLIERS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS suppliers (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(30)  NOT NULL UNIQUE,
+    name            VARCHAR(150) NOT NULL,
+    contact_person  VARCHAR(120) NULL,
+    email           VARCHAR(120) NULL,
+    phone           VARCHAR(30)  NULL,
+    address         VARCHAR(255) NULL,
+    city            VARCHAR(80)  NULL,
+    country         VARCHAR(80)  NULL,
+    tax_id          VARCHAR(50)  NULL,
+    payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+    status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    INDEX idx_suppliers_deleted_at (deleted_at),
+    INDEX idx_suppliers_name (name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- RAW MATERIALS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS raw_materials (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(30)  NOT NULL UNIQUE,
+    name            VARCHAR(150) NOT NULL,
+    unit            VARCHAR(20)  NOT NULL,          -- kg, ltr, pcs, etc.
+    reorder_point   DECIMAL(14,4) NOT NULL DEFAULT 0,
+    default_supplier_id BIGINT UNSIGNED NULL,
+    unit_cost       DECIMAL(14,4) NOT NULL DEFAULT 0,
+    status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_rm_supplier FOREIGN KEY (default_supplier_id) REFERENCES suppliers(id),
+    INDEX idx_rm_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- PRODUCTS (finished goods AND intermediate sub-assemblies)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS products (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(30)  NOT NULL UNIQUE,
+    name            VARCHAR(150) NOT NULL,
+    unit            VARCHAR(20)  NOT NULL,
+    product_type    ENUM('finished_good','sub_assembly') NOT NULL DEFAULT 'finished_good',
+    selling_price   DECIMAL(14,2) NOT NULL DEFAULT 0,
+    status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    INDEX idx_products_deleted_at (deleted_at),
+    INDEX idx_products_type (product_type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- BOM (Bill of Materials) - MULTI-LEVEL
+-- A product's BOM line points to either a raw_material OR another
+-- product (a sub-assembly), enabling arbitrary assembly depth.
+-- Depth/cycle guard is enforced in application code (see bom_service).
+-- ============================================================
+CREATE TABLE IF NOT EXISTS bom_lines (
+    id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    parent_product_id   BIGINT UNSIGNED NOT NULL,        -- the product/sub-assembly being built
+    component_type       ENUM('raw_material','product') NOT NULL,
+    component_id          BIGINT UNSIGNED NOT NULL,        -- raw_materials.id or products.id depending on component_type
+    quantity              DECIMAL(14,4) NOT NULL,
+    unit                   VARCHAR(20) NOT NULL,
+    scrap_percent          DECIMAL(5,2) NOT NULL DEFAULT 0,
+    deleted_at             DATETIME NULL,
+    created_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by             BIGINT UNSIGNED NULL,
+    updated_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by             BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_bom_parent FOREIGN KEY (parent_product_id) REFERENCES products(id),
+    INDEX idx_bom_parent (parent_product_id),
+    INDEX idx_bom_component (component_type, component_id),
+    INDEX idx_bom_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- INVENTORY
+-- ============================================================
+CREATE TABLE IF NOT EXISTS finished_goods_inventory (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    product_id      BIGINT UNSIGNED NOT NULL UNIQUE,
+    quantity_on_hand DECIMAL(14,4) NOT NULL DEFAULT 0,
+    quantity_reserved DECIMAL(14,4) NOT NULL DEFAULT 0,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_fgi_product FOREIGN KEY (product_id) REFERENCES products(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS raw_material_inventory (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    raw_material_id BIGINT UNSIGNED NOT NULL UNIQUE,
+    quantity_on_hand DECIMAL(14,4) NOT NULL DEFAULT 0,
+    quantity_reserved DECIMAL(14,4) NOT NULL DEFAULT 0,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_rmi_material FOREIGN KEY (raw_material_id) REFERENCES raw_materials(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS stock_movements (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    item_type       ENUM('raw_material','product') NOT NULL,
+    item_id         BIGINT UNSIGNED NOT NULL,
+    movement_type   ENUM('receipt','issue','adjustment','production_in','production_out','return') NOT NULL,
+    quantity        DECIMAL(14,4) NOT NULL,           -- positive = in, negative = out
+    reference_type  VARCHAR(40) NULL,                 -- e.g. 'order', 'production_schedule'
+    reference_id    BIGINT UNSIGNED NULL,
+    notes           VARCHAR(255) NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    INDEX idx_stock_mov_item (item_type, item_id),
+    INDEX idx_stock_mov_reference (reference_type, reference_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- ORDERS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS orders (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    order_number    VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. ORD-00001)
+    customer_id     BIGINT UNSIGNED NOT NULL,
+    order_date      DATE NOT NULL,
+    requested_delivery_date DATE NULL,
+    confirmed_delivery_date DATE NULL,
+    status          ENUM('draft','confirmed','in_production','ready_to_ship','shipped','delivered','cancelled') NOT NULL DEFAULT 'draft',
+    total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
+    notes           TEXT NULL,
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_orders_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    INDEX idx_orders_status (status),
+    INDEX idx_orders_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS order_details (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    order_id        BIGINT UNSIGNED NOT NULL,
+    product_id      BIGINT UNSIGNED NOT NULL,
+    quantity        DECIMAL(14,4) NOT NULL,
+    unit_price      DECIMAL(14,2) NOT NULL,
+    line_total      DECIMAL(14,2) NOT NULL,
+    CONSTRAINT fk_od_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
+    CONSTRAINT fk_od_product FOREIGN KEY (product_id) REFERENCES products(id),
+    INDEX idx_od_order (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- QUOTATIONS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS quotations (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    quotation_number VARCHAR(30) NOT NULL UNIQUE,     -- generated via number_series (prefix e.g. QTN-00001)
+    customer_id     BIGINT UNSIGNED NOT NULL,
+    quotation_date  DATE NOT NULL,
+    valid_until     DATE NULL,
+    status          ENUM('draft','sent','accepted','rejected','expired','converted') NOT NULL DEFAULT 'draft',
+    total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
+    notes           TEXT NULL,
+    converted_order_id BIGINT UNSIGNED NULL,
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_quotations_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_quotations_order FOREIGN KEY (converted_order_id) REFERENCES orders(id),
+    INDEX idx_quotations_status (status),
+    INDEX idx_quotations_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS quotation_details (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    quotation_id    BIGINT UNSIGNED NOT NULL,
+    product_id      BIGINT UNSIGNED NOT NULL,
+    quantity        DECIMAL(14,4) NOT NULL,
+    unit_price      DECIMAL(14,2) NOT NULL,
+    line_total      DECIMAL(14,2) NOT NULL,
+    CONSTRAINT fk_qd_quotation FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE CASCADE,
+    CONSTRAINT fk_qd_product FOREIGN KEY (product_id) REFERENCES products(id),
+    INDEX idx_qd_quotation (quotation_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- PRODUCTION SCHEDULING
+-- ============================================================
+CREATE TABLE IF NOT EXISTS production_schedules (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    batch_number    VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. PB-00001)
+    product_id      BIGINT UNSIGNED NOT NULL,
+    order_id        BIGINT UNSIGNED NULL,             -- nullable: batch may be for stock, not a specific order
+    planned_quantity DECIMAL(14,4) NOT NULL,
+    produced_quantity DECIMAL(14,4) NOT NULL DEFAULT 0,
+    scheduled_start DATE NOT NULL,
+    scheduled_end   DATE NOT NULL,
+    actual_start    DATETIME NULL,
+    actual_end      DATETIME NULL,
+    status          ENUM('planned','in_progress','completed','cancelled') NOT NULL DEFAULT 'planned',
+    notes           TEXT NULL,
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_ps_product FOREIGN KEY (product_id) REFERENCES products(id),
+    CONSTRAINT fk_ps_order FOREIGN KEY (order_id) REFERENCES orders(id),
+    INDEX idx_ps_status (status),
+    INDEX idx_ps_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- SETTINGS
+-- ============================================================
+CREATE TABLE IF NOT EXISTS settings (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    setting_key     VARCHAR(80) NOT NULL UNIQUE,
+    setting_value   TEXT NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- Seed number series
+-- ============================================================
+INSERT IGNORE INTO number_series (doc_type, prefix, next_number, padding) VALUES
+    ('ORDER', 'ORD', 1, 5),
+    ('QUOTATION', 'QTN', 1, 5),
+    ('PRODUCTION_BATCH', 'PB', 1, 5);
+
+SET FOREIGN_KEY_CHECKS = 1;
