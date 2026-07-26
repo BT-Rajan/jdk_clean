@@ -317,7 +317,24 @@ CREATE TABLE IF NOT EXISTS settings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
--- Seed number series
+-- AUTH: Revocable refresh tokens
+-- Access tokens are short-lived and stateless (JWT only).
+-- Refresh tokens are tracked here so logout/compromise can revoke them.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    jti             CHAR(36) NOT NULL UNIQUE,        -- token identifier (UUID), not the token itself
+    user_id         BIGINT UNSIGNED NOT NULL,
+    revoked         TINYINT(1) NOT NULL DEFAULT 0,
+    expires_at      DATETIME NOT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_refresh_user FOREIGN KEY (user_id) REFERENCES users(id),
+    INDEX idx_refresh_user (user_id),
+    INDEX idx_refresh_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- SEED
 -- ============================================================
 INSERT IGNORE INTO number_series (doc_type, prefix, next_number, padding) VALUES
     ('ORDER', 'ORD', 1, 5),
