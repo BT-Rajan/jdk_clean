@@ -45,7 +45,7 @@ class OrderUpdate(BaseModel):
     requested_delivery_date: date | None = None
     confirmed_delivery_date: date | None = None
     notes: str | None = None
-    lines: list[OrderLineIn] | None = None
+    lines: list[OrderLineIn] | None = Field(default=None, min_length=1)
 
 
 class OrderStatusUpdate(BaseModel):

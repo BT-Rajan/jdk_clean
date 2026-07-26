@@ -12,6 +12,8 @@ _INVENTORY_MODEL = {
 
 
 def _get_or_create_inventory_row(db: Session, item_type: str, item_id: int, for_update: bool = False):
+    if item_type not in _INVENTORY_MODEL:
+        raise ValidationAppError("item_type must be 'product' or 'raw_material'.")
     inv_model, fk_field, item_model = _INVENTORY_MODEL[item_type]
 
     item = db.query(item_model).filter(item_model.id == item_id, item_model.deleted_at.is_(None)).first()

@@ -172,7 +172,10 @@ def add_bom_line(db: Session, parent_product_id: int, line: dict, user_id: int |
     row = BomLine(parent_product_id=parent_product_id, created_by=user_id, **line)
     db.add(row)
     db.flush()
-    audit_service.log_create(db, TABLE_NAME, row.id, user_id)
+    # Keyed by parent_product_id (not row.id) so this shows up in the
+    # product's BOM history alongside replace_bom's entries -- history is
+    # queried per-product, not per-line.
+    audit_service.log_create(db, TABLE_NAME, parent_product_id, user_id)
     db.commit()
     _resolve_component_labels(db, [row])
     return row
@@ -187,7 +190,9 @@ def delete_bom_line(db: Session, parent_product_id: int, line_id: int, user_id: 
     if row is None:
         raise NotFoundError("BOM line")
     row.deleted_at = datetime.now(timezone.utc)
-    audit_service.log_delete(db, TABLE_NAME, line_id, user_id)
+    # Keyed by parent_product_id, matching add_bom_line/replace_bom -- see
+    # note above.
+    audit_service.log_delete(db, TABLE_NAME, parent_product_id, user_id)
     db.commit()
 
 

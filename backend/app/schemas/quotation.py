@@ -44,11 +44,14 @@ class QuotationUpdate(BaseModel):
     quotation_date: date | None = None
     valid_until: date | None = None
     notes: str | None = None
-    lines: list[QuotationLineIn] | None = None
+    lines: list[QuotationLineIn] | None = Field(default=None, min_length=1)
 
 
 class QuotationStatusUpdate(BaseModel):
-    status: str = Field(pattern="^(sent|accepted|rejected|expired|converted)$")
+    """'converted' is deliberately excluded: it's only ever set by
+    create_order_from_quotation, which also links converted_order_id."""
+
+    status: str = Field(pattern="^(sent|accepted|rejected|expired)$")
 
 
 class QuotationOut(BaseModel):

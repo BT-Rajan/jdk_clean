@@ -154,6 +154,11 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
 
 
 def change_status(db: Session, quotation_id: int, new_status: str, user_id: int | None = None) -> Quotation:
+    if new_status == "converted":
+        raise ConflictError(
+            "Quotations become 'converted' automatically when converted to an order "
+            "(POST /api/orders/from-quotation/{quotation_id}); it cannot be set directly."
+        )
     quotation = get_quotation(db, quotation_id)
     allowed = ALLOWED_TRANSITIONS.get(quotation.status, set())
     if new_status not in allowed:
@@ -173,6 +178,10 @@ def change_status(db: Session, quotation_id: int, new_status: str, user_id: int 
 
 def delete_quotation(db: Session, quotation_id: int, user_id: int | None = None) -> None:
     quotation = get_quotation(db, quotation_id)
+    if quotation.status == "converted":
+        raise ConflictError(
+            "This quotation has been converted to an order and cannot be deleted."
+        )
     quotation.deleted_at = datetime.now(timezone.utc)
     audit_service.log_delete(db, TABLE_NAME, quotation_id, user_id)
     db.commit()
