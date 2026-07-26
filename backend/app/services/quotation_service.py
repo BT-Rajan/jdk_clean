@@ -1,0 +1,186 @@
+from datetime import datetime, timezone
+from typing import Any
+
+from sqlalchemy.orm import Session, joinedload
+
+from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
+from app.models.customer import Customer
+from app.models.product import Product
+from app.models.quotation import ALLOWED_TRANSITIONS, Quotation, QuotationDetail
+from app.services import audit_service, number_series_service
+
+TABLE_NAME = "quotations"
+
+
+def _price_lines(db: Session, lines: list[dict]) -> list[dict]:
+    """Validate referenced products exist and compute each line's total."""
+    priced: list[dict] = []
+    for line in lines:
+        product = (
+            db.query(Product)
+            .filter(Product.id == line["product_id"], Product.deleted_at.is_(None))
+            .first()
+        )
+        if product is None:
+            raise ValidationAppError(f"Product {line['product_id']} not found.")
+        line_total = round(float(line["quantity"]) * float(line["unit_price"]), 2)
+        priced.append({**line, "line_total": line_total})
+    return priced
+
+
+def _base_query(db: Session, include_deleted: bool = False):
+    query = db.query(Quotation).options(
+        joinedload(Quotation.customer),
+        joinedload(Quotation.lines).joinedload(QuotationDetail.product),
+    )
+    if not include_deleted:
+        query = query.filter(Quotation.deleted_at.is_(None))
+    return query
+
+
+def get_quotation(db: Session, quotation_id: int, include_deleted: bool = False) -> Quotation:
+    obj = _base_query(db, include_deleted).filter(Quotation.id == quotation_id).first()
+    if obj is None:
+        raise NotFoundError("Quotation")
+    return obj
+
+
+def list_quotations(
+    db: Session,
+    page: int = 1,
+    page_size: int = 25,
+    search: str | None = None,
+    status: str | None = None,
+    customer_id: int | None = None,
+) -> dict:
+    query = _base_query(db)
+
+    if status:
+        query = query.filter(Quotation.status == status)
+    if customer_id:
+        query = query.filter(Quotation.customer_id == customer_id)
+    if search:
+        like = f"%{search}%"
+        query = query.join(Customer).filter(
+            (Quotation.quotation_number.ilike(like)) | (Customer.name.ilike(like))
+        )
+
+    query = query.order_by(Quotation.id.desc())
+
+    total = query.count()
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 200)
+    items = query.offset((page - 1) * page_size).limit(page_size).all()
+
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size if page_size else 0,
+    }
+
+
+def create_quotation(db: Session, data: dict, user_id: int | None = None) -> Quotation:
+    customer = (
+        db.query(Customer)
+        .filter(Customer.id == data["customer_id"], Customer.deleted_at.is_(None))
+        .first()
+    )
+    if customer is None:
+        raise ValidationAppError(f"Customer {data['customer_id']} not found.")
+
+    lines = _price_lines(db, [dict(line) for line in data.pop("lines")])
+    total_amount = round(sum(line["line_total"] for line in lines), 2)
+
+    quotation_number = number_series_service.next_number(db, "QUOTATION")
+
+    quotation = Quotation(
+        quotation_number=quotation_number,
+        total_amount=total_amount,
+        created_by=user_id,
+        **data,
+    )
+    quotation.lines = [QuotationDetail(**line) for line in lines]
+
+    db.add(quotation)
+    db.flush()
+    audit_service.log_create(db, TABLE_NAME, quotation.id, user_id)
+    db.commit()
+    db.refresh(quotation)
+    return get_quotation(db, quotation.id)
+
+
+def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | None = None) -> Quotation:
+    quotation = get_quotation(db, quotation_id)
+    if quotation.status != "draft":
+        raise ConflictError("Only draft quotations can be edited.")
+
+    changes: dict[str, tuple[Any, Any]] = {}
+
+    if "customer_id" in data and data["customer_id"] is not None:
+        customer = (
+            db.query(Customer)
+            .filter(Customer.id == data["customer_id"], Customer.deleted_at.is_(None))
+            .first()
+        )
+        if customer is None:
+            raise ValidationAppError(f"Customer {data['customer_id']} not found.")
+
+    lines = data.pop("lines", None)
+    # customer_id is required on the model; a None here means "not supplied"
+    # rather than "clear it", so drop it if absent/blank.
+    if data.get("customer_id") is None:
+        data.pop("customer_id", None)
+
+    for field, new_value in data.items():
+        old_value = getattr(quotation, field)
+        if old_value != new_value:
+            changes[field] = (old_value, new_value)
+            setattr(quotation, field, new_value)
+
+    if lines is not None:
+        priced = _price_lines(db, [dict(line) for line in lines])
+        quotation.lines.clear()
+        db.flush()
+        quotation.lines = [QuotationDetail(**line) for line in priced]
+        quotation.total_amount = round(sum(line["line_total"] for line in priced), 2)
+        changes["lines"] = ("(previous lines)", "(updated lines)")
+
+    quotation.updated_by = user_id
+    audit_service.log_update(db, TABLE_NAME, quotation_id, changes, user_id)
+    db.commit()
+    return get_quotation(db, quotation_id)
+
+
+def change_status(db: Session, quotation_id: int, new_status: str, user_id: int | None = None) -> Quotation:
+    quotation = get_quotation(db, quotation_id)
+    allowed = ALLOWED_TRANSITIONS.get(quotation.status, set())
+    if new_status not in allowed:
+        raise ConflictError(
+            f"Cannot move quotation from '{quotation.status}' to '{new_status}'."
+        )
+
+    old_status = quotation.status
+    quotation.status = new_status
+    quotation.updated_by = user_id
+    audit_service.log_update(
+        db, TABLE_NAME, quotation_id, {"status": (old_status, new_status)}, user_id
+    )
+    db.commit()
+    return get_quotation(db, quotation_id)
+
+
+def delete_quotation(db: Session, quotation_id: int, user_id: int | None = None) -> None:
+    quotation = get_quotation(db, quotation_id)
+    quotation.deleted_at = datetime.now(timezone.utc)
+    audit_service.log_delete(db, TABLE_NAME, quotation_id, user_id)
+    db.commit()
+
+
+def restore_quotation(db: Session, quotation_id: int, user_id: int | None = None) -> Quotation:
+    quotation = get_quotation(db, quotation_id, include_deleted=True)
+    quotation.deleted_at = None
+    audit_service.log_restore(db, TABLE_NAME, quotation_id, user_id)
+    db.commit()
+    return get_quotation(db, quotation_id)

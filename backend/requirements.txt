@@ -8,5 +8,6 @@ pydantic_core==2.46.4
 PyMySQL==1.2.0
 python-jose==3.5.0
 python-multipart==0.0.32
+reportlab==4.4.10
 SQLAlchemy==2.0.51
 uvicorn==0.51.0
