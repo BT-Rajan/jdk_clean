@@ -1,4 +1,4 @@
-from fastapi import Depends
+from fastapi import Depends, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
@@ -8,6 +8,22 @@ from app.core.security import decode_token
 from app.models.user import User
 
 bearer_scheme = HTTPBearer(auto_error=False)
+
+
+class ListParams:
+    def __init__(
+        self,
+        page: int = Query(1, ge=1),
+        page_size: int = Query(25, ge=1, le=200),
+        search: str | None = Query(None),
+        sort: str | None = Query(None),
+        status: str | None = Query(None),
+    ):
+        self.page = page
+        self.page_size = page_size
+        self.search = search
+        self.sort = sort
+        self.filters = {"status": status} if status else {}
 
 
 def get_current_user(
