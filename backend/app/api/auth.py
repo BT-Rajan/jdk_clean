@@ -1,5 +1,4 @@
 from fastapi import APIRouter, Depends
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -10,12 +9,11 @@ from app.schemas.auth import (
     LoginRequest,
     RefreshRequest,
     TokenResponse,
-    UserOut,
 )
+from app.schemas.user import UserOut
 from app.services import auth_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
-bearer_scheme = HTTPBearer()
 
 
 @router.post("/login", response_model=TokenResponse)

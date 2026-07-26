@@ -86,9 +86,6 @@ def generate_quotation_pdf(quotation, company_settings: dict | None = None) -> b
     )
 
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle(
-        "DocTitle", parent=styles["Heading1"], fontSize=16, spaceAfter=2
-    )
     small_muted = ParagraphStyle(
         "SmallMuted", parent=styles["Normal"], fontSize=9, textColor=colors.grey
     )

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
@@ -19,14 +19,3 @@ class RefreshRequest(BaseModel):
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str = Field(min_length=8)
-
-
-class UserOut(BaseModel):
-    id: int
-    username: str
-    email: EmailStr
-    full_name: str
-    role: str
-    is_active: bool
-
-    model_config = {"from_attributes": True}
