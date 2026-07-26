@@ -95,6 +95,42 @@ def adjust_stock(
     return get_stock(db, item_type, item_id)
 
 
+def reserve_stock(db: Session, item_type: str, item_id: int, quantity: float) -> dict:
+    """Increases quantity_reserved without touching on-hand stock.
+
+    Used when an order is confirmed: the stock is earmarked for that order
+    even if it hasn't shipped (or even been produced) yet. Reservations are
+    allowed to exceed on-hand quantity -- a shortfall here is exactly the
+    signal the future MRP/feasibility engine will act on, not something to
+    silently block at this layer.
+    """
+    if item_type not in _INVENTORY_MODEL:
+        raise ValidationAppError("item_type must be 'product' or 'raw_material'.")
+    if quantity <= 0:
+        raise ValidationAppError("Reservation quantity must be positive.")
+
+    row = _get_or_create_inventory_row(db, item_type, item_id, for_update=True)
+    row.quantity_reserved = float(row.quantity_reserved) + quantity
+    db.commit()
+    return get_stock(db, item_type, item_id)
+
+
+def release_reservation(db: Session, item_type: str, item_id: int, quantity: float) -> dict:
+    """Decreases quantity_reserved (e.g. order cancelled, or shipped and no
+    longer just "reserved"). Clamps at zero rather than going negative in
+    case of any prior drift.
+    """
+    if item_type not in _INVENTORY_MODEL:
+        raise ValidationAppError("item_type must be 'product' or 'raw_material'.")
+    if quantity <= 0:
+        raise ValidationAppError("Release quantity must be positive.")
+
+    row = _get_or_create_inventory_row(db, item_type, item_id, for_update=True)
+    row.quantity_reserved = max(0.0, float(row.quantity_reserved) - quantity)
+    db.commit()
+    return get_stock(db, item_type, item_id)
+
+
 def get_low_stock(db: Session) -> list[dict]:
     """Raw materials whose on-hand quantity is at or below their reorder point."""
     rows = (
