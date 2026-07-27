@@ -1,208 +1,86 @@
-# jdk_clean — Manufacturing ERP Backend
+# jdk_clean — Manufacturing ERP
 
-A FastAPI/SQLAlchemy/MySQL backend for a small manufacturing ERP: customers,
-suppliers, raw materials, products, multi-level BOMs, inventory, quotations,
-and orders — with role-based auth, soft deletes, and a field-level audit log.
+A FastAPI/SQLAlchemy/MySQL backend and a React/TypeScript frontend for a
+small manufacturing ERP: customers, suppliers, raw materials, products,
+multi-level BOMs, inventory, quotations, and orders — with role-based
+auth, soft deletes, and a field-level audit log.
 
-## Requirements
+- `backend/` — FastAPI API. See [backend/README.md](backend/README.md).
+- `frontend/` — React app (currently: authentication end to end — login,
+  session handling, protected routes, password change). See
+  [frontend/README.md](frontend/README.md).
 
-- Python 3.11+
-- MySQL 8.x
-- pip
+## Quick start
 
-## Installation
+```bash
+git clone https://github.com/BT-Rajan/jdk_clean.git
+cd jdk_clean
+./install.sh
+```
 
-1. **Clone and enter the backend directory**
+`install.sh` is interactive: it asks for your database connection,
+generates a JWT secret (or takes your own), sets up the backend venv and
+frontend `node_modules`, loads the schema, seeds a bootstrap admin
+account, builds the frontend, and (if you say yes) starts both under
+[pm2](https://pm2.keymetrics.io/). It's safe to re-run — anything that
+already exists (a `.env` file, an admin user, the schema) is left alone
+unless you explicitly ask to overwrite it.
 
-   ```bash
-   git clone https://github.com/BT-Rajan/jdk_clean.git
-   cd jdk_clean/backend
-   ```
+Requirements: Python 3.11+, Node.js 20+, MySQL 8.x, and the MySQL client
+(`mysql`) if you want the script to create the database/load the schema
+for you.
 
-2. **Create a virtual environment and install dependencies**
+At the end it prints the admin username/password (if generated) and the
+URLs for both apps. **Log in and change that password immediately** —
+there's a "Change password" page built into the frontend for exactly
+this.
 
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate        # Windows: venv\Scripts\activate
-   pip install -r requirements.txt
-   ```
+## Manual setup
 
-3. **Create the database**
+If you'd rather do it by hand or understand each step, see:
 
-   ```sql
-   CREATE DATABASE jdk_clean CHARACTER SET utf8mb4;
-   CREATE USER 'erp_user'@'localhost' IDENTIFIED BY 'your-password';
-   GRANT ALL PRIVILEGES ON jdk_clean.* TO 'erp_user'@'localhost';
-   FLUSH PRIVILEGES;
-   ```
+- [backend/README.md](backend/README.md) — venv, schema, `.env`, seeding, running
+- [frontend/README.md](frontend/README.md) — `.env`, dev server, production build/serving
 
-4. **Load the schema**
+## Running with pm2
 
-   ```bash
-   mysql -u erp_user -p jdk_clean < schema.sql
-   ```
+`install.sh` generates `ecosystem.config.js` at the repo root (not
+committed — it's environment-specific: ports, URLs). It defines two
+apps:
 
-5. **Configure environment variables**
+- **jdk-backend** — `uvicorn app.main:app` from the backend venv
+- **jdk-frontend** — `frontend/scripts/serve-static.mjs`, a small
+  dependency-free static file server (gzip, immutable caching on
+  hashed assets, SPA fallback, security headers including a CSP) —
+  see [frontend/README.md](frontend/README.md#deploying) for why this
+  exists instead of a third-party static-server package.
 
-   Copy `.env.example` to `.env` and fill in your values:
+```bash
+pm2 status              # check both processes
+pm2 logs                # tail logs for both
+pm2 logs jdk-backend    # tail logs for one
+pm2 restart all         # restart both
+pm2 stop all            # stop both
+pm2 save                # persist the current process list
+pm2 startup             # (optional) print the command to auto-start pm2 on boot
+```
 
-   ```bash
-   cp .env.example .env
-   ```
-
-   ```env
-   DB_HOST=localhost
-   DB_PORT=3306
-   DB_USER=erp_user
-   DB_PASSWORD=your-password
-   DB_NAME=jdk_clean
-
-   JWT_SECRET_KEY=replace-with-a-long-random-string
-   ACCESS_TOKEN_EXPIRE_MINUTES=60
-   REFRESH_TOKEN_EXPIRE_DAYS=7
-
-   CORS_ORIGINS=http://localhost:5173
-   ```
-
-   Generate a strong `JWT_SECRET_KEY` with:
-
-   ```bash
-   python3 -c "import secrets; print(secrets.token_urlsafe(48))"
-   ```
-
-6. **Seed a bootstrap admin user**
-
-   `schema.sql` only creates tables — it doesn't seed any rows, and every
-   user-management endpoint requires an existing admin, so there's no way
-   to create the first account through the API. Insert one directly:
-
-   ```sql
-   INSERT INTO users (username, email, password_hash, full_name, role, is_active)
-   VALUES (
-     'admin',
-     'admin@example.com',
-     '$2b$12$PyazmJDMEIf2xG5P0fAVv.yQD4oFcCpkC5v4EU/Z.LhHWOWgNATim', -- bcrypt hash of: ChangeMe123!
-     'Administrator',
-     'admin',
-     1
-   );
-   ```
-
-   This logs in with username `admin` / password `ChangeMe123!`. **Log in
-   once and immediately change the password** (step 3 below covers this).
-
-7. **Seed number series (required before creating orders/quotations)**
-
-   Order and quotation numbers are generated from the `number_series`
-   table, which also ships empty:
-
-   ```sql
-   INSERT INTO number_series (doc_type, prefix, next_number, padding) VALUES
-     ('ORDER', 'ORD', 1, 5),
-     ('QUOTATION', 'QTN', 1, 5);
-   ```
-
-8. **Run the server**
-
-   ```bash
-   uvicorn app.main:app --reload --port 8000
-   ```
-
-   The API is now at `http://localhost:8000`. Interactive docs (Swagger UI)
-   are at `http://localhost:8000/docs`.
+If you didn't generate `ecosystem.config.js` via `install.sh`, you can
+start each app manually — see the "Run the server" sections in each
+app's README — and skip pm2 entirely.
 
 ## Testing the login
 
-### Option A — Swagger UI
-
-1. Open `http://localhost:8000/docs`.
-2. Expand `POST /api/auth/login` → **Try it out**.
-3. Use the body:
-   ```json
-   { "username": "admin", "password": "ChangeMe123!" }
-   ```
-4. Execute. A `200` response returns `access_token`, `refresh_token`, and
-   `token_type`. Copy `access_token`.
-5. Click the **Authorize** button (top right), enter `Bearer <access_token>`,
-   and click Authorize.
-6. Expand `GET /api/auth/me` → **Try it out** → **Execute**. You should get
-   back the admin user's profile (`200`), confirming the token is accepted.
-
-### Option B — curl
-
-1. **Health check** (no auth required):
-
-   ```bash
-   curl http://localhost:8000/api/health
-   # {"status":"ok"}
-   ```
-
-2. **Log in:**
-
-   ```bash
-   curl -s -X POST http://localhost:8000/api/auth/login \
-     -H "Content-Type: application/json" \
-     -d '{"username": "admin", "password": "ChangeMe123!"}'
-   ```
-
-   Expected: `200` with a JSON body containing `access_token`,
-   `refresh_token`, and `token_type: "bearer"`.
-
-3. **Call an authenticated endpoint with the token:**
-
-   ```bash
-   TOKEN="paste-the-access_token-value-here"
-
-   curl -s http://localhost:8000/api/auth/me \
-     -H "Authorization: Bearer $TOKEN"
-   ```
-
-   Expected: `200` with the admin user's `id`, `username`, `email`,
-   `full_name`, `role`, and `is_active`.
-
-4. **Confirm a bad password is rejected:**
-
-   ```bash
-   curl -s -o /dev/null -w "%{http_code}\n" -X POST http://localhost:8000/api/auth/login \
-     -H "Content-Type: application/json" \
-     -d '{"username": "admin", "password": "wrong-password"}'
-   ```
-
-   Expected: `401`.
-
-5. **Refresh the access token:**
-
-   ```bash
-   REFRESH="paste-the-refresh_token-value-here"
-
-   curl -s -X POST http://localhost:8000/api/auth/refresh \
-     -H "Content-Type: application/json" \
-     -d "{\"refresh_token\": \"$REFRESH\"}"
-   ```
-
-   Expected: `200` with a **new** `access_token`/`refresh_token` pair. The
-   refresh token you sent is now revoked (one-time use — reusing it will
-   return `401`).
-
-6. **Change the bootstrap password**, then log out:
-
-   ```bash
-   curl -s -X POST http://localhost:8000/api/auth/change-password \
-     -H "Authorization: Bearer $TOKEN" \
-     -H "Content-Type: application/json" \
-     -d '{"current_password": "ChangeMe123!", "new_password": "a-new-strong-password"}'
-
-   curl -s -X POST http://localhost:8000/api/auth/logout \
-     -H "Content-Type: application/json" \
-     -d "{\"refresh_token\": \"$REFRESH\"}"
-   ```
-
-   Changing the password revokes all outstanding refresh tokens for that
-   user, so log in again afterward to get a fresh token pair.
+See [backend/README.md](backend/README.md#testing-the-login) for a full
+Swagger UI / curl walkthrough of the auth flow (login, `/me`, refresh
+rotation, password change), or just open the frontend and sign in.
 
 ## Project layout
 
 ```
+install.sh              # interactive installer (backend + frontend + pm2)
+ecosystem.config.js     # generated by install.sh, not committed
+
 backend/
   app/
     api/        # FastAPI routers (one per resource)
@@ -211,6 +89,21 @@ backend/
     models/     # SQLAlchemy models
     schemas/    # Pydantic request/response schemas
     services/   # business logic (auth, orders, quotations, BOM, inventory, PDF)
-  schema.sql    # MySQL schema (tables only — no seed data, see Installation)
+  scripts/
+    seed_admin.py   # idempotent bootstrap admin + number-series seeding
+  schema.sql    # MySQL schema (tables only — no seed data, see seed_admin.py)
   requirements.txt
+
+frontend/
+  src/
+    api/          # axios client + token store + typed endpoint functions
+    components/   # ui/ (Button, TextField, GlassCard, ...) + layout/
+    context/      # AuthContext + AuthProvider
+    hooks/        # useAuth
+    lib/          # validation, api error mapping, storage
+    pages/        # LoginPage, ChangePasswordPage, DashboardPage, NotFoundPage
+    routes/       # ProtectedRoute, PublicOnlyRoute
+    types/        # types mirroring the backend's Pydantic schemas
+  scripts/
+    serve-static.mjs   # zero-dependency production static server
 ```
