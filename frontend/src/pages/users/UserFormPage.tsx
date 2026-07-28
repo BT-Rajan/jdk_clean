@@ -63,11 +63,15 @@ function UserCreateForm() {
     <FormShell title="New user">
       <Alert variant="error">{formError}</Alert>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
-        <TextField label="Username" error={errors.username?.message} {...register('username')} />
-        <TextField label="Full name" error={errors.full_name?.message} {...register('full_name')} />
-        <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <TextField label="Username" error={errors.username?.message} {...register('username')} />
+          <TextField label="Full name" error={errors.full_name?.message} {...register('full_name')} />
+        </div>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
+          <RoleSelect {...register('role')} />
+        </div>
         <PasswordField label="Password" error={errors.password?.message} {...register('password')} />
-        <RoleSelect {...register('role')} />
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
           <Button type="submit" isLoading={isSubmitting}>Create user</Button>
@@ -116,13 +120,17 @@ function UserEditForm({ id }: { id: number }) {
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
-          <TextField label="Full name" error={errors.full_name?.message} {...register('full_name')} />
-          <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
-          <RoleSelect {...register('role')} />
-          <label className="flex items-center gap-3 text-sm text-white/70">
-            <input type="checkbox" className="h-4 w-4 rounded border-white/20 bg-transparent" {...register('is_active')} />
-            Active
-          </label>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <TextField label="Full name" error={errors.full_name?.message} {...register('full_name')} />
+            <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
+          </div>
+          <div className="grid grid-cols-1 items-center gap-5 sm:grid-cols-2">
+            <RoleSelect {...register('role')} />
+            <label className="flex items-center gap-3 text-sm text-white/70">
+              <input type="checkbox" className="h-4 w-4 rounded border-white/20 bg-transparent" {...register('is_active')} />
+              Active
+            </label>
+          </div>
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
             <Button type="submit" isLoading={isSubmitting}>Save changes</Button>
