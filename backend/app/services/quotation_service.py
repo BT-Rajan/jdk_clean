@@ -45,6 +45,15 @@ def get_quotation(db: Session, quotation_id: int, include_deleted: bool = False)
     return obj
 
 
+_QUOTATION_SORTABLE_FIELDS = {
+    "quotation_number": Quotation.quotation_number,
+    "quotation_date": Quotation.quotation_date,
+    "total_amount": Quotation.total_amount,
+    "status": Quotation.status,
+    "created_at": Quotation.created_at,
+}
+
+
 def list_quotations(
     db: Session,
     page: int = 1,
@@ -52,6 +61,7 @@ def list_quotations(
     search: str | None = None,
     status: str | None = None,
     customer_id: int | None = None,
+    sort: str | None = None,
 ) -> dict:
     query = _base_query(db)
 
@@ -65,7 +75,16 @@ def list_quotations(
             (Quotation.quotation_number.ilike(like)) | (Customer.name.ilike(like))
         )
 
-    query = query.order_by(Quotation.id.desc())
+    if sort:
+        direction = "desc" if sort.startswith("-") else "asc"
+        field = sort.lstrip("-")
+        column = _QUOTATION_SORTABLE_FIELDS.get(field)
+        if column is not None:
+            query = query.order_by(column.desc() if direction == "desc" else column.asc(), Quotation.id.desc())
+        else:
+            query = query.order_by(Quotation.id.desc())
+    else:
+        query = query.order_by(Quotation.id.desc())
 
     total = query.count()
     page = max(page, 1)

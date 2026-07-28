@@ -8,6 +8,7 @@ import {
   GlassCard,
   Pagination,
   SelectField,
+  SortableHeader,
   Spinner,
   StatusBadge,
   TextField,
@@ -21,11 +22,24 @@ export function OrdersListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const fetcher = useCallback(
-    (params: { page: number; search?: string; status?: string }) => listOrders(params),
+    (params: { page: number; search?: string; status?: string; sort?: string }) => listOrders(params),
     [],
   )
-  const { items, total, totalPages, page, setPage, searchInput, setSearchInput, status, setStatus, loading, error } =
-    usePagedResource(fetcher)
+  const {
+    items,
+    total,
+    totalPages,
+    page,
+    setPage,
+    searchInput,
+    setSearchInput,
+    status,
+    setStatus,
+    sort,
+    toggleSort,
+    loading,
+    error,
+  } = usePagedResource(fetcher)
 
   return (
     <AppLayout>
@@ -70,11 +84,11 @@ export function OrdersListPage() {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
-                  <th className="px-6 py-4 font-medium">Number</th>
+                  <SortableHeader label="Number" field="order_number" sort={sort} onSort={toggleSort} />
                   <th className="px-6 py-4 font-medium">Customer</th>
-                  <th className="px-6 py-4 font-medium">Date</th>
-                  <th className="px-6 py-4 font-medium">Total</th>
-                  <th className="px-6 py-4 font-medium">Status</th>
+                  <SortableHeader label="Date" field="order_date" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Total" field="total_amount" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Status" field="status" sort={sort} onSort={toggleSort} />
                 </tr>
               </thead>
               <tbody>

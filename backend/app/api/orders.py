@@ -19,11 +19,12 @@ def list_orders(
     search: str | None = Query(None),
     status: str | None = Query(None),
     customer_id: int | None = Query(None),
+    sort: str | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     result = order_service.list_orders(
-        db, page=page, page_size=page_size, search=search, status=status, customer_id=customer_id
+        db, page=page, page_size=page_size, search=search, status=status, customer_id=customer_id, sort=sort
     )
     result["items"] = [OrderOut.from_model(o) for o in result["items"]]
     return result

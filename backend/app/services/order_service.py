@@ -44,6 +44,15 @@ def get_order(db: Session, order_id: int, include_deleted: bool = False) -> Orde
     return obj
 
 
+_ORDER_SORTABLE_FIELDS = {
+    "order_number": Order.order_number,
+    "order_date": Order.order_date,
+    "total_amount": Order.total_amount,
+    "status": Order.status,
+    "created_at": Order.created_at,
+}
+
+
 def list_orders(
     db: Session,
     page: int = 1,
@@ -51,6 +60,7 @@ def list_orders(
     search: str | None = None,
     status: str | None = None,
     customer_id: int | None = None,
+    sort: str | None = None,
 ) -> dict:
     query = _base_query(db)
 
@@ -64,7 +74,16 @@ def list_orders(
             (Order.order_number.ilike(like)) | (Customer.name.ilike(like))
         )
 
-    query = query.order_by(Order.id.desc())
+    if sort:
+        direction = "desc" if sort.startswith("-") else "asc"
+        field = sort.lstrip("-")
+        column = _ORDER_SORTABLE_FIELDS.get(field)
+        if column is not None:
+            query = query.order_by(column.desc() if direction == "desc" else column.asc(), Order.id.desc())
+        else:
+            query = query.order_by(Order.id.desc())
+    else:
+        query = query.order_by(Order.id.desc())
 
     total = query.count()
     page = max(page, 1)

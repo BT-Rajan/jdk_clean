@@ -98,8 +98,15 @@ body {
    underneath it, so it gets its own treatment: a near-opaque, ink-tinted
    backdrop (rather than glass-panel-strong's light 9%-white wash) plus a
    heavier blur. This keeps table rows/text from "showing through" and
-   visually colliding with the header while the page scrolls. */
+   visually colliding with the header while the page scrolls.
+   The plain rgba() line is a fallback for engines that don't support
+   color-mix() -- an unsupported color-mix() declaration is dropped
+   entirely, leaving the rgba() one in effect, so the header is never
+   left fully transparent. `isolation: isolate` also pins it to its own
+   stacking context so nothing else can paint between it and the page. */
 @utility glass-panel-header {
+  isolation: isolate;
+  background-color: rgba(11, 11, 18, 0.86);
   background-color: color-mix(in oklab, var(--color-ink-900) 78%, transparent);
   backdrop-filter: blur(32px) saturate(160%);
   -webkit-backdrop-filter: blur(32px) saturate(160%);
@@ -114,6 +121,8 @@ body {
    the header to near-solid and add a firmer shadow for a clear
    foreground/background separation. */
 @utility glass-panel-header-scrolled {
+  isolation: isolate;
+  background-color: rgba(11, 11, 18, 0.97);
   background-color: color-mix(in oklab, var(--color-ink-900) 94%, transparent);
   backdrop-filter: blur(32px) saturate(160%);
   -webkit-backdrop-filter: blur(32px) saturate(160%);

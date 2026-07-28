@@ -1,14 +1,17 @@
 import { useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Badge, Button, EmptyState, GlassCard, Pagination, Spinner, TextField } from '@/components/ui'
+import { Alert, Badge, Button, EmptyState, GlassCard, Pagination, SortableHeader, Spinner, TextField } from '@/components/ui'
 import { listUsers } from '@/api/users'
 import { usePagedResource } from '@/hooks/usePagedResource'
 
 export function UsersListPage() {
   const navigate = useNavigate()
-  const fetcher = useCallback((params: { page: number; search?: string }) => listUsers(params), [])
-  const { items, total, totalPages, page, setPage, searchInput, setSearchInput, loading, error } =
+  const fetcher = useCallback(
+    (params: { page: number; search?: string; sort?: string }) => listUsers(params),
+    [],
+  )
+  const { items, total, totalPages, page, setPage, searchInput, setSearchInput, sort, toggleSort, loading, error } =
     usePagedResource(fetcher)
 
   return (
@@ -44,8 +47,8 @@ export function UsersListPage() {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
-                  <th className="px-6 py-4 font-medium">Username</th>
-                  <th className="px-6 py-4 font-medium">Full name</th>
+                  <SortableHeader label="Username" field="username" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Full name" field="full_name" sort={sort} onSort={toggleSort} />
                   <th className="px-6 py-4 font-medium">Email</th>
                   <th className="px-6 py-4 font-medium">Role</th>
                   <th className="px-6 py-4 font-medium">Active</th>

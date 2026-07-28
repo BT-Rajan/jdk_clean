@@ -8,6 +8,7 @@ import {
   GlassCard,
   Pagination,
   SelectField,
+  SortableHeader,
   Spinner,
   StatusBadge,
   TextField,
@@ -21,11 +22,24 @@ export function RawMaterialsListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const fetcher = useCallback(
-    (params: { page: number; search?: string; status?: string }) => listRawMaterials(params),
+    (params: { page: number; search?: string; status?: string; sort?: string }) => listRawMaterials(params),
     [],
   )
-  const { items, total, totalPages, page, setPage, searchInput, setSearchInput, status, setStatus, loading, error } =
-    usePagedResource(fetcher)
+  const {
+    items,
+    total,
+    totalPages,
+    page,
+    setPage,
+    searchInput,
+    setSearchInput,
+    status,
+    setStatus,
+    sort,
+    toggleSort,
+    loading,
+    error,
+  } = usePagedResource(fetcher)
 
   return (
     <AppLayout>
@@ -65,8 +79,8 @@ export function RawMaterialsListPage() {
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
-                  <th className="px-6 py-4 font-medium">Code</th>
-                  <th className="px-6 py-4 font-medium">Name</th>
+                  <SortableHeader label="Code" field="code" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Name" field="name" sort={sort} onSort={toggleSort} />
                   <th className="px-6 py-4 font-medium">Unit</th>
                   <th className="px-6 py-4 font-medium">Reorder point</th>
                   <th className="px-6 py-4 font-medium">Unit cost</th>

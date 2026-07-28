@@ -161,6 +161,13 @@ def get_low_stock(db: Session) -> list[dict]:
     return low
 
 
+_MOVEMENT_SORTABLE_FIELDS = {
+    "created_at": StockMovement.created_at,
+    "quantity": StockMovement.quantity,
+    "movement_type": StockMovement.movement_type,
+}
+
+
 def get_movement_history(
     db: Session,
     item_type: str | None = None,
@@ -169,6 +176,7 @@ def get_movement_history(
     reference_id: int | None = None,
     page: int = 1,
     page_size: int = 25,
+    sort: str | None = None,
 ) -> dict:
     query = db.query(StockMovement)
     if item_type:
@@ -180,12 +188,22 @@ def get_movement_history(
     if reference_id:
         query = query.filter(StockMovement.reference_id == reference_id)
 
+    if sort:
+        direction = "desc" if sort.startswith("-") else "asc"
+        field = sort.lstrip("-")
+        column = _MOVEMENT_SORTABLE_FIELDS.get(field)
+        if column is not None:
+            query = query.order_by(column.desc() if direction == "desc" else column.asc(), StockMovement.id.desc())
+        else:
+            query = query.order_by(StockMovement.created_at.desc(), StockMovement.id.desc())
+    else:
+        query = query.order_by(StockMovement.created_at.desc(), StockMovement.id.desc())
+
     total = query.count()
     page = max(page, 1)
     page_size = min(max(page_size, 1), 200)
     items = (
-        query.order_by(StockMovement.created_at.desc(), StockMovement.id.desc())
-        .offset((page - 1) * page_size)
+        query.offset((page - 1) * page_size)
         .limit(page_size)
         .all()
     )

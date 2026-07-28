@@ -30,6 +30,7 @@ export interface MovementQueryParams {
   reference_id?: number
   page?: number
   page_size?: number
+  sort?: string
 }
 
 export async function getMovements(params: MovementQueryParams): Promise<PagedResponse<StockMovement>> {

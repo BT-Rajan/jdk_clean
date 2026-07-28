@@ -12,12 +12,13 @@ const SEARCH_DEBOUNCE_MS = 350
  * page/search/status shape backend/app/api/deps.py:ListParams expects.
  */
 export function usePagedResource<T>(
-  fetcher: (params: { page: number; search?: string; status?: string }) => Promise<PagedResponse<T>>,
+  fetcher: (params: { page: number; search?: string; status?: string; sort?: string }) => Promise<PagedResponse<T>>,
 ) {
   const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [status, setStatus] = useState('')
+  const [sort, setSort] = useState('')
   const [data, setData] = useState<PagedResponse<T> | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -34,7 +35,7 @@ export function usePagedResource<T>(
   }, [searchInput])
 
   const load = useCallback(
-    async (targetPage: number, search: string, statusFilter: string) => {
+    async (targetPage: number, search: string, statusFilter: string, sortParam: string) => {
       const thisRequest = ++requestId.current
       setLoading(true)
       setError(null)
@@ -43,6 +44,7 @@ export function usePagedResource<T>(
           page: targetPage,
           search: search || undefined,
           status: statusFilter || undefined,
+          sort: sortParam || undefined,
         })
         if (thisRequest === requestId.current) {
           setData(result)
@@ -61,11 +63,26 @@ export function usePagedResource<T>(
   )
 
   useEffect(() => {
-    load(page, debouncedSearch, status)
+    load(page, debouncedSearch, status, sort)
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, debouncedSearch, status])
+  }, [page, debouncedSearch, status, sort])
 
-  const refetch = useCallback(() => load(page, debouncedSearch, status), [load, page, debouncedSearch, status])
+  const refetch = useCallback(
+    () => load(page, debouncedSearch, status, sort),
+    [load, page, debouncedSearch, status, sort],
+  )
+
+  // Three-state toggle per column: unsorted -> ascending -> descending ->
+  // unsorted again. Also snaps back to page 1, since the current page
+  // otherwise wouldn't correspond to the newly-ordered results.
+  const toggleSort = useCallback((field: string) => {
+    setSort((current) => {
+      if (current === field) return `-${field}`
+      if (current === `-${field}`) return ''
+      return field
+    })
+    setPage(1)
+  }, [])
 
   return {
     items: data?.items ?? [],
@@ -77,6 +94,8 @@ export function usePagedResource<T>(
     setSearchInput,
     status,
     setStatus,
+    sort,
+    toggleSort,
     loading,
     error,
     refetch,

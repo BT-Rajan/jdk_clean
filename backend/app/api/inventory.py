@@ -59,6 +59,7 @@ def movements(
     reference_id: int | None = Query(None),
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=200),
+    sort: str | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
@@ -70,6 +71,7 @@ def movements(
         reference_id=reference_id,
         page=page,
         page_size=page_size,
+        sort=sort,
     )
     result["items"] = [StockMovementOut.model_validate(m) for m in result["items"]]
     return result

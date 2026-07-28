@@ -1,7 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { z } from 'zod'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
   Alert,
@@ -9,98 +7,165 @@ import {
   Button,
   EmptyState,
   GlassCard,
-  Modal,
+  Pagination,
   PageHeader,
-  SelectField,
+  SortableHeader,
   Spinner,
-  TextField,
 } from '@/components/ui'
-import { adjustStock, getLowStock, getMovements } from '@/api/inventory'
-import { listProducts } from '@/api/products'
-import { listRawMaterials } from '@/api/rawMaterials'
-import { useSelectOptions } from '@/hooks/useSelectOptions'
+import { getLowStock, getMovements } from '@/api/inventory'
 import { useAuth } from '@/hooks/useAuth'
 import { canAdjustInventory } from '@/lib/roles'
 import { getApiErrorMessage } from '@/lib/apiError'
-import type { InventoryItemType, LowStockItem, StockMovement } from '@/types/inventory'
+import type { LowStockItem, StockMovement } from '@/types/inventory'
 
-const adjustSchema = z.object({
-  item_type: z.enum(['product', 'raw_material']),
-  item_id: z.coerce.number().int().positive('Choose an item'),
-  quantity: z.coerce.number().refine((v) => v !== 0, 'Quantity cannot be 0'),
-  movement_type: z.enum(['receipt', 'issue', 'adjustment', 'return']),
-  notes: z.string().trim().optional().or(z.literal('')),
-})
-type AdjustFormValues = z.input<typeof adjustSchema>
-type AdjustSubmitValues = z.output<typeof adjustSchema>
+const LOW_STOCK_PAGE_SIZE = 10
+const MOVEMENTS_PAGE_SIZE = 25
 
 export function InventoryPage() {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const canAdjust = canAdjustInventory(user?.role)
 
+  // Low stock comes back from the backend as a single unpaginated list (it's
+  // inherently bounded -- only materials currently below their reorder
+  // point), so pagination and sorting for it happen client-side over the
+  // already-fetched array, matching the same page-size/sort-toggle pattern
+  // every other table in the app uses.
   const [lowStock, setLowStock] = useState<LowStockItem[]>([])
-  const [movements, setMovements] = useState<StockMovement[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
+  const [lowStockPage, setLowStockPage] = useState(1)
+  const [lowStockSort, setLowStockSort] = useState('')
+  const [lowStockLoading, setLowStockLoading] = useState(true)
+  const [lowStockError, setLowStockError] = useState<string | null>(null)
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError(null)
+  // Movements is a genuinely large, ever-growing table, so it uses the same
+  // server-side page/sort as the rest of the app's list pages.
+  const [movements, setMovements] = useState<StockMovement[]>([])
+  const [movementsTotal, setMovementsTotal] = useState(0)
+  const [movementsTotalPages, setMovementsTotalPages] = useState(1)
+  const [movementsPage, setMovementsPage] = useState(1)
+  const [movementsSort, setMovementsSort] = useState('')
+  const [movementsLoading, setMovementsLoading] = useState(true)
+  const [movementsError, setMovementsError] = useState<string | null>(null)
+
+  const loadLowStock = useCallback(async () => {
+    setLowStockLoading(true)
+    setLowStockError(null)
     try {
-      const [low, moves] = await Promise.all([
-        getLowStock(),
-        getMovements({ page: 1, page_size: 25 }),
-      ])
+      const low = await getLowStock()
       setLowStock(low)
-      setMovements(moves.items)
     } catch (err) {
-      setError(getApiErrorMessage(err))
+      setLowStockError(getApiErrorMessage(err))
     } finally {
-      setLoading(false)
+      setLowStockLoading(false)
+    }
+  }, [])
+
+  const loadMovements = useCallback(async (page: number, sort: string) => {
+    setMovementsLoading(true)
+    setMovementsError(null)
+    try {
+      const moves = await getMovements({ page, page_size: MOVEMENTS_PAGE_SIZE, sort: sort || undefined })
+      setMovements(moves.items)
+      setMovementsTotal(moves.total)
+      setMovementsTotalPages(moves.total_pages)
+    } catch (err) {
+      setMovementsError(getApiErrorMessage(err))
+    } finally {
+      setMovementsLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    load()
-  }, [load])
+    loadLowStock()
+  }, [loadLowStock])
+
+  useEffect(() => {
+    loadMovements(movementsPage, movementsSort)
+  }, [loadMovements, movementsPage, movementsSort])
+
+  function toggleMovementsSort(field: string) {
+    setMovementsSort((current) => {
+      if (current === field) return `-${field}`
+      if (current === `-${field}`) return ''
+      return field
+    })
+    setMovementsPage(1)
+  }
+
+  function toggleLowStockSort(field: string) {
+    setLowStockSort((current) => {
+      if (current === field) return `-${field}`
+      if (current === `-${field}`) return ''
+      return field
+    })
+    setLowStockPage(1)
+  }
+
+  const sortedLowStock = useMemo(() => {
+    if (!lowStockSort) return lowStock
+    const field = lowStockSort.replace('-', '') as keyof LowStockItem
+    const direction = lowStockSort.startsWith('-') ? -1 : 1
+    return [...lowStock].sort((a, b) => {
+      const av = a[field]
+      const bv = b[field]
+      if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * direction
+      return String(av).localeCompare(String(bv)) * direction
+    })
+  }, [lowStock, lowStockSort])
+
+  const lowStockTotalPages = Math.max(1, Math.ceil(sortedLowStock.length / LOW_STOCK_PAGE_SIZE))
+  const pagedLowStock = sortedLowStock.slice(
+    (lowStockPage - 1) * LOW_STOCK_PAGE_SIZE,
+    lowStockPage * LOW_STOCK_PAGE_SIZE,
+  )
 
   return (
     <AppLayout>
       <PageHeader
         title="Inventory"
         subtitle="Stock levels, low-stock alerts, and movement history"
-        actions={canAdjust ? <Button onClick={() => setModalOpen(true)}>Adjust stock</Button> : undefined}
+        actions={canAdjust ? <Button onClick={() => navigate('/inventory/adjust')}>Adjust stock</Button> : undefined}
       />
 
-      <Alert variant="error">{error}</Alert>
-
-      {loading ? (
-        <div className="flex justify-center py-16">
-          <Spinner size={28} className="text-gold-300" />
-        </div>
-      ) : (
-        <div className="flex flex-col gap-6">
-          <GlassCard className="overflow-hidden">
-            <div className="border-b border-white/10 px-6 py-4">
-              <h2 className="font-display text-lg font-medium text-white">Low stock</h2>
+      <div className="flex flex-col gap-6">
+        <GlassCard className="overflow-hidden">
+          <div className="border-b border-white/10 px-6 py-4">
+            <h2 className="font-display text-lg font-medium text-white">Low stock</h2>
+          </div>
+          <Alert variant="error">{lowStockError}</Alert>
+          {lowStockLoading ? (
+            <div className="flex justify-center py-16">
+              <Spinner size={24} className="text-gold-300" />
             </div>
-            {lowStock.length === 0 ? (
-              <EmptyState title="Nothing is low" message="Every raw material is above its reorder point." />
-            ) : (
+          ) : lowStock.length === 0 ? (
+            <EmptyState title="Nothing is low" message="Every raw material is above its reorder point." />
+          ) : (
+            <>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
-                      <th className="px-6 py-4 font-medium">Material</th>
-                      <th className="px-6 py-4 font-medium">On hand</th>
-                      <th className="px-6 py-4 font-medium">Reorder point</th>
+                      <SortableHeader label="Material" field="name" sort={lowStockSort} onSort={toggleLowStockSort} />
+                      <SortableHeader
+                        label="On hand"
+                        field="quantity_on_hand"
+                        sort={lowStockSort}
+                        onSort={toggleLowStockSort}
+                      />
+                      <SortableHeader
+                        label="Reorder point"
+                        field="reorder_point"
+                        sort={lowStockSort}
+                        onSort={toggleLowStockSort}
+                      />
                     </tr>
                   </thead>
                   <tbody>
-                    {lowStock.map((item) => (
+                    {pagedLowStock.map((item) => (
                       <tr key={item.raw_material_id} className="border-b border-white/5 last:border-0">
-                        <td className="px-6 py-4 text-white">{item.code} — {item.name}</td>
+                        <td className="px-6 py-4 text-white">
+                          {item.code} — {item.name}
+                        </td>
                         <td className="px-6 py-4">
                           <Badge tone="danger">{`${item.quantity_on_hand}`}</Badge>
                         </td>
@@ -110,24 +175,54 @@ export function InventoryPage() {
                   </tbody>
                 </table>
               </div>
-            )}
-          </GlassCard>
+              <div className="px-6 pb-2">
+                <Pagination
+                  page={lowStockPage}
+                  totalPages={lowStockTotalPages}
+                  total={sortedLowStock.length}
+                  onPageChange={setLowStockPage}
+                />
+              </div>
+            </>
+          )}
+        </GlassCard>
 
-          <GlassCard className="overflow-hidden">
-            <div className="border-b border-white/10 px-6 py-4">
-              <h2 className="font-display text-lg font-medium text-white">Recent movements</h2>
+        <GlassCard className="overflow-hidden">
+          <div className="border-b border-white/10 px-6 py-4">
+            <h2 className="font-display text-lg font-medium text-white">Recent movements</h2>
+          </div>
+          <Alert variant="error">{movementsError}</Alert>
+          {movementsLoading ? (
+            <div className="flex justify-center py-16">
+              <Spinner size={24} className="text-gold-300" />
             </div>
-            {movements.length === 0 ? (
-              <EmptyState title="No movements yet" />
-            ) : (
+          ) : movements.length === 0 ? (
+            <EmptyState title="No movements yet" />
+          ) : (
+            <>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
-                      <th className="px-6 py-4 font-medium">Date</th>
+                      <SortableHeader
+                        label="Date"
+                        field="created_at"
+                        sort={movementsSort}
+                        onSort={toggleMovementsSort}
+                      />
                       <th className="px-6 py-4 font-medium">Item</th>
-                      <th className="px-6 py-4 font-medium">Type</th>
-                      <th className="px-6 py-4 font-medium">Quantity</th>
+                      <SortableHeader
+                        label="Type"
+                        field="movement_type"
+                        sort={movementsSort}
+                        onSort={toggleMovementsSort}
+                      />
+                      <SortableHeader
+                        label="Quantity"
+                        field="quantity"
+                        sort={movementsSort}
+                        onSort={toggleMovementsSort}
+                      />
                       <th className="px-6 py-4 font-medium">Notes</th>
                     </tr>
                   </thead>
@@ -148,95 +243,18 @@ export function InventoryPage() {
                   </tbody>
                 </table>
               </div>
-            )}
-          </GlassCard>
-        </div>
-      )}
-
-      <AdjustStockModal
-        open={modalOpen}
-        onClose={() => setModalOpen(false)}
-        onSuccess={() => {
-          setModalOpen(false)
-          load()
-        }}
-      />
+              <div className="px-6 pb-2">
+                <Pagination
+                  page={movementsPage}
+                  totalPages={movementsTotalPages}
+                  total={movementsTotal}
+                  onPageChange={setMovementsPage}
+                />
+              </div>
+            </>
+          )}
+        </GlassCard>
+      </div>
     </AppLayout>
-  )
-}
-
-function AdjustStockModal({
-  open,
-  onClose,
-  onSuccess,
-}: {
-  open: boolean
-  onClose: () => void
-  onSuccess: () => void
-}) {
-  const [formError, setFormError] = useState<string | null>(null)
-  const productsFetcher = useCallback(() => listProducts({ page: 1, page_size: 200, status: 'active' }), [])
-  const materialsFetcher = useCallback(() => listRawMaterials({ page: 1, page_size: 200, status: 'active' }), [])
-  const { options: products } = useSelectOptions(productsFetcher)
-  const { options: materials } = useSelectOptions(materialsFetcher)
-
-  const {
-    register,
-    handleSubmit,
-    watch,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<AdjustFormValues, unknown, AdjustSubmitValues>({
-    resolver: zodResolver(adjustSchema),
-    defaultValues: { item_type: 'raw_material', item_id: 0, quantity: 0, movement_type: 'adjustment', notes: '' },
-  })
-  const itemType = watch('item_type') as InventoryItemType
-
-  async function onSubmit(values: AdjustSubmitValues) {
-    setFormError(null)
-    try {
-      await adjustStock(values)
-      reset()
-      onSuccess()
-    } catch (err) {
-      setFormError(getApiErrorMessage(err))
-    }
-  }
-
-  return (
-    <Modal open={open} title="Adjust stock" onClose={onClose}>
-      <Alert variant="error">{formError}</Alert>
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-        <SelectField label="Item type" {...register('item_type')}>
-          <option value="raw_material">Raw material</option>
-          <option value="product">Product</option>
-        </SelectField>
-        <SelectField label="Item" error={errors.item_id?.message} {...register('item_id')}>
-          <option value="">Choose…</option>
-          {(itemType === 'product' ? products : materials).map((opt) => (
-            <option key={opt.id} value={opt.id}>{opt.code} — {opt.name}</option>
-          ))}
-        </SelectField>
-        <SelectField label="Movement type" {...register('movement_type')}>
-          <option value="receipt">Receipt (+)</option>
-          <option value="issue">Issue (-)</option>
-          <option value="adjustment">Adjustment (+/-)</option>
-          <option value="return">Return (+)</option>
-        </SelectField>
-        <TextField
-          label="Quantity"
-          type="number"
-          step="0.0001"
-          hint="Positive to add stock, negative to remove it"
-          error={errors.quantity?.message}
-          {...register('quantity')}
-        />
-        <TextField label="Notes" {...register('notes')} />
-        <div className="mt-2 flex justify-end gap-3">
-          <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
-          <Button type="submit" isLoading={isSubmitting}>Save adjustment</Button>
-        </div>
-      </form>
-    </Modal>
   )
 }
