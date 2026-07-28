@@ -13,10 +13,24 @@ from app.services import audit_service
 ALLOWED_AVATAR_FORMATS = {"JPEG", "PNG", "WEBP"}
 TABLE_NAME = "users"
 
+# backend/app/services/profile_service.py -> parents[2] is backend/, the
+# project root pm2's ecosystem config runs the process from (see
+# install.sh). Anchoring a relative UPLOAD_DIR here -- rather than
+# resolving it against whatever the current process's cwd happens to be
+# -- means avatar storage location can't silently shift if the backend is
+# ever started a different way (a different terminal, a different process
+# manager, `python -m app.main` from the repo root, etc.), which would
+# otherwise make previously-uploaded avatars simply "disappear" from a
+# process looking in a different `uploads/` than the one that wrote them.
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+
 
 def _avatars_dir() -> Path:
     settings = get_settings()
-    path = Path(settings.UPLOAD_DIR) / "avatars"
+    upload_dir = Path(settings.UPLOAD_DIR)
+    if not upload_dir.is_absolute():
+        upload_dir = _BACKEND_ROOT / upload_dir
+    path = upload_dir / "avatars"
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -80,14 +94,29 @@ def save_avatar(db: Session, user: User, raw_bytes: bytes) -> User:
     old_filename = user.avatar_filename
     new_filename = f"{uuid.uuid4().hex}.jpg"
     avatars_dir = _avatars_dir()
-    image.save(avatars_dir / new_filename, format="JPEG", quality=85, optimize=True)
 
+    # Commit the DB change *before* touching the filesystem. image.save()
+    # below is a side effect outside the DB transaction -- if it ran first
+    # and something after it failed (the audit log insert, a dropped DB
+    # connection, anything), the file would already be sitting on disk
+    # while the transaction rolled back, leaving a real image file that
+    # user.avatar_filename never actually points to: the upload looks
+    # like it silently did nothing, since avatar_url stays null/unchanged
+    # and nothing on disk is reachable through the API. Committing first
+    # means a failure here leaves no orphaned file at all. A failure in
+    # the save() call afterwards is possible instead, but is a much
+    # smaller blast radius (a local disk write, not a multi-statement DB
+    # transaction) and fails loudly -- get_avatar_path()'s is_file()
+    # check means the avatar simply won't load, rather than silently not
+    # existing despite an apparently-successful upload.
     user.avatar_filename = new_filename
     audit_service.log_update(
         db, TABLE_NAME, user.id, {"avatar_filename": (old_filename, new_filename)}, user.id
     )
     db.commit()
     db.refresh(user)
+
+    image.save(avatars_dir / new_filename, format="JPEG", quality=85, optimize=True)
 
     if old_filename:
         (avatars_dir / old_filename).unlink(missing_ok=True)
