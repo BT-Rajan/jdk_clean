@@ -82,6 +82,15 @@ const OrderFormPage = lazy(() =>
 const OrderDetailPage = lazy(() =>
   import('@/pages/orders/OrderDetailPage').then((m) => ({ default: m.OrderDetailPage })),
 )
+const ProductionListPage = lazy(() =>
+  import('@/pages/production/ProductionListPage').then((m) => ({ default: m.ProductionListPage })),
+)
+const ProductionFormPage = lazy(() =>
+  import('@/pages/production/ProductionFormPage').then((m) => ({ default: m.ProductionFormPage })),
+)
+const ProductionDetailPage = lazy(() =>
+  import('@/pages/production/ProductionDetailPage').then((m) => ({ default: m.ProductionDetailPage })),
+)
 
 const UsersListPage = lazy(() =>
   import('@/pages/users/UsersListPage').then((m) => ({ default: m.UsersListPage })),
@@ -142,6 +151,10 @@ export function App() {
             <Route path="/orders/new" element={<OrderFormPage />} />
             <Route path="/orders/:id" element={<OrderDetailPage />} />
             <Route path="/orders/:id/edit" element={<OrderFormPage />} />
+            <Route path="/production" element={<ProductionListPage />} />
+            <Route path="/production/new" element={<ProductionFormPage />} />
+            <Route path="/production/:id" element={<ProductionDetailPage />} />
+            <Route path="/production/:id/edit" element={<ProductionFormPage />} />
 
             <Route path="/users" element={<UsersListPage />} />
             <Route path="/users/new" element={<UserFormPage />} />

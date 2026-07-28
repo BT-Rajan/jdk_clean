@@ -42,6 +42,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/raw-materials', label: 'Raw materials' },
     { to: '/products', label: 'Products' },
     { to: '/inventory', label: 'Inventory' },
+    { to: '/production', label: 'Production' },
     { to: '/quotations', label: 'Quotations' },
     { to: '/orders', label: 'Orders' },
     ...(isAdmin(user?.role) ? [{ to: '/users', label: 'Users' }] : []),

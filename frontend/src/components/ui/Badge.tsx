@@ -24,6 +24,8 @@ const STATUS_TONES: Record<string, Tone> = {
   inactive: 'neutral',
   suspended: 'danger',
   draft: 'neutral',
+  planned: 'neutral',
+  in_progress: 'gold',
   sent: 'info',
   accepted: 'success',
   confirmed: 'success',
@@ -35,6 +37,7 @@ const STATUS_TONES: Record<string, Tone> = {
   rejected: 'danger',
   cancelled: 'danger',
   expired: 'danger',
+  completed: 'success',
 }
 
 export function Badge({ children, tone = 'neutral', className }: BadgeProps) {
