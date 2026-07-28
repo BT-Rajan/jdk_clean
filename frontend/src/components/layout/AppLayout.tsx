@@ -1,18 +1,37 @@
 import type { ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { Avatar, Logo, Button } from '@/components/ui'
 import { useAuth } from '@/hooks/useAuth'
+import { isAdmin } from '@/lib/roles'
+import { cn } from '@/lib/cn'
 import { AmbientBackground } from './AmbientBackground'
 
 interface AppLayoutProps {
   children: ReactNode
 }
 
+interface NavItem {
+  to: string
+  label: string
+}
+
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, logoutUser, avatarVersion } = useAuth()
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+
+  const navItems: NavItem[] = [
+    { to: '/dashboard', label: 'Dashboard' },
+    { to: '/customers', label: 'Customers' },
+    { to: '/suppliers', label: 'Suppliers' },
+    { to: '/raw-materials', label: 'Raw materials' },
+    { to: '/products', label: 'Products' },
+    { to: '/inventory', label: 'Inventory' },
+    { to: '/quotations', label: 'Quotations' },
+    { to: '/orders', label: 'Orders' },
+    ...(isAdmin(user?.role) ? [{ to: '/users', label: 'Users' }] : []),
+  ]
 
   async function handleLogout() {
     setIsLoggingOut(true)
@@ -27,26 +46,45 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="relative min-h-screen">
       <AmbientBackground />
 
-      <header className="glass-panel sticky top-4 z-10 mx-4 mt-4 flex items-center justify-between rounded-2xl px-5 py-3 sm:mx-6 sm:px-6">
-        <Logo />
+      <header className="glass-panel sticky top-4 z-10 mx-4 mt-4 flex flex-col gap-3 rounded-2xl px-5 py-3 sm:mx-6 sm:px-6">
+        <div className="flex items-center justify-between">
+          <Logo />
 
-        <div className="flex items-center gap-4">
-          {user && (
-            <Link
-              to="/profile"
-              className="flex items-center gap-3 rounded-xl px-2 py-1 transition-colors hover:bg-white/5"
-            >
-              <div className="hidden text-right sm:block">
-                <p className="text-sm font-medium text-white">{user.full_name}</p>
-                <p className="text-xs tracking-wide text-gold-300/80 capitalize">{user.role}</p>
-              </div>
-              <Avatar key={avatarVersion} avatarUrl={user.avatar_url} name={user.full_name} size="sm" />
-            </Link>
-          )}
-          <Button variant="ghost" size="sm" isLoading={isLoggingOut} onClick={handleLogout}>
-            Sign out
-          </Button>
+          <div className="flex items-center gap-4">
+            {user && (
+              <Link
+                to="/profile"
+                className="flex items-center gap-3 rounded-xl px-2 py-1 transition-colors hover:bg-white/5"
+              >
+                <div className="hidden text-right sm:block">
+                  <p className="text-sm font-medium text-white">{user.full_name}</p>
+                  <p className="text-xs tracking-wide text-gold-300/80 capitalize">{user.role}</p>
+                </div>
+                <Avatar key={avatarVersion} avatarUrl={user.avatar_url} name={user.full_name} size="sm" />
+              </Link>
+            )}
+            <Button variant="ghost" size="sm" isLoading={isLoggingOut} onClick={handleLogout}>
+              Sign out
+            </Button>
+          </div>
         </div>
+
+        <nav className="flex gap-1 overflow-x-auto pb-1">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              className={({ isActive }) =>
+                cn(
+                  'whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                  isActive ? 'bg-gold-500/15 text-gold-200' : 'text-white/50 hover:text-white',
+                )
+              }
+            >
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
       </header>
 
       <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">{children}</main>
