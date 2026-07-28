@@ -5,6 +5,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError
+from app.core.pagination import sort_and_paginate
 from app.services import audit_service
 
 ModelType = TypeVar("ModelType")
@@ -65,27 +66,7 @@ class BaseCRUD(Generic[ModelType]):
                 if field in self.filterable_fields and hasattr(self.model, field):
                     query = query.filter(getattr(self.model, field) == value)
 
-        if sort:
-            direction = "desc" if sort.startswith("-") else "asc"
-            field = sort.lstrip("-")
-            if field in self.sortable_fields and hasattr(self.model, field):
-                column = getattr(self.model, field)
-                query = query.order_by(column.desc() if direction == "desc" else column.asc())
-        else:
-            query = query.order_by(self.model.id.desc())
-
-        total = query.count()
-        page = max(page, 1)
-        page_size = min(max(page_size, 1), 200)
-        items = query.offset((page - 1) * page_size).limit(page_size).all()
-
-        return {
-            "items": items,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": (total + page_size - 1) // page_size if page_size else 0,
-        }
+        return sort_and_paginate(query, self.model, self.sortable_fields, sort, page, page_size)
 
     def create(self, db: Session, data: dict, user_id: int | None = None) -> ModelType:
         if hasattr(self.model, "created_by"):

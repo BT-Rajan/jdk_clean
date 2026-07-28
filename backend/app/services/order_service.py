@@ -4,6 +4,7 @@ from typing import Any
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
+from app.core.pagination import sort_and_paginate
 from app.models.customer import Customer
 from app.models.order import ALLOWED_TRANSITIONS, RESERVED_STATUSES, Order, OrderDetail
 from app.models.product import Product
@@ -74,29 +75,7 @@ def list_orders(
             (Order.order_number.ilike(like)) | (Customer.name.ilike(like))
         )
 
-    if sort:
-        direction = "desc" if sort.startswith("-") else "asc"
-        field = sort.lstrip("-")
-        column = _ORDER_SORTABLE_FIELDS.get(field)
-        if column is not None:
-            query = query.order_by(column.desc() if direction == "desc" else column.asc(), Order.id.desc())
-        else:
-            query = query.order_by(Order.id.desc())
-    else:
-        query = query.order_by(Order.id.desc())
-
-    total = query.count()
-    page = max(page, 1)
-    page_size = min(max(page_size, 1), 200)
-    items = query.offset((page - 1) * page_size).limit(page_size).all()
-
-    return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size if page_size else 0,
-    }
+    return sort_and_paginate(query, Order, _ORDER_SORTABLE_FIELDS, sort, page, page_size)
 
 
 def create_order(db: Session, data: dict, user_id: int | None = None) -> Order:

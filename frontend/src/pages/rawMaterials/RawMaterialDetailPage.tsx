@@ -4,8 +4,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { deleteRawMaterial, getRawMaterial, restoreRawMaterial } from '@/api/rawMaterials'
+import { getStock } from '@/api/inventory'
 import { getSupplier } from '@/api/suppliers'
 import type { RawMaterial } from '@/types/rawMaterial'
+import type { StockLevel } from '@/types/inventory'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
@@ -27,6 +29,7 @@ export function RawMaterialDetailPage() {
 
   const [material, setMaterial] = useState<RawMaterial | null>(null)
   const [supplierName, setSupplierName] = useState<string | null>(null)
+  const [stock, setStock] = useState<StockLevel | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -44,6 +47,9 @@ export function RawMaterialDetailPage() {
       })
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
+    getStock('raw_material', materialId)
+      .then(setStock)
+      .catch(() => {})
   }, [materialId])
 
   async function handleDelete() {
@@ -124,6 +130,14 @@ export function RawMaterialDetailPage() {
           <Field label="Reorder point" value={material.reorder_point} />
           <Field label="Unit cost" value={material.unit_cost.toLocaleString()} />
           <Field label="Default supplier" value={supplierName} />
+          <Field
+            label="On hand"
+            value={
+              stock
+                ? `${stock.quantity_on_hand} ${material.unit}${stock.quantity_reserved ? ` (${stock.quantity_available} available)` : ''}`
+                : undefined
+            }
+          />
         </dl>
       </GlassCard>
 

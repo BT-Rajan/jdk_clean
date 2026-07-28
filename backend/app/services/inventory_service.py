@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, NotFoundError, ValidationAppError
+from app.core.pagination import sort_and_paginate
 from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory, StockMovement
 from app.models.product import Product
 from app.models.raw_material import RawMaterial
@@ -188,29 +189,6 @@ def get_movement_history(
     if reference_id:
         query = query.filter(StockMovement.reference_id == reference_id)
 
-    if sort:
-        direction = "desc" if sort.startswith("-") else "asc"
-        field = sort.lstrip("-")
-        column = _MOVEMENT_SORTABLE_FIELDS.get(field)
-        if column is not None:
-            query = query.order_by(column.desc() if direction == "desc" else column.asc(), StockMovement.id.desc())
-        else:
-            query = query.order_by(StockMovement.created_at.desc(), StockMovement.id.desc())
-    else:
-        query = query.order_by(StockMovement.created_at.desc(), StockMovement.id.desc())
-
-    total = query.count()
-    page = max(page, 1)
-    page_size = min(max(page_size, 1), 200)
-    items = (
-        query.offset((page - 1) * page_size)
-        .limit(page_size)
-        .all()
+    return sort_and_paginate(
+        query, StockMovement, _MOVEMENT_SORTABLE_FIELDS, sort, page, page_size, default_field="created_at"
     )
-    return {
-        "items": items,
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-        "total_pages": (total + page_size - 1) // page_size if page_size else 0,
-    }

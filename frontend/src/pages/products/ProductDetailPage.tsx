@@ -4,7 +4,9 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Badge, Button, ConfirmDialog, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { deleteProduct, getProduct, restoreProduct } from '@/api/products'
+import { getStock } from '@/api/inventory'
 import type { Product } from '@/types/product'
+import type { StockLevel } from '@/types/inventory'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
@@ -26,6 +28,7 @@ export function ProductDetailPage() {
   const { user } = useAuth()
 
   const [product, setProduct] = useState<Product | null>(null)
+  const [stock, setStock] = useState<StockLevel | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -38,6 +41,9 @@ export function ProductDetailPage() {
       .then(setProduct)
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
+    getStock('product', productId)
+      .then(setStock)
+      .catch(() => {})
   }, [productId])
 
   async function handleDelete() {
@@ -117,6 +123,14 @@ export function ProductDetailPage() {
           <Field label="Type" value={<Badge tone={product.product_type === 'finished_good' ? 'gold' : 'info'}>{product.product_type}</Badge>} />
           <Field label="Unit" value={product.unit} />
           <Field label="Selling price" value={product.selling_price.toLocaleString()} />
+          <Field
+            label="On hand"
+            value={
+              stock
+                ? `${stock.quantity_on_hand} ${product.unit}${stock.quantity_reserved ? ` (${stock.quantity_available} available)` : ''}`
+                : undefined
+            }
+          />
         </dl>
       </GlassCard>
 
