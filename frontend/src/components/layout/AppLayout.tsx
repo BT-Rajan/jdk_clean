@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Avatar, Logo, Button } from '@/components/ui'
 import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
@@ -20,6 +20,20 @@ export function AppLayout({ children }: AppLayoutProps) {
   const { user, logoutUser, avatarVersion } = useAuth()
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [isScrolled, setIsScrolled] = useState(false)
+
+  // The header is sticky, so once the page scrolls, content passes directly
+  // behind it continuously. Track scroll position and swap to a near-solid
+  // background + firmer shadow at that point so scrolling content never
+  // visually blends/"jumbles" with the header text and nav above it.
+  useEffect(() => {
+    function handleScroll() {
+      setIsScrolled(window.scrollY > 8)
+    }
+    handleScroll()
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
 
   const navItems: NavItem[] = [
     { to: '/dashboard', label: 'Dashboard' },
@@ -46,7 +60,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="relative min-h-screen">
       <AmbientBackground />
 
-      <header className="glass-panel-strong sticky top-4 z-40 mx-4 mt-4 flex flex-col gap-3 rounded-2xl px-5 py-3 sm:mx-6 sm:px-6">
+      <header
+        className={cn(
+          'sticky top-4 z-40 mx-4 mt-4 flex flex-col gap-3 rounded-2xl px-5 py-3 transition-[background-color,box-shadow] duration-300 sm:mx-6 sm:px-6',
+          isScrolled ? 'glass-panel-header-scrolled' : 'glass-panel-header',
+        )}
+      >
         <div className="flex items-center justify-between">
           <Logo />
 

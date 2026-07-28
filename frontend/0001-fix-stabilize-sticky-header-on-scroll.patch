@@ -1,0 +1,107 @@
+From dfaa437f6542832d2dee3c5914d9d8432864d5f5 Mon Sep 17 00:00:00 2001
+From: Claude <assistant@anthropic.local>
+Date: Tue, 28 Jul 2026 08:03:43 +0000
+Subject: [PATCH] fix: stabilize sticky header on scroll
+
+The header used the shared glass-panel-strong utility (only ~9% white
+tint + blur), which let scrolling page content bleed through and
+visually blend with the header text/nav. Give the header its own
+near-opaque, ink-tinted background (glass-panel-header), and switch to
+an even more solid variant (glass-panel-header-scrolled) plus a firmer
+shadow once the page has scrolled, so content never collides with the
+header again.
+---
+ frontend/src/components/layout/AppLayout.tsx | 23 ++++++++++++++--
+ frontend/src/index.css                       | 29 ++++++++++++++++++++
+ 2 files changed, 50 insertions(+), 2 deletions(-)
+
+diff --git a/frontend/src/components/layout/AppLayout.tsx b/frontend/src/components/layout/AppLayout.tsx
+index e802844..7a3d66f 100644
+--- a/frontend/src/components/layout/AppLayout.tsx
++++ b/frontend/src/components/layout/AppLayout.tsx
+@@ -1,6 +1,6 @@
+ import type { ReactNode } from 'react'
+ import { Link, NavLink, useNavigate } from 'react-router-dom'
+-import { useState } from 'react'
++import { useEffect, useState } from 'react'
+ import { Avatar, Logo, Button } from '@/components/ui'
+ import { useAuth } from '@/hooks/useAuth'
+ import { isAdmin } from '@/lib/roles'
+@@ -20,6 +20,20 @@ export function AppLayout({ children }: AppLayoutProps) {
+   const { user, logoutUser, avatarVersion } = useAuth()
+   const navigate = useNavigate()
+   const [isLoggingOut, setIsLoggingOut] = useState(false)
++  const [isScrolled, setIsScrolled] = useState(false)
++
++  // The header is sticky, so once the page scrolls, content passes directly
++  // behind it continuously. Track scroll position and swap to a near-solid
++  // background + firmer shadow at that point so scrolling content never
++  // visually blends/"jumbles" with the header text and nav above it.
++  useEffect(() => {
++    function handleScroll() {
++      setIsScrolled(window.scrollY > 8)
++    }
++    handleScroll()
++    window.addEventListener('scroll', handleScroll, { passive: true })
++    return () => window.removeEventListener('scroll', handleScroll)
++  }, [])
+ 
+   const navItems: NavItem[] = [
+     { to: '/dashboard', label: 'Dashboard' },
+@@ -46,7 +60,12 @@ export function AppLayout({ children }: AppLayoutProps) {
+     <div className="relative min-h-screen">
+       <AmbientBackground />
+ 
+-      <header className="glass-panel-strong sticky top-4 z-40 mx-4 mt-4 flex flex-col gap-3 rounded-2xl px-5 py-3 sm:mx-6 sm:px-6">
++      <header
++        className={cn(
++          'sticky top-4 z-40 mx-4 mt-4 flex flex-col gap-3 rounded-2xl px-5 py-3 transition-[background-color,box-shadow] duration-300 sm:mx-6 sm:px-6',
++          isScrolled ? 'glass-panel-header-scrolled' : 'glass-panel-header',
++        )}
++      >
+         <div className="flex items-center justify-between">
+           <Logo />
+ 
+diff --git a/frontend/src/index.css b/frontend/src/index.css
+index 9652da5..621a723 100644
+--- a/frontend/src/index.css
++++ b/frontend/src/index.css
+@@ -94,6 +94,35 @@ body {
+     0 30px 80px -24px rgba(0, 0, 0, 0.7);
+ }
+ 
++/* Sticky header needs to stay legible over arbitrary scrolling content
++   underneath it, so it gets its own treatment: a near-opaque, ink-tinted
++   backdrop (rather than glass-panel-strong's light 9%-white wash) plus a
++   heavier blur. This keeps table rows/text from "showing through" and
++   visually colliding with the header while the page scrolls. */
++@utility glass-panel-header {
++  background-color: color-mix(in oklab, var(--color-ink-900) 78%, transparent);
++  backdrop-filter: blur(32px) saturate(160%);
++  -webkit-backdrop-filter: blur(32px) saturate(160%);
++  border: 1px solid color-mix(in oklab, white 14%, transparent);
++  box-shadow:
++    inset 0 1px 0 0 color-mix(in oklab, white 12%, transparent),
++    0 20px 50px -20px rgba(0, 0, 0, 0.7);
++}
++
++/* Once the page has scrolled, content is passing directly behind the
++   header continuously (not just peeking in at the edges), so we raise
++   the header to near-solid and add a firmer shadow for a clear
++   foreground/background separation. */
++@utility glass-panel-header-scrolled {
++  background-color: color-mix(in oklab, var(--color-ink-900) 94%, transparent);
++  backdrop-filter: blur(32px) saturate(160%);
++  -webkit-backdrop-filter: blur(32px) saturate(160%);
++  border: 1px solid color-mix(in oklab, white 16%, transparent);
++  box-shadow:
++    inset 0 1px 0 0 color-mix(in oklab, white 12%, transparent),
++    0 20px 50px -16px rgba(0, 0, 0, 0.85);
++}
++
+ @utility glass-inset {
+   background-color: color-mix(in oklab, white 4%, transparent);
+   border: 1px solid color-mix(in oklab, white 10%, transparent);
+-- 
+2.43.0
+
