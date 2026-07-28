@@ -14,7 +14,7 @@ class ListParams:
     def __init__(
         self,
         page: int = Query(1, ge=1),
-        page_size: int = Query(25, ge=1, le=200),
+        page_size: int = Query(10, ge=1, le=200),
         search: str | None = Query(None),
         sort: str | None = Query(None),
         status: str | None = Query(None),

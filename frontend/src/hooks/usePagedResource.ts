@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PagedResponse } from '@/types/common'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { DEFAULT_PAGE_SIZE } from '@/lib/constants'
 
 const SEARCH_DEBOUNCE_MS = 350
 
@@ -10,9 +11,17 @@ const SEARCH_DEBOUNCE_MS = 350
  * Every module's ListPage (customers, suppliers, raw materials, products,
  * quotations, orders, users) uses this the same way, matching the
  * page/search/status shape backend/app/api/deps.py:ListParams expects.
+ * Always requests DEFAULT_PAGE_SIZE rows/page -- see lib/constants.ts --
+ * so every list table in the app paginates identically.
  */
 export function usePagedResource<T>(
-  fetcher: (params: { page: number; search?: string; status?: string; sort?: string }) => Promise<PagedResponse<T>>,
+  fetcher: (params: {
+    page: number
+    page_size: number
+    search?: string
+    status?: string
+    sort?: string
+  }) => Promise<PagedResponse<T>>,
 ) {
   const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState('')
@@ -42,6 +51,7 @@ export function usePagedResource<T>(
       try {
         const result = await fetcher({
           page: targetPage,
+          page_size: DEFAULT_PAGE_SIZE,
           search: search || undefined,
           status: statusFilter || undefined,
           sort: sortParam || undefined,

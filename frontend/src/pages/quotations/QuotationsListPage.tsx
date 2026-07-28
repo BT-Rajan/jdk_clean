@@ -22,7 +22,7 @@ export function QuotationsListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const fetcher = useCallback(
-    (params: { page: number; search?: string; status?: string; sort?: string }) => listQuotations(params),
+    (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) => listQuotations(params),
     [],
   )
   const {

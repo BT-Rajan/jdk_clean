@@ -22,7 +22,7 @@ export function CustomersListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const fetcher = useCallback(
-    (params: { page: number; search?: string; status?: string; sort?: string }) => listCustomers(params),
+    (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) => listCustomers(params),
     [],
   )
   const {

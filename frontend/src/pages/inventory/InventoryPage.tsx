@@ -16,10 +16,11 @@ import { getLowStock, getMovements } from '@/api/inventory'
 import { useAuth } from '@/hooks/useAuth'
 import { canAdjustInventory } from '@/lib/roles'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { DEFAULT_PAGE_SIZE } from '@/lib/constants'
 import type { LowStockItem, StockMovement } from '@/types/inventory'
 
-const LOW_STOCK_PAGE_SIZE = 10
-const MOVEMENTS_PAGE_SIZE = 25
+const LOW_STOCK_PAGE_SIZE = DEFAULT_PAGE_SIZE
+const MOVEMENTS_PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 export function InventoryPage() {
   const { user } = useAuth()

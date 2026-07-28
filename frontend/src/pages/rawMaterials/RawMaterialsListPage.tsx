@@ -22,7 +22,7 @@ export function RawMaterialsListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const fetcher = useCallback(
-    (params: { page: number; search?: string; status?: string; sort?: string }) => listRawMaterials(params),
+    (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) => listRawMaterials(params),
     [],
   )
   const {

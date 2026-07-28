@@ -15,7 +15,7 @@ write_guard = require_role("admin", "manager")
 @router.get("", response_model=PagedResponse)
 def list_orders(
     page: int = Query(1, ge=1),
-    page_size: int = Query(25, ge=1, le=200),
+    page_size: int = Query(10, ge=1, le=200),
     search: str | None = Query(None),
     status: str | None = Query(None),
     customer_id: int | None = Query(None),

@@ -8,7 +8,7 @@ import { usePagedResource } from '@/hooks/usePagedResource'
 export function UsersListPage() {
   const navigate = useNavigate()
   const fetcher = useCallback(
-    (params: { page: number; search?: string; sort?: string }) => listUsers(params),
+    (params: { page: number; page_size?: number; search?: string; sort?: string }) => listUsers(params),
     [],
   )
   const { items, total, totalPages, page, setPage, searchInput, setSearchInput, sort, toggleSort, loading, error } =

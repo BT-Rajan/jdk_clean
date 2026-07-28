@@ -58,7 +58,7 @@ def movements(
     reference_type: str | None = Query(None),
     reference_id: int | None = Query(None),
     page: int = Query(1, ge=1),
-    page_size: int = Query(25, ge=1, le=200),
+    page_size: int = Query(10, ge=1, le=200),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),

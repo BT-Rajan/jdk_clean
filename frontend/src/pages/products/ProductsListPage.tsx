@@ -23,7 +23,7 @@ export function ProductsListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const fetcher = useCallback(
-    (params: { page: number; search?: string; status?: string; sort?: string }) => listProducts(params),
+    (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) => listProducts(params),
     [],
   )
   const {
