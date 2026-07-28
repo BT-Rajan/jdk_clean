@@ -105,7 +105,8 @@ backend/
     services/   # business logic (auth, orders, quotations, BOM, inventory, PDF)
   scripts/
     seed_admin.py   # idempotent bootstrap admin + number-series seeding
-  schema.sql    # MySQL schema (tables only — no seed data, see seed_admin.py)
+  migrations/   # one-off schema changes for existing databases, applied by hand
+  schema.sql    # MySQL schema + number_series seed rows (no admin user, see seed_admin.py)
   requirements.txt
 
 frontend/

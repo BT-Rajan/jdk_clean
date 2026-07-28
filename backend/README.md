@@ -126,6 +126,19 @@ and orders — with role-based auth, soft deletes, and a field-level audit log.
    The API is now at `http://localhost:8000`. Interactive docs (Swagger UI)
    are at `http://localhost:8000/docs`.
 
+## Migrations
+
+There's no migration framework (Alembic, etc.) here yet -- `schema.sql`
+is the source of truth for a fresh install, and schema changes made
+after a table's initial release ship as one-off files in `migrations/`,
+applied by hand:
+
+```bash
+mysql -u <user> -p <database> < migrations/2026-07-28_add_profile_fields.sql
+```
+
+Each migration file documents what it does and is safe to re-run.
+
 ## Testing the login
 
 ### Option A — Swagger UI
@@ -233,6 +246,7 @@ app/
   services/   # business logic (auth, orders, quotations, BOM, inventory, PDF)
 scripts/
   seed_admin.py   # idempotent bootstrap admin + number-series seeding
-schema.sql    # MySQL schema (tables only — no seed data, see seed_admin.py)
+migrations/   # one-off schema changes for existing databases, applied by hand
+schema.sql    # MySQL schema + number_series seed rows (no admin user, see seed_admin.py)
 requirements.txt
 ```
