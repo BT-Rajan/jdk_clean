@@ -179,15 +179,26 @@ if /i "!START_PM2!"=="Y" (
 REM -------------------------------------------------------------------
 REM Database setup
 REM -------------------------------------------------------------------
+set "NEED_MYSQL=N"
 if /i "!CREATE_DB!"=="Y" set "NEED_MYSQL=Y"
 if /i "!LOAD_SCHEMA!"=="Y" set "NEED_MYSQL=Y"
 
-if "!NEED_MYSQL!"=="Y" (
+set "MYSQL_CMD=mysql"
+if /i "!NEED_MYSQL!"=="Y" (
   call :Heading "Setting up the database"
-  where mysql >nul 2>&1
-  if errorlevel 1 (
-    call :Fail "The mysql client is required for the database steps you asked for. Install it, or answer No to those questions and set the database up yourself."
-    goto :EndFail
+  call :FindMysqlClient MYSQL_CMD
+  if "!MYSQL_CMD!"=="" (
+    call :Warn "Could not find the mysql client on this machine (checked PATH and the usual MySQL/XAMPP/WAMP install locations)."
+    call :AskDefault "Full path to mysql.exe (leave blank to skip database setup and do it yourself)" "" MYSQL_CMD
+    if "!MYSQL_CMD!"=="" (
+      call :Warn "Skipping database setup -- run backend\schema.sql yourself, then re-run install.bat and answer No to the DB questions."
+      set "CREATE_DB=N"
+      set "LOAD_SCHEMA=N"
+      set "NEED_MYSQL=N"
+    ) else if not exist "!MYSQL_CMD!" (
+      call :Fail "No file found at '!MYSQL_CMD!'."
+      goto :EndFail
+    )
   )
 )
 
@@ -201,7 +212,7 @@ if /i "!CREATE_DB!"=="Y" (
     echo FLUSH PRIVILEGES;
   ) > "!TEMP_SQL!"
   set "MYSQL_PWD=!ADMIN_DB_PASSWORD!"
-  mysql -h "!DB_HOST!" -P "!DB_PORT!" -u "!ADMIN_DB_USER!" < "!TEMP_SQL!"
+  "!MYSQL_CMD!" -h "!DB_HOST!" -P "!DB_PORT!" -u "!ADMIN_DB_USER!" < "!TEMP_SQL!"
   set "CREATE_DB_RESULT=!errorlevel!"
   set "MYSQL_PWD="
   del /q "!TEMP_SQL!" >nul 2>&1
@@ -215,7 +226,7 @@ if /i "!CREATE_DB!"=="Y" (
 if /i "!LOAD_SCHEMA!"=="Y" (
   call :Info "Loading schema..."
   set "MYSQL_PWD=!DB_PASSWORD!"
-  mysql -h "!DB_HOST!" -P "!DB_PORT!" -u "!DB_USER!" "!DB_NAME!" < "%BACKEND_DIR%\schema.sql"
+  "!MYSQL_CMD!" -h "!DB_HOST!" -P "!DB_PORT!" -u "!DB_USER!" "!DB_NAME!" < "%BACKEND_DIR%\schema.sql"
   set "SCHEMA_RESULT=!errorlevel!"
   set "MYSQL_PWD="
   if not "!SCHEMA_RESULT!"=="0" (
@@ -440,6 +451,40 @@ exit /b 0
 :EndFail
 endlocal
 exit /b 1
+
+REM %1=result var. Sets it to a usable mysql command/path, or "" if none found.
+REM Checks PATH first, then the usual Windows install locations for MySQL
+REM Server, XAMPP, and WAMP (any of which may not add mysql.exe to PATH).
+:FindMysqlClient
+setlocal EnableDelayedExpansion
+set "FOUND="
+where mysql >nul 2>&1
+if not errorlevel 1 (
+  set "FOUND=mysql"
+) else (
+  for %%D in (
+    "%ProgramFiles%\MySQL\MySQL Server 8.4\bin\mysql.exe"
+    "%ProgramFiles%\MySQL\MySQL Server 8.0\bin\mysql.exe"
+    "%ProgramFiles(x86)%\MySQL\MySQL Server 8.0\bin\mysql.exe"
+    "%ProgramFiles%\MySQL\MySQL Server 5.7\bin\mysql.exe"
+    "C:\xampp\mysql\bin\mysql.exe"
+    "C:\wamp64\bin\mysql\mysql8.0.31\bin\mysql.exe"
+  ) do (
+    if "!FOUND!"=="" if exist %%D set "FOUND=%%~D"
+  )
+  if "!FOUND!"=="" (
+    for /d %%V in ("%ProgramFiles%\MySQL\MySQL Server *") do (
+      if "!FOUND!"=="" if exist "%%V\bin\mysql.exe" set "FOUND=%%V\bin\mysql.exe"
+    )
+  )
+  if "!FOUND!"=="" (
+    for /d %%V in ("C:\wamp64\bin\mysql\mysql*") do (
+      if "!FOUND!"=="" if exist "%%V\bin\mysql.exe" set "FOUND=%%V\bin\mysql.exe"
+    )
+  )
+)
+endlocal & set "%~1=%FOUND%"
+goto :eof
 
 REM ===================================================================
 REM Subroutines
