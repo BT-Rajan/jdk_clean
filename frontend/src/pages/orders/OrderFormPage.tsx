@@ -4,6 +4,7 @@ import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, Spinner, TextareaField, TextField } from '@/components/ui'
 import { createOrder, getOrder, updateOrder } from '@/api/orders'
 import { listCustomers } from '@/api/customers'
@@ -30,10 +31,10 @@ function useProductOptions() {
 function FormShell({ title, children }: { title: string; children: ReactNode }) {
   return (
     <AppLayout>
-      <div className="mx-auto max-w-3xl">
+      <PageContainer>
         <h1 className="font-display text-2xl font-medium text-white">{title}</h1>
         <GlassCard className="mt-8 p-8">{children}</GlassCard>
-      </div>
+      </PageContainer>
     </AppLayout>
   )
 }

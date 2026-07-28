@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { cn } from '@/lib/cn'
@@ -12,7 +12,13 @@ interface ModalProps {
   wide?: boolean
 }
 
+const FOCUSABLE_SELECTOR =
+  'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
 export function Modal({ open, title, onClose, children, footer, wide = false }: ModalProps) {
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const previouslyFocused = useRef<HTMLElement | null>(null)
+
   useEffect(() => {
     if (!open) return
     function onKeydown(e: KeyboardEvent) {
@@ -21,6 +27,47 @@ export function Modal({ open, title, onClose, children, footer, wide = false }: 
     document.addEventListener('keydown', onKeydown)
     return () => document.removeEventListener('keydown', onKeydown)
   }, [open, onClose])
+
+  // Without this, Tab cycles through the whole page behind the overlay --
+  // nav links, buttons on the page the modal is covering -- rather than
+  // staying inside the dialog, and closing leaves focus wherever it last
+  // landed (often nowhere) instead of back on whatever opened the modal.
+  useEffect(() => {
+    if (!open) return
+
+    previouslyFocused.current = document.activeElement as HTMLElement | null
+
+    const dialog = dialogRef.current
+    const focusFirst = () => {
+      const first = dialog?.querySelector<HTMLElement>(FOCUSABLE_SELECTOR)
+      ;(first ?? dialog)?.focus()
+    }
+    // Wait a tick for the enter animation/mount to finish so the element
+    // being focused actually exists and is visible.
+    const raf = requestAnimationFrame(focusFirst)
+
+    function onKeydown(e: KeyboardEvent) {
+      if (e.key !== 'Tab' || !dialog) return
+      const focusable = Array.from(dialog.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR))
+      if (focusable.length === 0) return
+      const first = focusable[0]!
+      const last = focusable[focusable.length - 1]!
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault()
+        last.focus()
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault()
+        first.focus()
+      }
+    }
+    document.addEventListener('keydown', onKeydown)
+
+    return () => {
+      cancelAnimationFrame(raf)
+      document.removeEventListener('keydown', onKeydown)
+      previouslyFocused.current?.focus()
+    }
+  }, [open])
 
   return (
     <AnimatePresence>
@@ -36,15 +83,17 @@ export function Modal({ open, title, onClose, children, footer, wide = false }: 
           }}
         >
           <motion.div
+            ref={dialogRef}
             role="dialog"
             aria-modal="true"
             aria-label={title}
+            tabIndex={-1}
             initial={{ opacity: 0, y: 12, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             className={cn(
-              'glass-panel-strong m-4 max-h-[85vh] w-full overflow-y-auto rounded-3xl p-6 sm:p-8',
+              'glass-panel-strong m-4 max-h-[85vh] w-full overflow-y-auto rounded-3xl p-6 sm:p-8 focus:outline-none',
               wide ? 'max-w-2xl' : 'max-w-md',
             )}
           >

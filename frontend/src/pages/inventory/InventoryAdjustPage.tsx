@@ -4,6 +4,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, TextField } from '@/components/ui'
 import { adjustStock } from '@/api/inventory'
 import { listProducts } from '@/api/products'
@@ -57,7 +58,7 @@ export function InventoryAdjustPage() {
 
   return (
     <AppLayout>
-      <div className="mx-auto max-w-2xl">
+      <PageContainer>
         <h1 className="font-display text-2xl font-medium text-white">Adjust stock</h1>
         <p className="mt-2 text-sm text-white/50">
           Record a receipt, issue, adjustment, or return against a product or raw material.
@@ -106,7 +107,7 @@ export function InventoryAdjustPage() {
             </div>
           </form>
         </GlassCard>
-      </div>
+      </PageContainer>
     </AppLayout>
   )
 }
