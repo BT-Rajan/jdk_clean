@@ -40,10 +40,17 @@ export async function updateProfile(payload: UpdateProfilePayload): Promise<User
 export async function uploadAvatar(file: File): Promise<User> {
   const form = new FormData()
   form.append('file', file)
-  // No explicit Content-Type here -- the browser must generate the
-  // multipart boundary itself; setting the header manually would produce
-  // a body the backend's multipart parser can't read.
-  const { data } = await apiClient.post<User>('/api/auth/me/avatar', form)
+  // apiClient sets a default 'Content-Type: application/json' header on
+  // every request. Axios only lets FormData pass through untouched when
+  // there's no JSON content-type already present -- otherwise it actually
+  // JSON.stringifies the FormData (into something like '{"file":{}}',
+  // discarding the file bytes entirely) and sends *that* as JSON. Setting
+  // Content-Type to undefined here removes the inherited default for just
+  // this request, so axios's FormData branch applies and the browser can
+  // generate the multipart boundary itself.
+  const { data } = await apiClient.post<User>('/api/auth/me/avatar', form, {
+    headers: { 'Content-Type': undefined },
+  })
   return data
 }
 
