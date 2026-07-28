@@ -31,3 +31,15 @@ export const changePasswordSchema = z
   })
 
 export type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>
+
+export const profileSchema = z.object({
+  full_name: z.string().trim().min(1, 'Full name is required').max(120),
+  phone: z
+    .string()
+    .trim()
+    .max(30, 'Phone number is too long')
+    .optional()
+    .or(z.literal('')),
+})
+
+export type ProfileFormValues = z.infer<typeof profileSchema>

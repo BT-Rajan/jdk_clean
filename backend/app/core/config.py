@@ -21,6 +21,10 @@ class Settings(BaseSettings):
 
     CORS_ORIGINS: str = "http://localhost:5173"
 
+    UPLOAD_DIR: str = "uploads"
+    AVATAR_MAX_UPLOAD_MB: int = 5
+    AVATAR_MAX_DIMENSION: int = 512
+
     @property
     def database_url(self) -> str:
         return (

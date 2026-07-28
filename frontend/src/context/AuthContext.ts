@@ -9,6 +9,14 @@ export interface AuthContextValue {
   loginUser: (payload: LoginPayload) => Promise<void>
   logoutUser: () => Promise<void>
   changeUserPassword: (payload: ChangePasswordPayload) => Promise<void>
+  /** Replaces the in-memory user with fresher data returned by a profile/
+   * avatar update -- avoids an extra round-trip re-fetch of /me. */
+  updateUser: (user: User) => void
+  /** The avatar URL string never changes across re-uploads (it's always
+   * /api/auth/me/avatar) -- bump this after an avatar mutation so
+   * consumers know to re-fetch the image rather than reuse a cached blob. */
+  avatarVersion: number
+  refreshAvatar: () => void
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null)

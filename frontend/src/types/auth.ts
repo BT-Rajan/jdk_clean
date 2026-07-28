@@ -10,8 +10,15 @@ export interface User {
   username: string
   email: string
   full_name: string
+  phone: string | null
   role: UserRole
   is_active: boolean
+  avatar_url: string | null
+}
+
+export interface UpdateProfilePayload {
+  full_name?: string
+  phone?: string | null
 }
 
 export interface LoginPayload {

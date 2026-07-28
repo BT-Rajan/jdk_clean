@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
-import { Logo, Button } from '@/components/ui'
+import { Avatar, Logo, Button } from '@/components/ui'
 import { useAuth } from '@/hooks/useAuth'
 import { AmbientBackground } from './AmbientBackground'
 
@@ -10,7 +10,7 @@ interface AppLayoutProps {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { user, logoutUser } = useAuth()
+  const { user, logoutUser, avatarVersion } = useAuth()
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
@@ -32,10 +32,16 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         <div className="flex items-center gap-4">
           {user && (
-            <div className="hidden text-right sm:block">
-              <p className="text-sm font-medium text-white">{user.full_name}</p>
-              <p className="text-xs tracking-wide text-gold-300/80 capitalize">{user.role}</p>
-            </div>
+            <Link
+              to="/profile"
+              className="flex items-center gap-3 rounded-xl px-2 py-1 transition-colors hover:bg-white/5"
+            >
+              <div className="hidden text-right sm:block">
+                <p className="text-sm font-medium text-white">{user.full_name}</p>
+                <p className="text-xs tracking-wide text-gold-300/80 capitalize">{user.role}</p>
+              </div>
+              <Avatar key={avatarVersion} avatarUrl={user.avatar_url} name={user.full_name} size="sm" />
+            </Link>
           )}
           <Button variant="ghost" size="sm" isLoading={isLoggingOut} onClick={handleLogout}>
             Sign out

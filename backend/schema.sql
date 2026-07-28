@@ -37,12 +37,18 @@ CREATE TABLE IF NOT EXISTS audit_log (
 -- ============================================================
 -- USERS & AUTH
 -- ============================================================
+-- Note: phone and avatar_filename were added after this table's initial
+-- release. A database created before that needs, once:
+--   ALTER TABLE users ADD COLUMN phone VARCHAR(30) NULL AFTER full_name;
+--   ALTER TABLE users ADD COLUMN avatar_filename VARCHAR(255) NULL AFTER phone;
 CREATE TABLE IF NOT EXISTS users (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     username        VARCHAR(50)  NOT NULL UNIQUE,
     email           VARCHAR(120) NOT NULL UNIQUE,
     password_hash   VARCHAR(255) NOT NULL,
     full_name       VARCHAR(120) NOT NULL,
+    phone           VARCHAR(30)  NULL,
+    avatar_filename VARCHAR(255) NULL,
     role            ENUM('admin','manager','staff','viewer') NOT NULL DEFAULT 'staff',
     is_active       TINYINT(1)   NOT NULL DEFAULT 1,
     deleted_at      DATETIME NULL,

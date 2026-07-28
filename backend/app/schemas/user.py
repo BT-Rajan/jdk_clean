@@ -21,7 +21,26 @@ class UserOut(BaseModel):
     username: str
     email: EmailStr
     full_name: str
+    phone: str | None = None
     role: str
     is_active: bool
 
     model_config = {"from_attributes": True}
+
+
+class MeUpdate(BaseModel):
+    """Self-service profile update -- deliberately narrower than UserUpdate
+    (admin-only): a user can update their own contact details, but not
+    their own role, active status, or (for now) email/username."""
+
+    full_name: str | None = Field(default=None, min_length=1, max_length=120)
+    phone: str | None = Field(default=None, max_length=30)
+
+
+class MeOut(UserOut):
+    """UserOut plus the fields that only make sense in a 'this is me'
+    context -- avatar_url always points at the caller's own avatar, which
+    would be misleading if reused on UserOut for admins viewing other
+    users (see api/users.py)."""
+
+    avatar_url: str | None = None

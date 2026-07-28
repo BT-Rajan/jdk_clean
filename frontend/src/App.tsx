@@ -9,8 +9,8 @@ import { FullScreenLoader } from '@/components/layout/FullScreenLoader'
 const DashboardPage = lazy(() =>
   import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
 )
-const ChangePasswordPage = lazy(() =>
-  import('@/pages/ChangePasswordPage').then((m) => ({ default: m.ChangePasswordPage })),
+const ProfilePage = lazy(() =>
+  import('@/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })),
 )
 const NotFoundPage = lazy(() =>
   import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
@@ -29,7 +29,9 @@ export function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/change-password" element={<ChangePasswordPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            {/* The password form moved into /profile; keep old links working. */}
+            <Route path="/change-password" element={<Navigate to="/profile" replace />} />
           </Route>
 
           <Route path="*" element={<NotFoundPage />} />

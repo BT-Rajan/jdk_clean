@@ -1,10 +1,10 @@
 import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { GlassCard } from '@/components/ui'
+import { Avatar, GlassCard } from '@/components/ui'
 import { useAuth } from '@/hooks/useAuth'
 
 export function DashboardPage() {
-  const { user } = useAuth()
+  const { user, avatarVersion } = useAuth()
 
   return (
     <AppLayout>
@@ -14,35 +14,22 @@ export function DashboardPage() {
       <p className="mt-2 text-sm text-white/50">You're signed in to the JDK ERP workspace.</p>
 
       <GlassCard className="mt-8 p-8">
-        <h2 className="text-xs font-medium tracking-[0.14em] text-white/50 uppercase">
-          Account
-        </h2>
-        <dl className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div className="flex items-center gap-5">
+          {user && (
+            <Avatar key={avatarVersion} avatarUrl={user.avatar_url} name={user.full_name} size="md" />
+          )}
           <div>
-            <dt className="text-xs text-white/40">Username</dt>
-            <dd className="mt-1 text-[15px] text-white">{user?.username}</dd>
+            <p className="text-lg font-medium text-white">{user?.full_name}</p>
+            <p className="text-sm text-white/50">{user?.email}</p>
+            <p className="mt-1 text-xs tracking-wide text-gold-300/80 capitalize">{user?.role}</p>
           </div>
-          <div>
-            <dt className="text-xs text-white/40">Email</dt>
-            <dd className="mt-1 text-[15px] text-white">{user?.email}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-white/40">Role</dt>
-            <dd className="mt-1 text-[15px] text-white capitalize">{user?.role}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-white/40">Status</dt>
-            <dd className="mt-1 text-[15px] text-white">
-              {user?.is_active ? 'Active' : 'Inactive'}
-            </dd>
-          </div>
-        </dl>
+        </div>
 
         <Link
-          to="/change-password"
-          className="mt-8 inline-block text-sm font-medium text-gold-300 transition-colors hover:text-gold-200"
+          to="/profile"
+          className="mt-6 inline-block text-sm font-medium text-gold-300 transition-colors hover:text-gold-200"
         >
-          Change password →
+          View profile →
         </Link>
       </GlassCard>
 

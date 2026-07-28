@@ -18,6 +18,8 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     email: Mapped[str] = mapped_column(String(120), unique=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     full_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    avatar_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(
         Enum("admin", "manager", "staff", "viewer", name="user_role"),
         nullable=False,
