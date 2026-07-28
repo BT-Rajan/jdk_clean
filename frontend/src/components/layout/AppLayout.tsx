@@ -46,7 +46,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     <div className="relative min-h-screen">
       <AmbientBackground />
 
-      <header className="glass-panel sticky top-4 z-10 mx-4 mt-4 flex flex-col gap-3 rounded-2xl px-5 py-3 sm:mx-6 sm:px-6">
+      <header className="glass-panel-strong sticky top-4 z-40 mx-4 mt-4 flex flex-col gap-3 rounded-2xl px-5 py-3 sm:mx-6 sm:px-6">
         <div className="flex items-center justify-between">
           <Logo />
 
@@ -87,7 +87,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </nav>
       </header>
 
-      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6">{children}</main>
+      <main className="relative z-0 mx-auto max-w-5xl px-4 py-10 sm:px-6">{children}</main>
     </div>
   )
 }
