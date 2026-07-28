@@ -39,37 +39,37 @@ TRUNCATE TABLE settings;
 -- backend uses -- these will actually log in, not just satisfy NOT NULL).
 -- ============================================================================
 INSERT INTO users (id, username, email, password_hash, full_name, phone, role, is_active, created_at, updated_at) VALUES
-(1, 'admin',     'admin@jdk.test',     '$2b$12$3EBawRdVSeQHLhIax7HCpO94Qo90.xXXTaStlTqChTaKLFk7L07ci', 'Admin User',        '+91-9876543210', 'admin',   1, NOW(), NOW()),
-(2, 'manager',   'manager@jdk.test',   '$2b$12$10/Y94vrwMHTMunT8yBUy.CXqboYbcrvjGQs5pGhxujuTR/Yi4116', 'Operations Manager','+91-9876543211', 'manager', 1, NOW(), NOW()),
-(3, 'sales',     'sales@jdk.test',     '$2b$12$cUVzEilHjz3LyJmSerPkruWhf5C/qM5TyteflkcjQ3Gk1pkpcN7m.', 'Sales Executive',   '+91-9876543212', 'staff',   1, NOW(), NOW()),
-(4, 'inventory', 'inventory@jdk.test', '$2b$12$PC2egDYT4dETeqS3cZtQROaV21s2rVIxn3lQMhk4LjT6hTUgyisF.', 'Inventory Staff',   '+91-9876543213', 'staff',   1, NOW(), NOW()),
-(5, 'viewer',    'viewer@jdk.test',    '$2b$12$qleed4S6ixwxIkB1ASNJfehV4t7HAI4R54l3LyFsEN0Me0uSrAAIi', 'Read Only Viewer',  '+91-9876543214', 'viewer',  1, NOW(), NOW());
+(1, 'admin',     'admin@jdk.com',     '$2b$12$3EBawRdVSeQHLhIax7HCpO94Qo90.xXXTaStlTqChTaKLFk7L07ci', 'Admin User',        '+91-9876543210', 'admin',   1, NOW(), NOW()),
+(2, 'manager',   'manager@jdk.com',   '$2b$12$10/Y94vrwMHTMunT8yBUy.CXqboYbcrvjGQs5pGhxujuTR/Yi4116', 'Operations Manager','+91-9876543211', 'manager', 1, NOW(), NOW()),
+(3, 'sales',     'sales@jdk.com',     '$2b$12$cUVzEilHjz3LyJmSerPkruWhf5C/qM5TyteflkcjQ3Gk1pkpcN7m.', 'Sales Executive',   '+91-9876543212', 'staff',   1, NOW(), NOW()),
+(4, 'inventory', 'inventory@jdk.com', '$2b$12$PC2egDYT4dETeqS3cZtQROaV21s2rVIxn3lQMhk4LjT6hTUgyisF.', 'Inventory Staff',   '+91-9876543213', 'staff',   1, NOW(), NOW()),
+(5, 'viewer',    'viewer@jdk.com',    '$2b$12$qleed4S6ixwxIkB1ASNJfehV4t7HAI4R54l3LyFsEN0Me0uSrAAIi', 'Read Only Viewer',  '+91-9876543214', 'viewer',  1, NOW(), NOW());
 
 -- ============================================================================
 -- 2. CUSTOMERS
 -- ============================================================================
 INSERT INTO customers (id, code, name, contact_person, email, phone, billing_address, shipping_address, city, country, credit_limit, payment_terms_days, status, created_at, created_by, updated_at) VALUES
-(1, 'CUST-0001', 'BuildTech Construction Ltd',   'Rajesh Kumar',     'rajesh@buildtech.test', '+91-8765432100', '456 Industrial Avenue', '456 Industrial Avenue', 'Bangalore', 'India', 50000.00, 30, 'active', NOW(), 1, NOW()),
-(2, 'CUST-0002', 'Metro Infrastructure Solutions','Priya Sharma',     'priya@metro.test',      '+91-8765432101', '789 Commerce Plaza',    '789 Commerce Plaza',    'Pune',      'India', 75000.00, 45, 'active', NOW(), 1, NOW()),
-(3, 'CUST-0003', 'National Road Works',          'Amit Patel',       'amit@nrw.test',         '+91-8765432102', '123 Tech Park',         '123 Tech Park',         'Ahmedabad', 'India', 100000.00, 60, 'active', NOW(), 1, NOW()),
-(4, 'CUST-0004', 'Urban Builders Collective',    'Sanjana Singh',    'sanjana@urbanbc.test',  '+91-8765432103', '321 Commerce Street',   '321 Commerce Street',   'Delhi',     'India', 60000.00, 30, 'active', NOW(), 1, NOW()),
-(5, 'CUST-0005', 'Southern Concrete Pvt Ltd',    'Venkatesh Reddy',  'venkat@scpl.test',      '+91-8765432104', '654 Industrial Zone',   '654 Industrial Zone',   'Hyderabad', 'India', 80000.00, 45, 'active', NOW(), 1, NOW()),
-(6, 'CUST-0006', 'Coastal Development Corp',     'Anjali Das',       'anjali@cdc.test',       '+91-8765432105', '987 Port Area',         '987 Port Area',         'Chennai',   'India', 45000.00, 30, 'active', NOW(), 1, NOW()),
-(7, 'CUST-0007', 'Eastern Infrastructure',       'Rahul Verma',      'rahul@ei.test',         '+91-8765432106', '111 Business District', '111 Business District', 'Kolkata',   'India', 55000.00, 30, 'inactive', NOW(), 1, NOW()),
-(8, 'CUST-0008', 'Premium Concrete Industries',  'Neha Gupta',       'neha@pci.test',         '+91-8765432107', '222 Tech Hub',          '222 Tech Hub',          'Noida',     'India', 120000.00, 60, 'active', NOW(), 1, NOW());
+(1, 'CUST-0001', 'BuildTech Construction Ltd',   'Rajesh Kumar',     'rajesh@buildtech.com', '+91-8765432100', '456 Industrial Avenue', '456 Industrial Avenue', 'Bangalore', 'India', 50000.00, 30, 'active', NOW(), 1, NOW()),
+(2, 'CUST-0002', 'Metro Infrastructure Solutions','Priya Sharma',     'priya@metro.com',      '+91-8765432101', '789 Commerce Plaza',    '789 Commerce Plaza',    'Pune',      'India', 75000.00, 45, 'active', NOW(), 1, NOW()),
+(3, 'CUST-0003', 'National Road Works',          'Amit Patel',       'amit@nrw.com',         '+91-8765432102', '123 Tech Park',         '123 Tech Park',         'Ahmedabad', 'India', 100000.00, 60, 'active', NOW(), 1, NOW()),
+(4, 'CUST-0004', 'Urban Builders Collective',    'Sanjana Singh',    'sanjana@urbanbc.com',  '+91-8765432103', '321 Commerce Street',   '321 Commerce Street',   'Delhi',     'India', 60000.00, 30, 'active', NOW(), 1, NOW()),
+(5, 'CUST-0005', 'Southern Concrete Pvt Ltd',    'Venkatesh Reddy',  'venkat@scpl.com',      '+91-8765432104', '654 Industrial Zone',   '654 Industrial Zone',   'Hyderabad', 'India', 80000.00, 45, 'active', NOW(), 1, NOW()),
+(6, 'CUST-0006', 'Coastal Development Corp',     'Anjali Das',       'anjali@cdc.com',       '+91-8765432105', '987 Port Area',         '987 Port Area',         'Chennai',   'India', 45000.00, 30, 'active', NOW(), 1, NOW()),
+(7, 'CUST-0007', 'Eastern Infrastructure',       'Rahul Verma',      'rahul@ei.com',         '+91-8765432106', '111 Business District', '111 Business District', 'Kolkata',   'India', 55000.00, 30, 'inactive', NOW(), 1, NOW()),
+(8, 'CUST-0008', 'Premium Concrete Industries',  'Neha Gupta',       'neha@pci.com',         '+91-8765432107', '222 Tech Hub',          '222 Tech Hub',          'Noida',     'India', 120000.00, 60, 'active', NOW(), 1, NOW());
 
 -- ============================================================================
 -- 3. SUPPLIERS
 -- ============================================================================
 INSERT INTO suppliers (id, code, name, contact_person, email, phone, address, city, country, payment_terms_days, status, created_at, created_by, updated_at) VALUES
-(1, 'SUPP-0001', 'Global Minerals Ltd',          'Vikram Singh',   'vikram@gm.test',    '+91-7654321000', '456 Mining Complex', 'Singrauli',   'India', 15, 'active', NOW(), 1, NOW()),
-(2, 'SUPP-0002', 'AshRem Industries',            'Deepak Kumar',   'deepak@ashrem.test','+91-7654321001', '789 Industrial Hub',  'Chhindwara',  'India', 30, 'active', NOW(), 1, NOW()),
-(3, 'SUPP-0003', 'Quality Limestone Quarries',   'Suresh Nair',    'suresh@qlq.test',   '+91-7654321002', '123 Quarry Road',     'Jodhpur',     'India', 15, 'active', NOW(), 1, NOW()),
-(4, 'SUPP-0004', 'Peak Gypsum Suppliers',        'Mohan Das',      'mohan@peak.test',   '+91-7654321003', '321 Supply Park',     'Bikaner',     'India', 20, 'active', NOW(), 1, NOW()),
-(5, 'SUPP-0005', 'Iron Ore Trading Co',          'Arun Desai',     'arun@iot.test',     '+91-7654321004', '654 Trade Center',    'Bellary',     'India', 30, 'active', NOW(), 1, NOW()),
-(6, 'SUPP-0006', 'Premium Additives Corp',       'Kavya Rao',      'kavya@pac.test',    '+91-7654321005', '987 Chemical Zone',   'Visakhapatnam','India', 25, 'active', NOW(), 1, NOW()),
-(7, 'SUPP-0007', 'Coal Energy Solutions',        'Harish Menon',   'harish@ces.test',   '+91-7654321006', '111 Power District',  'Raipur',      'India', 30, 'active', NOW(), 1, NOW()),
-(8, 'SUPP-0008', 'Water Treatment Specialists',  'Priya Mukerjee', 'priya@wts.test',    '+91-7654321007', '222 Clean Tech',      'Jamshedpur',  'India', 10, 'active', NOW(), 1, NOW());
+(1, 'SUPP-0001', 'Global Minerals Ltd',          'Vikram Singh',   'vikram@gm.com',    '+91-7654321000', '456 Mining Complex', 'Singrauli',   'India', 15, 'active', NOW(), 1, NOW()),
+(2, 'SUPP-0002', 'AshRem Industries',            'Deepak Kumar',   'deepak@ashrem.com','+91-7654321001', '789 Industrial Hub',  'Chhindwara',  'India', 30, 'active', NOW(), 1, NOW()),
+(3, 'SUPP-0003', 'Quality Limestone Quarries',   'Suresh Nair',    'suresh@qlq.com',   '+91-7654321002', '123 Quarry Road',     'Jodhpur',     'India', 15, 'active', NOW(), 1, NOW()),
+(4, 'SUPP-0004', 'Peak Gypsum Suppliers',        'Mohan Das',      'mohan@peak.com',   '+91-7654321003', '321 Supply Park',     'Bikaner',     'India', 20, 'active', NOW(), 1, NOW()),
+(5, 'SUPP-0005', 'Iron Ore Trading Co',          'Arun Desai',     'arun@iot.com',     '+91-7654321004', '654 Trade Center',    'Bellary',     'India', 30, 'active', NOW(), 1, NOW()),
+(6, 'SUPP-0006', 'Premium Additives Corp',       'Kavya Rao',      'kavya@pac.com',    '+91-7654321005', '987 Chemical Zone',   'Visakhapatnam','India', 25, 'active', NOW(), 1, NOW()),
+(7, 'SUPP-0007', 'Coal Energy Solutions',        'Harish Menon',   'harish@ces.com',   '+91-7654321006', '111 Power District',  'Raipur',      'India', 30, 'active', NOW(), 1, NOW()),
+(8, 'SUPP-0008', 'Water Treatment Specialists',  'Priya Mukerjee', 'priya@wts.com',    '+91-7654321007', '222 Clean Tech',      'Jamshedpur',  'India', 10, 'active', NOW(), 1, NOW());
 
 -- ============================================================================
 -- 4. RAW MATERIALS
