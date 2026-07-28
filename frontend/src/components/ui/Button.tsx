@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { cn } from '@/lib/cn'
 import { Spinner } from './Spinner'
 
-type Variant = 'primary' | 'ghost' | 'subtle'
+type Variant = 'primary' | 'ghost' | 'subtle' | 'danger'
 type Size = 'md' | 'sm'
 
 type ConflictingHandlers = 'onAnimationStart' | 'onAnimationEnd' | 'onDrag' | 'onDragStart' | 'onDragEnd'
@@ -23,6 +23,8 @@ const variantStyles: Record<Variant, string> = {
     'glass-inset text-gold-100 hover:bg-white/10 focus-visible:outline-gold-300',
   subtle:
     'text-white/70 hover:text-white hover:bg-white/5',
+  danger:
+    'bg-gradient-to-b from-red-400 to-red-600 text-white shadow-glow-gold hover:from-red-300 hover:to-red-500 focus-visible:outline-red-300',
 }
 
 const sizeStyles: Record<Size, string> = {
