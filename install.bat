@@ -88,44 +88,61 @@ for /f "delims=" %%V in ('pm2 -v 2^>nul') do call :Ok "pm2 %%V"
 REM -------------------------------------------------------------------
 REM Gather configuration
 REM -------------------------------------------------------------------
+call :Heading "Configuration"
+
+call :AskYesNo "Set up the database and .env files now? (Answer No if your DB and .env are already configured -- this jumps straight to dependency install / process setup)" Y DO_DB_ENV_SETUP
+
 call :Heading "Database"
 
-call :AskDefault "MySQL host" "localhost" DB_HOST
-call :AskDefault "MySQL port" "3306" DB_PORT
-call :AskDefault "Database name" "jdk_clean" DB_NAME
-call :AskDefault "Database user" "erp_user" DB_USER
-call :AskSecret "Database password" DB_PASSWORD
-
+set "DB_HOST=" & set "DB_PORT=" & set "DB_NAME=" & set "DB_USER=" & set "DB_PASSWORD="
 set "CREATE_DB=N"
+set "LOAD_SCHEMA=N"
 set "ADMIN_DB_USER="
 set "ADMIN_DB_PASSWORD="
-call :AskYesNo "Create the database/user now with a MySQL admin login (skip if you've already created them)?" Y CREATE_DB
-if /i "!CREATE_DB!"=="Y" (
-  call :AskDefault "MySQL admin user (for CREATE DATABASE/USER)" "root" ADMIN_DB_USER
-  call :AskSecret "MySQL admin password" ADMIN_DB_PASSWORD
-)
+if /i "!DO_DB_ENV_SETUP!"=="Y" (
+  call :AskDefault "MySQL host" "localhost" DB_HOST
+  call :AskDefault "MySQL port" "3306" DB_PORT
+  call :AskDefault "Database name" "jdk_clean" DB_NAME
+  call :AskDefault "Database user" "erp_user" DB_USER
+  call :AskSecret "Database password" DB_PASSWORD
 
-call :AskYesNo "Load backend\schema.sql into the database now (safe to re-run)?" Y LOAD_SCHEMA
+  call :AskYesNo "Create the database/user now with a MySQL admin login (skip if you've already created them)?" Y CREATE_DB
+  if /i "!CREATE_DB!"=="Y" (
+    call :AskDefault "MySQL admin user (for CREATE DATABASE/USER)" "root" ADMIN_DB_USER
+    call :AskSecret "MySQL admin password" ADMIN_DB_PASSWORD
+  )
+
+  call :AskYesNo "Load backend\schema.sql into the database now (safe to re-run)?" Y LOAD_SCHEMA
+) else (
+  call :Info "Skipping database setup -- using your existing database."
+)
 
 call :Heading "Backend"
 
-call :AskDefault "Backend port" "8000" BACKEND_PORT
+call :AskPortFree "Backend port" "8000" BACKEND_PORT
 
-call :AskYesNo "Auto-generate a secure JWT secret?" Y GEN_JWT
-if /i "!GEN_JWT!"=="Y" (
-  for /f "delims=" %%S in ('%PYLAUNCHER% -c "import secrets; print(secrets.token_urlsafe(48))"') do set "JWT_SECRET=%%S"
-  call :Ok "Generated a JWT secret."
-) else (
-  call :AskSecretMinLen "Paste your JWT secret" 32 JWT_SECRET
+set "JWT_SECRET=" & set "ACCESS_TOKEN_EXPIRE_MINUTES=" & set "REFRESH_TOKEN_EXPIRE_DAYS="
+if /i "!DO_DB_ENV_SETUP!"=="Y" (
+  call :AskYesNo "Auto-generate a secure JWT secret?" Y GEN_JWT
+  if /i "!GEN_JWT!"=="Y" (
+    for /f "delims=" %%S in ('%PYLAUNCHER% -c "import secrets; print(secrets.token_urlsafe(48))"') do set "JWT_SECRET=%%S"
+    call :Ok "Generated a JWT secret."
+  ) else (
+    call :AskSecretMinLen "Paste your JWT secret" 32 JWT_SECRET
+  )
+
+  call :AskDefault "Access token lifetime (minutes)" "60" ACCESS_TOKEN_EXPIRE_MINUTES
+  call :AskDefault "Refresh token lifetime (days)" "7" REFRESH_TOKEN_EXPIRE_DAYS
 )
-
-call :AskDefault "Access token lifetime (minutes)" "60" ACCESS_TOKEN_EXPIRE_MINUTES
-call :AskDefault "Refresh token lifetime (days)" "7" REFRESH_TOKEN_EXPIRE_DAYS
 
 call :Heading "Frontend"
 
-call :AskDefault "Frontend port" "4173" FRONTEND_PORT
-call :AskDefault "Frontend origin (used for the backend's CORS_ORIGINS)" "http://localhost:!FRONTEND_PORT!" FRONTEND_ORIGIN
+call :AskPortFree "Frontend port" "4173" FRONTEND_PORT
+
+set "FRONTEND_ORIGIN=http://localhost:!FRONTEND_PORT!"
+if /i "!DO_DB_ENV_SETUP!"=="Y" (
+  call :AskDefault "Frontend origin (used for the backend's CORS_ORIGINS)" "!FRONTEND_ORIGIN!" FRONTEND_ORIGIN
+)
 call :AskDefault "Backend base URL (used for the frontend's VITE_API_BASE_URL)" "http://localhost:!BACKEND_PORT!" BACKEND_URL
 
 call :Heading "Bootstrap admin account"
@@ -235,9 +252,12 @@ if errorlevel 1 (
 )
 call :Ok "Backend dependencies installed."
 
-set "WRITE_BACKEND_ENV=Y"
-if exist ".env" (
-  call :AskYesNo ".env already exists in backend\ -- overwrite it with these settings?" N WRITE_BACKEND_ENV
+set "WRITE_BACKEND_ENV=N"
+if /i "!DO_DB_ENV_SETUP!"=="Y" (
+  set "WRITE_BACKEND_ENV=Y"
+  if exist ".env" (
+    call :AskYesNo ".env already exists in backend\ -- overwrite it with these settings?" N WRITE_BACKEND_ENV
+  )
 )
 
 if /i "!WRITE_BACKEND_ENV!"=="Y" (
@@ -255,8 +275,10 @@ if /i "!WRITE_BACKEND_ENV!"=="Y" (
     echo CORS_ORIGINS=!FRONTEND_ORIGIN!
   ) > ".env"
   call :Ok "Wrote backend\.env"
-) else (
+) else if /i "!DO_DB_ENV_SETUP!"=="Y" (
   call :Warn "Left the existing backend\.env untouched."
+) else (
+  call :Info "Using existing backend\.env as-is."
 )
 
 if /i "!SEED_ADMIN!"=="Y" (
@@ -287,9 +309,12 @@ if errorlevel 1 (
 )
 call :Ok "Frontend dependencies installed."
 
-set "WRITE_FRONTEND_ENV=Y"
-if exist ".env" (
-  call :AskYesNo ".env already exists in frontend\ -- overwrite it with these settings?" N WRITE_FRONTEND_ENV
+set "WRITE_FRONTEND_ENV=N"
+if /i "!DO_DB_ENV_SETUP!"=="Y" (
+  set "WRITE_FRONTEND_ENV=Y"
+  if exist ".env" (
+    call :AskYesNo ".env already exists in frontend\ -- overwrite it with these settings?" N WRITE_FRONTEND_ENV
+  )
 )
 
 if /i "!WRITE_FRONTEND_ENV!"=="Y" (
@@ -297,8 +322,10 @@ if /i "!WRITE_FRONTEND_ENV!"=="Y" (
     echo VITE_API_BASE_URL=!BACKEND_URL!
   ) > ".env"
   call :Ok "Wrote frontend\.env"
-) else (
+) else if /i "!DO_DB_ENV_SETUP!"=="Y" (
   call :Warn "Left the existing frontend\.env untouched."
+) else (
+  call :Info "Using existing frontend\.env as-is."
 )
 
 call :Info "Building the frontend for production..."
@@ -479,6 +506,35 @@ if errorlevel 1 (
   for /f "usebackq delims=" %%S in (`powershell -NoProfile -Command "$s = Read-Host -Prompt '%PROMPT_TEXT%' -AsSecureString; $b = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s); [Runtime.InteropServices.Marshal]::PtrToStringBSTR($b)"`) do set "ANSWER=%%S"
 )
 endlocal & set "%~2=%ANSWER%"
+goto :eof
+
+REM %1=port number, %2=result var (Y if something is already listening on it)
+:CheckPortBusy
+setlocal
+set "CHECK_PORT=%~1"
+set "PORT_BUSY=N"
+netstat -ano | findstr /R /C:":%CHECK_PORT% " >nul 2>&1
+if not errorlevel 1 set "PORT_BUSY=Y"
+endlocal & set "%~2=%PORT_BUSY%"
+goto :eof
+
+REM %1=prompt, %2=default port, %3=result var. Like AskDefault, but re-asks
+REM until the chosen port is confirmed free (checked before any install
+REM step runs, so a busy port is caught immediately instead of failing
+REM later when a server tries to bind it).
+:AskPortFree
+setlocal
+set "PROMPT_TEXT=%~1"
+set "DEFAULT_VAL=%~2"
+:AskPortFree_loop
+call :AskDefault "%PROMPT_TEXT%" "%DEFAULT_VAL%" LOOP_PORT
+call :CheckPortBusy "!LOOP_PORT!" LOOP_BUSY
+if /i "!LOOP_BUSY!"=="Y" (
+  call :Warn "Port !LOOP_PORT! is already in use by another process."
+  set "DEFAULT_VAL=!LOOP_PORT!"
+  goto :AskPortFree_loop
+)
+endlocal & set "%~3=%LOOP_PORT%"
 goto :eof
 
 REM %1=prompt, %2=minimum length, %3=result var. Re-asks until long enough.
