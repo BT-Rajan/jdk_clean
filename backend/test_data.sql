@@ -24,6 +24,7 @@ TRUNCATE TABLE bom_lines;
 TRUNCATE TABLE finished_goods_inventory;
 TRUNCATE TABLE raw_material_inventory;
 TRUNCATE TABLE products;
+TRUNCATE TABLE supplier_materials;
 TRUNCATE TABLE raw_materials;
 TRUNCATE TABLE suppliers;
 TRUNCATE TABLE customers;
@@ -61,15 +62,15 @@ INSERT INTO customers (id, code, name, contact_person, email, phone, billing_add
 -- ============================================================================
 -- 3. SUPPLIERS
 -- ============================================================================
-INSERT INTO suppliers (id, code, name, contact_person, email, phone, address, city, country, payment_terms_days, status, created_at, created_by, updated_at) VALUES
-(1, 'SUPP-0001', 'Global Minerals Ltd',          'Vikram Singh',   'vikram@gm.com',    '+91-7654321000', '456 Mining Complex', 'Singrauli',   'India', 15, 'active', NOW(), 1, NOW()),
-(2, 'SUPP-0002', 'AshRem Industries',            'Deepak Kumar',   'deepak@ashrem.com','+91-7654321001', '789 Industrial Hub',  'Chhindwara',  'India', 30, 'active', NOW(), 1, NOW()),
-(3, 'SUPP-0003', 'Quality Limestone Quarries',   'Suresh Nair',    'suresh@qlq.com',   '+91-7654321002', '123 Quarry Road',     'Jodhpur',     'India', 15, 'active', NOW(), 1, NOW()),
-(4, 'SUPP-0004', 'Peak Gypsum Suppliers',        'Mohan Das',      'mohan@peak.com',   '+91-7654321003', '321 Supply Park',     'Bikaner',     'India', 20, 'active', NOW(), 1, NOW()),
-(5, 'SUPP-0005', 'Iron Ore Trading Co',          'Arun Desai',     'arun@iot.com',     '+91-7654321004', '654 Trade Center',    'Bellary',     'India', 30, 'active', NOW(), 1, NOW()),
-(6, 'SUPP-0006', 'Premium Additives Corp',       'Kavya Rao',      'kavya@pac.com',    '+91-7654321005', '987 Chemical Zone',   'Visakhapatnam','India', 25, 'active', NOW(), 1, NOW()),
-(7, 'SUPP-0007', 'Coal Energy Solutions',        'Harish Menon',   'harish@ces.com',   '+91-7654321006', '111 Power District',  'Raipur',      'India', 30, 'active', NOW(), 1, NOW()),
-(8, 'SUPP-0008', 'Water Treatment Specialists',  'Priya Mukerjee', 'priya@wts.com',    '+91-7654321007', '222 Clean Tech',      'Jamshedpur',  'India', 10, 'active', NOW(), 1, NOW());
+INSERT INTO suppliers (id, code, name, contact_person, email, phone, address, city, country, payment_terms_days, mode_of_supply, rating, status, created_at, created_by, updated_at) VALUES
+(1, 'SUPP-0001', 'Global Minerals Ltd',          'Vikram Singh',   'vikram@gm.com',    '+91-7654321000', '456 Mining Complex', 'Singrauli',   'India', 15, 'direct',      4, 'active', NOW(), 1, NOW()),
+(2, 'SUPP-0002', 'AshRem Industries',            'Deepak Kumar',   'deepak@ashrem.com','+91-7654321001', '789 Industrial Hub',  'Chhindwara',  'India', 30, 'distributor', 5, 'active', NOW(), 1, NOW()),
+(3, 'SUPP-0003', 'Quality Limestone Quarries',   'Suresh Nair',    'suresh@qlq.com',   '+91-7654321002', '123 Quarry Road',     'Jodhpur',     'India', 15, 'direct',      5, 'active', NOW(), 1, NOW()),
+(4, 'SUPP-0004', 'Peak Gypsum Suppliers',        'Mohan Das',      'mohan@peak.com',   '+91-7654321003', '321 Supply Park',     'Bikaner',     'India', 20, 'direct',      3, 'active', NOW(), 1, NOW()),
+(5, 'SUPP-0005', 'Iron Ore Trading Co',          'Arun Desai',     'arun@iot.com',     '+91-7654321004', '654 Trade Center',    'Bellary',     'India', 30, 'broker',      4, 'active', NOW(), 1, NOW()),
+(6, 'SUPP-0006', 'Premium Additives Corp',       'Kavya Rao',      'kavya@pac.com',    '+91-7654321005', '987 Chemical Zone',   'Visakhapatnam','India', 25, 'distributor', 4, 'active', NOW(), 1, NOW()),
+(7, 'SUPP-0007', 'Coal Energy Solutions',        'Harish Menon',   'harish@ces.com',   '+91-7654321006', '111 Power District',  'Raipur',      'India', 30, 'direct',      3, 'suspended', NOW(), 1, NOW()),
+(8, 'SUPP-0008', 'Water Treatment Specialists',  'Priya Mukerjee', 'priya@wts.com',    '+91-7654321007', '222 Clean Tech',      'Jamshedpur',  'India', 10, 'import',      5, 'active', NOW(), 1, NOW());
 
 -- ============================================================================
 -- 4. RAW MATERIALS
@@ -87,6 +88,25 @@ INSERT INTO raw_materials (id, code, name, unit, reorder_point, default_supplier
 (10, 'MAT-0010', 'Air Entrainer',           'ltr', 80,   6, 380.00,  'active', NOW(), 1, NOW()),
 (11, 'MAT-0011', 'Packaging Bags (50kg)',   'pcs', 5000, 8, 12.00,   'active', NOW(), 1, NOW()),
 (12, 'MAT-0012', 'Water Treatment Chemical','ltr', 120,  8, 220.00,  'active', NOW(), 1, NOW());
+
+-- ============================================================================
+-- 2b. SUPPLIER MATERIALS (which materials each supplier can supply)
+-- ============================================================================
+INSERT INTO supplier_materials (supplier_id, raw_material_id, max_supply_quantity, lead_time_days, created_at, created_by, updated_at) VALUES
+(1, 6,  400.0000, 10, NOW(), 1, NOW()),  -- Global Minerals also supplies Silica Sand (alternate to supplier 3)
+(1, 5,  200.0000, 14, NOW(), 1, NOW()),  -- and Iron Ore (alternate to supplier 5)
+(2, 2,  600.0000, 7,  NOW(), 1, NOW()),  -- AshRem: Fly Ash
+(2, 7,  350.0000, 7,  NOW(), 1, NOW()),  -- AshRem: Pozzolana
+(3, 1,  1000.0000, 5, NOW(), 1, NOW()),  -- Quality Limestone Quarries: Limestone
+(3, 6,  500.0000, 5,  NOW(), 1, NOW()),  -- Quality Limestone Quarries: Silica Sand
+(4, 4,  400.0000, 10, NOW(), 1, NOW()),  -- Peak Gypsum: Gypsum
+(5, 3,  600.0000, 12, NOW(), 1, NOW()),  -- Iron Ore Trading Co: Blast Furnace Slag
+(5, 5,  300.0000, 14, NOW(), 1, NOW()),  -- Iron Ore Trading Co: Iron Ore
+(6, 9,  200.0000, 3,  NOW(), 1, NOW()),  -- Premium Additives: Plasticizer Additive
+(6, 10, 150.0000, 3,  NOW(), 1, NOW()),  -- Premium Additives: Air Entrainer
+(7, 8,  1200.0000, 20, NOW(), 1, NOW()), -- Coal Energy Solutions: Coal
+(8, 11, 20000.0000, 7, NOW(), 1, NOW()), -- Water Treatment Specialists: Packaging Bags
+(8, 12, 300.0000, 5,  NOW(), 1, NOW());  -- Water Treatment Specialists: Water Treatment Chemical
 
 -- ============================================================================
 -- 5. PRODUCTS

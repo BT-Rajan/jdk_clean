@@ -2,12 +2,20 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, RatingStars, Spinner, StatusBadge } from '@/components/ui'
 import { deleteSupplier, getSupplier, restoreSupplier } from '@/api/suppliers'
 import type { Supplier } from '@/types/supplier'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
+import { SuppliedMaterialsEditor } from './SuppliedMaterialsEditor'
+
+const MODE_OF_SUPPLY_LABELS: Record<string, string> = {
+  direct: 'Direct',
+  distributor: 'Distributor',
+  broker: 'Broker',
+  import: 'Import',
+}
 
 function Field({ label, value }: { label: string; value: ReactNode }) {
   return (
@@ -121,8 +129,17 @@ export function SupplierDetailPage() {
           <Field label="City" value={supplier.city} />
           <Field label="Country" value={supplier.country} />
           <Field label="Payment terms" value={`${supplier.payment_terms_days} days`} />
+          <Field
+            label="Mode of supply"
+            value={supplier.mode_of_supply ? MODE_OF_SUPPLY_LABELS[supplier.mode_of_supply] : null}
+          />
+          <Field label="Rating" value={<RatingStars rating={supplier.rating} />} />
         </dl>
       </GlassCard>
+
+      <div className="mt-6">
+        <SuppliedMaterialsEditor supplierId={supplierId} canEdit={canWrite(user?.role)} />
+      </div>
 
       <div className="mt-6">
         <Link to="/suppliers" className="text-sm text-white/50 hover:text-white">← Back to suppliers</Link>

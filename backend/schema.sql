@@ -100,7 +100,9 @@ CREATE TABLE IF NOT EXISTS suppliers (
     country         VARCHAR(80)  NULL,
     tax_id          VARCHAR(50)  NULL,
     payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
-    status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    mode_of_supply  ENUM('direct','distributor','broker','import') NULL,
+    rating          TINYINT UNSIGNED NULL,          -- 1-5 stars
+    status          ENUM('active','inactive','suspended') NOT NULL DEFAULT 'active',
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -129,6 +131,30 @@ CREATE TABLE IF NOT EXISTS raw_materials (
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_rm_supplier FOREIGN KEY (default_supplier_id) REFERENCES suppliers(id),
     INDEX idx_rm_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- SUPPLIER MATERIALS (which raw materials a supplier can supply, and
+-- how much of each -- a supplier commonly supplies several different
+-- materials, so this is a proper line-item table rather than a single
+-- FK, mirroring bom_lines' shape)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS supplier_materials (
+    id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    supplier_id         BIGINT UNSIGNED NOT NULL,
+    raw_material_id     BIGINT UNSIGNED NOT NULL,
+    max_supply_quantity DECIMAL(14,4) NOT NULL,
+    lead_time_days      SMALLINT UNSIGNED NULL,
+    deleted_at          DATETIME NULL,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by          BIGINT UNSIGNED NULL,
+    updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by          BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_sm_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    CONSTRAINT fk_sm_material FOREIGN KEY (raw_material_id) REFERENCES raw_materials(id),
+    INDEX idx_sm_supplier (supplier_id),
+    INDEX idx_sm_material (raw_material_id),
+    INDEX idx_sm_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================

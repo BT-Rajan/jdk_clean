@@ -7,6 +7,7 @@ import {
   EmptyState,
   GlassCard,
   Pagination,
+  RatingStars,
   SelectField,
   SortableHeader,
   Spinner,
@@ -62,6 +63,7 @@ export function SuppliersListPage() {
           <option value="">All statuses</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
+          <option value="suspended">Suspended</option>
         </SelectField>
       </div>
 
@@ -83,6 +85,7 @@ export function SuppliersListPage() {
                   <SortableHeader label="Name" field="name" sort={sort} onSort={toggleSort} />
                   <th className="px-6 py-4 font-medium">City / Country</th>
                   <th className="px-6 py-4 font-medium">Payment terms</th>
+                  <SortableHeader label="Rating" field="rating" sort={sort} onSort={toggleSort} />
                   <th className="px-6 py-4 font-medium">Status</th>
                 </tr>
               </thead>
@@ -97,6 +100,9 @@ export function SuppliersListPage() {
                     <td className="px-6 py-4 text-white">{s.name}</td>
                     <td className="px-6 py-4 text-white/60">{[s.city, s.country].filter(Boolean).join(', ') || '—'}</td>
                     <td className="px-6 py-4 text-white/60">{s.payment_terms_days} days</td>
+                    <td className="px-6 py-4">
+                      <RatingStars rating={s.rating} />
+                    </td>
                     <td className="px-6 py-4">
                       <StatusBadge status={s.status} />
                     </td>

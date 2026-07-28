@@ -26,8 +26,8 @@ class SupplierCRUD(BaseCRUD):
     model = Supplier
     table_name = "suppliers"
     searchable_fields = ["name", "code", "email"]
-    sortable_fields = ["name", "code", "created_at"]
-    filterable_fields = ["status", "city", "country"]
+    sortable_fields = ["name", "code", "rating", "created_at"]
+    filterable_fields = ["status", "city", "country", "mode_of_supply"]
 
 
 class RawMaterialCRUD(BaseCRUD):

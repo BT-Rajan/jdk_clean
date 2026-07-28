@@ -12,7 +12,9 @@ export const supplierSchema = z.object({
   country: z.string().trim().optional().or(z.literal('')),
   tax_id: z.string().trim().optional().or(z.literal('')),
   payment_terms_days: z.coerce.number().int().min(0, 'Must be 0 or more'),
-  status: z.enum(['active', 'inactive']),
+  mode_of_supply: z.enum(['direct', 'distributor', 'broker', 'import']).optional().or(z.literal('')),
+  rating: z.coerce.number().int().min(1).max(5).optional().or(z.literal('')),
+  status: z.enum(['active', 'inactive', 'suspended']),
 })
 
 export type SupplierFormValues = z.input<typeof supplierSchema>

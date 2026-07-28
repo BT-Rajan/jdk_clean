@@ -1,5 +1,8 @@
 from pydantic import BaseModel, EmailStr, Field
 
+MODE_OF_SUPPLY_PATTERN = "^(direct|distributor|broker|import)$"
+STATUS_PATTERN = "^(active|inactive|suspended)$"
+
 
 class SupplierCreate(BaseModel):
     code: str = Field(min_length=1, max_length=30)
@@ -12,7 +15,9 @@ class SupplierCreate(BaseModel):
     country: str | None = None
     tax_id: str | None = None
     payment_terms_days: int = 30
-    status: str = Field(default="active", pattern="^(active|inactive)$")
+    mode_of_supply: str | None = Field(default=None, pattern=MODE_OF_SUPPLY_PATTERN)
+    rating: int | None = Field(default=None, ge=1, le=5)
+    status: str = Field(default="active", pattern=STATUS_PATTERN)
 
 
 class SupplierUpdate(BaseModel):
@@ -25,7 +30,9 @@ class SupplierUpdate(BaseModel):
     country: str | None = None
     tax_id: str | None = None
     payment_terms_days: int | None = None
-    status: str | None = Field(default=None, pattern="^(active|inactive)$")
+    mode_of_supply: str | None = Field(default=None, pattern=MODE_OF_SUPPLY_PATTERN)
+    rating: int | None = Field(default=None, ge=1, le=5)
+    status: str | None = Field(default=None, pattern=STATUS_PATTERN)
 
 
 class SupplierOut(BaseModel):
@@ -38,6 +45,8 @@ class SupplierOut(BaseModel):
     city: str | None
     country: str | None
     payment_terms_days: int
+    mode_of_supply: str | None
+    rating: int | None
     status: str
 
     model_config = {"from_attributes": True}

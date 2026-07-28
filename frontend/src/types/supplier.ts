@@ -1,5 +1,7 @@
 /** Mirrors backend/app/schemas/supplier.py. */
-import type { ActiveStatus } from './customer'
+
+export type SupplierStatus = 'active' | 'inactive' | 'suspended'
+export type ModeOfSupply = 'direct' | 'distributor' | 'broker' | 'import'
 
 export interface Supplier {
   id: number
@@ -11,7 +13,9 @@ export interface Supplier {
   city: string | null
   country: string | null
   payment_terms_days: number
-  status: ActiveStatus
+  mode_of_supply: ModeOfSupply | null
+  rating: number | null
+  status: SupplierStatus
 }
 
 export interface SupplierPayload {
@@ -25,5 +29,7 @@ export interface SupplierPayload {
   country?: string | null
   tax_id?: string | null
   payment_terms_days?: number
-  status?: ActiveStatus
+  mode_of_supply?: ModeOfSupply | null
+  rating?: number | null
+  status?: SupplierStatus
 }

@@ -22,6 +22,7 @@ const toneStyles: Record<Tone, string> = {
 const STATUS_TONES: Record<string, Tone> = {
   active: 'success',
   inactive: 'neutral',
+  suspended: 'danger',
   draft: 'neutral',
   sent: 'info',
   accepted: 'success',

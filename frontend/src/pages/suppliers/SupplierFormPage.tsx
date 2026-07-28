@@ -53,6 +53,8 @@ function SupplierCreateForm() {
       country: '',
       tax_id: '',
       payment_terms_days: 30,
+      mode_of_supply: '',
+      rating: '',
       status: 'active',
     },
   })
@@ -60,7 +62,11 @@ function SupplierCreateForm() {
   async function onSubmit(values: SupplierSubmitValues) {
     setFormError(null)
     try {
-      const created = await createSupplier(values)
+      const created = await createSupplier({
+        ...values,
+        mode_of_supply: values.mode_of_supply || null,
+        rating: values.rating || null,
+      })
       navigate(`/suppliers/${created.id}`)
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -98,6 +104,24 @@ function SupplierCreateForm() {
           <SelectField label="Status" {...register('status')}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
+            <option value="suspended">Suspended</option>
+          </SelectField>
+        </div>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <SelectField label="Mode of supply" {...register('mode_of_supply')}>
+            <option value="">Not set</option>
+            <option value="direct">Direct</option>
+            <option value="distributor">Distributor</option>
+            <option value="broker">Broker</option>
+            <option value="import">Import</option>
+          </SelectField>
+          <SelectField label="Rating" error={errors.rating?.message} {...register('rating')}>
+            <option value="">Not rated</option>
+            <option value="1">★☆☆☆☆ (1)</option>
+            <option value="2">★★☆☆☆ (2)</option>
+            <option value="3">★★★☆☆ (3)</option>
+            <option value="4">★★★★☆ (4)</option>
+            <option value="5">★★★★★ (5)</option>
           </SelectField>
         </div>
         <div className="mt-2 flex justify-end gap-3">
@@ -133,6 +157,8 @@ function SupplierEditForm({ id }: { id: number }) {
           city: supplier.city ?? '',
           country: supplier.country ?? '',
           payment_terms_days: supplier.payment_terms_days,
+          mode_of_supply: supplier.mode_of_supply ?? '',
+          rating: supplier.rating ?? '',
           status: supplier.status,
         })
       })
@@ -143,7 +169,11 @@ function SupplierEditForm({ id }: { id: number }) {
   async function onSubmit(values: SupplierEditSubmitValues) {
     setFormError(null)
     try {
-      await updateSupplier(id, values)
+      await updateSupplier(id, {
+        ...values,
+        mode_of_supply: values.mode_of_supply || null,
+        rating: values.rating || null,
+      })
       navigate(`/suppliers/${id}`)
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -180,6 +210,24 @@ function SupplierEditForm({ id }: { id: number }) {
             <SelectField label="Status" {...register('status')}>
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
+              <option value="suspended">Suspended</option>
+            </SelectField>
+          </div>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <SelectField label="Mode of supply" {...register('mode_of_supply')}>
+              <option value="">Not set</option>
+              <option value="direct">Direct</option>
+              <option value="distributor">Distributor</option>
+              <option value="broker">Broker</option>
+              <option value="import">Import</option>
+            </SelectField>
+            <SelectField label="Rating" error={errors.rating?.message} {...register('rating')}>
+              <option value="">Not rated</option>
+              <option value="1">★☆☆☆☆ (1)</option>
+              <option value="2">★★☆☆☆ (2)</option>
+              <option value="3">★★★☆☆ (3)</option>
+              <option value="4">★★★★☆ (4)</option>
+              <option value="5">★★★★★ (5)</option>
             </SelectField>
           </div>
           <div className="mt-2 flex justify-end gap-3">
