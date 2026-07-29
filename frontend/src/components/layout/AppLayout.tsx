@@ -6,14 +6,26 @@ import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
 import { cn } from '@/lib/cn'
 import { AmbientBackground } from './AmbientBackground'
+import { NavDropdown } from './NavDropdown'
 
 interface AppLayoutProps {
   children: ReactNode
 }
 
-interface NavItem {
+interface NavLeaf {
   to: string
   label: string
+}
+
+interface NavGroup {
+  label: string
+  items: NavLeaf[]
+}
+
+type NavEntry = NavLeaf | NavGroup
+
+function isNavGroup(entry: NavEntry): entry is NavGroup {
+  return 'items' in entry
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
@@ -35,21 +47,50 @@ export function AppLayout({ children }: AppLayoutProps) {
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
 
-  const navItems: NavItem[] = [
+  const navEntries: NavEntry[] = [
     { to: '/dashboard', label: 'Dashboard' },
-    { to: '/customers', label: 'Customers' },
-    { to: '/suppliers', label: 'Suppliers' },
-    { to: '/raw-materials', label: 'Raw materials' },
-    { to: '/products', label: 'Products' },
-    { to: '/inventory', label: 'Inventory' },
-    { to: '/production', label: 'Production' },
-    { to: '/mrp', label: 'MRP' },
-    { to: '/purchase-orders', label: 'Purchase orders' },
-    { to: '/delivery-notes', label: 'Delivery notes' },
-    { to: '/quotations', label: 'Quotations' },
-    { to: '/orders', label: 'Orders' },
-    ...(isAdmin(user?.role) ? [{ to: '/users', label: 'Users' }] : []),
-    ...(isAdmin(user?.role) ? [{ to: '/settings', label: 'Settings' }] : []),
+    {
+      label: 'Sales',
+      items: [
+        { to: '/customers', label: 'Customers' },
+        { to: '/quotations', label: 'Quotations' },
+        { to: '/orders', label: 'Orders' },
+        { to: '/delivery-notes', label: 'Delivery notes' },
+      ],
+    },
+    {
+      label: 'Purchasing',
+      items: [
+        { to: '/suppliers', label: 'Suppliers' },
+        { to: '/purchase-orders', label: 'Purchase orders' },
+      ],
+    },
+    {
+      label: 'Inventory',
+      items: [
+        { to: '/raw-materials', label: 'Raw materials' },
+        { to: '/products', label: 'Products' },
+        { to: '/inventory', label: 'Stock levels' },
+      ],
+    },
+    {
+      label: 'Production',
+      items: [
+        { to: '/production', label: 'Production' },
+        { to: '/mrp', label: 'MRP' },
+      ],
+    },
+    ...(isAdmin(user?.role)
+      ? [
+          {
+            label: 'Admin',
+            items: [
+              { to: '/users', label: 'Users' },
+              { to: '/settings', label: 'Settings' },
+            ],
+          } satisfies NavGroup,
+        ]
+      : []),
   ]
 
   async function handleLogout() {
@@ -94,20 +135,24 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         <nav className="flex gap-1 overflow-x-auto pb-1">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              className={({ isActive }) =>
-                cn(
-                  'whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
-                  isActive ? 'bg-gold-500/15 text-gold-200' : 'text-white/50 hover:text-white',
-                )
-              }
-            >
-              {item.label}
-            </NavLink>
-          ))}
+          {navEntries.map((entry) =>
+            isNavGroup(entry) ? (
+              <NavDropdown key={entry.label} label={entry.label} items={entry.items} />
+            ) : (
+              <NavLink
+                key={entry.to}
+                to={entry.to}
+                className={({ isActive }) =>
+                  cn(
+                    'whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+                    isActive ? 'bg-gold-500/15 text-gold-200' : 'text-white/50 hover:text-white',
+                  )
+                }
+              >
+                {entry.label}
+              </NavLink>
+            ),
+          )}
         </nav>
       </header>
 
