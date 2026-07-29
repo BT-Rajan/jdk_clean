@@ -33,7 +33,7 @@ function isNavGroup(entry: NavEntry): entry is NavGroup {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, logoutUser, avatarVersion } = useAuth()
-  const { getTaskCount, getPendingTasks } = useTasks()
+  const { getTaskCount, getPendingTasks, closeTask, deferTask, assignTask, setTaskRecurrence } = useTasks()
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
@@ -220,7 +220,15 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {user && (
         <>
-          <TasksNotificationModal open={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} tasks={pendingTasks} />
+          <TasksNotificationModal
+            open={isNotificationsOpen}
+            onClose={() => setIsNotificationsOpen(false)}
+            tasks={pendingTasks}
+            onCloseTask={closeTask}
+            onDefer={deferTask}
+            onAssign={assignTask}
+            onSetRecurrence={setTaskRecurrence}
+          />
           <AssistantDrawer open={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
         </>
       )}
