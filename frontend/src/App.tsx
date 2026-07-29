@@ -59,6 +59,7 @@ const ProductDetailPage = lazy(() =>
 const InventoryPage = lazy(() =>
   import('@/pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryPage })),
 )
+const MrpPage = lazy(() => import('@/pages/mrp/MrpPage').then((m) => ({ default: m.MrpPage })))
 const InventoryAdjustPage = lazy(() =>
   import('@/pages/inventory/InventoryAdjustPage').then((m) => ({ default: m.InventoryAdjustPage })),
 )
@@ -141,6 +142,7 @@ export function App() {
 
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/inventory/adjust" element={<InventoryAdjustPage />} />
+            <Route path="/mrp" element={<MrpPage />} />
 
             <Route path="/quotations" element={<QuotationsListPage />} />
             <Route path="/quotations/new" element={<QuotationFormPage />} />

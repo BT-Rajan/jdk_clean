@@ -4,6 +4,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.raw_material import RawMaterial
+from app.models.supplier import Supplier
 from app.models.user import BigPK
 
 
@@ -28,3 +29,4 @@ class SupplierMaterial(Base, TimestampMixin, SoftDeleteMixin):
     lead_time_days: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
 
     raw_material: Mapped[RawMaterial] = relationship(foreign_keys=[raw_material_id], lazy="joined")
+    supplier: Mapped[Supplier] = relationship(foreign_keys=[supplier_id], lazy="joined")
