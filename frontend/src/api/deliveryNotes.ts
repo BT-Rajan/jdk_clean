@@ -66,3 +66,12 @@ export async function downloadDeliveryNotePdf(id: number, noteNumber: string): P
   link.remove()
   window.URL.revokeObjectURL(url)
 }
+
+/** Sends the delivery note PDF as an email attachment. */
+export async function emailDeliveryNote(id: number, toEmail: string, message?: string): Promise<MessageResponse> {
+  const { data } = await apiClient.post<MessageResponse>(`/api/delivery-notes/${id}/email`, {
+    to_email: toEmail,
+    message: message || undefined,
+  })
+  return data
+}

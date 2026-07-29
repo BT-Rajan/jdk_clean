@@ -21,6 +21,7 @@ export interface Quotation {
   quotation_number: string
   customer_id: number
   customer_name: string | null
+  customer_email: string | null
   quotation_date: string
   valid_until: string | null
   status: QuotationStatus

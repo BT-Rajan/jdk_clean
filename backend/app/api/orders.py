@@ -6,8 +6,9 @@ from app.api.common import PagedResponse
 from app.api.deps import get_current_user, require_department_write
 from app.core.database import get_db
 from app.models.user import User
+from app.schemas.email import SendDocumentEmailRequest
 from app.schemas.order import OrderCreate, OrderOut, OrderStatusUpdate, OrderUpdate
-from app.services import audit_service, order_service, pdf_generator
+from app.services import audit_service, email_service, order_service, pdf_generator
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 write_guard = require_department_write("sales")
@@ -130,3 +131,31 @@ def download_order_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/{order_id}/email")
+def email_order_pdf(
+    order_id: int,
+    payload: SendDocumentEmailRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    order = order_service.get_order(db, order_id)
+    company_settings = pdf_generator.get_company_settings(db)
+    signer = pdf_generator.resolve_signer(db, order.created_by)
+    pdf_bytes = pdf_generator.generate_order_pdf(order, company_settings, signer=signer)
+    filename = f"{order.order_number}.pdf"
+
+    body = payload.message or (
+        f"Please find attached order confirmation {order.order_number}."
+    )
+    email_service.send_document_email(
+        to_email=payload.to_email,
+        subject=f"Order {order.order_number}",
+        body=body,
+        attachment_bytes=pdf_bytes,
+        attachment_filename=filename,
+    )
+    audit_service.log_update(db, "orders", order_id, {"emailed_to": (None, payload.to_email)}, user.id)
+    db.commit()
+    return {"message": f"Emailed to {payload.to_email}."}

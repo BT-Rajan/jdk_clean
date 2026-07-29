@@ -73,3 +73,12 @@ export async function downloadPurchaseOrderPdf(id: number, poNumber: string): Pr
   link.remove()
   window.URL.revokeObjectURL(url)
 }
+
+/** Sends the purchase order PDF as an email attachment. */
+export async function emailPurchaseOrder(id: number, toEmail: string, message?: string): Promise<MessageResponse> {
+  const { data } = await apiClient.post<MessageResponse>(`/api/purchase-orders/${id}/email`, {
+    to_email: toEmail,
+    message: message || undefined,
+  })
+  return data
+}

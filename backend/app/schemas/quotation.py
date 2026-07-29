@@ -59,6 +59,7 @@ class QuotationOut(BaseModel):
     quotation_number: str
     customer_id: int
     customer_name: str | None = None
+    customer_email: str | None = None
     quotation_date: date
     valid_until: date | None
     status: str
@@ -75,6 +76,7 @@ class QuotationOut(BaseModel):
     def from_model(obj) -> "QuotationOut":
         data = QuotationOut.model_validate(obj)
         data.customer_name = obj.customer.name if obj.customer else None
+        data.customer_email = obj.customer.email if obj.customer else None
         for line, src in zip(data.lines, obj.lines):
             line.product_code = src.product.code if src.product else None
             line.product_name = src.product.name if src.product else None

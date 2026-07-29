@@ -62,6 +62,7 @@ class PurchaseOrderOut(BaseModel):
     supplier_id: int
     supplier_code: str | None = None
     supplier_name: str | None = None
+    supplier_email: str | None = None
     order_date: date
     expected_delivery_date: date | None
     status: str
@@ -78,6 +79,7 @@ class PurchaseOrderOut(BaseModel):
         data = PurchaseOrderOut.model_validate(obj)
         data.supplier_code = obj.supplier.code if obj.supplier else None
         data.supplier_name = obj.supplier.name if obj.supplier else None
+        data.supplier_email = obj.supplier.email if obj.supplier else None
         for line_out, line_obj in zip(data.lines, obj.lines, strict=True):
             line_out.material_code = line_obj.raw_material.code if line_obj.raw_material else None
             line_out.material_name = line_obj.raw_material.name if line_obj.raw_material else None

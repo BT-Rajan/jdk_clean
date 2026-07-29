@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   convertQuotationToOrder,
   deleteQuotation,
   downloadQuotationPdf,
+  emailQuotation,
   getQuotation,
   restoreQuotation,
   updateQuotationStatus,
@@ -29,6 +31,7 @@ export function QuotationDetailPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [emailOpen, setEmailOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
 
   function load() {
@@ -137,6 +140,7 @@ export function QuotationDetailPage() {
           !justDeleted ? (
             <>
               <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
+              <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
               {allowWrite && quotation.status === 'draft' && (
                 <Button variant="ghost" onClick={() => navigate(`/quotations/${quotationId}/edit`)}>Edit</Button>
               )}
@@ -246,6 +250,17 @@ export function QuotationDetailPage() {
         busy={busy}
         onConfirm={handleDelete}
         onCancel={() => setConfirmOpen(false)}
+      />
+
+      <SendEmailDialog
+        open={emailOpen}
+        title={`Email ${quotation.quotation_number}`}
+        defaultEmail={quotation.customer_email}
+        onClose={() => setEmailOpen(false)}
+        onSend={async (toEmail, message) => {
+          await emailQuotation(quotation.id, toEmail, message)
+          setNotice(`Emailed to ${toEmail}.`)
+        }}
       />
     </AppLayout>
   )

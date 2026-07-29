@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
+import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   deleteDeliveryNote,
   downloadDeliveryNotePdf,
+  emailDeliveryNote,
   getDeliveryNote,
   restoreDeliveryNote,
   updateDeliveryNote,
@@ -38,6 +40,7 @@ export function DeliveryNoteDetailPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [emailOpen, setEmailOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
 
   function load() {
@@ -162,6 +165,7 @@ export function DeliveryNoteDetailPage() {
           !justDeleted ? (
             <>
               <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
+              <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
               {allowWrite && isDraft && (
                 <Button variant="danger" onClick={() => setConfirmOpen(true)}>Delete</Button>
               )}
@@ -259,6 +263,17 @@ export function DeliveryNoteDetailPage() {
         busy={busy}
         onConfirm={handleDelete}
         onCancel={() => setConfirmOpen(false)}
+      />
+
+      <SendEmailDialog
+        open={emailOpen}
+        title={`Email ${note.delivery_note_number}`}
+        defaultEmail={note.customer_email}
+        onClose={() => setEmailOpen(false)}
+        onSend={async (toEmail, message) => {
+          await emailDeliveryNote(note.id, toEmail, message)
+          setNotice(`Emailed to ${toEmail}.`)
+        }}
       />
     </AppLayout>
   )

@@ -12,7 +12,8 @@ from app.schemas.delivery_note import (
     DeliveryNoteStatusUpdate,
     DeliveryNoteUpdate,
 )
-from app.services import audit_service, delivery_note_service, pdf_generator
+from app.schemas.email import SendDocumentEmailRequest
+from app.services import audit_service, delivery_note_service, email_service, pdf_generator
 
 router = APIRouter(prefix="/api/delivery-notes", tags=["delivery-notes"])
 write_guard = require_department_write("warehouse")
@@ -125,3 +126,33 @@ def download_delivery_note_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/{note_id}/email")
+def email_delivery_note_pdf(
+    note_id: int,
+    payload: SendDocumentEmailRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    note = delivery_note_service.get_delivery_note(db, note_id)
+    company_settings = pdf_generator.get_company_settings(db)
+    signer = pdf_generator.resolve_signer(db, note.created_by)
+    pdf_bytes = pdf_generator.generate_delivery_note_pdf(note, company_settings, signer=signer)
+    filename = f"{note.delivery_note_number}.pdf"
+
+    body = payload.message or (
+        f"Please find attached delivery note {note.delivery_note_number}."
+    )
+    email_service.send_document_email(
+        to_email=payload.to_email,
+        subject=f"Delivery Note {note.delivery_note_number}",
+        body=body,
+        attachment_bytes=pdf_bytes,
+        attachment_filename=filename,
+    )
+    audit_service.log_update(
+        db, "delivery_notes", note_id, {"emailed_to": (None, payload.to_email)}, user.id
+    )
+    db.commit()
+    return {"message": f"Emailed to {payload.to_email}."}

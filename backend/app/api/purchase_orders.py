@@ -6,6 +6,7 @@ from app.api.common import PagedResponse
 from app.api.deps import get_current_user, require_department_write
 from app.core.database import get_db
 from app.models.user import User
+from app.schemas.email import SendDocumentEmailRequest
 from app.schemas.purchase_order import (
     PurchaseOrderCreate,
     PurchaseOrderOut,
@@ -13,7 +14,7 @@ from app.schemas.purchase_order import (
     PurchaseOrderUpdate,
     ReceivePurchaseOrder,
 )
-from app.services import audit_service, pdf_generator, purchase_order_service
+from app.services import audit_service, email_service, pdf_generator, purchase_order_service
 
 router = APIRouter(prefix="/api/purchase-orders", tags=["purchase-orders"])
 write_guard = require_department_write("procurement")
@@ -138,3 +139,33 @@ def download_purchase_order_pdf(
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/{po_id}/email")
+def email_purchase_order_pdf(
+    po_id: int,
+    payload: SendDocumentEmailRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    po = purchase_order_service.get_purchase_order(db, po_id)
+    company_settings = pdf_generator.get_company_settings(db)
+    signer = pdf_generator.resolve_signer(db, po.created_by)
+    pdf_bytes = pdf_generator.generate_purchase_order_pdf(po, company_settings, signer=signer)
+    filename = f"{po.po_number}.pdf"
+
+    body = payload.message or (
+        f"Please find attached purchase order {po.po_number}."
+    )
+    email_service.send_document_email(
+        to_email=payload.to_email,
+        subject=f"Purchase Order {po.po_number}",
+        body=body,
+        attachment_bytes=pdf_bytes,
+        attachment_filename=filename,
+    )
+    audit_service.log_update(
+        db, "purchase_orders", po_id, {"emailed_to": (None, payload.to_email)}, user.id
+    )
+    db.commit()
+    return {"message": f"Emailed to {payload.to_email}."}

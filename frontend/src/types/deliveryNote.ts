@@ -17,6 +17,7 @@ export interface DeliveryNote {
   order_id: number
   order_number: string | null
   customer_name: string | null
+  customer_email: string | null
   delivery_date: string
   status: DeliveryNoteStatus
   notes: string | null

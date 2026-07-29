@@ -48,6 +48,7 @@ class DeliveryNoteOut(BaseModel):
     order_id: int
     order_number: str | None = None
     customer_name: str | None = None
+    customer_email: str | None = None
     delivery_date: date
     status: str
     notes: str | None
@@ -62,6 +63,7 @@ class DeliveryNoteOut(BaseModel):
         data = DeliveryNoteOut.model_validate(obj)
         data.order_number = obj.order.order_number if obj.order else None
         data.customer_name = obj.order.customer.name if obj.order and obj.order.customer else None
+        data.customer_email = obj.order.customer.email if obj.order and obj.order.customer else None
         for line_out, line_obj in zip(data.lines, obj.lines, strict=True):
             line_out.product_code = line_obj.product.code if line_obj.product else None
             line_out.product_name = line_obj.product.name if line_obj.product else None

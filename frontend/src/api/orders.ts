@@ -53,3 +53,12 @@ export async function downloadOrderPdf(id: number, orderNumber: string): Promise
   link.remove()
   window.URL.revokeObjectURL(url)
 }
+
+/** Sends the order PDF as an email attachment. */
+export async function emailOrder(id: number, toEmail: string, message?: string): Promise<MessageResponse> {
+  const { data } = await apiClient.post<MessageResponse>(`/api/orders/${id}/email`, {
+    to_email: toEmail,
+    message: message || undefined,
+  })
+  return data
+}

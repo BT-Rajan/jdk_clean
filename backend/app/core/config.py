@@ -25,6 +25,20 @@ class Settings(BaseSettings):
     AVATAR_MAX_UPLOAD_MB: int = 5
     AVATAR_MAX_DIMENSION: int = 512
 
+    # Email (Phase 6): deliberately .env-only, not part of the Settings
+    # DB table/UI (see settings_service.py) -- SMTP credentials are
+    # infrastructure config, not day-to-day business settings, same
+    # reasoning DB_* already follows. SMTP_HOST empty means email isn't
+    # configured; email_service.py fails with a clear, actionable error
+    # rather than a confusing SMTP connection failure.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM_EMAIL: str = ""
+    SMTP_FROM_NAME: str = ""
+    SMTP_USE_TLS: bool = True
+
     @property
     def database_url(self) -> str:
         return (

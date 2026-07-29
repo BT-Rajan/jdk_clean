@@ -26,6 +26,7 @@ export interface PurchaseOrder {
   supplier_id: number
   supplier_code: string | null
   supplier_name: string | null
+  supplier_email: string | null
   order_date: string
   expected_delivery_date: string | null
   status: PurchaseOrderStatus

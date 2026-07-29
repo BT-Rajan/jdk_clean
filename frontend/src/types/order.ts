@@ -28,6 +28,7 @@ export interface Order {
   order_number: string
   customer_id: number
   customer_name: string | null
+  customer_email: string | null
   order_date: string
   requested_delivery_date: string | null
   confirmed_delivery_date: string | null

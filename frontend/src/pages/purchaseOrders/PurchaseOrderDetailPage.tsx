@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
+import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   deletePurchaseOrder,
   downloadPurchaseOrderPdf,
+  emailPurchaseOrder,
   getPurchaseOrder,
   receivePurchaseOrder,
   restorePurchaseOrder,
@@ -38,6 +40,7 @@ export function PurchaseOrderDetailPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [emailOpen, setEmailOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
   const [receiveQuantities, setReceiveQuantities] = useState<Record<number, string>>({})
 
@@ -165,6 +168,7 @@ export function PurchaseOrderDetailPage() {
           !justDeleted ? (
             <>
               <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
+              <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
               {allowWrite && po.status === 'draft' && (
                 <Button variant="ghost" onClick={() => navigate(`/purchase-orders/${poId}/edit`)}>Edit</Button>
               )}
@@ -288,6 +292,17 @@ export function PurchaseOrderDetailPage() {
         busy={busy}
         onConfirm={handleDelete}
         onCancel={() => setConfirmOpen(false)}
+      />
+
+      <SendEmailDialog
+        open={emailOpen}
+        title={`Email ${po.po_number}`}
+        defaultEmail={po.supplier_email}
+        onClose={() => setEmailOpen(false)}
+        onSend={async (toEmail, message) => {
+          await emailPurchaseOrder(po.id, toEmail, message)
+          setNotice(`Emailed to ${toEmail}.`)
+        }}
       />
     </AppLayout>
   )

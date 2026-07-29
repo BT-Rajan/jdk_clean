@@ -59,3 +59,12 @@ export async function downloadQuotationPdf(id: number, quotationNumber: string):
   link.remove()
   window.URL.revokeObjectURL(url)
 }
+
+/** Sends the quotation PDF as an email attachment. */
+export async function emailQuotation(id: number, toEmail: string, message?: string): Promise<MessageResponse> {
+  const { data } = await apiClient.post<MessageResponse>(`/api/quotations/${id}/email`, {
+    to_email: toEmail,
+    message: message || undefined,
+  })
+  return data
+}
