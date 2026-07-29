@@ -35,6 +35,7 @@ export interface Quotation {
 
 export interface QuotationPayload {
   customer_id: number
+  feasibility_id?: number | null
   quotation_date: string
   valid_until?: string | null
   notes?: string | null

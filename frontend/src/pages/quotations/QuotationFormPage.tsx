@@ -125,6 +125,7 @@ function QuotationCreateForm() {
     resolver: zodResolver(quotationSchema),
     defaultValues: {
       customer_id: 0,
+      feasibility_id: undefined,
       quotation_date: new Date().toISOString().slice(0, 10),
       valid_until: '',
       notes: '',
@@ -146,7 +147,7 @@ function QuotationCreateForm() {
     <FormShell title="New quotation">
       <Alert variant="error">{formError}</Alert>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-4">
           <SelectField label="Customer" error={errors.customer_id?.message} {...register('customer_id')}>
             <option value="">Choose…</option>
             {customers.map((c) => (
@@ -155,6 +156,7 @@ function QuotationCreateForm() {
           </SelectField>
           <TextField label="Quotation date" type="date" error={errors.quotation_date?.message} {...register('quotation_date')} />
           <TextField label="Valid until" type="date" {...register('valid_until')} />
+          <TextField label="Feasibility ID" type="number" {...register('feasibility_id')} />
         </div>
 
         <LineItemsEditor control={control} register={register} watch={watch} errors={errors} products={products} />
@@ -226,7 +228,7 @@ function QuotationEditForm({ id }: { id: number }) {
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-4">
             <SelectField label="Customer" error={errors.customer_id?.message} {...register('customer_id')}>
               <option value="">Choose…</option>
               {customers.map((c) => (
@@ -235,6 +237,7 @@ function QuotationEditForm({ id }: { id: number }) {
             </SelectField>
             <TextField label="Quotation date" type="date" error={errors.quotation_date?.message} {...register('quotation_date')} />
             <TextField label="Valid until" type="date" {...register('valid_until')} />
+            <TextField label="Feasibility ID" type="number" {...register('feasibility_id')} disabled />
           </div>
 
           <LineItemsEditor control={control} register={register} watch={watch} errors={errors} products={products} />

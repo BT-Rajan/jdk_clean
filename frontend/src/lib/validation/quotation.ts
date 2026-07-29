@@ -9,6 +9,7 @@ export const quotationLineSchema = z.object({
 
 export const quotationSchema = z.object({
   customer_id: z.coerce.number().int().positive('Choose a customer'),
+  feasibility_id: z.coerce.number().int().optional().or(z.literal('').transform(() => undefined)),
   quotation_date: z.string().min(1, 'Date is required'),
   valid_until: z.string().optional().or(z.literal('')),
   notes: z.string().trim().optional().or(z.literal('')),

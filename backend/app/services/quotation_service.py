@@ -96,8 +96,10 @@ def create_quotation(db: Session, data: dict, user_id: int | None = None) -> Quo
     # A quotation can only be raised off a feasibility check that came back
     # feasible, or one Sales explicitly exception-approved despite a raw
     # material shortfall -- there's no "skip feasibility" path.
-    feasibility_id = data["feasibility_id"]
-    feasibility_service.mark_converted(db, feasibility_id, user_id=user_id)
+    # If feasibility_id is provided, mark it as converted.
+    feasibility_id = data.pop("feasibility_id", None)
+    if feasibility_id:
+        feasibility_service.mark_converted(db, feasibility_id, user_id=user_id)
 
     lines = _price_lines(db, [dict(line) for line in data.pop("lines")])
     total_amount = round(sum(line["line_total"] for line in lines), 2)

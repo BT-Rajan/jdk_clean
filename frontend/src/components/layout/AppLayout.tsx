@@ -116,7 +116,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       <header
         className={cn(
-          'sticky top-4 z-40 mx-4 mt-4 flex flex-col gap-3 rounded-2xl px-5 py-3 transition-[background-color,box-shadow] duration-300 sm:mx-6 sm:px-6',
+          'sticky top-0 z-50 mx-4 mt-4 flex flex-col gap-3 rounded-2xl px-5 py-3 transition-[background-color,box-shadow] duration-300 sm:mx-6 sm:px-6',
           isScrolled ? 'glass-panel-header-scrolled' : 'glass-panel-header',
         )}
       >
@@ -213,7 +213,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </nav>
       </header>
 
-      <main className="relative z-0 mx-auto max-w-5xl px-4 py-10 sm:px-6">{children}</main>
+      <main className="relative z-10 mx-auto max-w-5xl px-4 pt-32 pb-10 sm:px-6">{children}</main>
 
       {user && (
         <>

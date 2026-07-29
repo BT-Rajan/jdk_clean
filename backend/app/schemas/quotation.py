@@ -25,8 +25,8 @@ class QuotationLineOut(BaseModel):
 class QuotationCreate(BaseModel):
     customer_id: int
     # A passed (or exception-approved) feasibility check this quotation is
-    # generated from -- required, see quotation_service.create_quotation.
-    feasibility_id: int
+    # generated from -- optional for UI form submission, required in workflows.
+    feasibility_id: int | None = None
     quotation_date: date
     valid_until: date | None = None
     notes: str | None = None
