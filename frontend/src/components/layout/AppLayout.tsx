@@ -134,7 +134,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           </div>
         </div>
 
-        <nav className="flex gap-1 overflow-x-auto pb-1">
+        <nav className="flex flex-wrap gap-1">
           {navEntries.map((entry) =>
             isNavGroup(entry) ? (
               <NavDropdown key={entry.label} label={entry.label} items={entry.items} />
