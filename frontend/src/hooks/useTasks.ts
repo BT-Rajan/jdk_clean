@@ -58,7 +58,7 @@ const mockTasks: Task[] = [
   },
 ]
 
-export function useTasks(userRole?: string) {
+export function useTasks() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [isLoading, setIsLoading] = useState(true)
 

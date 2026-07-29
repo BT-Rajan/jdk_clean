@@ -3,10 +3,9 @@ import type { Task } from '@/hooks/useTasks'
 
 interface TasksWidgetProps {
   tasks: Task[]
-  onTaskStatusChange?: (taskId: string, status: Task['status']) => void
 }
 
-export function TasksWidget({ tasks, onTaskStatusChange }: TasksWidgetProps) {
+export function TasksWidget({ tasks }: TasksWidgetProps) {
   const getPriorityColor = (priority: Task['priority']) => {
     switch (priority) {
       case 'high':

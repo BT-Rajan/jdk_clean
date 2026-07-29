@@ -33,7 +33,7 @@ function isNavGroup(entry: NavEntry): entry is NavGroup {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, logoutUser, avatarVersion } = useAuth()
-  const { getTaskCount, getPendingTasks } = useTasks(user?.role)
+  const { getTaskCount, getPendingTasks } = useTasks()
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)

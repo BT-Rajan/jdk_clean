@@ -108,7 +108,7 @@ export function DashboardPage() {
   const { user } = useAuth()
   const dashboardConfig = getDashboardConfig(user?.role)
   const { isLoading, getEnabledWidgets } = useDashboardPreferences(user?.role)
-  const { getPendingTasks, updateTask } = useTasks(user?.role)
+  const { getPendingTasks } = useTasks()
 
   const enabledWidgets = getEnabledWidgets()
   const pendingTasks = getPendingTasks()
@@ -180,7 +180,7 @@ export function DashboardPage() {
             Your Tasks <span className="text-lg text-gold-300">({pendingTasks.length})</span>
           </h2>
           <div className="grid gap-6 sm:grid-cols-2">
-            <TasksWidget tasks={pendingTasks} onTaskStatusChange={updateTask} />
+            <TasksWidget tasks={pendingTasks} />
           </div>
         </div>
       )}
