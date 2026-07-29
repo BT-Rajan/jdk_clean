@@ -99,6 +99,13 @@ export function MrpPage() {
                               {': '}
                               {p.quantity.toLocaleString()} {item.unit}
                               {p.lead_time_days != null && <> · {p.lead_time_days}d lead</>}
+                              {' · '}
+                              <Link
+                                to={`/purchase-orders/new?supplier_id=${p.supplier_id}&raw_material_id=${item.raw_material_id}&quantity=${p.quantity}`}
+                                className="text-white/50 underline hover:text-white"
+                              >
+                                Create PO
+                              </Link>
                             </li>
                           ))}
                         </ul>

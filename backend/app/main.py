@@ -9,6 +9,7 @@ from app.api.mrp import router as mrp_router
 from app.api.orders import router as orders_router
 from app.api.products import router as products_router
 from app.api.production_schedules import router as production_schedules_router
+from app.api.purchase_orders import router as purchase_orders_router
 from app.api.quotations import router as quotations_router
 from app.api.raw_materials import router as raw_materials_router
 from app.api.suppliers import router as suppliers_router
@@ -42,6 +43,7 @@ app.include_router(mrp_router)
 app.include_router(quotations_router)
 app.include_router(orders_router)
 app.include_router(production_schedules_router)
+app.include_router(purchase_orders_router)
 app.include_router(bom_router)
 
 

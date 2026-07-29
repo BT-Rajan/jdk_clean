@@ -1,0 +1,62 @@
+import type { PagedResponse, ListQueryParams, MessageResponse } from '@/types/common'
+import type {
+  PurchaseOrder,
+  PurchaseOrderPayload,
+  SettablePurchaseOrderStatus,
+} from '@/types/purchaseOrder'
+import { apiClient } from './client'
+
+export interface PurchaseOrderListParams extends ListQueryParams {
+  supplier_id?: number
+}
+
+export async function listPurchaseOrders(
+  params: PurchaseOrderListParams,
+): Promise<PagedResponse<PurchaseOrder>> {
+  const { data } = await apiClient.get<PagedResponse<PurchaseOrder>>('/api/purchase-orders', { params })
+  return data
+}
+
+export async function getPurchaseOrder(id: number): Promise<PurchaseOrder> {
+  const { data } = await apiClient.get<PurchaseOrder>(`/api/purchase-orders/${id}`)
+  return data
+}
+
+export async function createPurchaseOrder(payload: PurchaseOrderPayload): Promise<PurchaseOrder> {
+  const { data } = await apiClient.post<PurchaseOrder>('/api/purchase-orders', payload)
+  return data
+}
+
+export async function updatePurchaseOrder(
+  id: number,
+  payload: Partial<PurchaseOrderPayload>,
+): Promise<PurchaseOrder> {
+  const { data } = await apiClient.put<PurchaseOrder>(`/api/purchase-orders/${id}`, payload)
+  return data
+}
+
+export async function updatePurchaseOrderStatus(
+  id: number,
+  status: SettablePurchaseOrderStatus,
+): Promise<PurchaseOrder> {
+  const { data } = await apiClient.post<PurchaseOrder>(`/api/purchase-orders/${id}/status`, { status })
+  return data
+}
+
+export async function receivePurchaseOrder(
+  id: number,
+  lines: { line_id: number; quantity: number }[],
+): Promise<PurchaseOrder> {
+  const { data } = await apiClient.post<PurchaseOrder>(`/api/purchase-orders/${id}/receive`, { lines })
+  return data
+}
+
+export async function deletePurchaseOrder(id: number): Promise<MessageResponse> {
+  const { data } = await apiClient.delete<MessageResponse>(`/api/purchase-orders/${id}`)
+  return data
+}
+
+export async function restorePurchaseOrder(id: number): Promise<PurchaseOrder> {
+  const { data } = await apiClient.post<PurchaseOrder>(`/api/purchase-orders/${id}/restore`)
+  return data
+}

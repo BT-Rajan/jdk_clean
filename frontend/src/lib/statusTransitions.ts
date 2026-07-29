@@ -1,6 +1,7 @@
 import type { QuotationStatus, SettableQuotationStatus } from '@/types/quotation'
 import type { OrderStatus, SettableOrderStatus } from '@/types/order'
 import type { ProductionStatus, SettableProductionStatus } from '@/types/production'
+import type { PurchaseOrderStatus, SettablePurchaseOrderStatus } from '@/types/purchaseOrder'
 
 /** Mirrors ALLOWED_TRANSITIONS in backend/app/models/quotation.py. Drives
  * which status-change buttons the detail page offers -- 'converted' is
@@ -33,5 +34,19 @@ export const PRODUCTION_TRANSITIONS: Record<ProductionStatus, SettableProduction
   planned: ['in_progress', 'cancelled'],
   in_progress: ['completed', 'cancelled'],
   completed: [],
+  cancelled: [],
+}
+
+/** Mirrors ALLOWED_TRANSITIONS in backend/app/models/purchase_order.py.
+ * 'partially_received' and 'received' are reached via the dedicated
+ * receive action (see api/purchaseOrders.ts:receivePurchaseOrder), not
+ * this plain status endpoint -- so they're not listed as targets here,
+ * matching what the backend actually accepts on /status. */
+export const PURCHASE_ORDER_TRANSITIONS: Record<PurchaseOrderStatus, SettablePurchaseOrderStatus[]> = {
+  draft: ['sent', 'cancelled'],
+  sent: ['confirmed', 'cancelled'],
+  confirmed: ['cancelled'],
+  partially_received: ['cancelled'],
+  received: [],
   cancelled: [],
 }
