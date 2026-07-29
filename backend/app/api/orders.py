@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
@@ -6,7 +7,7 @@ from app.api.deps import get_current_user, require_department_write
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.order import OrderCreate, OrderOut, OrderStatusUpdate, OrderUpdate
-from app.services import audit_service, order_service
+from app.services import audit_service, order_service, pdf_generator
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 write_guard = require_department_write("sales")
@@ -111,3 +112,21 @@ def restore_order(
 ):
     order = order_service.restore_order(db, order_id, user_id=user.id)
     return OrderOut.from_model(order)
+
+
+@router.get("/{order_id}/pdf")
+def download_order_pdf(
+    order_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    order = order_service.get_order(db, order_id)
+    company_settings = pdf_generator.get_company_settings(db)
+    signer = pdf_generator.resolve_signer(db, order.created_by)
+    pdf_bytes = pdf_generator.generate_order_pdf(order, company_settings, signer=signer)
+    filename = f"{order.order_number}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

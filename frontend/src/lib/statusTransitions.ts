@@ -2,6 +2,7 @@ import type { QuotationStatus, SettableQuotationStatus } from '@/types/quotation
 import type { OrderStatus, SettableOrderStatus } from '@/types/order'
 import type { ProductionStatus, SettableProductionStatus } from '@/types/production'
 import type { PurchaseOrderStatus, SettablePurchaseOrderStatus } from '@/types/purchaseOrder'
+import type { DeliveryNoteStatus, SettableDeliveryNoteStatus } from '@/types/deliveryNote'
 
 /** Mirrors ALLOWED_TRANSITIONS in backend/app/models/quotation.py. Drives
  * which status-change buttons the detail page offers -- 'converted' is
@@ -48,5 +49,15 @@ export const PURCHASE_ORDER_TRANSITIONS: Record<PurchaseOrderStatus, SettablePur
   confirmed: ['cancelled'],
   partially_received: ['cancelled'],
   received: [],
+  cancelled: [],
+}
+
+/** Mirrors ALLOWED_TRANSITIONS in backend/app/models/delivery_note.py.
+ * 'issued' is terminal on purpose -- it drives the linked order to
+ * 'shipped', a real inventory/order change that shouldn't be reversible
+ * from here (cancel the order itself instead). */
+export const DELIVERY_NOTE_TRANSITIONS: Record<DeliveryNoteStatus, SettableDeliveryNoteStatus[]> = {
+  draft: ['issued', 'cancelled'],
+  issued: [],
   cancelled: [],
 }

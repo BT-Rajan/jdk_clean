@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
@@ -12,7 +13,7 @@ from app.schemas.purchase_order import (
     PurchaseOrderUpdate,
     ReceivePurchaseOrder,
 )
-from app.services import audit_service, purchase_order_service
+from app.services import audit_service, pdf_generator, purchase_order_service
 
 router = APIRouter(prefix="/api/purchase-orders", tags=["purchase-orders"])
 write_guard = require_department_write("procurement")
@@ -119,3 +120,21 @@ def restore_purchase_order(
 ):
     po = purchase_order_service.restore_purchase_order(db, po_id, user_id=user.id)
     return PurchaseOrderOut.from_model(po)
+
+
+@router.get("/{po_id}/pdf")
+def download_purchase_order_pdf(
+    po_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    po = purchase_order_service.get_purchase_order(db, po_id)
+    company_settings = pdf_generator.get_company_settings(db)
+    signer = pdf_generator.resolve_signer(db, po.created_by)
+    pdf_bytes = pdf_generator.generate_purchase_order_pdf(po, company_settings, signer=signer)
+    filename = f"{po.po_number}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

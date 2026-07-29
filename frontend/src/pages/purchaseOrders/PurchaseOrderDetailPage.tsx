@@ -4,6 +4,7 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
 import {
   deletePurchaseOrder,
+  downloadPurchaseOrderPdf,
   getPurchaseOrder,
   receivePurchaseOrder,
   restorePurchaseOrder,
@@ -122,6 +123,18 @@ export function PurchaseOrderDetailPage() {
     }
   }
 
+  async function handleDownload() {
+    if (!po) return
+    setBusy(true)
+    try {
+      await downloadPurchaseOrderPdf(po.id, po.po_number)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -151,6 +164,7 @@ export function PurchaseOrderDetailPage() {
         actions={
           !justDeleted ? (
             <>
+              <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
               {allowWrite && po.status === 'draft' && (
                 <Button variant="ghost" onClick={() => navigate(`/purchase-orders/${poId}/edit`)}>Edit</Button>
               )}

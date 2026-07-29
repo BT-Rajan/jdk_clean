@@ -117,7 +117,8 @@ def download_quotation_pdf(
 ):
     quotation = quotation_service.get_quotation(db, quotation_id)
     company_settings = pdf_generator.get_company_settings(db)
-    pdf_bytes = pdf_generator.generate_quotation_pdf(quotation, company_settings)
+    signer = pdf_generator.resolve_signer(db, quotation.created_by)
+    pdf_bytes = pdf_generator.generate_quotation_pdf(quotation, company_settings, signer=signer)
     filename = f"{quotation.quotation_number}.pdf"
     return Response(
         content=pdf_bytes,

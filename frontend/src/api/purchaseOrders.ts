@@ -60,3 +60,16 @@ export async function restorePurchaseOrder(id: number): Promise<PurchaseOrder> {
   const { data } = await apiClient.post<PurchaseOrder>(`/api/purchase-orders/${id}/restore`)
   return data
 }
+
+/** Triggers a browser download of the purchase order PDF via a Blob response. */
+export async function downloadPurchaseOrderPdf(id: number, poNumber: string): Promise<void> {
+  const response = await apiClient.get(`/api/purchase-orders/${id}/pdf`, { responseType: 'blob' })
+  const url = window.URL.createObjectURL(new Blob([response.data]))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${poNumber}.pdf`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}

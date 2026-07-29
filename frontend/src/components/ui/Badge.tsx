@@ -40,6 +40,7 @@ const STATUS_TONES: Record<string, Tone> = {
   completed: 'success',
   partially_received: 'gold',
   received: 'success',
+  issued: 'success',
 }
 
 export function Badge({ children, tone = 'neutral', className }: BadgeProps) {

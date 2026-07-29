@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
-import { deleteOrder, getOrder, restoreOrder, updateOrderStatus } from '@/api/orders'
+import { deleteOrder, downloadOrderPdf, getOrder, restoreOrder, updateOrderStatus } from '@/api/orders'
 import type { Order } from '@/types/order'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
@@ -76,6 +76,18 @@ export function OrderDetailPage() {
     }
   }
 
+  async function handleDownload() {
+    if (!order) return
+    setBusy(true)
+    try {
+      await downloadOrderPdf(order.id, order.order_number)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -104,6 +116,7 @@ export function OrderDetailPage() {
         actions={
           !justDeleted ? (
             <>
+              <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
               {allowWrite && order.status === 'draft' && (
                 <Button variant="ghost" onClick={() => navigate(`/orders/${orderId}/edit`)}>Edit</Button>
               )}

@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.auth import router as auth_router
 from app.api.bom import router as bom_router
 from app.api.customers import router as customers_router
+from app.api.delivery_notes import router as delivery_notes_router
 from app.api.inventory import router as inventory_router
 from app.api.mrp import router as mrp_router
 from app.api.orders import router as orders_router
@@ -44,6 +45,7 @@ app.include_router(inventory_router)
 app.include_router(mrp_router)
 app.include_router(quotations_router)
 app.include_router(orders_router)
+app.include_router(delivery_notes_router)
 app.include_router(production_schedules_router)
 app.include_router(purchase_orders_router)
 app.include_router(bom_router)
