@@ -2,9 +2,11 @@ import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Avatar, GlassCard } from '@/components/ui'
 import { useAuth } from '@/hooks/useAuth'
+import { getDashboardConfig } from '@/lib/dashboardConfig'
 
 export function DashboardPage() {
   const { user, avatarVersion } = useAuth()
+  const dashboardConfig = getDashboardConfig(user?.role)
 
   return (
     <AppLayout>
@@ -33,9 +35,28 @@ export function DashboardPage() {
         </Link>
       </GlassCard>
 
-      <p className="mt-8 text-center text-xs text-white/30">
-        Orders, quotations, inventory, and BOM management are on their way here next.
-      </p>
+      {/* Role-based Dashboard Sections */}
+      <div className="mt-8 grid gap-6">
+        {dashboardConfig.sections.map((section) => (
+          <GlassCard key={section.id} className="p-6">
+            <h2 className="mb-4 text-lg font-medium text-white">{section.title}</h2>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {section.items.map((item) => (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className="group rounded-lg border border-gold-400/20 bg-gold-500/5 p-4 transition-all hover:bg-gold-500/10 hover:border-gold-400/40"
+                >
+                  <p className="text-sm font-medium text-gold-200 group-hover:text-gold-100">{item.label}</p>
+                  {item.description && (
+                    <p className="mt-1 text-xs text-white/40 group-hover:text-white/50">{item.description}</p>
+                  )}
+                </Link>
+              ))}
+            </div>
+          </GlassCard>
+        ))}
+      </div>
     </AppLayout>
   )
 }
