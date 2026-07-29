@@ -24,6 +24,9 @@ class QuotationLineOut(BaseModel):
 
 class QuotationCreate(BaseModel):
     customer_id: int
+    # A passed (or exception-approved) feasibility check this quotation is
+    # generated from -- required, see quotation_service.create_quotation.
+    feasibility_id: int
     quotation_date: date
     valid_until: date | None = None
     notes: str | None = None
@@ -52,6 +55,9 @@ class QuotationStatusUpdate(BaseModel):
     create_order_from_quotation, which also links converted_order_id."""
 
     status: str = Field(pattern="^(sent|accepted|rejected|expired)$")
+    # Required by the service layer when status == 'rejected' (Sales closing
+    # the quotation without an order); ignored otherwise.
+    reason: str | None = None
 
 
 class QuotationOut(BaseModel):
@@ -66,6 +72,8 @@ class QuotationOut(BaseModel):
     total_amount: float
     notes: str | None
     converted_order_id: int | None
+    feasibility_id: int | None
+    close_reason: str | None
     lines: list[QuotationLineOut] = []
     created_at: datetime
     updated_at: datetime

@@ -3,15 +3,22 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
-from app.api.deps import get_current_user, require_department_write
+from app.api.deps import get_current_user, require_department_write, require_role
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.email import SendDocumentEmailRequest
-from app.schemas.order import OrderCreate, OrderOut, OrderStatusUpdate, OrderUpdate
+from app.schemas.order import (
+    OrderAdminReview,
+    OrderCreate,
+    OrderOut,
+    OrderStatusUpdate,
+    OrderUpdate,
+)
 from app.services import audit_service, email_service, order_service, pdf_generator
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 write_guard = require_department_write("sales")
+admin_guard = require_role("admin")
 
 
 @router.get("", response_model=PagedResponse)
@@ -21,12 +28,20 @@ def list_orders(
     search: str | None = Query(None),
     status: str | None = Query(None),
     customer_id: int | None = Query(None),
+    admin_review_required: bool | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(get_current_user),
 ):
     result = order_service.list_orders(
-        db, page=page, page_size=page_size, search=search, status=status, customer_id=customer_id, sort=sort
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        status=status,
+        customer_id=customer_id,
+        admin_review_required=admin_review_required,
+        sort=sort,
     )
     result["items"] = [OrderOut.from_model(o) for o in result["items"]]
     return result
@@ -91,7 +106,9 @@ def update_status(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
-    order = order_service.change_status(db, order_id, payload.status, user_id=user.id)
+    order = order_service.change_status(
+        db, order_id, payload.status, reason=payload.reason, user_id=user.id
+    )
     return OrderOut.from_model(order)
 
 
@@ -112,6 +129,32 @@ def restore_order(
     user: User = Depends(write_guard),
 ):
     order = order_service.restore_order(db, order_id, user_id=user.id)
+    return OrderOut.from_model(order)
+
+
+@router.post("/scan-overdue")
+def scan_overdue_orders(
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    """Flags open orders past their delivery date with neither a delivery
+    note nor a close reason, for admin approval. Run this periodically
+    (e.g. an external cron/scheduled task hitting this endpoint daily)."""
+    flagged = order_service.escalate_overdue_orders(db)
+    return {
+        "flagged_count": len(flagged),
+        "order_ids": [o.id for o in flagged],
+    }
+
+
+@router.post("/{order_id}/admin-review", response_model=OrderOut)
+def admin_review_order(
+    order_id: int,
+    payload: OrderAdminReview,
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    order = order_service.admin_review(db, order_id, payload.notes, user_id=user.id)
     return OrderOut.from_model(order)
 
 

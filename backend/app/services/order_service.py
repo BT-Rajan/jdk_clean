@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
@@ -6,7 +6,15 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
 from app.models.customer import Customer
-from app.models.order import ALLOWED_TRANSITIONS, RESERVED_STATUSES, Order, OrderDetail
+from app.models.delivery_note import DeliveryNote
+from app.models.order import (
+    ALLOWED_TRANSITIONS,
+    OPEN_STATUSES,
+    RESERVED_STATUSES,
+    STATUSES_REQUIRING_CLOSE_REASON,
+    Order,
+    OrderDetail,
+)
 from app.models.product import Product
 from app.services import audit_service, inventory_service, number_series_service
 
@@ -61,6 +69,7 @@ def list_orders(
     search: str | None = None,
     status: str | None = None,
     customer_id: int | None = None,
+    admin_review_required: bool | None = None,
     sort: str | None = None,
 ) -> dict:
     query = _base_query(db)
@@ -69,6 +78,8 @@ def list_orders(
         query = query.filter(Order.status == status)
     if customer_id:
         query = query.filter(Order.customer_id == customer_id)
+    if admin_review_required is not None:
+        query = query.filter(Order.admin_review_required == admin_review_required)
     if search:
         like = f"%{search}%"
         query = query.join(Customer).filter(
@@ -148,11 +159,22 @@ def update_order(db: Session, order_id: int, data: dict, user_id: int | None = N
     return get_order(db, order_id)
 
 
-def change_status(db: Session, order_id: int, new_status: str, user_id: int | None = None) -> Order:
+def change_status(
+    db: Session,
+    order_id: int,
+    new_status: str,
+    reason: str | None = None,
+    user_id: int | None = None,
+) -> Order:
     order = get_order(db, order_id)
     allowed = ALLOWED_TRANSITIONS.get(order.status, set())
     if new_status not in allowed:
         raise ConflictError(f"Cannot move order from '{order.status}' to '{new_status}'.")
+
+    if new_status in STATUSES_REQUIRING_CLOSE_REASON and not (reason and reason.strip()):
+        raise ValidationAppError(
+            "A reason is required to cancel an order without a delivery note."
+        )
 
     old_status = order.status
 
@@ -184,6 +206,10 @@ def change_status(db: Session, order_id: int, new_status: str, user_id: int | No
             inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity))
 
     order.status = new_status
+    if new_status in STATUSES_REQUIRING_CLOSE_REASON:
+        order.close_reason = reason
+        # A deliberate close resolves any pending overdue-delivery escalation.
+        order.admin_review_required = False
     order.updated_by = user_id
     audit_service.log_update(db, TABLE_NAME, order_id, {"status": (old_status, new_status)}, user_id)
     db.commit()
@@ -203,6 +229,69 @@ def restore_order(db: Session, order_id: int, user_id: int | None = None) -> Ord
     order = get_order(db, order_id, include_deleted=True)
     order.deleted_at = None
     audit_service.log_restore(db, TABLE_NAME, order_id, user_id)
+    db.commit()
+    return get_order(db, order_id)
+
+
+def escalate_overdue_orders(db: Session, as_of: date | None = None) -> list[Order]:
+    """Flags every still-open order whose delivery date has passed with
+    neither a delivery note issued nor a close reason recorded, for admin
+    approval. Meant to be run periodically (e.g. an external cron hitting
+    the scan endpoint); idempotent -- re-running only (re)flags orders that
+    still qualify, it never clears admin_review_required itself (only
+    change_status on cancel, or admin_review, does that).
+    """
+    today = as_of or datetime.now(timezone.utc).date()
+
+    overdue_order_ids = {
+        row.order_id
+        for row in db.query(DeliveryNote.order_id)
+        .filter(DeliveryNote.status == "issued", DeliveryNote.deleted_at.is_(None))
+        .all()
+    }
+
+    candidates = (
+        db.query(Order)
+        .filter(
+            Order.deleted_at.is_(None),
+            Order.status.in_(OPEN_STATUSES),
+            Order.close_reason.is_(None),
+            Order.admin_review_required.is_(False),
+        )
+        .all()
+    )
+
+    flagged: list[Order] = []
+    for order in candidates:
+        if order.id in overdue_order_ids:
+            continue
+        due_date = order.confirmed_delivery_date or order.requested_delivery_date
+        if due_date is not None and due_date < today:
+            order.admin_review_required = True
+            audit_service.log_update(
+                db, TABLE_NAME, order.id, {"admin_review_required": (False, True)}, None
+            )
+            flagged.append(order)
+
+    if flagged:
+        db.commit()
+    return flagged
+
+
+def admin_review(db: Session, order_id: int, notes: str, user_id: int | None = None) -> Order:
+    """Admin clears an overdue-delivery escalation, recording their decision."""
+    order = get_order(db, order_id)
+    if not order.admin_review_required:
+        raise ConflictError("This order has no pending admin review.")
+
+    order.admin_review_required = False
+    order.admin_reviewed_at = datetime.now(timezone.utc)
+    order.admin_reviewed_by = user_id
+    order.admin_review_notes = notes
+    order.updated_by = user_id
+    audit_service.log_update(
+        db, TABLE_NAME, order_id, {"admin_review_required": (True, False)}, user_id
+    )
     db.commit()
     return get_order(db, order_id)
 

@@ -241,6 +241,44 @@ CREATE TABLE IF NOT EXISTS stock_movements (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- FEASIBILITY CHECKS (gates quotation creation: tries to manufacture the
+-- requested product(s) from raw materials on hand; a shortfall needs
+-- Sales' exception approval before a quotation can be raised)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS feasibility_checks (
+    id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    feasibility_number  VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. FSB-00001)
+    customer_id         BIGINT UNSIGNED NOT NULL,
+    status              ENUM('draft','feasible','exception_pending','exception_approved','exception_rejected','closed','converted') NOT NULL DEFAULT 'draft',
+    checked_at          DATETIME NULL,
+    exception_reason    TEXT NULL,        -- Sales' reason for approving/rejecting a shortfall exception
+    exception_by        BIGINT UNSIGNED NULL,
+    close_reason        TEXT NULL,        -- Sales' reason for closing without generating a quotation
+    notes               TEXT NULL,
+    deleted_at          DATETIME NULL,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by          BIGINT UNSIGNED NULL,
+    updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by          BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_feasibility_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_feasibility_exception_by FOREIGN KEY (exception_by) REFERENCES users(id),
+    INDEX idx_feasibility_status (status),
+    INDEX idx_feasibility_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS feasibility_lines (
+    id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    feasibility_id      BIGINT UNSIGNED NOT NULL,
+    product_id          BIGINT UNSIGNED NOT NULL,
+    quantity            DECIMAL(14,4) NOT NULL,
+    is_feasible         TINYINT(1) NULL,       -- NULL until run; then whether this line's raw materials were fully covered
+    shortfall_json      TEXT NULL,             -- JSON list of {raw_material_id, code, name, unit, required, on_hand, shortfall}
+    CONSTRAINT fk_fl_feasibility FOREIGN KEY (feasibility_id) REFERENCES feasibility_checks(id) ON DELETE CASCADE,
+    CONSTRAINT fk_fl_product FOREIGN KEY (product_id) REFERENCES products(id),
+    INDEX idx_fl_feasibility (feasibility_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
 -- ORDERS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS orders (
@@ -253,12 +291,18 @@ CREATE TABLE IF NOT EXISTS orders (
     status          ENUM('draft','confirmed','in_production','ready_to_ship','shipped','delivered','cancelled') NOT NULL DEFAULT 'draft',
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
+    close_reason    TEXT NULL,                        -- Sales' reason for cancelling without a delivery note
+    admin_review_required TINYINT(1) NOT NULL DEFAULT 0, -- flagged when overdue with no delivery note and no close_reason
+    admin_reviewed_at      DATETIME NULL,
+    admin_reviewed_by      BIGINT UNSIGNED NULL,
+    admin_review_notes     TEXT NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
     updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_orders_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_orders_admin_reviewed_by FOREIGN KEY (admin_reviewed_by) REFERENCES users(id),
     INDEX idx_orders_status (status),
     INDEX idx_orders_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -359,6 +403,8 @@ CREATE TABLE IF NOT EXISTS quotations (
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
     converted_order_id BIGINT UNSIGNED NULL,
+    feasibility_id  BIGINT UNSIGNED NULL,             -- the passed/exception-approved feasibility check this came from
+    close_reason    TEXT NULL,                        -- Sales' reason for closing without converting to an order
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -366,6 +412,7 @@ CREATE TABLE IF NOT EXISTS quotations (
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_quotations_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
     CONSTRAINT fk_quotations_order FOREIGN KEY (converted_order_id) REFERENCES orders(id),
+    CONSTRAINT fk_quotations_feasibility FOREIGN KEY (feasibility_id) REFERENCES feasibility_checks(id),
     INDEX idx_quotations_status (status),
     INDEX idx_quotations_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -444,6 +491,7 @@ INSERT IGNORE INTO number_series (doc_type, prefix, next_number, padding) VALUES
     ('QUOTATION', 'QTN', 1, 5),
     ('PRODUCTION_BATCH', 'PB', 1, 5),
     ('PURCHASE_ORDER', 'PO', 1, 5),
-    ('DELIVERY_NOTE', 'DN', 1, 5);
+    ('DELIVERY_NOTE', 'DN', 1, 5),
+    ('FEASIBILITY', 'FSB', 1, 5);
 
 SET FOREIGN_KEY_CHECKS = 1;

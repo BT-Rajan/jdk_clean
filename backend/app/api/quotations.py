@@ -86,7 +86,9 @@ def update_status(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
-    quotation = quotation_service.change_status(db, quotation_id, payload.status, user_id=user.id)
+    quotation = quotation_service.change_status(
+        db, quotation_id, payload.status, reason=payload.reason, user_id=user.id
+    )
     return QuotationOut.from_model(quotation)
 
 

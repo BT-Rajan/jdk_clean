@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import DATE, DECIMAL, Enum, ForeignKey, String, Text
+from sqlalchemy import DATE, DECIMAL, Boolean, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -34,6 +34,15 @@ ALLOWED_TRANSITIONS = {
 # order (used to decide whether cancelling needs to release a reservation).
 RESERVED_STATUSES = {"confirmed", "in_production", "ready_to_ship"}
 
+# Cancelling without a delivery note is Sales closing the order with a
+# comment instead of fulfilling it -- a reason is mandatory (see
+# order_service.change_status).
+STATUSES_REQUIRING_CLOSE_REASON = {"cancelled"}
+
+# Orders in these statuses are still "open" (not yet fulfilled or closed)
+# for the purposes of the overdue-delivery admin escalation.
+OPEN_STATUSES = {"draft", "confirmed", "in_production", "ready_to_ship"}
+
 
 class Order(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "orders"
@@ -49,6 +58,16 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     )
     total_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Set when Sales cancels this order without a delivery note ever
+    # having been issued for it.
+    close_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Set by order_service.escalate_overdue_orders when the (confirmed or
+    # requested) delivery date has passed with neither a delivery note nor
+    # close_reason recorded. Cleared by an admin via admin_review().
+    admin_review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    admin_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    admin_reviewed_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+    admin_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     lines: Mapped[list["OrderDetail"]] = relationship(

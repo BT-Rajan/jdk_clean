@@ -52,6 +52,13 @@ class OrderStatusUpdate(BaseModel):
     status: str = Field(
         pattern="^(confirmed|in_production|ready_to_ship|shipped|delivered|cancelled)$"
     )
+    # Required by the service layer when status == 'cancelled' (Sales
+    # closing the order with a comment instead of a delivery note).
+    reason: str | None = None
+
+
+class OrderAdminReview(BaseModel):
+    notes: str = Field(min_length=1)
 
 
 class OrderOut(BaseModel):
@@ -66,6 +73,10 @@ class OrderOut(BaseModel):
     status: str
     total_amount: float
     notes: str | None
+    close_reason: str | None
+    admin_review_required: bool
+    admin_reviewed_at: datetime | None
+    admin_review_notes: str | None
     lines: list[OrderLineOut] = []
     created_at: datetime
     updated_at: datetime

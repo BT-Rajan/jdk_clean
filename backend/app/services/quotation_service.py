@@ -7,8 +7,13 @@ from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
 from app.models.customer import Customer
 from app.models.product import Product
-from app.models.quotation import ALLOWED_TRANSITIONS, Quotation, QuotationDetail
-from app.services import audit_service, number_series_service
+from app.models.quotation import (
+    ALLOWED_TRANSITIONS,
+    STATUSES_REQUIRING_CLOSE_REASON,
+    Quotation,
+    QuotationDetail,
+)
+from app.services import audit_service, feasibility_service, number_series_service
 
 TABLE_NAME = "quotations"
 
@@ -88,6 +93,12 @@ def create_quotation(db: Session, data: dict, user_id: int | None = None) -> Quo
     if customer is None:
         raise ValidationAppError(f"Customer {data['customer_id']} not found.")
 
+    # A quotation can only be raised off a feasibility check that came back
+    # feasible, or one Sales explicitly exception-approved despite a raw
+    # material shortfall -- there's no "skip feasibility" path.
+    feasibility_id = data["feasibility_id"]
+    feasibility_service.mark_converted(db, feasibility_id, user_id=user_id)
+
     lines = _price_lines(db, [dict(line) for line in data.pop("lines")])
     total_amount = round(sum(line["line_total"] for line in lines), 2)
 
@@ -151,7 +162,13 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
     return get_quotation(db, quotation_id)
 
 
-def change_status(db: Session, quotation_id: int, new_status: str, user_id: int | None = None) -> Quotation:
+def change_status(
+    db: Session,
+    quotation_id: int,
+    new_status: str,
+    reason: str | None = None,
+    user_id: int | None = None,
+) -> Quotation:
     if new_status == "converted":
         raise ConflictError(
             "Quotations become 'converted' automatically when converted to an order "
@@ -164,8 +181,15 @@ def change_status(db: Session, quotation_id: int, new_status: str, user_id: int 
             f"Cannot move quotation from '{quotation.status}' to '{new_status}'."
         )
 
+    if new_status in STATUSES_REQUIRING_CLOSE_REASON and not (reason and reason.strip()):
+        raise ValidationAppError(
+            "A reason is required to close a quotation without generating an order."
+        )
+
     old_status = quotation.status
     quotation.status = new_status
+    if new_status in STATUSES_REQUIRING_CLOSE_REASON:
+        quotation.close_reason = reason
     quotation.updated_by = user_id
     audit_service.log_update(
         db, TABLE_NAME, quotation_id, {"status": (old_status, new_status)}, user_id

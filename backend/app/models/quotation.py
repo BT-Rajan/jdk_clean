@@ -22,6 +22,12 @@ ALLOWED_TRANSITIONS = {
     "converted": set(),
 }
 
+# Sales closing a quotation without generating an order must supply a
+# reason (see quotation_service.change_status); 'rejected' is the only
+# manually-driven terminal-without-order status -- 'expired' is a
+# calendar-driven state, not a deliberate close.
+STATUSES_REQUIRING_CLOSE_REASON = {"rejected"}
+
 
 class Quotation(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "quotations"
@@ -37,6 +43,13 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
     total_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     converted_order_id: Mapped[int | None] = mapped_column(BigPK, nullable=True)
+    # Every quotation must originate from a passed/exception-approved
+    # feasibility check (enforced in quotation_service.create_quotation).
+    feasibility_id: Mapped[int | None] = mapped_column(
+        BigPK, ForeignKey("feasibility_checks.id"), nullable=True
+    )
+    # Set when Sales closes this quotation without converting it to an order.
+    close_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     lines: Mapped[list["QuotationDetail"]] = relationship(
