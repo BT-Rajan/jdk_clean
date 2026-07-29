@@ -1,5 +1,11 @@
 import { useState, useEffect } from 'react'
 
+export interface TaskRecurrence {
+  frequency: 'daily' | 'weekly' | 'monthly'
+  date: string
+  time: string
+}
+
 export interface Task {
   id: string
   title: string
@@ -10,6 +16,7 @@ export interface Task {
   assignedTo?: string
   module: 'sales' | 'purchasing' | 'inventory' | 'production' | 'admin'
   createdAt: string
+  recurrence?: TaskRecurrence
 }
 
 const TASKS_KEY = 'jdk_tasks'
@@ -104,6 +111,22 @@ export function useTasks() {
     localStorage.setItem(TASKS_KEY, JSON.stringify(updatedTasks))
   }
 
+  const closeTask = (id: string) => {
+    updateTask(id, { status: 'completed' })
+  }
+
+  const deferTask = (id: string, newDueDate: string) => {
+    updateTask(id, { dueDate: newDueDate, status: 'pending' })
+  }
+
+  const assignTask = (id: string, assignedTo: string) => {
+    updateTask(id, { assignedTo })
+  }
+
+  const setTaskRecurrence = (id: string, recurrence: TaskRecurrence | undefined) => {
+    updateTask(id, { recurrence })
+  }
+
   const getPendingTasks = () => {
     return tasks.filter((t) => t.status !== 'completed')
   }
@@ -122,6 +145,10 @@ export function useTasks() {
     addTask,
     updateTask,
     deleteTask,
+    closeTask,
+    deferTask,
+    assignTask,
+    setTaskRecurrence,
     getPendingTasks,
     getTasksByModule,
     getTaskCount,

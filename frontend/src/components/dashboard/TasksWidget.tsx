@@ -1,11 +1,19 @@
+import { useState } from 'react'
 import { GlassCard } from '@/components/ui'
-import type { Task } from '@/hooks/useTasks'
+import type { Task, TaskRecurrence } from '@/hooks/useTasks'
+import { TaskDetailModal } from './TaskDetailModal'
 
 interface TasksWidgetProps {
   tasks: Task[]
+  onCloseTask: (id: string) => void
+  onDefer: (id: string, newDueDate: string) => void
+  onAssign: (id: string, assignedTo: string) => void
+  onSetRecurrence: (id: string, recurrence: TaskRecurrence | undefined) => void
 }
 
-export function TasksWidget({ tasks }: TasksWidgetProps) {
+export function TasksWidget({ tasks, onCloseTask, onDefer, onAssign, onSetRecurrence }: TasksWidgetProps) {
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null)
+
   const getPriorityColor = (priority: Task['priority']) => {
     switch (priority) {
       case 'high':
@@ -28,6 +36,9 @@ export function TasksWidget({ tasks }: TasksWidgetProps) {
     }
   }
 
+  // Keep the modal in sync with the latest task data (e.g. after an action is applied)
+  const activeTask = selectedTask ? tasks.find((t) => t.id === selectedTask.id) ?? null : null
+
   if (tasks.length === 0) {
     return (
       <GlassCard className="p-6">
@@ -44,13 +55,17 @@ export function TasksWidget({ tasks }: TasksWidgetProps) {
       </h3>
       <div className="space-y-3">
         {tasks.slice(0, 5).map((task) => (
-          <div
+          <button
             key={task.id}
-            className="rounded-lg border border-white/10 bg-white/5 p-3 transition-colors hover:border-white/20 hover:bg-white/10"
+            type="button"
+            onClick={() => setSelectedTask(task)}
+            className="w-full rounded-lg border border-white/10 bg-white/5 p-3 text-left transition-colors hover:border-white/20 hover:bg-white/10"
           >
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <p className="truncate text-sm font-medium text-white">{task.title}</p>
+                <p className="truncate text-sm font-medium text-white">
+                  {task.title} {task.recurrence && <span title="Recurring">🔁</span>}
+                </p>
                 <p className={`mt-1 text-xs ${getStatusColor(task.status)}`}>
                   {task.status === 'in-progress' ? '🔄 In Progress' : task.status === 'completed' ? '✓ Completed' : '⏳ Pending'}
                 </p>
@@ -63,12 +78,21 @@ export function TasksWidget({ tasks }: TasksWidgetProps) {
               <p className="mt-2 text-xs text-white/40 line-clamp-1">{task.description}</p>
             )}
             <p className="mt-2 text-xs text-white/30">Due: {new Date(task.dueDate).toLocaleDateString()}</p>
-          </div>
+          </button>
         ))}
         {tasks.length > 5 && (
           <p className="text-center text-xs text-white/40">+{tasks.length - 5} more tasks</p>
         )}
       </div>
+
+      <TaskDetailModal
+        task={activeTask}
+        onClose={() => setSelectedTask(null)}
+        onCloseTask={onCloseTask}
+        onDefer={onDefer}
+        onAssign={onAssign}
+        onSetRecurrence={onSetRecurrence}
+      />
     </GlassCard>
   )
 }

@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { GlassCard, Button } from '@/components/ui'
 import { useAuth } from '@/hooks/useAuth'
-import { getDashboardConfig } from '@/lib/dashboardConfig'
 import { useDashboardPreferences } from '@/hooks/useDashboardPreferences'
 import { useTasks } from '@/hooks/useTasks'
 import { StatsWidget, GraphWidget, SkeletonWidget } from '@/components/dashboard/DashboardWidgets'
@@ -106,9 +105,8 @@ function generateMockGraph(widgetId: string) {
 
 export function DashboardPage() {
   const { user } = useAuth()
-  const dashboardConfig = getDashboardConfig(user?.role)
   const { isLoading, getEnabledWidgets } = useDashboardPreferences(user?.role)
-  const { getPendingTasks } = useTasks()
+  const { getPendingTasks, closeTask, deferTask, assignTask, setTaskRecurrence } = useTasks()
 
   const enabledWidgets = getEnabledWidgets()
   const pendingTasks = getPendingTasks()
@@ -180,36 +178,16 @@ export function DashboardPage() {
             Your Tasks <span className="text-lg text-gold-300">({pendingTasks.length})</span>
           </h2>
           <div className="grid gap-6 sm:grid-cols-2">
-            <TasksWidget tasks={pendingTasks} />
+            <TasksWidget
+              tasks={pendingTasks}
+              onCloseTask={closeTask}
+              onDefer={deferTask}
+              onAssign={assignTask}
+              onSetRecurrence={setTaskRecurrence}
+            />
           </div>
         </div>
       )}
-
-      {/* Quick Access Section */}
-      <div className="mt-8">
-        <h2 className="mb-4 font-display text-xl font-medium text-white">Quick Access</h2>
-        <div className="grid gap-6">
-          {dashboardConfig.sections.map((section) => (
-            <GlassCard key={section.id} className="p-6">
-              <h3 className="mb-4 text-lg font-medium text-white">{section.title}</h3>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {section.items.map((item) => (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className="group rounded-lg border border-gold-400/20 bg-gold-500/5 p-4 transition-all hover:bg-gold-500/10 hover:border-gold-400/40"
-                  >
-                    <p className="text-sm font-medium text-gold-200 group-hover:text-gold-100">{item.label}</p>
-                    {item.description && (
-                      <p className="mt-1 text-xs text-white/40 group-hover:text-white/50">{item.description}</p>
-                    )}
-                  </Link>
-                ))}
-              </div>
-            </GlassCard>
-          ))}
-        </div>
-      </div>
     </AppLayout>
   )
 }
