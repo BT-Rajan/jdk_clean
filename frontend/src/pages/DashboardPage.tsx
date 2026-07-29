@@ -1,14 +1,19 @@
 import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Avatar, GlassCard, Button } from '@/components/ui'
+import { GlassCard, Button } from '@/components/ui'
 import { useAuth } from '@/hooks/useAuth'
 import { getDashboardConfig } from '@/lib/dashboardConfig'
 import { useDashboardPreferences } from '@/hooks/useDashboardPreferences'
+import { useTasks } from '@/hooks/useTasks'
 import { StatsWidget, GraphWidget, SkeletonWidget } from '@/components/dashboard/DashboardWidgets'
+import { TasksWidget } from '@/components/dashboard/TasksWidget'
 
 // Mock data generators for demo
 function generateMockStats(widgetId: string) {
   const data: Record<string, { value: string | number; unit?: string; trend?: { value: number; isPositive: boolean } }> = {
+    'sales-customers': { value: 12, trend: { value: 25, isPositive: true } },
+    'sales-quotations': { value: 8, trend: { value: 15, isPositive: true } },
+    'sales-orders': { value: 24, trend: { value: 32, isPositive: true } },
     'sales-total': { value: 234, trend: { value: 12, isPositive: true } },
     'sales-revenue': { value: '₹45.2L', unit: 'lakhs', trend: { value: 8, isPositive: true } },
     'sales-pending': { value: 18, trend: { value: -5, isPositive: false } },
@@ -24,6 +29,10 @@ function generateMockStats(widgetId: string) {
     'total-users': { value: 24, trend: { value: 2, isPositive: true } },
     'orders-total': { value: 892, trend: { value: 11, isPositive: true } },
     'revenue-total': { value: '₹487.3L', unit: 'lakhs', trend: { value: 18, isPositive: true } },
+    'admin-quotations': { value: 8, trend: { value: 15, isPositive: true } },
+    'admin-orders': { value: 24, trend: { value: 32, isPositive: true } },
+    'admin-raw-materials': { value: 156, trend: { value: 5, isPositive: true } },
+    'admin-inventory': { value: '₹125.4L', unit: 'lakhs', trend: { value: 10, isPositive: true } },
   }
   return data[widgetId] || { value: '—' }
 }
@@ -96,11 +105,13 @@ function generateMockGraph(widgetId: string) {
 }
 
 export function DashboardPage() {
-  const { user, avatarVersion } = useAuth()
+  const { user } = useAuth()
   const dashboardConfig = getDashboardConfig(user?.role)
   const { isLoading, getEnabledWidgets } = useDashboardPreferences(user?.role)
+  const { getPendingTasks, updateTask } = useTasks(user?.role)
 
   const enabledWidgets = getEnabledWidgets()
+  const pendingTasks = getPendingTasks()
 
   return (
     <AppLayout>
@@ -109,31 +120,10 @@ export function DashboardPage() {
       </h1>
       <p className="mt-2 text-sm text-white/50">You're signed in to the JDK ERP workspace.</p>
 
-      <GlassCard className="mt-8 p-8">
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex items-center gap-5">
-            {user && (
-              <Avatar key={avatarVersion} avatarUrl={user.avatar_url} name={user.full_name} size="md" />
-            )}
-            <div>
-              <p className="text-lg font-medium text-white">{user?.full_name}</p>
-              <p className="text-sm text-white/50">{user?.email}</p>
-              <p className="mt-1 text-xs tracking-wide text-gold-300/80 capitalize">{user?.role}</p>
-            </div>
-          </div>
-          <Link to="/profile">
-            <button className="text-sm font-medium text-gold-300 transition-colors hover:text-gold-200">
-              Profile →
-            </button>
-          </Link>
-        </div>
-      </GlassCard>
-
       {/* Dashboard Widgets */}
       {!isLoading && enabledWidgets.length > 0 && (
         <div className="mt-8">
           <div className="mb-6 flex items-center justify-between">
-            <h2 className="font-display text-xl font-medium text-white">Your Dashboard</h2>
             <Link to="/dashboard/customize">
               <button className="text-sm font-medium text-gold-300 transition-colors hover:text-gold-200">
                 Customize →
@@ -181,6 +171,18 @@ export function DashboardPage() {
             <Button className="mt-4">Customize Dashboard</Button>
           </Link>
         </GlassCard>
+      )}
+
+      {/* Tasks Section */}
+      {pendingTasks.length > 0 && (
+        <div className="mt-8">
+          <h2 className="mb-4 font-display text-xl font-medium text-white">
+            Your Tasks <span className="text-lg text-gold-300">({pendingTasks.length})</span>
+          </h2>
+          <div className="grid gap-6 sm:grid-cols-2">
+            <TasksWidget tasks={pendingTasks} onTaskStatusChange={updateTask} />
+          </div>
+        </div>
       )}
 
       {/* Quick Access Section */}

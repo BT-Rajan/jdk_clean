@@ -4,10 +4,12 @@ import { useEffect, useState } from 'react'
 import { Avatar, Logo, Button } from '@/components/ui'
 import { AssistantDrawer } from '@/components/assistant/AssistantDrawer'
 import { useAuth } from '@/hooks/useAuth'
+import { useTasks } from '@/hooks/useTasks'
 import { isAdmin } from '@/lib/roles'
 import { cn } from '@/lib/cn'
 import { AmbientBackground } from './AmbientBackground'
 import { NavDropdown } from './NavDropdown'
+import { TasksNotificationModal } from './TasksNotificationModal'
 
 interface AppLayoutProps {
   children: ReactNode
@@ -31,10 +33,14 @@ function isNavGroup(entry: NavEntry): entry is NavGroup {
 
 export function AppLayout({ children }: AppLayoutProps) {
   const { user, logoutUser, avatarVersion } = useAuth()
+  const { getTaskCount, getPendingTasks } = useTasks(user?.role)
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const [isAssistantOpen, setIsAssistantOpen] = useState(false)
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const taskCount = getTaskCount()
+  const pendingTasks = getPendingTasks()
 
   // The header is sticky, so once the page scrolls, content passes directly
   // behind it continuously. Track scroll position and swap to a near-solid
@@ -78,7 +84,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     {
       label: 'Production',
       items: [
-        { to: '/production', label: 'Production' },
+        { to: '/production', label: 'Schedule' },
         { to: '/mrp', label: 'MRP' },
       ],
     },
@@ -121,6 +127,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             {user && (
               <button
                 type="button"
+                onClick={() => setIsNotificationsOpen(true)}
                 aria-label="Notifications"
                 className="relative flex items-center justify-center rounded-xl border border-white/10 p-2 text-white/40 transition-colors hover:text-white/60 hover:border-white/20"
               >
@@ -140,6 +147,11 @@ export function AppLayout({ children }: AppLayoutProps) {
                     strokeLinejoin="round"
                   />
                 </svg>
+                {taskCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                    {taskCount > 9 ? '9+' : taskCount}
+                  </span>
+                )}
               </button>
             )}
             {user && (
@@ -204,7 +216,10 @@ export function AppLayout({ children }: AppLayoutProps) {
       <main className="relative z-0 mx-auto max-w-5xl px-4 py-10 sm:px-6">{children}</main>
 
       {user && (
-        <AssistantDrawer open={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
+        <>
+          <TasksNotificationModal open={isNotificationsOpen} onClose={() => setIsNotificationsOpen(false)} tasks={pendingTasks} />
+          <AssistantDrawer open={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
+        </>
       )}
     </div>
   )

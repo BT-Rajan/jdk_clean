@@ -17,9 +17,9 @@ const DASHBOARD_PREFS_KEY = 'jdk_dashboard_prefs'
 // Available widgets by role
 const availableWidgetsByRole: Record<string, DashboardWidget[]> = {
   sales: [
-    { id: 'sales-total', title: 'Total Orders', type: 'stats', dataSource: 'orders', enabled: true },
-    { id: 'sales-revenue', title: 'Revenue', type: 'stats', dataSource: 'orders_revenue', enabled: true },
-    { id: 'sales-pending', title: 'Pending Quotations', type: 'stats', dataSource: 'quotations_pending', enabled: true },
+    { id: 'sales-customers', title: 'Customers (This Month)', type: 'stats', dataSource: 'customers_month', enabled: true },
+    { id: 'sales-quotations', title: 'Quotations (This Month)', type: 'stats', dataSource: 'quotations_month', enabled: true },
+    { id: 'sales-orders', title: 'Orders (This Month)', type: 'stats', dataSource: 'orders_month', enabled: true },
     { id: 'sales-trend', title: 'Sales Trend', type: 'graph', dataSource: 'sales_trend', enabled: true },
     { id: 'customers-graph', title: 'Top Customers', type: 'graph', dataSource: 'top_customers', enabled: false },
   ],
@@ -45,12 +45,10 @@ const availableWidgetsByRole: Record<string, DashboardWidget[]> = {
     { id: 'mrp-graph', title: 'Material Requirements', type: 'graph', dataSource: 'mrp_status', enabled: false },
   ],
   admin: [
-    { id: 'total-users', title: 'Total Users', type: 'stats', dataSource: 'users_count', enabled: true },
-    { id: 'orders-total', title: 'Total Orders', type: 'stats', dataSource: 'orders_total', enabled: true },
-    { id: 'revenue-total', title: 'Total Revenue', type: 'stats', dataSource: 'revenue_total', enabled: true },
-    { id: 'system-health', title: 'System Health', type: 'graph', dataSource: 'system_health', enabled: true },
-    { id: 'all-orders-trend', title: 'Orders Trend', type: 'graph', dataSource: 'all_orders_trend', enabled: true },
-    { id: 'module-usage', title: 'Module Usage', type: 'graph', dataSource: 'module_usage', enabled: false },
+    { id: 'admin-quotations', title: 'Quotations (This Month)', type: 'stats', dataSource: 'quotations_month', enabled: true },
+    { id: 'admin-orders', title: 'Orders (This Month)', type: 'stats', dataSource: 'orders_month', enabled: true },
+    { id: 'admin-raw-materials', title: 'Raw Materials in Stock', type: 'stats', dataSource: 'raw_materials_count', enabled: true },
+    { id: 'admin-inventory', title: 'Inventory Value', type: 'stats', dataSource: 'inventory_value', enabled: true },
   ],
 }
 
