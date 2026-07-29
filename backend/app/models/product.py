@@ -1,4 +1,4 @@
-from sqlalchemy import DECIMAL, Enum, ForeignKey, String
+from sqlalchemy import DECIMAL, Enum, ForeignKey, SmallInteger, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -21,11 +21,13 @@ class Product(Base, TimestampMixin, SoftDeleteMixin):
     )
     selling_price: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     # The "formula" inputs for feasibility's time-required calculation:
-    # which machine makes this product, and how many hours of that
-    # machine's time one unit consumes. Both optional -- products with
-    # neither simply skip the capacity check (only the material check runs).
+    # which machine makes this product, how many hours of that machine's
+    # time one unit consumes, and how many workers are needed concurrently
+    # for that time. All optional -- products with none of these simply
+    # skip the capacity check (only the material/BOM check runs).
     machine_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("machines.id"), nullable=True)
     production_hours_per_unit: Mapped[float | None] = mapped_column(DECIMAL(10, 4), nullable=True)
+    workers_required: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
     status: Mapped[str] = mapped_column(
         Enum("active", "inactive", name="product_status"), nullable=False, default="active"
     )

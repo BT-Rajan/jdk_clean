@@ -11,6 +11,11 @@ export interface Settings {
   ai_provider: AiProvider
   /** Masked (e.g. "••••••••ab12") once set -- never the real key. */
   ai_api_key: string
+  /** Factory-wide worker pool used by the feasibility check's capacity
+   * scan alongside each machine's own capacity. Stored/sent as strings
+   * (numeric text) like every other setting. */
+  factory_total_workers: string
+  factory_workday_hours: string
 }
 
 export type SettingsPayload = Partial<Settings>

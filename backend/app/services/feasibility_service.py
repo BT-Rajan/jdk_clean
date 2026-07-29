@@ -17,7 +17,7 @@ from app.models.machine import Machine
 from app.models.product import Product
 from app.models.production_schedule import ProductionSchedule
 from app.models.raw_material import RawMaterial
-from app.services import audit_service, bom_service, inventory_service, number_series_service
+from app.services import audit_service, bom_service, inventory_service, number_series_service, settings_service
 
 TABLE_NAME = "feasibility_checks"
 
@@ -27,6 +27,10 @@ STALE_AFTER_DAYS = 5
 
 # Statuses whose booked hours count against a machine's free capacity.
 BOOKED_PRODUCTION_STATUSES = ("planned", "in_progress")
+
+# How far forward the vacant-slot scan looks before giving up and reporting
+# "not achievable in the foreseeable future" rather than scanning forever.
+MAX_SCAN_DAYS = 365
 
 
 def _base_query(db: Session, include_deleted: bool = False):
@@ -111,17 +115,71 @@ def create_feasibility(db: Session, data: dict, user_id: int | None = None) -> F
     return get_feasibility(db, feasibility.id)
 
 
+def _daily_booked_hours(
+    batches: list[ProductionSchedule], hours_field: str = "machine"
+) -> dict[date, float]:
+    """Spreads each batch's total required hours evenly across the days it's
+    scheduled over, so a 5-day batch doesn't count as fully consuming
+    capacity on every one of those days at once. `hours_field` selects
+    whether to spread machine-hours or worker-hours (a batch's product may
+    have both, at different totals)."""
+    daily: dict[date, float] = {}
+    for batch in batches:
+        product = batch.product
+        if product is None or product.production_hours_per_unit is None:
+            continue
+        span_days = (batch.scheduled_end - batch.scheduled_start).days + 1
+        if span_days <= 0:
+            continue
+        batch_hours = float(batch.planned_quantity) * float(product.production_hours_per_unit)
+        if hours_field == "workers":
+            if not product.workers_required:
+                continue
+            batch_hours *= product.workers_required
+        per_day = batch_hours / span_days
+        d = batch.scheduled_start
+        while d <= batch.scheduled_end:
+            daily[d] = daily.get(d, 0.0) + per_day
+            d += timedelta(days=1)
+    return daily
+
+
+def _find_vacant_slot_completion(
+    daily_capacity: float, daily_booked: dict[date, float], required_hours: float, today: date
+) -> date | None:
+    """Scans forward day by day from `today`, accumulating free capacity
+    (daily_capacity minus whatever's already booked that day), and returns
+    the first date by which enough cumulative free time has opened up to
+    cover `required_hours` -- i.e. identifies the actual vacant slot rather
+    than just comparing aggregate totals. None if not achievable within
+    MAX_SCAN_DAYS."""
+    if required_hours <= 0:
+        return today
+    cumulative_free = 0.0
+    d = today
+    for _ in range(MAX_SCAN_DAYS):
+        free_today = max(daily_capacity - daily_booked.get(d, 0.0), 0.0)
+        cumulative_free += free_today
+        if cumulative_free >= required_hours:
+            return d
+        d += timedelta(days=1)
+    return None
+
+
 def _check_capacity(
     db: Session, product: Product, quantity: float, required_by_date: date | None, today: date
 ) -> tuple[bool | None, dict | None]:
-    """Machine-availability + time-required check for one line: does the
-    product's machine (product.machine_id) have enough free capacity,
-    between today and required_by_date, for `quantity` units at the
-    product's production_hours_per_unit ("formula" time)?
+    """Machine-availability + time-required (+ labor) check for one line:
+    scans forward from today for the first vacant slot -- on the product's
+    machine, and in the factory's shared worker pool -- with enough free
+    capacity to produce `quantity` units at the product's formula
+    (production_hours_per_unit, workers_required), net of what's already
+    booked in production_schedules. capacity_ok is True only if that
+    projected completion date is on or before required_by_date.
 
     Returns (capacity_ok, shortfall_dict). capacity_ok is None -- meaning
     "not evaluable" -- when the product has no machine/time formula set, or
-    the check has no required_by_date to measure a window against.
+    the check has no required_by_date to measure against.
     """
     if product.machine_id is None or product.production_hours_per_unit is None:
         return None, None
@@ -133,39 +191,71 @@ def _check_capacity(
         return None, None
 
     required_hours = round(float(quantity) * float(product.production_hours_per_unit), 4)
-    window_days = max((required_by_date - today).days, 0)
-    total_capacity = float(machine.capacity_hours_per_day) * window_days
 
-    # Hours already booked on this machine by other planned/in-progress
-    # batches whose window overlaps [today, required_by_date].
-    booked_batches = (
+    # Machine slot: only this machine's own bookings compete for its time.
+    machine_batches = (
         db.query(ProductionSchedule)
-        .join(Product, ProductionSchedule.product_id == Product.id)
+        .options(joinedload(ProductionSchedule.product))
         .filter(
             ProductionSchedule.machine_id == machine.id,
             ProductionSchedule.deleted_at.is_(None),
             ProductionSchedule.status.in_(BOOKED_PRODUCTION_STATUSES),
-            ProductionSchedule.scheduled_start <= required_by_date,
             ProductionSchedule.scheduled_end >= today,
         )
         .all()
     )
-    booked_hours = 0.0
-    for batch in booked_batches:
-        per_unit = batch.product.production_hours_per_unit if batch.product else None
-        if per_unit is not None:
-            booked_hours += float(batch.planned_quantity) * float(per_unit)
+    machine_daily_booked = _daily_booked_hours(machine_batches, hours_field="machine")
+    machine_completion = _find_vacant_slot_completion(
+        float(machine.capacity_hours_per_day), machine_daily_booked, required_hours, today
+    )
 
-    available_hours = round(total_capacity - booked_hours, 4)
-    capacity_ok = available_hours >= required_hours
+    # Worker slot: every batch factory-wide competes for the shared pool,
+    # not just this machine's -- workers move between machines.
+    worker_completion = today
+    workers_required = product.workers_required
+    required_worker_hours = None
+    total_workers, workday_hours = settings_service.get_factory_labor_pool(db)
+    if workers_required and total_workers > 0:
+        required_worker_hours = round(required_hours * workers_required, 4)
+        worker_batches = (
+            db.query(ProductionSchedule)
+            .options(joinedload(ProductionSchedule.product))
+            .filter(
+                ProductionSchedule.deleted_at.is_(None),
+                ProductionSchedule.status.in_(BOOKED_PRODUCTION_STATUSES),
+                ProductionSchedule.scheduled_end >= today,
+            )
+            .all()
+        )
+        worker_daily_booked = _daily_booked_hours(worker_batches, hours_field="workers")
+        worker_completion = _find_vacant_slot_completion(
+            total_workers * workday_hours, worker_daily_booked, required_worker_hours, today
+        )
+    elif workers_required and total_workers == 0:
+        # Workers required by the formula but no factory-wide pool
+        # configured (Settings -> factory_total_workers) -- can't evaluate
+        # that half of the check, so don't silently pass it.
+        worker_completion = None
+
+    if machine_completion is None or worker_completion is None:
+        # Not achievable within the scan window on at least one axis.
+        projected_completion = None
+    else:
+        projected_completion = max(machine_completion, worker_completion)
+
+    capacity_ok = projected_completion is not None and projected_completion <= required_by_date
     if capacity_ok:
         return True, None
 
     return False, {
         "machine": f"{machine.code} — {machine.name}",
         "required_hours": required_hours,
-        "available_hours": max(available_hours, 0.0),
-        "shortfall_hours": round(required_hours - available_hours, 4),
+        "projected_completion_date": projected_completion.isoformat() if projected_completion else None,
+        "shortfall_days": (
+            (projected_completion - required_by_date).days if projected_completion else None
+        ),
+        "workers_required": workers_required,
+        "required_worker_hours": required_worker_hours,
     }
 
 

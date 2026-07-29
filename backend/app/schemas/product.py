@@ -10,6 +10,7 @@ class ProductCreate(BaseModel):
     # "Formula" inputs for the feasibility check's time-required calculation.
     machine_id: int | None = None
     production_hours_per_unit: float | None = Field(default=None, ge=0)
+    workers_required: int | None = Field(default=None, ge=0)
     status: str = Field(default="active", pattern="^(active|inactive)$")
 
 
@@ -20,6 +21,7 @@ class ProductUpdate(BaseModel):
     selling_price: float | None = None
     machine_id: int | None = None
     production_hours_per_unit: float | None = Field(default=None, ge=0)
+    workers_required: int | None = Field(default=None, ge=0)
     status: str | None = Field(default=None, pattern="^(active|inactive)$")
 
 
@@ -32,6 +34,7 @@ class ProductOut(BaseModel):
     selling_price: float
     machine_id: int | None
     production_hours_per_unit: float | None
+    workers_required: int | None
     status: str
 
     model_config = {"from_attributes": True}

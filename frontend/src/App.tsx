@@ -112,6 +112,13 @@ const MachineFormPage = lazy(() =>
   import('@/pages/machines/MachineFormPage').then((m) => ({ default: m.MachineFormPage })),
 )
 
+const FactorySetupListPage = lazy(() =>
+  import('@/pages/factorySetup/FactorySetupListPage').then((m) => ({ default: m.FactorySetupListPage })),
+)
+const FactorySetupFormPage = lazy(() =>
+  import('@/pages/factorySetup/FactorySetupFormPage').then((m) => ({ default: m.FactorySetupFormPage })),
+)
+
 const OrdersListPage = lazy(() =>
   import('@/pages/orders/OrdersListPage').then((m) => ({ default: m.OrdersListPage })),
 )
@@ -200,6 +207,9 @@ export function App() {
             <Route path="/machines" element={<MachinesListPage />} />
             <Route path="/machines/new" element={<MachineFormPage />} />
             <Route path="/machines/:id/edit" element={<MachineFormPage />} />
+
+            <Route path="/factory-setup" element={<FactorySetupListPage />} />
+            <Route path="/factory-setup/:id" element={<FactorySetupFormPage />} />
 
             <Route path="/quotations" element={<QuotationsListPage />} />
             <Route path="/quotations/new" element={<QuotationFormPage />} />

@@ -9,6 +9,7 @@ export const productSchema = z.object({
   selling_price: z.coerce.number().min(0, 'Must be 0 or more'),
   machine_id: z.coerce.number().int().positive().optional().or(z.literal('').transform(() => undefined)),
   production_hours_per_unit: z.coerce.number().min(0, 'Must be 0 or more').optional().or(z.literal('').transform(() => undefined)),
+  workers_required: z.coerce.number().int().min(0, 'Must be 0 or more').optional().or(z.literal('').transform(() => undefined)),
   status: z.enum(['active', 'inactive']),
 })
 

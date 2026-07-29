@@ -23,8 +23,13 @@ class ShortfallItem(BaseModel):
 class CapacityShortfall(BaseModel):
     machine: str
     required_hours: float
-    available_hours: float
-    shortfall_hours: float
+    # Earliest date the machine + labor pool could actually finish this,
+    # given what's already booked -- None if not achievable within the
+    # scan horizon at all.
+    projected_completion_date: date | None
+    shortfall_days: int | None
+    workers_required: int | None = None
+    required_worker_hours: float | None = None
 
 
 class FeasibilityLineOut(BaseModel):

@@ -81,6 +81,30 @@ export function SettingsPage() {
             </GlassCard>
 
             <GlassCard className="p-8">
+              <h2 className="font-display text-lg font-medium text-white">Factory</h2>
+              <p className="mt-1 text-sm text-white/50">
+                The shared worker pool feasibility checks weigh against each product's "workers required" formula
+                field, alongside each machine's own capacity.
+              </p>
+              <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2">
+                <TextField
+                  label="Total workers"
+                  type="number"
+                  step="1"
+                  min="0"
+                  {...register('factory_total_workers')}
+                />
+                <TextField
+                  label="Workday hours (per worker)"
+                  type="number"
+                  step="0.5"
+                  min="0"
+                  {...register('factory_workday_hours')}
+                />
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-8">
               <h2 className="font-display text-lg font-medium text-white">AI assistant provider</h2>
               <p className="mt-1 text-sm text-white/50">
                 Visible here only -- the assistant itself never names a provider anywhere else in the app.

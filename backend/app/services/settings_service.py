@@ -7,9 +7,17 @@ COMPANY_FIELDS = ["company_name", "company_address", "company_phone", "company_e
 # frontend never shows either name outside the admin-only settings screen
 # (see SettingsPage.tsx) -- the chat feature itself just says "AI Assistant".
 AI_FIELDS = ["ai_provider", "ai_api_key"]
-ALL_FIELDS = COMPANY_FIELDS + AI_FIELDS
+# The factory-wide worker pool used alongside each machine's own capacity
+# in the feasibility check's capacity scan (see feasibility_service.py).
+# Stored as text like every other setting; parsed by whoever reads them.
+FACTORY_FIELDS = ["factory_total_workers", "factory_workday_hours"]
+ALL_FIELDS = COMPANY_FIELDS + AI_FIELDS + FACTORY_FIELDS
 
 DEFAULTS = {key: "" for key in ALL_FIELDS}
+# factory_workday_hours defaults to a standard shift length rather than
+# empty, since 0 would make every worker-hours check fail as "no capacity"
+# for factories that haven't touched this setting yet.
+DEFAULTS["factory_workday_hours"] = "8"
 
 
 def get_all(db: Session) -> dict:
@@ -29,6 +37,25 @@ def get_masked(db: Session) -> dict:
     if values["ai_api_key"]:
         values["ai_api_key"] = "••••••••" + values["ai_api_key"][-4:]
     return values
+
+
+def get_factory_labor_pool(db: Session) -> tuple[int, float]:
+    """(total_workers, workday_hours) for the feasibility check's capacity
+    scan. Unset/unparseable values default to (0, 8.0) -- 0 workers means
+    the worker-hours side of the capacity check is simply skipped (same
+    "not evaluable" treatment as a product with no machine/formula set),
+    rather than erroring.
+    """
+    values = get_all(db)
+    try:
+        total_workers = int(values["factory_total_workers"])
+    except (ValueError, KeyError):
+        total_workers = 0
+    try:
+        workday_hours = float(values["factory_workday_hours"])
+    except (ValueError, KeyError):
+        workday_hours = 8.0
+    return max(total_workers, 0), max(workday_hours, 0.0)
 
 
 def update(db: Session, data: dict) -> dict:

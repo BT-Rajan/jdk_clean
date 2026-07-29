@@ -188,10 +188,13 @@ CREATE TABLE IF NOT EXISTS products (
     product_type    ENUM('finished_good','sub_assembly') NOT NULL DEFAULT 'finished_good',
     selling_price   DECIMAL(14,2) NOT NULL DEFAULT 0,
     -- The "formula" inputs for the feasibility check's time-required
-    -- calculation: which machine makes this product, and how many hours
-    -- of that machine's time one unit consumes.
+    -- calculation: which machine makes this product, how many hours of
+    -- that machine's time one unit consumes, and how many workers are
+    -- needed concurrently for that time (alongside the BOM -- see
+    -- bom_lines -- which covers the raw-material side of the formula).
     machine_id                 BIGINT UNSIGNED NULL,
     production_hours_per_unit  DECIMAL(10,4) NULL,
+    workers_required           SMALLINT UNSIGNED NULL,
     status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

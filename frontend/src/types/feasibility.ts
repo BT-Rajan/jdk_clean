@@ -29,8 +29,13 @@ export interface ShortfallItem {
 export interface CapacityShortfall {
   machine: string
   required_hours: number
-  available_hours: number
-  shortfall_hours: number
+  /** Earliest date the machine + labor pool could actually finish this,
+   * given what's already booked -- null if not achievable at all within
+   * the scan horizon. */
+  projected_completion_date: string | null
+  shortfall_days: number | null
+  workers_required: number | null
+  required_worker_hours: number | null
 }
 
 export interface FeasibilityLine extends FeasibilityLineInput {

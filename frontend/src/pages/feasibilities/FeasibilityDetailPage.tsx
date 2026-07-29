@@ -319,8 +319,22 @@ export function FeasibilityDetailPage() {
                         <StatusBadge status="rejected" />
                         {line.capacity_shortfall && (
                           <p className="mt-2 text-xs text-white/60">
-                            {line.capacity_shortfall.machine} — short {line.capacity_shortfall.shortfall_hours} hrs
-                            (need {line.capacity_shortfall.required_hours}, have {line.capacity_shortfall.available_hours})
+                            {line.capacity_shortfall.machine} — needs {line.capacity_shortfall.required_hours} hrs
+                            {line.capacity_shortfall.workers_required
+                              ? ` and ${line.capacity_shortfall.workers_required} workers`
+                              : ''}
+                            .{' '}
+                            {line.capacity_shortfall.projected_completion_date ? (
+                              <>
+                                Earliest it could actually be done:{' '}
+                                {new Date(line.capacity_shortfall.projected_completion_date).toLocaleDateString()}
+                                {line.capacity_shortfall.shortfall_days
+                                  ? ` (${line.capacity_shortfall.shortfall_days} day${line.capacity_shortfall.shortfall_days === 1 ? '' : 's'} late)`
+                                  : ''}
+                              </>
+                            ) : (
+                              'Not achievable within the next year at current bookings.'
+                            )}
                           </p>
                         )}
                       </div>
