@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -18,6 +18,13 @@ class ShortfallItem(BaseModel):
     shortfall: float
 
 
+class CapacityShortfall(BaseModel):
+    machine: str
+    required_hours: float
+    available_hours: float
+    shortfall_hours: float
+
+
 class FeasibilityLineOut(BaseModel):
     id: int
     product_id: int
@@ -26,12 +33,15 @@ class FeasibilityLineOut(BaseModel):
     quantity: float
     is_feasible: bool | None
     shortfalls: list[ShortfallItem] = []
+    capacity_ok: bool | None
+    capacity_shortfall: CapacityShortfall | None = None
 
     model_config = {"from_attributes": True}
 
 
 class FeasibilityCreate(BaseModel):
     customer_id: int
+    required_by_date: date | None = None
     notes: str | None = None
     lines: list[FeasibilityLineIn] = Field(min_length=1)
 
@@ -52,16 +62,25 @@ class FeasibilityClose(BaseModel):
     reason: str = Field(min_length=1)
 
 
+class FeasibilityAdminReview(BaseModel):
+    notes: str = Field(min_length=1)
+
+
 class FeasibilityOut(BaseModel):
     id: int
     feasibility_number: str
     customer_id: int
     customer_name: str | None = None
     status: str
+    required_by_date: date | None
     checked_at: datetime | None
     exception_reason: str | None
     close_reason: str | None
     notes: str | None
+    admin_review_required: bool
+    admin_review_reason: str | None
+    admin_reviewed_at: datetime | None
+    admin_review_notes: str | None
     lines: list[FeasibilityLineOut] = []
     created_at: datetime
     updated_at: datetime
@@ -78,4 +97,7 @@ class FeasibilityOut(BaseModel):
             line.product_code = src.product.code if src.product else None
             line.product_name = src.product.name if src.product else None
             line.shortfalls = json.loads(src.shortfall_json) if src.shortfall_json else []
+            line.capacity_shortfall = (
+                json.loads(src.capacity_shortfall_json) if src.capacity_shortfall_json else None
+            )
         return data

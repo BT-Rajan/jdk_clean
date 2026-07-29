@@ -2,10 +2,11 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
-from app.api.deps import get_current_user, require_department_write
+from app.api.deps import get_current_user, require_department_write, require_role
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.feasibility import (
+    FeasibilityAdminReview,
     FeasibilityClose,
     FeasibilityCreate,
     FeasibilityExceptionDecision,
@@ -15,6 +16,7 @@ from app.services import audit_service, feasibility_service
 
 router = APIRouter(prefix="/api/feasibility", tags=["feasibility"])
 write_guard = require_department_write("sales")
+admin_guard = require_role("admin")
 
 
 @router.get("", response_model=PagedResponse)
@@ -113,6 +115,33 @@ def close_feasibility(
     feasibility = feasibility_service.close_feasibility(
         db, feasibility_id, payload.reason, user_id=user.id
     )
+    return FeasibilityOut.from_model(feasibility)
+
+
+@router.post("/scan-stale")
+def scan_stale_feasibility_checks(
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    """Flags feasibility checks open more than 5 days with neither a
+    quotation conversion nor a close reason, for admin attention. Run this
+    periodically (e.g. an external cron/scheduled task hitting this
+    endpoint daily)."""
+    flagged = feasibility_service.escalate_stale_feasibility_checks(db)
+    return {
+        "flagged_count": len(flagged),
+        "feasibility_ids": [f.id for f in flagged],
+    }
+
+
+@router.post("/{feasibility_id}/admin-review", response_model=FeasibilityOut)
+def admin_review_feasibility(
+    feasibility_id: int,
+    payload: FeasibilityAdminReview,
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    feasibility = feasibility_service.admin_review(db, feasibility_id, payload.notes, user_id=user.id)
     return FeasibilityOut.from_model(feasibility)
 
 

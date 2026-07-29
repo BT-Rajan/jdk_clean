@@ -4,6 +4,7 @@ from sqlalchemy import DATE, DECIMAL, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.models.machine import Machine
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.order import Order
 from app.models.product import Product
@@ -34,6 +35,11 @@ class ProductionSchedule(Base, TimestampMixin, SoftDeleteMixin):
     id: Mapped[int] = mapped_column(BigPK, primary_key=True)
     batch_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     product_id: Mapped[int] = mapped_column(BigPK, ForeignKey("products.id"), nullable=False)
+    # Which machine this batch occupies. Defaults to the product's own
+    # machine_id at creation time (see production_service.create_batch) but
+    # stored explicitly since a batch could in principle run on a
+    # different machine than the product's usual one.
+    machine_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("machines.id"), nullable=True)
     order_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("orders.id"), nullable=True)
     planned_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False)
     produced_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
@@ -49,4 +55,5 @@ class ProductionSchedule(Base, TimestampMixin, SoftDeleteMixin):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     product: Mapped[Product] = relationship(foreign_keys=[product_id], lazy="joined")
+    machine: Mapped[Machine | None] = relationship(foreign_keys=[machine_id], lazy="joined")
     order: Mapped[Order | None] = relationship(foreign_keys=[order_id], lazy="joined")
