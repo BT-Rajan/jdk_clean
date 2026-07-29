@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Avatar, Logo, Button } from '@/components/ui'
+import { AssistantDrawer } from '@/components/assistant/AssistantDrawer'
 import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
 import { cn } from '@/lib/cn'
@@ -33,6 +34,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false)
 
   // The header is sticky, so once the page scrolls, content passes directly
   // behind it continuously. Track scroll position and swap to a near-solid
@@ -117,6 +119,25 @@ export function AppLayout({ children }: AppLayoutProps) {
 
           <div className="flex items-center gap-4">
             {user && (
+              <button
+                type="button"
+                onClick={() => setIsAssistantOpen(true)}
+                className="flex items-center gap-1.5 rounded-xl border border-gold-400/30 bg-gold-500/10 px-3 py-1.5 text-sm font-medium text-gold-200 transition-colors hover:bg-gold-500/20"
+                aria-label="Open JDK Assistant"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M12 2a5 5 0 0 1 5 5v1a5 5 0 0 1-2 4v2a3 3 0 0 1-3 3h-1v2h-2v-2H8a3 3 0 0 1-3-3v-2a5 5 0 0 1-2-4V7a5 5 0 0 1 5-5h4Z"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                  />
+                  <circle cx="9.5" cy="9.5" r="1" fill="currentColor" />
+                  <circle cx="14.5" cy="9.5" r="1" fill="currentColor" />
+                </svg>
+                <span className="hidden sm:inline">AI</span>
+              </button>
+            )}
+            {user && (
               <Link
                 to="/profile"
                 className="flex items-center gap-3 rounded-xl px-2 py-1 transition-colors hover:bg-white/5"
@@ -157,6 +178,10 @@ export function AppLayout({ children }: AppLayoutProps) {
       </header>
 
       <main className="relative z-0 mx-auto max-w-5xl px-4 py-10 sm:px-6">{children}</main>
+
+      {user && (
+        <AssistantDrawer open={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
+      )}
     </div>
   )
 }

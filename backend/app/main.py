@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.assistant import router as assistant_router
 from app.api.auth import router as auth_router
 from app.api.bom import router as bom_router
 from app.api.customers import router as customers_router
@@ -34,6 +35,7 @@ app.add_middleware(
 
 register_exception_handlers(app)
 app.include_router(auth_router)
+app.include_router(assistant_router)
 app.include_router(users_router)
 app.include_router(settings_router)
 app.include_router(customers_router)
