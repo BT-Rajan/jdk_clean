@@ -98,7 +98,7 @@ function generateMockGraph(widgetId: string) {
 export function DashboardPage() {
   const { user, avatarVersion } = useAuth()
   const dashboardConfig = getDashboardConfig(user?.role)
-  const { preferences, isLoading, getEnabledWidgets } = useDashboardPreferences(user?.role)
+  const { isLoading, getEnabledWidgets } = useDashboardPreferences(user?.role)
 
   const enabledWidgets = getEnabledWidgets()
 

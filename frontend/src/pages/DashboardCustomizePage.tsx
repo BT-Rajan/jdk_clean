@@ -51,7 +51,7 @@ export function DashboardCustomizePage() {
                     <input
                       type="checkbox"
                       checked={isEnabled}
-                      onChange={(e) => handleToggleWidget(widget.id, isEnabled)}
+                      onChange={() => handleToggleWidget(widget.id, isEnabled)}
                       className="h-5 w-5 rounded border-gold-400/30 bg-gold-500/10 accent-gold-400 cursor-pointer"
                     />
                     <div>
@@ -88,7 +88,7 @@ export function DashboardCustomizePage() {
 
         <div className="mt-8 flex flex-col gap-3 sm:flex-row">
           <Link to="/dashboard" className="flex-1">
-            <Button variant="secondary" className="w-full">
+            <Button variant="ghost" className="w-full">
               Back to Dashboard
             </Button>
           </Link>
