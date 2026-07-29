@@ -22,6 +22,12 @@ export interface Quotation {
   customer_id: number
   customer_name: string | null
   customer_email: string | null
+  deal_id: number | null
+  deal_number: string | null
+  feasibility_id: number | null
+  /** True when the system drafted this automatically because a
+   * feasibility check just passed, rather than a person creating it. */
+  auto_created: boolean
   quotation_date: string
   valid_until: string | null
   status: QuotationStatus

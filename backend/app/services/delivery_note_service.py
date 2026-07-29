@@ -7,7 +7,7 @@ from app.core.pagination import sort_and_paginate
 from app.models.delivery_note import ALLOWED_TRANSITIONS, DeliveryNote, DeliveryNoteLine
 from app.models.order import Order
 from app.models.product import Product
-from app.services import audit_service, number_series_service
+from app.services import audit_service, deal_service, number_series_service
 
 TABLE_NAME = "delivery_notes"
 
@@ -119,6 +119,7 @@ def create_delivery_note(db: Session, data: dict, user_id: int | None = None) ->
     db.add(note)
     db.flush()
     audit_service.log_create(db, TABLE_NAME, note.id, user_id)
+    deal_service.advance_stage(db, order.deal_id, "delivery", user_id=user_id)
     db.commit()
     db.refresh(note)
     return get_delivery_note(db, note.id)

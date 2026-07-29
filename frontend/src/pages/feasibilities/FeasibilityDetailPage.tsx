@@ -230,6 +230,14 @@ export function FeasibilityDetailPage() {
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <StatusBadge status={f.status} />
+          {f.deal_number && (
+            <Link
+              to={`/deals/${f.deal_id}`}
+              className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/50 hover:border-white/20 hover:text-white/70"
+            >
+              {f.deal_number}
+            </Link>
+          )}
         </div>
 
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">

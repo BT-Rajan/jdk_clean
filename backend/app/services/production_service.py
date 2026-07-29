@@ -8,7 +8,7 @@ from app.models.order import Order
 from app.models.product import Product
 from app.models.production_schedule import ALLOWED_TRANSITIONS, ProductionSchedule
 from app.models.raw_material import RawMaterial
-from app.services import audit_service, bom_service, inventory_service, number_series_service
+from app.services import audit_service, bom_service, deal_service, inventory_service, number_series_service
 
 TABLE_NAME = "production_schedules"
 
@@ -82,8 +82,9 @@ def _validate_order(db: Session, order_id: int) -> Order:
 
 def create_batch(db: Session, data: dict, user_id: int | None = None) -> ProductionSchedule:
     product = _validate_product(db, data["product_id"])
+    order = None
     if data.get("order_id"):
-        _validate_order(db, data["order_id"])
+        order = _validate_order(db, data["order_id"])
     if not data.get("machine_id"):
         data["machine_id"] = product.machine_id
 
@@ -92,6 +93,8 @@ def create_batch(db: Session, data: dict, user_id: int | None = None) -> Product
     db.add(batch)
     db.flush()
     audit_service.log_create(db, TABLE_NAME, batch.id, user_id)
+    if order is not None:
+        deal_service.advance_stage(db, order.deal_id, "production", user_id=user_id)
     db.commit()
     db.refresh(batch)
     return get_batch(db, batch.id)

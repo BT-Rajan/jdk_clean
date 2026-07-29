@@ -105,6 +105,22 @@ export function SettingsPage() {
             </GlassCard>
 
             <GlassCard className="p-8">
+              <h2 className="font-display text-lg font-medium text-white">Sales workflow</h2>
+              <p className="mt-1 text-sm text-white/50">
+                When a feasibility check passes (or Sales overrides an infeasible result), the system can draft a
+                quotation automatically -- pre-filled from the check's own lines, on the same deal -- instead of
+                Sales creating one by hand. The draft is a completely normal quotation afterward: fully editable,
+                and deletable if it's not wanted.
+              </p>
+              <div className="mt-6">
+                <SelectField label="Auto-create quotation when feasibility passes" {...register('auto_create_quotation_from_feasibility')}>
+                  <option value="true">On</option>
+                  <option value="false">Off (Sales creates manually, as before)</option>
+                </SelectField>
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-8">
               <h2 className="font-display text-lg font-medium text-white">AI assistant provider</h2>
               <p className="mt-1 text-sm text-white/50">
                 Visible here only -- the assistant itself never names a provider anywhere else in the app.

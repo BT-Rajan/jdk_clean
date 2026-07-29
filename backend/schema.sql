@@ -268,6 +268,32 @@ CREATE TABLE IF NOT EXISTS stock_movements (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- DEALS (loose grouping, not a rigid pipeline: the thread that ties one
+-- customer request's feasibility check, quotation(s), and order together
+-- so "where does this stand" is one query instead of chasing FKs across
+-- five tables. Loose on purpose -- a deal can start at feasibility OR at
+-- a standalone quotation OR at a standalone order; whichever stage is
+-- created first with no deal_id given creates one. Nothing requires a
+-- deal to pass through every stage.)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS deals (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    deal_number     VARCHAR(30) NOT NULL UNIQUE,     -- generated via number_series (prefix e.g. DEAL-00001)
+    customer_id     BIGINT UNSIGNED NOT NULL,
+    -- Furthest stage reached so far -- purely descriptive/display, not a
+    -- gate on anything. Updated whenever a new stage attaches to this deal.
+    furthest_stage  ENUM('feasibility','quotation','order','production','delivery') NOT NULL DEFAULT 'feasibility',
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_deals_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    INDEX idx_deals_customer (customer_id),
+    INDEX idx_deals_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
 -- FEASIBILITY CHECKS (gates quotation creation: tries to manufacture the
 -- requested product(s) from raw materials on hand; a shortfall needs
 -- Sales' exception approval before a quotation can be raised)
@@ -276,6 +302,7 @@ CREATE TABLE IF NOT EXISTS feasibility_checks (
     id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     feasibility_number  VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. FSB-00001)
     customer_id         BIGINT UNSIGNED NOT NULL,
+    deal_id             BIGINT UNSIGNED NULL,             -- see `deals` above
     status              ENUM('draft','feasible','exception_pending','exception_approved','exception_rejected','closed','converted') NOT NULL DEFAULT 'draft',
     required_by_date    DATE NULL,        -- when the customer needs this quantity
     checked_at          DATETIME NULL,
@@ -297,9 +324,11 @@ CREATE TABLE IF NOT EXISTS feasibility_checks (
     updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by          BIGINT UNSIGNED NULL,
     CONSTRAINT fk_feasibility_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_feasibility_deal FOREIGN KEY (deal_id) REFERENCES deals(id),
     CONSTRAINT fk_feasibility_exception_by FOREIGN KEY (exception_by) REFERENCES users(id),
     CONSTRAINT fk_feasibility_admin_reviewed_by FOREIGN KEY (admin_reviewed_by) REFERENCES users(id),
     INDEX idx_feasibility_status (status),
+    INDEX idx_feasibility_deal (deal_id),
     INDEX idx_feasibility_deleted_at (deleted_at),
     INDEX idx_feasibility_admin_review (admin_review_required)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -332,6 +361,7 @@ CREATE TABLE IF NOT EXISTS orders (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     order_number    VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. ORD-00001)
     customer_id     BIGINT UNSIGNED NOT NULL,
+    deal_id         BIGINT UNSIGNED NULL,             -- see `deals` above
     order_date      DATE NOT NULL,
     requested_delivery_date DATE NULL,
     confirmed_delivery_date DATE NULL,
@@ -350,7 +380,9 @@ CREATE TABLE IF NOT EXISTS orders (
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_orders_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
     CONSTRAINT fk_orders_admin_reviewed_by FOREIGN KEY (admin_reviewed_by) REFERENCES users(id),
+    CONSTRAINT fk_orders_deal FOREIGN KEY (deal_id) REFERENCES deals(id),
     INDEX idx_orders_status (status),
+    INDEX idx_orders_deal (deal_id),
     INDEX idx_orders_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -444,6 +476,7 @@ CREATE TABLE IF NOT EXISTS quotations (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     quotation_number VARCHAR(30) NOT NULL UNIQUE,     -- generated via number_series (prefix e.g. QTN-00001)
     customer_id     BIGINT UNSIGNED NOT NULL,
+    deal_id         BIGINT UNSIGNED NULL,             -- see `deals` above
     quotation_date  DATE NOT NULL,
     valid_until     DATE NULL,
     status          ENUM('draft','sent','accepted','rejected','expired','converted') NOT NULL DEFAULT 'draft',
@@ -451,6 +484,7 @@ CREATE TABLE IF NOT EXISTS quotations (
     notes           TEXT NULL,
     converted_order_id BIGINT UNSIGNED NULL,
     feasibility_id  BIGINT UNSIGNED NULL,             -- the passed/exception-approved feasibility check this came from
+    auto_created    TINYINT(1) NOT NULL DEFAULT 0,    -- true when the system drafted this from a passed feasibility check, not a person
     close_reason    TEXT NULL,                        -- Sales' reason for closing without converting to an order
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -460,7 +494,9 @@ CREATE TABLE IF NOT EXISTS quotations (
     CONSTRAINT fk_quotations_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
     CONSTRAINT fk_quotations_order FOREIGN KEY (converted_order_id) REFERENCES orders(id),
     CONSTRAINT fk_quotations_feasibility FOREIGN KEY (feasibility_id) REFERENCES feasibility_checks(id),
+    CONSTRAINT fk_quotations_deal FOREIGN KEY (deal_id) REFERENCES deals(id),
     INDEX idx_quotations_status (status),
+    INDEX idx_quotations_deal (deal_id),
     INDEX idx_quotations_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
@@ -541,6 +577,7 @@ INSERT IGNORE INTO number_series (doc_type, prefix, next_number, padding) VALUES
     ('PRODUCTION_BATCH', 'PB', 1, 5),
     ('PURCHASE_ORDER', 'PO', 1, 5),
     ('DELIVERY_NOTE', 'DN', 1, 5),
-    ('FEASIBILITY', 'FSB', 1, 5);
+    ('FEASIBILITY', 'FSB', 1, 5),
+    ('DEAL', 'DEAL', 1, 5);
 
 SET FOREIGN_KEY_CHECKS = 1;

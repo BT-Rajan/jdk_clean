@@ -79,6 +79,8 @@ class OrderOut(BaseModel):
     customer_id: int
     customer_name: str | None = None
     customer_email: str | None = None
+    deal_id: int | None
+    deal_number: str | None = None
     order_date: date
     requested_delivery_date: date | None
     confirmed_delivery_date: date | None
@@ -100,6 +102,7 @@ class OrderOut(BaseModel):
         data = OrderOut.model_validate(obj)
         data.customer_name = obj.customer.name if obj.customer else None
         data.customer_email = obj.customer.email if obj.customer else None
+        data.deal_number = obj.deal.deal_number if obj.deal else None
         for line, src in zip(data.lines, obj.lines):
             line.product_code = src.product.code if src.product else None
             line.product_name = src.product.name if src.product else None

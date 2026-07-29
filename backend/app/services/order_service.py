@@ -16,7 +16,7 @@ from app.models.order import (
     OrderDetail,
 )
 from app.models.product import Product
-from app.services import audit_service, inventory_service, number_series_service
+from app.services import audit_service, deal_service, inventory_service, number_series_service
 
 TABLE_NAME = "orders"
 
@@ -97,6 +97,15 @@ def create_order(db: Session, data: dict, user_id: int | None = None) -> Order:
     )
     if customer is None:
         raise ValidationAppError(f"Customer {data['customer_id']} not found.")
+
+    deal = deal_service.get_or_create_for_new_stage(
+        db,
+        deal_id=data.pop("deal_id", None),
+        customer_id=data["customer_id"],
+        stage="order",
+        user_id=user_id,
+    )
+    data["deal_id"] = deal.id
 
     lines = _price_lines(db, [dict(line) for line in data.pop("lines")])
     total_amount = round(sum(line["line_total"] for line in lines), 2)
@@ -322,9 +331,18 @@ def create_order_from_quotation(db: Session, quotation_id: int, user_id: int | N
         for line in quotation.lines
     ]
 
+    deal = deal_service.get_or_create_for_new_stage(
+        db,
+        deal_id=quotation.deal_id,
+        customer_id=quotation.customer_id,
+        stage="order",
+        user_id=user_id,
+    )
+
     order = Order(
         order_number=order_number,
         customer_id=quotation.customer_id,
+        deal_id=deal.id,
         order_date=datetime.now(timezone.utc).date(),
         total_amount=quotation.total_amount,
         notes=f"Converted from quotation {quotation.quotation_number}.",

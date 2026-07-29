@@ -16,6 +16,9 @@ export interface Settings {
    * (numeric text) like every other setting. */
   factory_total_workers: string
   factory_workday_hours: string
+  /** 'true' or 'false' -- whether a passed/exception-approved feasibility
+   * check automatically drafts a quotation. Admin/manager-only to change. */
+  auto_create_quotation_from_feasibility: string
 }
 
 export type SettingsPayload = Partial<Settings>

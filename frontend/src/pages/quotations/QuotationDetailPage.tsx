@@ -170,6 +170,19 @@ export function QuotationDetailPage() {
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-4">
           <StatusBadge status={quotation.status} />
+          {quotation.auto_created && (
+            <span className="rounded-full border border-gold-400/30 bg-gold-500/10 px-2.5 py-1 text-xs font-medium text-gold-200">
+              Auto-created from feasibility
+            </span>
+          )}
+          {quotation.deal_number && (
+            <Link
+              to={`/deals/${quotation.deal_id}`}
+              className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/50 hover:border-white/20 hover:text-white/70"
+            >
+              {quotation.deal_number}
+            </Link>
+          )}
           {quotation.converted_order_id && (
             <Link to={`/orders/${quotation.converted_order_id}`} className="text-sm text-gold-300 hover:text-gold-200">
               View converted order →

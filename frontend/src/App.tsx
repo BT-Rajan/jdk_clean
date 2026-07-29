@@ -95,6 +95,10 @@ const QuotationDetailPage = lazy(() =>
   import('@/pages/quotations/QuotationDetailPage').then((m) => ({ default: m.QuotationDetailPage })),
 )
 
+const DealDetailPage = lazy(() =>
+  import('@/pages/deals/DealDetailPage').then((m) => ({ default: m.DealDetailPage })),
+)
+
 const FeasibilitiesListPage = lazy(() =>
   import('@/pages/feasibilities/FeasibilitiesListPage').then((m) => ({ default: m.FeasibilitiesListPage })),
 )
@@ -199,6 +203,8 @@ export function App() {
             <Route path="/delivery-notes" element={<DeliveryNotesListPage />} />
             <Route path="/delivery-notes/new" element={<DeliveryNoteFormPage />} />
             <Route path="/delivery-notes/:id" element={<DeliveryNoteDetailPage />} />
+
+            <Route path="/deals/:id" element={<DealDetailPage />} />
 
             <Route path="/feasibilities" element={<FeasibilitiesListPage />} />
             <Route path="/feasibilities/new" element={<FeasibilityFormPage />} />

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.customer import Customer
+from app.models.deal import Deal
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.product import Product
 from app.models.user import BigPK
@@ -51,6 +52,10 @@ class FeasibilityCheck(Base, TimestampMixin, SoftDeleteMixin):
     id: Mapped[int] = mapped_column(BigPK, primary_key=True)
     feasibility_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     customer_id: Mapped[int] = mapped_column(BigPK, ForeignKey("customers.id"), nullable=False)
+    # The deal this check belongs to (see models/deal.py) -- set on
+    # creation, either inherited (rare for feasibility, since it's
+    # usually the first stage) or newly minted right here.
+    deal_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("deals.id"), nullable=True)
     status: Mapped[str] = mapped_column(
         Enum(*FEASIBILITY_STATUSES, name="feasibility_status"), nullable=False, default="draft"
     )
@@ -80,6 +85,7 @@ class FeasibilityCheck(Base, TimestampMixin, SoftDeleteMixin):
     admin_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     customer: Mapped[Customer] = relationship(lazy="joined")
+    deal: Mapped[Deal | None] = relationship(lazy="joined")
     lines: Mapped[list["FeasibilityLine"]] = relationship(
         back_populates="feasibility",
         cascade="all, delete-orphan",

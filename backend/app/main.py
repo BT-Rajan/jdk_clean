@@ -6,6 +6,7 @@ from app.api.auth import router as auth_router
 from app.api.bom import router as bom_router
 from app.api.customers import router as customers_router
 from app.api.dashboard import router as dashboard_router
+from app.api.deals import router as deals_router
 from app.api.delivery_notes import router as delivery_notes_router
 from app.api.feasibility import router as feasibility_router
 from app.api.inventory import router as inventory_router
@@ -44,6 +45,7 @@ app.include_router(users_router)
 app.include_router(settings_router)
 app.include_router(customers_router)
 app.include_router(dashboard_router)
+app.include_router(deals_router)
 app.include_router(suppliers_router)
 app.include_router(supplier_materials_router)
 app.include_router(raw_materials_router)

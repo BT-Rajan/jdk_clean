@@ -11,13 +11,24 @@ AI_FIELDS = ["ai_provider", "ai_api_key"]
 # in the feasibility check's capacity scan (see feasibility_service.py).
 # Stored as text like every other setting; parsed by whoever reads them.
 FACTORY_FIELDS = ["factory_total_workers", "factory_workday_hours"]
-ALL_FIELDS = COMPANY_FIELDS + AI_FIELDS + FACTORY_FIELDS
+# Sales workflow: whether a passed/exception-approved feasibility check
+# automatically drafts a quotation, or just becomes eligible for one that
+# Sales creates by hand as before. Admin/manager-only to change (see
+# api/settings.py's write guard) -- this is the "role-based override" on
+# the auto-create-with-flexibility behavior: the automation itself is
+# role-gated at the settings level, and any quotation it drafts is a
+# completely normal, editable/deletable record afterward regardless.
+SALES_FIELDS = ["auto_create_quotation_from_feasibility"]
+ALL_FIELDS = COMPANY_FIELDS + AI_FIELDS + FACTORY_FIELDS + SALES_FIELDS
 
 DEFAULTS = {key: "" for key in ALL_FIELDS}
 # factory_workday_hours defaults to a standard shift length rather than
 # empty, since 0 would make every worker-hours check fail as "no capacity"
 # for factories that haven't touched this setting yet.
 DEFAULTS["factory_workday_hours"] = "8"
+# Auto-create defaults ON -- this is the behavior actually being asked
+# for; an admin who wants the old manual-only flow can switch it off.
+DEFAULTS["auto_create_quotation_from_feasibility"] = "true"
 
 
 def get_all(db: Session) -> dict:
@@ -56,6 +67,11 @@ def get_factory_labor_pool(db: Session) -> tuple[int, float]:
     except (ValueError, KeyError):
         workday_hours = 8.0
     return max(total_workers, 0), max(workday_hours, 0.0)
+
+
+def is_auto_create_quotation_enabled(db: Session) -> bool:
+    values = get_all(db)
+    return values.get("auto_create_quotation_from_feasibility", "true").strip().lower() in ("true", "1", "yes")
 
 
 def update(db: Session, data: dict) -> dict:

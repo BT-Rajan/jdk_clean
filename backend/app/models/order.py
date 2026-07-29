@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.customer import Customer
+from app.models.deal import Deal
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.product import Product
 from app.models.user import BigPK
@@ -50,6 +51,9 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     id: Mapped[int] = mapped_column(BigPK, primary_key=True)
     order_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     customer_id: Mapped[int] = mapped_column(BigPK, ForeignKey("customers.id"), nullable=False)
+    # The deal this order belongs to (see models/deal.py) -- inherited
+    # from its quotation if it has one, otherwise newly minted.
+    deal_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("deals.id"), nullable=True)
     order_date: Mapped[date] = mapped_column(DATE, nullable=False)
     requested_delivery_date: Mapped[date | None] = mapped_column(DATE, nullable=True)
     confirmed_delivery_date: Mapped[date | None] = mapped_column(DATE, nullable=True)
@@ -70,6 +74,7 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     admin_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     customer: Mapped[Customer] = relationship(lazy="joined")
+    deal: Mapped[Deal | None] = relationship(lazy="joined")
     lines: Mapped[list["OrderDetail"]] = relationship(
         back_populates="order",
         cascade="all, delete-orphan",

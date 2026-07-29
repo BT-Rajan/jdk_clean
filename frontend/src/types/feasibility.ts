@@ -53,6 +53,8 @@ export interface Feasibility {
   feasibility_number: string
   customer_id: number
   customer_name: string | null
+  deal_id: number | null
+  deal_number: string | null
   status: FeasibilityStatus
   required_by_date: string | null
   checked_at: string | null

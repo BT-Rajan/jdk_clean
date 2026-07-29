@@ -13,7 +13,7 @@ from app.models.quotation import (
     Quotation,
     QuotationDetail,
 )
-from app.services import audit_service, feasibility_service, number_series_service
+from app.services import audit_service, deal_service, feasibility_service, number_series_service
 
 TABLE_NAME = "quotations"
 
@@ -93,13 +93,27 @@ def create_quotation(db: Session, data: dict, user_id: int | None = None) -> Quo
     if customer is None:
         raise ValidationAppError(f"Customer {data['customer_id']} not found.")
 
-    # A quotation can only be raised off a feasibility check that came back
+    # A quotation can be raised off a feasibility check that came back
     # feasible, or one Sales explicitly exception-approved despite a raw
-    # material shortfall -- there's no "skip feasibility" path.
-    # If feasibility_id is provided, mark it as converted.
-    feasibility_id = data.pop("feasibility_id", None)
+    # material shortfall -- or created standalone with no check at all
+    # (see FeasibilityCreate/QuotationCreate: feasibility_id is optional).
+    # If given, mark that check converted and inherit its deal; otherwise
+    # this quotation starts its own new deal.
+    feasibility_id = data.get("feasibility_id")
     if feasibility_id:
         feasibility_service.mark_converted(db, feasibility_id, user_id=user_id)
+        if not data.get("deal_id"):
+            checked = feasibility_service.get_feasibility(db, feasibility_id)
+            data["deal_id"] = checked.deal_id
+
+    deal = deal_service.get_or_create_for_new_stage(
+        db,
+        deal_id=data.pop("deal_id", None),
+        customer_id=data["customer_id"],
+        stage="quotation",
+        user_id=user_id,
+    )
+    data["deal_id"] = deal.id
 
     lines = _price_lines(db, [dict(line) for line in data.pop("lines")])
     total_amount = round(sum(line["line_total"] for line in lines), 2)

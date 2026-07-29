@@ -17,7 +17,7 @@ from app.models.machine import Machine
 from app.models.product import Product
 from app.models.production_schedule import ProductionSchedule
 from app.models.raw_material import RawMaterial
-from app.services import audit_service, bom_service, inventory_service, number_series_service, settings_service
+from app.services import audit_service, bom_service, deal_service, inventory_service, number_series_service, settings_service
 
 TABLE_NAME = "feasibility_checks"
 
@@ -100,8 +100,16 @@ def create_feasibility(db: Session, data: dict, user_id: int | None = None) -> F
         lines_in.append(line)
 
     feasibility_number = number_series_service.next_number(db, "FEASIBILITY")
+    deal = deal_service.get_or_create_for_new_stage(
+        db,
+        deal_id=data.pop("deal_id", None),
+        customer_id=data["customer_id"],
+        stage="feasibility",
+        user_id=user_id,
+    )
     feasibility = FeasibilityCheck(
         feasibility_number=feasibility_number,
+        deal_id=deal.id,
         created_by=user_id,
         **data,
     )
@@ -317,6 +325,10 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
         db, TABLE_NAME, feasibility_id, {"status": (old_status, new_status)}, user_id
     )
     db.commit()
+
+    if new_status == "feasible":
+        _maybe_auto_create_quotation(db, feasibility_id, user_id)
+
     return get_feasibility(db, feasibility_id)
 
 
@@ -358,7 +370,70 @@ def decide_exception(
         db, TABLE_NAME, feasibility_id, {"status": (old_status, new_status)}, user_id
     )
     db.commit()
+
+    if new_status == "exception_approved":
+        _maybe_auto_create_quotation(db, feasibility_id, user_id)
+
     return get_feasibility(db, feasibility_id)
+
+
+def _maybe_auto_create_quotation(db: Session, feasibility_id: int, user_id: int | None = None) -> None:
+    """Fires the moment a check turns feasible (run_check) or Sales
+    overrides an infeasible result (decide_exception, approved) -- the
+    "auto create, with role-based flexibility" behavior: if enabled (see
+    Settings -> Sales, admin/manager-only to change), drafts a quotation
+    right then, pre-filled from the check's own lines, on the same deal.
+    If disabled, does nothing -- Sales creates the quotation by hand from
+    the feasibility check as before, exactly like the old flow.
+
+    Never raises: an auto-create failure (disabled, or any edge case)
+    should never break the feasibility action that triggered it. The
+    drafted quotation is a completely normal draft afterward -- Sales can
+    edit or delete it like any other; nothing about it is locked in.
+    """
+    if not settings_service.is_auto_create_quotation_enabled(db):
+        return
+
+    # Local import: quotation_service already imports feasibility_service
+    # at module level (to call mark_converted), so importing it back here
+    # at module level would be circular.
+    from app.services import quotation_service
+
+    feasibility = get_feasibility(db, feasibility_id)
+
+    lines = []
+    for line in feasibility.lines:
+        product = line.product
+        lines.append(
+            {
+                "product_id": line.product_id,
+                "quantity": float(line.quantity),
+                "unit_price": float(product.selling_price) if product else 0.0,
+            }
+        )
+    if not lines:
+        return
+
+    try:
+        quotation_service.create_quotation(
+            db,
+            {
+                "customer_id": feasibility.customer_id,
+                "deal_id": feasibility.deal_id,
+                "feasibility_id": feasibility.id,
+                "quotation_date": datetime.now(timezone.utc).date(),
+                "valid_until": None,
+                "notes": f"Auto-created from feasibility check {feasibility.feasibility_number}.",
+                "auto_created": True,
+                "lines": lines,
+            },
+            user_id=user_id,
+        )
+    except (ConflictError, ValidationAppError):
+        # Already converted, or some other reason it's not quotable right
+        # now -- fine, this is a best-effort convenience, not a hard
+        # requirement. Sales can still create one by hand.
+        pass
 
 
 def close_feasibility(db: Session, feasibility_id: int, reason: str, user_id: int | None = None) -> FeasibilityCheck:
