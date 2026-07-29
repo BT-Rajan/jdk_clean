@@ -11,6 +11,7 @@ from app.api.feasibility import router as feasibility_router
 from app.api.inventory import router as inventory_router
 from app.api.machines import router as machines_router
 from app.api.mrp import router as mrp_router
+from app.api.notifications import router as notifications_router
 from app.api.orders import router as orders_router
 from app.api.products import router as products_router
 from app.api.production_schedules import router as production_schedules_router
@@ -50,6 +51,7 @@ app.include_router(products_router)
 app.include_router(machines_router)
 app.include_router(inventory_router)
 app.include_router(mrp_router)
+app.include_router(notifications_router)
 app.include_router(feasibility_router)
 app.include_router(quotations_router)
 app.include_router(orders_router)

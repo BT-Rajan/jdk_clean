@@ -8,6 +8,10 @@ import { isAdmin } from '@/lib/roles'
 import { cn } from '@/lib/cn'
 import { AmbientBackground } from './AmbientBackground'
 import { NavDropdown } from './NavDropdown'
+import { NotificationsModal } from './NotificationsModal'
+import { listNotifications } from '@/api/notifications'
+import type { Notification } from '@/types/notification'
+import { getApiErrorMessage } from '@/lib/apiError'
 
 interface AppLayoutProps {
   children: ReactNode
@@ -35,6 +39,40 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const [isAssistantOpen, setIsAssistantOpen] = useState(false)
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [notifLoading, setNotifLoading] = useState(true)
+  const [notifError, setNotifError] = useState<string | null>(null)
+
+  // Real notifications, polled from the database -- not a mock list. A
+  // 60s interval keeps the bell's badge reasonably current without
+  // hammering the endpoint; opening the modal doesn't need its own
+  // separate fetch since the payload is small and already fresh enough.
+  useEffect(() => {
+    if (!user) return
+    let cancelled = false
+    function fetchNotifications() {
+      listNotifications()
+        .then((res) => {
+          if (!cancelled) {
+            setNotifications(res.items)
+            setNotifError(null)
+          }
+        })
+        .catch((err) => {
+          if (!cancelled) setNotifError(getApiErrorMessage(err))
+        })
+        .finally(() => {
+          if (!cancelled) setNotifLoading(false)
+        })
+    }
+    fetchNotifications()
+    const interval = setInterval(fetchNotifications, 60_000)
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+    }
+  }, [user])
 
   // The header is sticky, so once the page scrolls, content passes directly
   // behind it continuously. Track scroll position and swap to a near-solid
@@ -124,6 +162,36 @@ export function AppLayout({ children }: AppLayoutProps) {
             {user && (
               <button
                 type="button"
+                onClick={() => setIsNotificationsOpen(true)}
+                aria-label="Notifications"
+                className="relative flex items-center justify-center rounded-xl border border-white/10 p-2 text-white/40 transition-colors hover:text-white/60 hover:border-white/20"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <path
+                    d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M13.73 21a2 2 0 0 1-3.46 0"
+                    stroke="currentColor"
+                    strokeWidth="1.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+                {notifications.length > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs font-bold text-white">
+                    {notifications.length > 9 ? '9+' : notifications.length}
+                  </span>
+                )}
+              </button>
+            )}
+            {user && (
+              <button
+                type="button"
                 onClick={() => setIsAssistantOpen(true)}
                 className="flex items-center gap-1.5 rounded-xl border border-gold-400/30 bg-gold-500/10 px-3 py-1.5 text-sm font-medium text-gold-200 transition-colors hover:bg-gold-500/20"
                 aria-label="Open JDK Assistant"
@@ -185,6 +253,13 @@ export function AppLayout({ children }: AppLayoutProps) {
       {user && (
         <>
           <AssistantDrawer open={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
+          <NotificationsModal
+            open={isNotificationsOpen}
+            onClose={() => setIsNotificationsOpen(false)}
+            notifications={notifications}
+            loading={notifLoading}
+            error={notifError}
+          />
         </>
       )}
     </div>
