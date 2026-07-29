@@ -48,7 +48,7 @@ const API_BASE_URL = readApiBaseUrl()
 const CSP = [
   "default-src 'self'",
   `connect-src 'self'${API_BASE_URL ? ` ${API_BASE_URL}` : ''}`,
-  "img-src 'self' data:",
+  "img-src 'self' data: blob:",
   // framer-motion animates via inline `style="..."` attributes, which
   // style-src governs -- 'unsafe-inline' here is a much narrower
   // allowance than in script-src and is the standard tradeoff for

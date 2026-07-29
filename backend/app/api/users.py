@@ -13,7 +13,7 @@ from app.schemas.user import UserCreate, UserOut, UserUpdate
 from app.services import audit_service, signature_service
 
 router = APIRouter(prefix="/api/users", tags=["users"])
-admin_only = require_role("admin")
+admin_only = require_role("admin", "manager")
 
 
 @router.get("", response_model=PagedResponse)
