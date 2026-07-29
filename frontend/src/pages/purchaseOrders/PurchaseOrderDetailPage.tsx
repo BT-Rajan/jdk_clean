@@ -12,7 +12,7 @@ import {
 import type { PurchaseOrder } from '@/types/purchaseOrder'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
-import { canWrite } from '@/lib/roles'
+import { canWriteDepartment } from '@/lib/roles'
 import { PURCHASE_ORDER_TRANSITIONS } from '@/lib/statusTransitions'
 
 function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
@@ -29,7 +29,7 @@ export function PurchaseOrderDetailPage() {
   const poId = Number(id)
   const navigate = useNavigate()
   const { user } = useAuth()
-  const allowWrite = canWrite(user?.role)
+  const allowWrite = canWriteDepartment(user, 'procurement')
 
   const [po, setPo] = useState<PurchaseOrder | null>(null)
   const [loading, setLoading] = useState(true)

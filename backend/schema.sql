@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS users (
     full_name       VARCHAR(120) NOT NULL,
     phone           VARCHAR(30)  NULL,
     avatar_filename VARCHAR(255) NULL,
+    department      ENUM('sales','procurement','warehouse') NULL,
+    signature_filename VARCHAR(255) NULL,
     role            ENUM('admin','manager','staff','viewer') NOT NULL DEFAULT 'staff',
     is_active       TINYINT(1)   NOT NULL DEFAULT 1,
     deleted_at      DATETIME NULL,

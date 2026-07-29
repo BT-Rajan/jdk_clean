@@ -6,7 +6,7 @@ import { deleteOrder, getOrder, restoreOrder, updateOrderStatus } from '@/api/or
 import type { Order } from '@/types/order'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
-import { canWrite } from '@/lib/roles'
+import { canWriteDepartment } from '@/lib/roles'
 import { ORDER_TRANSITIONS } from '@/lib/statusTransitions'
 
 export function OrderDetailPage() {
@@ -14,7 +14,7 @@ export function OrderDetailPage() {
   const orderId = Number(id)
   const navigate = useNavigate()
   const { user } = useAuth()
-  const allowWrite = canWrite(user?.role)
+  const allowWrite = canWriteDepartment(user, 'sales')
 
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)

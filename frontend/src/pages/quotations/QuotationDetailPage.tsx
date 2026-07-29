@@ -13,7 +13,7 @@ import {
 import type { Quotation } from '@/types/quotation'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
-import { canWrite } from '@/lib/roles'
+import { canWriteDepartment } from '@/lib/roles'
 import { QUOTATION_TRANSITIONS } from '@/lib/statusTransitions'
 
 export function QuotationDetailPage() {
@@ -21,7 +21,7 @@ export function QuotationDetailPage() {
   const quotationId = Number(id)
   const navigate = useNavigate()
   const { user } = useAuth()
-  const allowWrite = canWrite(user?.role)
+  const allowWrite = canWriteDepartment(user, 'sales')
 
   const [quotation, setQuotation] = useState<Quotation | null>(null)
   const [loading, setLoading] = useState(true)

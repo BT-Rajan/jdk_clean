@@ -105,6 +105,9 @@ const ProductionDetailPage = lazy(() =>
 const UsersListPage = lazy(() =>
   import('@/pages/users/UsersListPage').then((m) => ({ default: m.UsersListPage })),
 )
+const SettingsPage = lazy(() =>
+  import('@/pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
+)
 const UserFormPage = lazy(() =>
   import('@/pages/users/UserFormPage').then((m) => ({ default: m.UserFormPage })),
 )
@@ -172,6 +175,7 @@ export function App() {
             <Route path="/production/:id/edit" element={<ProductionFormPage />} />
 
             <Route path="/users" element={<UsersListPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
             <Route path="/users/new" element={<UserFormPage />} />
             <Route path="/users/:id" element={<UserDetailPage />} />
             <Route path="/users/:id/edit" element={<UserFormPage />} />

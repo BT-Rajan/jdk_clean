@@ -26,6 +26,8 @@ def _to_me_out(user: User) -> MeOut:
         full_name=user.full_name,
         phone=user.phone,
         role=user.role,
+        department=user.department,
+        has_signature=bool(user.signature_filename),
         is_active=user.is_active,
         avatar_url="/api/auth/me/avatar" if user.avatar_filename else None,
     )

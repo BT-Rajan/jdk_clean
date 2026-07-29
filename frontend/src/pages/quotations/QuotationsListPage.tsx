@@ -16,7 +16,7 @@ import {
 import { listQuotations } from '@/api/quotations'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
-import { canWrite } from '@/lib/roles'
+import { canWriteDepartment } from '@/lib/roles'
 
 export function QuotationsListPage() {
   const { user } = useAuth()
@@ -48,7 +48,7 @@ export function QuotationsListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Quotations</h1>
           <p className="mt-2 text-sm text-white/50">{total} on file</p>
         </div>
-        {canWrite(user?.role) && <Button onClick={() => navigate('/quotations/new')}>New quotation</Button>}
+        {canWriteDepartment(user, 'sales') && <Button onClick={() => navigate('/quotations/new')}>New quotation</Button>}
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_220px]">

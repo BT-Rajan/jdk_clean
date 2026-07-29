@@ -48,6 +48,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/quotations', label: 'Quotations' },
     { to: '/orders', label: 'Orders' },
     ...(isAdmin(user?.role) ? [{ to: '/users', label: 'Users' }] : []),
+    ...(isAdmin(user?.role) ? [{ to: '/settings', label: 'Settings' }] : []),
   ]
 
   async function handleLogout() {

@@ -4,6 +4,7 @@
  */
 
 export type UserRole = 'admin' | 'manager' | 'staff' | 'viewer'
+export type UserDepartment = 'sales' | 'procurement' | 'warehouse'
 
 export interface User {
   id: number
@@ -12,6 +13,8 @@ export interface User {
   full_name: string
   phone: string | null
   role: UserRole
+  department: UserDepartment | null
+  has_signature: boolean
   is_active: boolean
   avatar_url: string | null
 }

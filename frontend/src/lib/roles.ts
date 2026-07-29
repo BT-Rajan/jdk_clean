@@ -1,4 +1,4 @@
-import type { UserRole } from '@/types/auth'
+import type { User, UserDepartment, UserRole } from '@/types/auth'
 
 /**
  * Mirrors the write_roles guards used across the backend routers:
@@ -14,6 +14,20 @@ export function canWrite(role: UserRole | undefined): boolean {
 /** Inventory adjustments allow staff too (see api/inventory.py write_guard). */
 export function canAdjustInventory(role: UserRole | undefined): boolean {
   return role === 'admin' || role === 'manager' || role === 'staff'
+}
+
+/**
+ * Mirrors api/deps.py:require_department_write exactly. Quotations/Orders
+ * are department 'sales', Purchase Orders are 'procurement' (Delivery
+ * Notes will be 'warehouse'). admin/manager always pass regardless of
+ * their own department -- department-scoping is what unlocks limited
+ * write access for staff, not a restriction on roles that already have
+ * full access.
+ */
+export function canWriteDepartment(user: User | null | undefined, department: UserDepartment): boolean {
+  if (!user) return false
+  if (user.role === 'admin' || user.role === 'manager') return true
+  return user.role === 'staff' && user.department === department
 }
 
 export function isAdmin(role: UserRole | undefined): boolean {

@@ -20,6 +20,19 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     full_name: Mapped[str] = mapped_column(String(120), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     avatar_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Which document-creating department this user belongs to (staff only
+    # get write access to Quotations/Orders/Purchase Orders through this --
+    # admin/manager keep full access regardless). NULL means no department,
+    # i.e. a staff member with read-only access everywhere, same as before
+    # this column existed.
+    department: Mapped[str | None] = mapped_column(
+        Enum("sales", "procurement", "warehouse", name="user_department"), nullable=True
+    )
+    # Admin-assigned signature image (mirrors avatar_filename exactly --
+    # same upload/storage pattern, see profile_service.py and
+    # signature_service.py). No self-upload, no approval state: admin
+    # uploads and assigns directly.
+    signature_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     role: Mapped[str] = mapped_column(
         Enum("admin", "manager", "staff", "viewer", name="user_role"),
         nullable=False,

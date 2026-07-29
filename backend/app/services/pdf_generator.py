@@ -22,7 +22,6 @@ from reportlab.platypus import (
     TableStyle,
 )
 
-from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 DEFAULT_COMPANY_SETTINGS = {
@@ -35,24 +34,12 @@ DEFAULT_COMPANY_SETTINGS = {
 
 
 def get_company_settings(db: Session) -> dict:
-    """Reads letterhead fields from the `settings` key/value table, if present.
+    """Reads letterhead fields via settings_service, falling back to sane
+    placeholder text for any field that hasn't been configured yet."""
+    from app.services import settings_service
 
-    Falls back to sane defaults for any key that hasn't been configured yet,
-    since a full settings module/UI doesn't exist yet.
-    """
-    settings = dict(DEFAULT_COMPANY_SETTINGS)
-    try:
-        rows = db.execute(
-            text("SELECT setting_key, setting_value FROM settings WHERE setting_key LIKE 'company_%'")
-        ).all()
-        for row in rows:
-            if row.setting_key in settings and row.setting_value is not None:
-                settings[row.setting_key] = row.setting_value
-    except Exception:
-        # settings table may be empty/unavailable in some environments; the
-        # PDF should still render with placeholder letterhead text.
-        pass
-    return settings
+    values = settings_service.get_all(db)
+    return {key: (values.get(key) or default) for key, default in DEFAULT_COMPANY_SETTINGS.items()}
 
 
 def _fmt_money(value) -> str:

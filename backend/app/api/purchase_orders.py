@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
-from app.api.deps import get_current_user, require_role
+from app.api.deps import get_current_user, require_department_write
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.purchase_order import (
@@ -15,7 +15,7 @@ from app.schemas.purchase_order import (
 from app.services import audit_service, purchase_order_service
 
 router = APIRouter(prefix="/api/purchase-orders", tags=["purchase-orders"])
-write_guard = require_role("admin", "manager")
+write_guard = require_department_write("procurement")
 
 
 @router.get("", response_model=PagedResponse)

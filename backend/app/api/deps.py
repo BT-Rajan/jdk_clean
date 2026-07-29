@@ -53,3 +53,24 @@ def require_role(*allowed_roles: str):
         return user
 
     return _check
+
+
+def require_department_write(*allowed_departments: str):
+    """Gates write access to a department-scoped document type (Quotations/
+    Orders -> 'sales', Purchase Orders -> 'procurement', Delivery Notes ->
+    'warehouse'). admin and manager always pass, regardless of their own
+    department -- department-scoping is what *unlocks* limited write
+    access for staff who'd otherwise have none, not a restriction on the
+    roles that already had full access. A staff member only passes if
+    their own department is one of allowed_departments; viewer never
+    passes, same as it never could before this existed.
+    """
+
+    def _check(user: User = Depends(get_current_user)) -> User:
+        if user.role in ("admin", "manager"):
+            return user
+        if user.role == "staff" and user.department in allowed_departments:
+            return user
+        raise PermissionError_()
+
+    return _check

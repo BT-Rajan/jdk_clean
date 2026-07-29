@@ -7,6 +7,7 @@ export const userCreateSchema = z.object({
   password: z.string().min(8, 'At least 8 characters'),
   full_name: z.string().trim().min(1, 'Full name is required').max(120),
   role: z.enum(['admin', 'manager', 'staff', 'viewer']),
+  department: z.enum(['sales', 'procurement', 'warehouse']).optional().or(z.literal('')),
 })
 
 export type UserCreateFormValues = z.infer<typeof userCreateSchema>
@@ -18,6 +19,7 @@ export const userEditSchema = z.object({
   email: z.string().trim().email('Enter a valid email'),
   full_name: z.string().trim().min(1, 'Full name is required').max(120),
   role: z.enum(['admin', 'manager', 'staff', 'viewer']),
+  department: z.enum(['sales', 'procurement', 'warehouse']).optional().or(z.literal('')),
   is_active: z.boolean(),
 })
 

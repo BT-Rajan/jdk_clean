@@ -16,7 +16,7 @@ import {
 import { listPurchaseOrders } from '@/api/purchaseOrders'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
-import { canWrite } from '@/lib/roles'
+import { canWriteDepartment } from '@/lib/roles'
 
 export function PurchaseOrdersListPage() {
   const { user } = useAuth()
@@ -49,7 +49,7 @@ export function PurchaseOrdersListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Purchase orders</h1>
           <p className="mt-2 text-sm text-white/50">{total} purchase orders on file</p>
         </div>
-        {canWrite(user?.role) && <Button onClick={() => navigate('/purchase-orders/new')}>New purchase order</Button>}
+        {canWriteDepartment(user, 'procurement') && <Button onClick={() => navigate('/purchase-orders/new')}>New purchase order</Button>}
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_220px]">

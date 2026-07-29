@@ -32,3 +32,28 @@ export async function restoreUser(id: number): Promise<User> {
   const { data } = await apiClient.post<User>(`/api/users/${id}/restore`)
   return data
 }
+
+/** Admin-only: uploads and assigns a signature image directly to a user
+ * (no self-upload, no approval step -- see api/users.py). */
+export async function uploadUserSignature(id: number, file: File): Promise<User> {
+  const form = new FormData()
+  form.append('file', file)
+  // Same apiClient JSON-default gotcha as uploadAvatar in api/auth.ts --
+  // must clear Content-Type for this one request so axios's FormData
+  // branch applies instead of JSON.stringify-ing the file away.
+  const { data } = await apiClient.post<User>(`/api/users/${id}/signature`, form, {
+    headers: { 'Content-Type': undefined },
+  })
+  return data
+}
+
+export async function deleteUserSignature(id: number): Promise<User> {
+  const { data } = await apiClient.delete<User>(`/api/users/${id}/signature`)
+  return data
+}
+
+/** Fetches a user's signature image as a Blob for inline preview. */
+export async function fetchUserSignatureBlob(id: number): Promise<Blob> {
+  const { data } = await apiClient.get<Blob>(`/api/users/${id}/signature`, { responseType: 'blob' })
+  return data
+}
