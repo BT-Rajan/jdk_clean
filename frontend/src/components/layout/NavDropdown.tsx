@@ -86,7 +86,7 @@ export function NavDropdown({ label, items }: NavDropdownProps) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.15, ease: 'easeOut' }}
-            className="glass-panel-strong absolute left-0 top-[calc(100%+0.5rem)] z-50 min-w-48 overflow-hidden rounded-xl p-1.5"
+            className="glass-panel-header-scrolled absolute left-0 top-[calc(100%+0.5rem)] z-50 min-w-48 overflow-hidden rounded-xl p-1.5"
           >
             {items.map((item) => (
               <NavLink
