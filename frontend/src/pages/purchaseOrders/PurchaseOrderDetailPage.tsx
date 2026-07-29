@@ -14,6 +14,7 @@ import {
 } from '@/api/purchaseOrders'
 import type { PurchaseOrder } from '@/types/purchaseOrder'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDate } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
 import { PURCHASE_ORDER_TRANSITIONS } from '@/lib/statusTransitions'
@@ -205,8 +206,8 @@ export function PurchaseOrderDetailPage() {
         </div>
 
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-          <Field label="Order date" value={po.order_date} />
-          <Field label="Expected delivery" value={po.expected_delivery_date} />
+          <Field label="Order date" value={formatDate(po.order_date)} />
+          <Field label="Expected delivery" value={formatDate(po.expected_delivery_date)} />
           <Field label="Total" value={po.total_amount.toLocaleString()} />
         </dl>
 

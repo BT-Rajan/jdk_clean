@@ -17,6 +17,7 @@ import { listPurchaseOrders } from '@/api/purchaseOrders'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
+import { formatDate } from '@/lib/dateFormat'
 
 export function PurchaseOrdersListPage() {
   const { user } = useAuth()
@@ -100,7 +101,7 @@ export function PurchaseOrdersListPage() {
                       </Link>
                     </td>
                     <td className="px-6 py-4 text-white">{po.supplier_name ?? `#${po.supplier_id}`}</td>
-                    <td className="px-6 py-4 text-white/60">{po.order_date}</td>
+                    <td className="px-6 py-4 text-white/60">{formatDate(po.order_date)}</td>
                     <td className="px-6 py-4 text-white/60">{po.total_amount.toLocaleString()}</td>
                     <td className="px-6 py-4">
                       <StatusBadge status={po.status} />

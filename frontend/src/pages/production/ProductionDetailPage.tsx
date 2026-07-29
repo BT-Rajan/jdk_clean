@@ -10,6 +10,7 @@ import {
 } from '@/api/production'
 import type { ProductionBatch } from '@/types/production'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
 import { PRODUCTION_TRANSITIONS } from '@/lib/statusTransitions'
@@ -198,10 +199,10 @@ export function ProductionDetailPage() {
             label="Produced quantity"
             value={batch.produced_quantity ? `${batch.produced_quantity} ${batch.unit ?? ''}` : null}
           />
-          <Field label="Scheduled start" value={batch.scheduled_start} />
-          <Field label="Scheduled end" value={batch.scheduled_end} />
-          <Field label="Actual start" value={batch.actual_start ? new Date(batch.actual_start).toLocaleString() : null} />
-          <Field label="Actual end" value={batch.actual_end ? new Date(batch.actual_end).toLocaleString() : null} />
+          <Field label="Scheduled start" value={formatDate(batch.scheduled_start)} />
+          <Field label="Scheduled end" value={formatDate(batch.scheduled_end)} />
+          <Field label="Actual start" value={batch.actual_start ? formatDateTime(batch.actual_start) : null} />
+          <Field label="Actual end" value={batch.actual_end ? formatDateTime(batch.actual_end) : null} />
         </dl>
 
         {batch.notes && (

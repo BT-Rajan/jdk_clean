@@ -25,6 +25,7 @@ import {
 } from '@/api/feasibilities'
 import type { Feasibility } from '@/types/feasibility'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment, isAdmin } from '@/lib/roles'
 import {
@@ -241,9 +242,9 @@ export function FeasibilityDetailPage() {
         </div>
 
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-          <Field label="Required by">{f.required_by_date ?? '—'}</Field>
-          <Field label="Checked at">{f.checked_at ? new Date(f.checked_at).toLocaleString() : 'Not yet run'}</Field>
-          <Field label="Created">{new Date(f.created_at).toLocaleDateString()}</Field>
+          <Field label="Required by">{formatDate(f.required_by_date)}</Field>
+          <Field label="Checked at">{f.checked_at ? formatDateTime(f.checked_at) : 'Not yet run'}</Field>
+          <Field label="Created">{formatDateTime(f.created_at)}</Field>
         </dl>
 
         {f.notes && (
@@ -327,7 +328,7 @@ export function FeasibilityDetailPage() {
                             {line.capacity_shortfall.projected_completion_date ? (
                               <>
                                 Earliest it could actually be done:{' '}
-                                {new Date(line.capacity_shortfall.projected_completion_date).toLocaleDateString()}
+                                {formatDate(line.capacity_shortfall.projected_completion_date)}
                                 {line.capacity_shortfall.shortfall_days
                                   ? ` (${line.capacity_shortfall.shortfall_days} day${line.capacity_shortfall.shortfall_days === 1 ? '' : 's'} late)`
                                   : ''}

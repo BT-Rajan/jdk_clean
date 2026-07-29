@@ -14,6 +14,7 @@ import {
 } from '@/api/deliveryNotes'
 import type { DeliveryNote } from '@/types/deliveryNote'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDate } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
 import { DELIVERY_NOTE_TRANSITIONS } from '@/lib/statusTransitions'
@@ -200,7 +201,7 @@ export function DeliveryNoteDetailPage() {
 
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
           <Field label="Order" value={note.order_number} />
-          <Field label="Delivery date" value={note.delivery_date} />
+          <Field label="Delivery date" value={formatDate(note.delivery_date)} />
           <Field label="Notes" value={note.notes} />
         </dl>
       </GlassCard>

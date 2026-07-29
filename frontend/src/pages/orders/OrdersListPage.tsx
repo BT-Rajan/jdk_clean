@@ -17,6 +17,7 @@ import { listOrders } from '@/api/orders'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
+import { formatDate } from '@/lib/dateFormat'
 
 export function OrdersListPage() {
   const { user } = useAuth()
@@ -100,7 +101,7 @@ export function OrdersListPage() {
                       </Link>
                     </td>
                     <td className="px-6 py-4 text-white">{o.customer_name ?? '—'}</td>
-                    <td className="px-6 py-4 text-white/60">{o.order_date}</td>
+                    <td className="px-6 py-4 text-white/60">{formatDate(o.order_date)}</td>
                     <td className="px-6 py-4 text-white/60">{o.total_amount.toLocaleString()}</td>
                     <td className="px-6 py-4">
                       <StatusBadge status={o.status} />

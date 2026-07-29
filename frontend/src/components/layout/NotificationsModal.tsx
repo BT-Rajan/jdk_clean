@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom'
 import { Modal } from '@/components/ui'
 import type { Notification, NotificationSeverity } from '@/types/notification'
+import { formatDateTime } from '@/lib/dateFormat'
 
 interface NotificationsModalProps {
   open: boolean
@@ -59,7 +60,7 @@ export function NotificationsModal({ open, onClose, notifications, loading, erro
                 </span>
               </div>
               <p className="mt-2 text-sm text-white/60">{n.message}</p>
-              <p className="mt-2 text-xs text-white/30">{new Date(n.created_at).toLocaleString()}</p>
+              <p className="mt-2 text-xs text-white/30">{formatDateTime(n.created_at)}</p>
             </button>
           ))
         )}

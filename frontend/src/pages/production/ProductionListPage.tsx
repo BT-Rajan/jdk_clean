@@ -17,6 +17,7 @@ import { listProductionBatches } from '@/api/production'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
+import { formatDate } from '@/lib/dateFormat'
 
 export function ProductionListPage() {
   const { user } = useAuth()
@@ -102,7 +103,7 @@ export function ProductionListPage() {
                       {b.product_code ? `${b.product_code} — ${b.product_name}` : `#${b.product_id}`}
                     </td>
                     <td className="px-6 py-4 text-white/60">{b.order_number ?? '—'}</td>
-                    <td className="px-6 py-4 text-white/60">{b.scheduled_start}</td>
+                    <td className="px-6 py-4 text-white/60">{formatDate(b.scheduled_start)}</td>
                     <td className="px-6 py-4 text-white/60">
                       {b.status === 'completed'
                         ? `${b.produced_quantity} ${b.unit ?? ''}`

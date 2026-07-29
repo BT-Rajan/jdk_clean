@@ -17,6 +17,7 @@ import { listDeliveryNotes } from '@/api/deliveryNotes'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
+import { formatDate } from '@/lib/dateFormat'
 
 export function DeliveryNotesListPage() {
   const { user } = useAuth()
@@ -100,7 +101,7 @@ export function DeliveryNotesListPage() {
                     </td>
                     <td className="px-6 py-4 text-white/60">{n.order_number ?? '—'}</td>
                     <td className="px-6 py-4 text-white">{n.customer_name ?? '—'}</td>
-                    <td className="px-6 py-4 text-white/60">{n.delivery_date}</td>
+                    <td className="px-6 py-4 text-white/60">{formatDate(n.delivery_date)}</td>
                     <td className="px-6 py-4">
                       <StatusBadge status={n.status} />
                     </td>

@@ -14,6 +14,7 @@ import {
 } from '@/api/quotations'
 import type { Quotation } from '@/types/quotation'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDate } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
 import { QUOTATION_TRANSITIONS } from '@/lib/statusTransitions'
@@ -187,11 +188,11 @@ export function QuotationDetailPage() {
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
           <div>
             <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">Date</dt>
-            <dd className="mt-1 text-[15px] text-white">{quotation.quotation_date}</dd>
+            <dd className="mt-1 text-[15px] text-white">{formatDate(quotation.quotation_date)}</dd>
           </div>
           <div>
             <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">Valid until</dt>
-            <dd className="mt-1 text-[15px] text-white">{quotation.valid_until ?? '—'}</dd>
+            <dd className="mt-1 text-[15px] text-white">{formatDate(quotation.valid_until)}</dd>
           </div>
           <div>
             <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">Total</dt>

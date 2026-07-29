@@ -5,6 +5,7 @@ import { GlassCard, Spinner, StatusBadge } from '@/components/ui'
 import { getOrderJourney } from '@/api/orders'
 import type { OrderJourney as OrderJourneyData } from '@/types/orderJourney'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDate, formatDateTime } from '@/lib/dateFormat'
 
 interface OrderJourneyProps {
   orderId: number
@@ -81,12 +82,20 @@ export function OrderJourney({ orderId }: OrderJourneyProps) {
       <div>
         <Stage label="Feasibility" reached={feasibility !== null}>
           {feasibility ? (
-            <Link to={`/feasibilities/${feasibility.id}`} className="group flex items-center gap-2">
-              <span className="font-medium text-gold-300 group-hover:text-gold-200">
-                {feasibility.feasibility_number}
-              </span>
-              <StatusBadge status={feasibility.status} />
-            </Link>
+            <>
+              <Link to={`/feasibilities/${feasibility.id}`} className="group flex items-center gap-2">
+                <span className="font-medium text-gold-300 group-hover:text-gold-200">
+                  {feasibility.feasibility_number}
+                </span>
+                <StatusBadge status={feasibility.status} />
+              </Link>
+              <p className="mt-1 text-sm text-white/40">
+                {feasibility.checked_at
+                  ? `Checked ${formatDateTime(feasibility.checked_at)}`
+                  : `Requested ${formatDateTime(feasibility.created_at)}`}
+                {feasibility.required_by_date && ` · required by ${formatDate(feasibility.required_by_date)}`}
+              </p>
+            </>
           ) : (
             <p className="text-sm text-white/40">No feasibility check on record for this order.</p>
           )}
@@ -94,13 +103,16 @@ export function OrderJourney({ orderId }: OrderJourneyProps) {
 
         <Stage label="Quotation" reached={quotation !== null}>
           {quotation ? (
-            <Link to={`/quotations/${quotation.id}`} className="group flex items-center gap-2">
-              <span className="font-medium text-gold-300 group-hover:text-gold-200">
-                {quotation.quotation_number}
-              </span>
-              <StatusBadge status={quotation.status} />
-              <span className="text-sm text-white/40">₹{quotation.total_amount.toLocaleString()}</span>
-            </Link>
+            <>
+              <Link to={`/quotations/${quotation.id}`} className="group flex items-center gap-2">
+                <span className="font-medium text-gold-300 group-hover:text-gold-200">
+                  {quotation.quotation_number}
+                </span>
+                <StatusBadge status={quotation.status} />
+                <span className="text-sm text-white/40">₹{quotation.total_amount.toLocaleString()}</span>
+              </Link>
+              <p className="mt-1 text-sm text-white/40">Raised {formatDateTime(quotation.created_at)}</p>
+            </>
           ) : (
             <p className="text-sm text-white/40">This order wasn't converted from a quotation.</p>
           )}
@@ -114,22 +126,30 @@ export function OrderJourney({ orderId }: OrderJourneyProps) {
           </div>
           <p className="mt-1 text-sm text-white/40">
             {order.customer_name} · ₹{order.total_amount.toLocaleString()}
-            {order.confirmed_delivery_date && ` · due ${new Date(order.confirmed_delivery_date).toLocaleDateString()}`}
+            {order.confirmed_delivery_date && ` · due ${formatDate(order.confirmed_delivery_date)}`}
           </p>
+          <p className="mt-1 text-sm text-white/40">Placed {formatDateTime(order.created_at)}</p>
         </Stage>
 
         <Stage label="Production" reached={production_batches.length > 0}>
           {production_batches.length > 0 ? (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {production_batches.map((b) => (
-                <div key={b.id} className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium text-white">{b.batch_number}</span>
-                  <StatusBadge status={b.status} />
-                  <span className="text-sm text-white/40">
+                <div key={b.id}>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium text-white">{b.batch_number}</span>
+                    <StatusBadge status={b.status} />
+                  </div>
+                  <p className="mt-1 text-sm text-white/40">
                     {b.product_name}
                     {b.machine_name && ` on ${b.machine_name}`} · {b.produced_quantity}/{b.planned_quantity} done ·{' '}
-                    {new Date(b.scheduled_start).toLocaleDateString()} – {new Date(b.scheduled_end).toLocaleDateString()}
-                  </span>
+                    {formatDate(b.scheduled_start)} – {formatDate(b.scheduled_end)}
+                  </p>
+                  <p className="mt-1 text-sm text-white/40">
+                    Scheduled {formatDateTime(b.created_at)}
+                    {b.actual_start && ` · started ${formatDateTime(b.actual_start)}`}
+                    {b.actual_end && ` · finished ${formatDateTime(b.actual_end)}`}
+                  </p>
                 </div>
               ))}
             </div>
@@ -152,12 +172,16 @@ export function OrderJourney({ orderId }: OrderJourneyProps) {
             <p className="text-xs font-medium tracking-wide text-white/40 uppercase">Delivery</p>
             <div className="mt-2">
               {delivery_notes.length > 0 ? (
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {delivery_notes.map((d) => (
-                    <div key={d.id} className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium text-white">{d.delivery_note_number}</span>
-                      <StatusBadge status={d.status} />
-                      <span className="text-sm text-white/40">{new Date(d.delivery_date).toLocaleDateString()}</span>
+                    <div key={d.id}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-white">{d.delivery_note_number}</span>
+                        <StatusBadge status={d.status} />
+                      </div>
+                      <p className="mt-1 text-sm text-white/40">
+                        Delivery date {formatDate(d.delivery_date)} · recorded {formatDateTime(d.created_at)}
+                      </p>
                     </div>
                   ))}
                 </div>

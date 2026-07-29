@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
@@ -8,6 +8,8 @@ class JourneyFeasibility(BaseModel):
     feasibility_number: str
     status: str
     required_by_date: date | None
+    created_at: datetime
+    checked_at: datetime | None
 
 
 class JourneyQuotation(BaseModel):
@@ -16,6 +18,7 @@ class JourneyQuotation(BaseModel):
     status: str
     quotation_date: date
     total_amount: float
+    created_at: datetime
 
 
 class JourneyOrder(BaseModel):
@@ -28,6 +31,7 @@ class JourneyOrder(BaseModel):
     total_amount: float
     customer_name: str | None
     admin_review_required: bool
+    created_at: datetime
 
 
 class JourneyProductionBatch(BaseModel):
@@ -40,6 +44,9 @@ class JourneyProductionBatch(BaseModel):
     produced_quantity: float
     scheduled_start: date
     scheduled_end: date
+    created_at: datetime
+    actual_start: datetime | None
+    actual_end: datetime | None
 
 
 class JourneyDeliveryNote(BaseModel):
@@ -47,6 +54,7 @@ class JourneyDeliveryNote(BaseModel):
     delivery_note_number: str
     status: str
     delivery_date: date
+    created_at: datetime
 
 
 class OrderJourneyOut(BaseModel):

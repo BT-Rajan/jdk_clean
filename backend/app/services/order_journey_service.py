@@ -72,6 +72,7 @@ def get_order_journey(db: Session, order_id: int) -> dict:
             "total_amount": float(order.total_amount),
             "customer_name": order.customer.name if order.customer else None,
             "admin_review_required": order.admin_review_required,
+            "created_at": order.created_at,
         },
         "feasibility": (
             {
@@ -79,6 +80,8 @@ def get_order_journey(db: Session, order_id: int) -> dict:
                 "feasibility_number": feasibility.feasibility_number,
                 "status": feasibility.status,
                 "required_by_date": feasibility.required_by_date,
+                "created_at": feasibility.created_at,
+                "checked_at": feasibility.checked_at,
             }
             if feasibility
             else None
@@ -90,6 +93,7 @@ def get_order_journey(db: Session, order_id: int) -> dict:
                 "status": quotation.status,
                 "quotation_date": quotation.quotation_date,
                 "total_amount": float(quotation.total_amount),
+                "created_at": quotation.created_at,
             }
             if quotation
             else None
@@ -105,6 +109,9 @@ def get_order_journey(db: Session, order_id: int) -> dict:
                 "produced_quantity": float(b.produced_quantity),
                 "scheduled_start": b.scheduled_start,
                 "scheduled_end": b.scheduled_end,
+                "created_at": b.created_at,
+                "actual_start": b.actual_start,
+                "actual_end": b.actual_end,
             }
             for b in batches
         ],
@@ -114,6 +121,7 @@ def get_order_journey(db: Session, order_id: int) -> dict:
                 "delivery_note_number": d.delivery_note_number,
                 "status": d.status,
                 "delivery_date": d.delivery_date,
+                "created_at": d.created_at,
             }
             for d in deliveries
         ],

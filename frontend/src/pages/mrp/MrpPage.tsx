@@ -5,6 +5,7 @@ import { Alert, Badge, Button, EmptyState, GlassCard, PageHeader, Spinner } from
 import { getMrpReport } from '@/api/mrp'
 import type { MrpReport } from '@/types/mrp'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDateTime } from '@/lib/dateFormat'
 
 export function MrpPage() {
   const [report, setReport] = useState<MrpReport | null>(null)
@@ -38,7 +39,7 @@ export function MrpPage() {
 
       {report && !loading && (
         <p className="mb-4 text-xs text-white/40">
-          Generated {new Date(report.generated_at).toLocaleString()}
+          Generated {formatDateTime(report.generated_at)}
         </p>
       )}
 

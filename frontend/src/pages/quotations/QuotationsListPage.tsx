@@ -17,6 +17,7 @@ import { listQuotations } from '@/api/quotations'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
+import { formatDate } from '@/lib/dateFormat'
 
 export function QuotationsListPage() {
   const { user } = useAuth()
@@ -99,7 +100,7 @@ export function QuotationsListPage() {
                       </Link>
                     </td>
                     <td className="px-6 py-4 text-white">{q.customer_name ?? '—'}</td>
-                    <td className="px-6 py-4 text-white/60">{q.quotation_date}</td>
+                    <td className="px-6 py-4 text-white/60">{formatDate(q.quotation_date)}</td>
                     <td className="px-6 py-4 text-white/60">{q.total_amount.toLocaleString()}</td>
                     <td className="px-6 py-4">
                       <StatusBadge status={q.status} />

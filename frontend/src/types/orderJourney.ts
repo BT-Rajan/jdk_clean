@@ -5,6 +5,8 @@ export interface JourneyFeasibility {
   feasibility_number: string
   status: string
   required_by_date: string | null
+  created_at: string
+  checked_at: string | null
 }
 
 export interface JourneyQuotation {
@@ -13,6 +15,7 @@ export interface JourneyQuotation {
   status: string
   quotation_date: string
   total_amount: number
+  created_at: string
 }
 
 export interface JourneyOrder {
@@ -25,6 +28,7 @@ export interface JourneyOrder {
   total_amount: number
   customer_name: string | null
   admin_review_required: boolean
+  created_at: string
 }
 
 export interface JourneyProductionBatch {
@@ -37,6 +41,9 @@ export interface JourneyProductionBatch {
   produced_quantity: number
   scheduled_start: string
   scheduled_end: string
+  created_at: string
+  actual_start: string | null
+  actual_end: string | null
 }
 
 export interface JourneyDeliveryNote {
@@ -44,6 +51,7 @@ export interface JourneyDeliveryNote {
   delivery_note_number: string
   status: string
   delivery_date: string
+  created_at: string
 }
 
 export interface OrderJourney {

@@ -17,6 +17,7 @@ import { listFeasibilities } from '@/api/feasibilities'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
+import { formatDateTime } from '@/lib/dateFormat'
 
 export function FeasibilitiesListPage() {
   const { user } = useAuth()
@@ -102,7 +103,7 @@ export function FeasibilitiesListPage() {
                     <td className="px-6 py-4">
                       <StatusBadge status={f.status} />
                     </td>
-                    <td className="px-6 py-4 text-white/60">{f.checked_at ? new Date(f.checked_at).toLocaleDateString() : '—'}</td>
+                    <td className="px-6 py-4 text-white/60">{f.checked_at ? formatDateTime(f.checked_at) : '—'}</td>
                   </tr>
                 ))}
               </tbody>

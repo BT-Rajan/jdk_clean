@@ -12,6 +12,7 @@ import { listProducts } from '@/api/products'
 import { listAvailableForQuotation } from '@/api/feasibilities'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDateTime } from '@/lib/dateFormat'
 import type { Feasibility } from '@/types/feasibility'
 import {
   quotationSchema,
@@ -222,7 +223,7 @@ function QuotationCreateForm() {
                 </div>
                 <div>
                   <dt className="text-white/40">Checked At</dt>
-                  <dd className="text-white">{selectedFeasibility.checked_at ? new Date(selectedFeasibility.checked_at).toLocaleDateString() : '—'}</dd>
+                  <dd className="text-white">{selectedFeasibility.checked_at ? formatDateTime(selectedFeasibility.checked_at) : '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-white/40">Line Items</dt>

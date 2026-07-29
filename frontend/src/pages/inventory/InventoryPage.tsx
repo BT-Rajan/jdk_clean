@@ -16,6 +16,7 @@ import { getLowStock, getMovements } from '@/api/inventory'
 import { useAuth } from '@/hooks/useAuth'
 import { canAdjustInventory } from '@/lib/roles'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDateTime } from '@/lib/dateFormat'
 import { DEFAULT_PAGE_SIZE } from '@/lib/constants'
 import type { LowStockItem, StockMovement } from '@/types/inventory'
 
@@ -230,7 +231,7 @@ export function InventoryPage() {
                   <tbody>
                     {movements.map((m) => (
                       <tr key={m.id} className="border-b border-white/5 last:border-0">
-                        <td className="px-6 py-4 text-white/60">{new Date(m.created_at).toLocaleString()}</td>
+                        <td className="px-6 py-4 text-white/60">{formatDateTime(m.created_at)}</td>
                         <td className="px-6 py-4 text-white">
                           {m.item_type} #{m.item_id}
                         </td>

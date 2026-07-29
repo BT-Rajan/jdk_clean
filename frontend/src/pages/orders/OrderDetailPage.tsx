@@ -6,6 +6,7 @@ import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import { deleteOrder, downloadOrderPdf, emailOrder, getOrder, restoreOrder, updateOrderStatus } from '@/api/orders'
 import type { Order } from '@/types/order'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDate } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
 import { ORDER_TRANSITIONS } from '@/lib/statusTransitions'
@@ -159,11 +160,11 @@ export function OrderDetailPage() {
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
           <div>
             <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">Order date</dt>
-            <dd className="mt-1 text-[15px] text-white">{order.order_date}</dd>
+            <dd className="mt-1 text-[15px] text-white">{formatDate(order.order_date)}</dd>
           </div>
           <div>
             <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">Requested delivery</dt>
-            <dd className="mt-1 text-[15px] text-white">{order.requested_delivery_date ?? '—'}</dd>
+            <dd className="mt-1 text-[15px] text-white">{formatDate(order.requested_delivery_date)}</dd>
           </div>
           <div>
             <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">Total</dt>
