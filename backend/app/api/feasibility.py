@@ -35,6 +35,18 @@ def list_feasibility_checks(
     return result
 
 
+@router.get("/available/for-quotation", response_model=list[FeasibilityOut])
+def list_available_for_quotation(
+    customer_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """List feasibility checks available for quotation generation.
+    Only returns checks in quotable statuses that haven't been converted or closed."""
+    feasibilities = feasibility_service.list_available_for_quotation(db, customer_id=customer_id)
+    return [FeasibilityOut.from_model(f) for f in feasibilities]
+
+
 @router.get("/{feasibility_id}", response_model=FeasibilityOut)
 def get_feasibility(
     feasibility_id: int,

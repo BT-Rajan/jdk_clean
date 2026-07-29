@@ -61,6 +61,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       label: 'Sales',
       items: [
         { to: '/customers', label: 'Customers' },
+        { to: '/feasibilities', label: 'Feasibility checks' },
         { to: '/quotations', label: 'Quotations' },
         { to: '/orders', label: 'Orders' },
         { to: '/delivery-notes', label: 'Delivery notes' },

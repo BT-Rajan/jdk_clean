@@ -203,6 +203,16 @@ def close_feasibility(db: Session, feasibility_id: int, reason: str, user_id: in
     return get_feasibility(db, feasibility_id)
 
 
+def list_available_for_quotation(db: Session, customer_id: int | None = None) -> list[FeasibilityCheck]:
+    """List feasibility checks available for quotation generation.
+    Only returns checks in quotable statuses (feasible, exception_approved)
+    that haven't been converted or closed."""
+    query = _base_query(db).filter(FeasibilityCheck.status.in_(QUOTABLE_STATUSES))
+    if customer_id:
+        query = query.filter(FeasibilityCheck.customer_id == customer_id)
+    return query.order_by(FeasibilityCheck.feasibility_number.desc()).all()
+
+
 def mark_converted(db: Session, feasibility_id: int, user_id: int | None = None) -> None:
     """Called by quotation_service.create_quotation once it has validated
     this feasibility check is quotable; not exposed as its own endpoint."""
