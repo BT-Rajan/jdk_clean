@@ -6,6 +6,7 @@ import { getOrderJourney } from '@/api/orders'
 import type { OrderJourney as OrderJourneyData } from '@/types/orderJourney'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
+import { formatCurrency } from '@/lib/currency'
 
 interface OrderJourneyProps {
   orderId: number
@@ -109,7 +110,7 @@ export function OrderJourney({ orderId }: OrderJourneyProps) {
                   {quotation.quotation_number}
                 </span>
                 <StatusBadge status={quotation.status} />
-                <span className="text-sm text-white/40">₹{quotation.total_amount.toLocaleString()}</span>
+                <span className="text-sm text-white/40">{formatCurrency(quotation.total_amount)}</span>
               </Link>
               <p className="mt-1 text-sm text-white/40">Raised {formatDateTime(quotation.created_at)}</p>
             </>
@@ -125,7 +126,7 @@ export function OrderJourney({ orderId }: OrderJourneyProps) {
             {order.admin_review_required && <StatusBadge status="overdue" className="border-amber-400/30 bg-amber-500/10 text-amber-200" />}
           </div>
           <p className="mt-1 text-sm text-white/40">
-            {order.customer_name} · ₹{order.total_amount.toLocaleString()}
+            {order.customer_name} · {formatCurrency(order.total_amount)}
             {order.confirmed_delivery_date && ` · due ${formatDate(order.confirmed_delivery_date)}`}
           </p>
           <p className="mt-1 text-sm text-white/40">Placed {formatDateTime(order.created_at)}</p>

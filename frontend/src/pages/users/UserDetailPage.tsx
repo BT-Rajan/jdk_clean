@@ -1,21 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Badge, Button, ConfirmDialog, GlassCard, PageHeader, Spinner } from '@/components/ui'
+import { Alert, Badge, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner } from '@/components/ui'
 import { deleteUser, getUser, restoreUser } from '@/api/users'
 import type { User } from '@/types/auth'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
-
-function Field({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">{label}</dt>
-      <dd className="mt-1 text-[15px] text-white">{value ?? '—'}</dd>
-    </div>
-  )
-}
 
 export function UserDetailPage() {
   const { id } = useParams()

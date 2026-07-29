@@ -2,6 +2,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.validators import not_in_past
+
 
 class ProductionScheduleCreate(BaseModel):
     product_id: int
@@ -11,6 +13,11 @@ class ProductionScheduleCreate(BaseModel):
     scheduled_start: date
     scheduled_end: date
     notes: str | None = None
+
+    @field_validator("scheduled_start")
+    @classmethod
+    def _start_not_past(cls, v: date) -> date:
+        return not_in_past(v)
 
     @field_validator("scheduled_end")
     @classmethod
@@ -30,6 +37,11 @@ class ProductionScheduleUpdate(BaseModel):
     scheduled_start: date | None = None
     scheduled_end: date | None = None
     notes: str | None = None
+
+    @field_validator("scheduled_start", "scheduled_end")
+    @classmethod
+    def _dates_not_past(cls, v: date | None) -> date | None:
+        return not_in_past(v)
 
 
 class ProductionScheduleStatusUpdate(BaseModel):

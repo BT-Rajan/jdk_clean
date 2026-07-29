@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useParams } from 'react-router-dom'
@@ -8,6 +7,7 @@ import {
   Alert,
   Button,
   ConfirmDialog,
+  Field,
   GlassCard,
   Modal,
   PageHeader,
@@ -109,15 +109,6 @@ function NotesModal({
         </div>
       </form>
     </Modal>
-  )
-}
-
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">{label}</dt>
-      <dd className="mt-1 text-[15px] text-white">{children}</dd>
-    </div>
   )
 }
 

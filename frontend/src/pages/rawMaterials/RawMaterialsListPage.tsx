@@ -17,6 +17,7 @@ import { listRawMaterials } from '@/api/rawMaterials'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
+import { formatCurrency } from '@/lib/currency'
 
 export function RawMaterialsListPage() {
   const { user } = useAuth()
@@ -98,7 +99,7 @@ export function RawMaterialsListPage() {
                     <td className="px-6 py-4 text-white">{m.name}</td>
                     <td className="px-6 py-4 text-white/60">{m.unit}</td>
                     <td className="px-6 py-4 text-white/60">{m.reorder_point}</td>
-                    <td className="px-6 py-4 text-white/60">{m.unit_cost.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-white/60">{formatCurrency(m.unit_cost)}</td>
                     <td className="px-6 py-4">
                       <StatusBadge status={m.status} />
                     </td>

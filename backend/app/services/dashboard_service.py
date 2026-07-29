@@ -84,7 +84,7 @@ def get_stats(db: Session) -> dict:
         .filter(RawMaterial.deleted_at.is_(None))
         .scalar()
     )
-    stats["inventory_value"] = _stat(f"₹{float(inv_value):,.2f}")
+    stats["inventory_value"] = _stat(round(float(inv_value), 3))
     stats["inventory_items"] = _stat(
         db.query(RawMaterialInventory)
         .join(RawMaterial, RawMaterialInventory.raw_material_id == RawMaterial.id)

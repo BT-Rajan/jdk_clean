@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import { deleteOrder, downloadOrderPdf, emailOrder, getOrder, restoreOrder, updateOrderStatus } from '@/api/orders'
 import type { Order } from '@/types/order'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
+import { formatCurrency } from '@/lib/currency'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
 import { ORDER_TRANSITIONS } from '@/lib/statusTransitions'
@@ -158,24 +159,14 @@ export function OrderDetailPage() {
         </div>
 
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-          <div>
-            <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">Order date</dt>
-            <dd className="mt-1 text-[15px] text-white">{formatDate(order.order_date)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">Requested delivery</dt>
-            <dd className="mt-1 text-[15px] text-white">{formatDate(order.requested_delivery_date)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">Total</dt>
-            <dd className="mt-1 text-[15px] text-white">{order.total_amount.toLocaleString()}</dd>
-          </div>
+          <Field label="Order date" value={formatDate(order.order_date)} />
+          <Field label="Requested delivery" value={formatDate(order.requested_delivery_date)} />
+          <Field label="Total" value={formatCurrency(order.total_amount)} />
         </dl>
 
         {order.notes && (
           <div className="mt-6">
-            <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">Notes</dt>
-            <dd className="mt-1 text-[15px] text-white/80">{order.notes}</dd>
+            <Field label="Notes" value={order.notes} />
           </div>
         )}
       </GlassCard>
@@ -201,8 +192,8 @@ export function OrderDetailPage() {
                     {line.product_code ? `${line.product_code} — ${line.product_name}` : `#${line.product_id}`}
                   </td>
                   <td className="px-6 py-4 text-white/60">{line.quantity} {line.unit}</td>
-                  <td className="px-6 py-4 text-white/60">{line.unit_price.toLocaleString()}</td>
-                  <td className="px-6 py-4 text-white/60">{line.line_total.toLocaleString()}</td>
+                  <td className="px-6 py-4 text-white/60">{formatCurrency(line.unit_price)}</td>
+                  <td className="px-6 py-4 text-white/60">{formatCurrency(line.line_total)}</td>
                 </tr>
               ))}
             </tbody>

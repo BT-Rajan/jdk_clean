@@ -1,22 +1,14 @@
 import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { deleteCustomer, getCustomer, restoreCustomer } from '@/api/customers'
 import type { Customer } from '@/types/customer'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatCurrency } from '@/lib/currency'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
 
-function Field({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">{label}</dt>
-      <dd className="mt-1 text-[15px] text-white">{value ?? '—'}</dd>
-    </div>
-  )
-}
 
 export function CustomerDetailPage() {
   const { id } = useParams()
@@ -124,7 +116,7 @@ export function CustomerDetailPage() {
           <Field label="Phone" value={customer.phone} />
           <Field label="City" value={customer.city} />
           <Field label="Country" value={customer.country} />
-          <Field label="Credit limit" value={customer.credit_limit.toLocaleString()} />
+          <Field label="Credit limit" value={formatCurrency(customer.credit_limit)} />
           <Field label="Payment terms" value={`${customer.payment_terms_days} days`} />
         </dl>
       </GlassCard>

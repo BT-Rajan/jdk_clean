@@ -18,6 +18,7 @@ import { listProducts } from '@/api/products'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
+import { formatCurrency } from '@/lib/currency'
 
 export function ProductsListPage() {
   const { user } = useAuth()
@@ -99,7 +100,7 @@ export function ProductsListPage() {
                     <td className="px-6 py-4">
                       <Badge tone={p.product_type === 'finished_good' ? 'gold' : 'info'}>{p.product_type}</Badge>
                     </td>
-                    <td className="px-6 py-4 text-white/60">{p.selling_price.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-white/60">{formatCurrency(p.selling_price)}</td>
                     <td className="px-6 py-4">
                       <StatusBadge status={p.status} />
                     </td>

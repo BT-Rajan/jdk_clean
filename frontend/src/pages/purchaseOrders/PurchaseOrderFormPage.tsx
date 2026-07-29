@@ -11,8 +11,10 @@ import { listSuppliers } from '@/api/suppliers'
 import { listRawMaterials } from '@/api/rawMaterials'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatCurrency } from '@/lib/currency'
 import {
   purchaseOrderSchema,
+  todayDateInputMin,
   type PurchaseOrderFormValues,
   type PurchaseOrderSubmitValues,
 } from '@/lib/validation'
@@ -96,7 +98,7 @@ function LineItemsEditor({
                 <TextField label="Unit price" type="number" step="0.01" {...register(`lines.${index}.unit_price` as const)} />
               </div>
               <div className="sm:col-span-2 text-sm text-white/60">
-                Line total: {(quantity * unitPrice).toLocaleString()}
+                Line total: {formatCurrency(quantity * unitPrice)}
               </div>
               <div className="sm:col-span-1">
                 <Button variant="ghost" size="sm" type="button" onClick={() => remove(index)}>Remove</Button>
@@ -167,8 +169,8 @@ function PurchaseOrderCreateForm() {
               <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
             ))}
           </SelectField>
-          <TextField label="Order date" type="date" error={errors.order_date?.message} {...register('order_date')} />
-          <TextField label="Expected delivery" type="date" {...register('expected_delivery_date')} />
+          <TextField label="Order date" type="date" min={todayDateInputMin} error={errors.order_date?.message} {...register('order_date')} />
+          <TextField label="Expected delivery" type="date" min={todayDateInputMin} error={errors.expected_delivery_date?.message} {...register('expected_delivery_date')} />
         </div>
 
         <LineItemsEditor control={control} register={register} watch={watch} errors={errors} materials={materials} />
@@ -247,8 +249,8 @@ function PurchaseOrderEditForm({ id }: { id: number }) {
                 <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
               ))}
             </SelectField>
-            <TextField label="Order date" type="date" error={errors.order_date?.message} {...register('order_date')} />
-            <TextField label="Expected delivery" type="date" {...register('expected_delivery_date')} />
+            <TextField label="Order date" type="date" min={todayDateInputMin} error={errors.order_date?.message} {...register('order_date')} />
+            <TextField label="Expected delivery" type="date" min={todayDateInputMin} error={errors.expected_delivery_date?.message} {...register('expected_delivery_date')} />
           </div>
 
           <LineItemsEditor control={control} register={register} watch={watch} errors={errors} materials={materials} />

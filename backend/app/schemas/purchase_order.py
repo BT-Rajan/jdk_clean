@@ -1,6 +1,8 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.core.validators import not_in_past
 
 
 class PurchaseOrderLineIn(BaseModel):
@@ -30,6 +32,11 @@ class PurchaseOrderCreate(BaseModel):
     notes: str | None = None
     lines: list[PurchaseOrderLineIn] = Field(min_length=1)
 
+    @field_validator("order_date", "expected_delivery_date")
+    @classmethod
+    def _dates_not_past(cls, v: date | None) -> date | None:
+        return not_in_past(v)
+
 
 class PurchaseOrderUpdate(BaseModel):
     """Only 'draft' purchase orders may be edited (enforced in the service
@@ -41,6 +48,11 @@ class PurchaseOrderUpdate(BaseModel):
     expected_delivery_date: date | None = None
     notes: str | None = None
     lines: list[PurchaseOrderLineIn] | None = None
+
+    @field_validator("order_date", "expected_delivery_date")
+    @classmethod
+    def _dates_not_past(cls, v: date | None) -> date | None:
+        return not_in_past(v)
 
 
 class PurchaseOrderStatusUpdate(BaseModel):

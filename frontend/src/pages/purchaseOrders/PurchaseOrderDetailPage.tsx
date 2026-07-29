@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   deletePurchaseOrder,
@@ -15,18 +15,10 @@ import {
 import type { PurchaseOrder } from '@/types/purchaseOrder'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
+import { formatCurrency } from '@/lib/currency'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
 import { PURCHASE_ORDER_TRANSITIONS } from '@/lib/statusTransitions'
-
-function Field({ label, value }: { label: string; value: string | number | null | undefined }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">{label}</dt>
-      <dd className="mt-1 text-[15px] text-white">{value ?? '—'}</dd>
-    </div>
-  )
-}
 
 export function PurchaseOrderDetailPage() {
   const { id } = useParams()
@@ -208,7 +200,7 @@ export function PurchaseOrderDetailPage() {
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
           <Field label="Order date" value={formatDate(po.order_date)} />
           <Field label="Expected delivery" value={formatDate(po.expected_delivery_date)} />
-          <Field label="Total" value={po.total_amount.toLocaleString()} />
+          <Field label="Total" value={formatCurrency(po.total_amount)} />
         </dl>
 
         {po.notes && (
@@ -244,8 +236,8 @@ export function PurchaseOrderDetailPage() {
                       {line.material_code} — {line.material_name}
                     </td>
                     <td className="px-6 py-4 text-white/60">{line.quantity} {line.unit}</td>
-                    <td className="px-6 py-4 text-white/60">{line.unit_price.toLocaleString()}</td>
-                    <td className="px-6 py-4 text-white/60">{line.line_total.toLocaleString()}</td>
+                    <td className="px-6 py-4 text-white/60">{formatCurrency(line.unit_price)}</td>
+                    <td className="px-6 py-4 text-white/60">{formatCurrency(line.line_total)}</td>
                     <td className="px-6 py-4 text-white/60">{line.received_quantity} {line.unit}</td>
                     {canReceive && (
                       <td className="px-6 py-4">

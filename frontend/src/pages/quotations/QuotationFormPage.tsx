@@ -13,6 +13,7 @@ import { listAvailableForQuotation } from '@/api/feasibilities'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDateTime } from '@/lib/dateFormat'
+import { formatCurrency } from '@/lib/currency'
 import type { Feasibility } from '@/types/feasibility'
 import {
   quotationSchema,
@@ -100,7 +101,7 @@ function LineItemsEditor({
                 <TextField label="Unit price" type="number" step="0.01" {...register(`lines.${index}.unit_price` as const)} />
               </div>
               <div className="sm:col-span-2 text-sm text-white/60">
-                Line total: {(quantity * unitPrice).toLocaleString()}
+                Line total: {formatCurrency(quantity * unitPrice)}
               </div>
               <div className="sm:col-span-1">
                 <Button variant="ghost" size="sm" type="button" onClick={() => remove(index)}>Remove</Button>

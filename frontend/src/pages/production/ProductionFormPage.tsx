@@ -13,6 +13,7 @@ import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import {
   productionBatchSchema,
+  todayDateInputMin,
   type ProductionBatchFormValues,
   type ProductionBatchSubmitValues,
 } from '@/lib/validation'
@@ -108,12 +109,14 @@ function ProductionCreateForm() {
           <TextField
             label="Scheduled start"
             type="date"
+            min={todayDateInputMin}
             error={errors.scheduled_start?.message}
             {...register('scheduled_start')}
           />
           <TextField
             label="Scheduled end"
             type="date"
+            min={todayDateInputMin}
             error={errors.scheduled_end?.message}
             {...register('scheduled_end')}
           />
@@ -203,12 +206,14 @@ function ProductionEditForm({ id }: { id: number }) {
             <TextField
               label="Scheduled start"
               type="date"
+              min={todayDateInputMin}
               error={errors.scheduled_start?.message}
               {...register('scheduled_start')}
             />
             <TextField
               label="Scheduled end"
               type="date"
+              min={todayDateInputMin}
               error={errors.scheduled_end?.message}
               {...register('scheduled_end')}
             />

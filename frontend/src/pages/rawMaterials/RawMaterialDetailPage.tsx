@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { deleteRawMaterial, getRawMaterial, restoreRawMaterial } from '@/api/rawMaterials'
 import { getStock } from '@/api/inventory'
 import { getSupplier } from '@/api/suppliers'
@@ -11,15 +10,7 @@ import type { StockLevel } from '@/types/inventory'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
-
-function Field({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">{label}</dt>
-      <dd className="mt-1 text-[15px] text-white">{value ?? '—'}</dd>
-    </div>
-  )
-}
+import { formatCurrency } from '@/lib/currency'
 
 export function RawMaterialDetailPage() {
   const { id } = useParams()
@@ -128,7 +119,7 @@ export function RawMaterialDetailPage() {
           <Field label="Status" value={<StatusBadge status={material.status} />} />
           <Field label="Unit" value={material.unit} />
           <Field label="Reorder point" value={material.reorder_point} />
-          <Field label="Unit cost" value={material.unit_cost.toLocaleString()} />
+          <Field label="Unit cost" value={formatCurrency(material.unit_cost)} />
           <Field label="Default supplier" value={supplierName} />
           <Field
             label="On hand"

@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useDashboardPreferences } from '@/hooks/useDashboardPreferences'
 import { getDashboardStats } from '@/api/dashboard'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatCurrency } from '@/lib/currency'
 import type { DashboardStatsResponse } from '@/types/dashboard'
 import { StatsWidget, GraphWidget, SkeletonWidget } from '@/components/dashboard/DashboardWidgets'
 
@@ -50,11 +51,18 @@ export function DashboardPage() {
             {enabledWidgets.map((widget) => {
               if (widget.type === 'stats') {
                 const stat = data?.stats[widget.dataSource]
+                // Only inventory_value is a money amount among the stats
+                // dashboard_service.py computes -- everything else here is
+                // a plain count, so only this one gets currency formatting.
+                const value =
+                  widget.dataSource === 'inventory_value' && typeof stat?.value === 'number'
+                    ? formatCurrency(stat.value)
+                    : (stat?.value ?? '—')
                 return (
                   <StatsWidget
                     key={widget.id}
                     title={widget.title}
-                    value={stat?.value ?? '—'}
+                    value={value}
                     trend={stat?.trend}
                   />
                 )

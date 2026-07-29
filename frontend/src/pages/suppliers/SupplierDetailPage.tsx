@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, GlassCard, PageHeader, RatingStars, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, RatingStars, Spinner, StatusBadge } from '@/components/ui'
 import { deleteSupplier, getSupplier, restoreSupplier } from '@/api/suppliers'
 import type { Supplier } from '@/types/supplier'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -15,15 +14,6 @@ const MODE_OF_SUPPLY_LABELS: Record<string, string> = {
   distributor: 'Distributor',
   broker: 'Broker',
   import: 'Import',
-}
-
-function Field({ label, value }: { label: string; value: ReactNode }) {
-  return (
-    <div>
-      <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">{label}</dt>
-      <dd className="mt-1 text-[15px] text-white">{value ?? '—'}</dd>
-    </div>
-  )
 }
 
 export function SupplierDetailPage() {
