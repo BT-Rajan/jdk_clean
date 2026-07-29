@@ -9,6 +9,9 @@ import { FullScreenLoader } from '@/components/layout/FullScreenLoader'
 const DashboardPage = lazy(() =>
   import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
 )
+const DashboardCustomizePage = lazy(() =>
+  import('@/pages/DashboardCustomizePage').then((m) => ({ default: m.DashboardCustomizePage })),
+)
 const ProfilePage = lazy(() =>
   import('@/pages/ProfilePage').then((m) => ({ default: m.ProfilePage })),
 )
@@ -137,6 +140,7 @@ export function App() {
 
           <Route element={<ProtectedRoute />}>
             <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/dashboard/customize" element={<DashboardCustomizePage />} />
             <Route path="/profile" element={<ProfilePage />} />
             {/* The password form moved into /profile; keep old links working. */}
             <Route path="/change-password" element={<Navigate to="/profile" replace />} />
