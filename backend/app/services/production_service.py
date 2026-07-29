@@ -16,6 +16,7 @@ TABLE_NAME = "production_schedules"
 def _base_query(db: Session, include_deleted: bool = False):
     query = db.query(ProductionSchedule).options(
         joinedload(ProductionSchedule.product),
+        joinedload(ProductionSchedule.machine),
         joinedload(ProductionSchedule.order),
     )
     if not include_deleted:
@@ -80,9 +81,11 @@ def _validate_order(db: Session, order_id: int) -> Order:
 
 
 def create_batch(db: Session, data: dict, user_id: int | None = None) -> ProductionSchedule:
-    _validate_product(db, data["product_id"])
+    product = _validate_product(db, data["product_id"])
     if data.get("order_id"):
         _validate_order(db, data["order_id"])
+    if not data.get("machine_id"):
+        data["machine_id"] = product.machine_id
 
     batch_number = number_series_service.next_number(db, "PRODUCTION_BATCH")
     batch = ProductionSchedule(batch_number=batch_number, created_by=user_id, **data)

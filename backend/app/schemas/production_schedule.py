@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field, field_validator
 
 class ProductionScheduleCreate(BaseModel):
     product_id: int
+    machine_id: int | None = None
     order_id: int | None = None
     planned_quantity: float = Field(gt=0)
     scheduled_start: date
@@ -24,6 +25,7 @@ class ProductionScheduleUpdate(BaseModel):
     """Only 'planned' batches may be edited (enforced in the service layer)."""
 
     order_id: int | None = None
+    machine_id: int | None = None
     planned_quantity: float | None = Field(default=None, gt=0)
     scheduled_start: date | None = None
     scheduled_end: date | None = None
@@ -44,6 +46,8 @@ class ProductionScheduleOut(BaseModel):
     product_code: str | None = None
     product_name: str | None = None
     unit: str | None = None
+    machine_id: int | None
+    machine_name: str | None = None
     order_id: int | None
     order_number: str | None = None
     planned_quantity: float
@@ -65,5 +69,6 @@ class ProductionScheduleOut(BaseModel):
         data.product_code = obj.product.code if obj.product else None
         data.product_name = obj.product.name if obj.product else None
         data.unit = obj.product.unit if obj.product else None
+        data.machine_name = obj.machine.name if obj.machine else None
         data.order_number = obj.order.order_number if obj.order else None
         return data

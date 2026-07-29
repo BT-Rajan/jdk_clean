@@ -1,5 +1,6 @@
 from app.crud.base import BaseCRUD
 from app.models.customer import Customer
+from app.models.machine import Machine
 from app.models.product import Product
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
@@ -46,8 +47,17 @@ class ProductCRUD(BaseCRUD):
     filterable_fields = ["status", "product_type"]
 
 
+class MachineCRUD(BaseCRUD):
+    model = Machine
+    table_name = "machines"
+    searchable_fields = ["name", "code"]
+    sortable_fields = ["name", "code", "created_at"]
+    filterable_fields = ["status"]
+
+
 user_crud = UserCRUD()
 customer_crud = CustomerCRUD()
 supplier_crud = SupplierCRUD()
 raw_material_crud = RawMaterialCRUD()
 product_crud = ProductCRUD()
+machine_crud = MachineCRUD()

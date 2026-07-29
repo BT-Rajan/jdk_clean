@@ -160,6 +160,24 @@ CREATE TABLE IF NOT EXISTS supplier_materials (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- MACHINES (production capacity used by the feasibility check's
+-- machine-availability + time-required calculations)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS machines (
+    id                      BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    code                    VARCHAR(30)  NOT NULL UNIQUE,
+    name                    VARCHAR(150) NOT NULL,
+    capacity_hours_per_day  DECIMAL(6,2) NOT NULL DEFAULT 8,
+    status                  ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    deleted_at              DATETIME NULL,
+    created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by              BIGINT UNSIGNED NULL,
+    updated_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by              BIGINT UNSIGNED NULL,
+    INDEX idx_machines_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
 -- PRODUCTS (finished goods AND intermediate sub-assemblies)
 -- ============================================================
 CREATE TABLE IF NOT EXISTS products (
@@ -169,12 +187,18 @@ CREATE TABLE IF NOT EXISTS products (
     unit            VARCHAR(20)  NOT NULL,
     product_type    ENUM('finished_good','sub_assembly') NOT NULL DEFAULT 'finished_good',
     selling_price   DECIMAL(14,2) NOT NULL DEFAULT 0,
+    -- The "formula" inputs for the feasibility check's time-required
+    -- calculation: which machine makes this product, and how many hours
+    -- of that machine's time one unit consumes.
+    machine_id                 BIGINT UNSIGNED NULL,
+    production_hours_per_unit  DECIMAL(10,4) NULL,
     status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
     updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by      BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_products_machine FOREIGN KEY (machine_id) REFERENCES machines(id),
     INDEX idx_products_deleted_at (deleted_at),
     INDEX idx_products_type (product_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -250,11 +274,20 @@ CREATE TABLE IF NOT EXISTS feasibility_checks (
     feasibility_number  VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. FSB-00001)
     customer_id         BIGINT UNSIGNED NOT NULL,
     status              ENUM('draft','feasible','exception_pending','exception_approved','exception_rejected','closed','converted') NOT NULL DEFAULT 'draft',
+    required_by_date    DATE NULL,        -- when the customer needs this quantity
     checked_at          DATETIME NULL,
-    exception_reason    TEXT NULL,        -- Sales' reason for approving/rejecting a shortfall exception
+    exception_reason    TEXT NULL,        -- Sales' reason for approving/rejecting a shortfall exception (the "override" comment)
     exception_by        BIGINT UNSIGNED NULL,
     close_reason        TEXT NULL,        -- Sales' reason for closing without generating a quotation
     notes               TEXT NULL,
+    -- Admin notification: flagged when Sales overrides an infeasible result
+    -- (admin_review_reason='override') or when a check has sat open more
+    -- than 5 days with no close_reason/conversion (admin_review_reason='stale_open').
+    admin_review_required TINYINT(1) NOT NULL DEFAULT 0,
+    admin_review_reason   ENUM('override','stale_open') NULL,
+    admin_reviewed_at      DATETIME NULL,
+    admin_reviewed_by      BIGINT UNSIGNED NULL,
+    admin_review_notes     TEXT NULL,
     deleted_at          DATETIME NULL,
     created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by          BIGINT UNSIGNED NULL,
@@ -262,8 +295,10 @@ CREATE TABLE IF NOT EXISTS feasibility_checks (
     updated_by          BIGINT UNSIGNED NULL,
     CONSTRAINT fk_feasibility_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
     CONSTRAINT fk_feasibility_exception_by FOREIGN KEY (exception_by) REFERENCES users(id),
+    CONSTRAINT fk_feasibility_admin_reviewed_by FOREIGN KEY (admin_reviewed_by) REFERENCES users(id),
     INDEX idx_feasibility_status (status),
-    INDEX idx_feasibility_deleted_at (deleted_at)
+    INDEX idx_feasibility_deleted_at (deleted_at),
+    INDEX idx_feasibility_admin_review (admin_review_required)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS feasibility_lines (
@@ -273,6 +308,15 @@ CREATE TABLE IF NOT EXISTS feasibility_lines (
     quantity            DECIMAL(14,4) NOT NULL,
     is_feasible         TINYINT(1) NULL,       -- NULL until run; then whether this line's raw materials were fully covered
     shortfall_json      TEXT NULL,             -- JSON list of {raw_material_id, code, name, unit, required, on_hand, shortfall}
+    -- Machine-availability / time-required check: whether the product's
+    -- machine (see products.machine_id) has enough free capacity, between
+    -- today and the feasibility's required_by_date, for this line's
+    -- quantity at the product's production_hours_per_unit ("formula"
+    -- time), net of what's already booked in production_schedules.
+    -- NULL when the product has no machine/time formula or no
+    -- required_by_date was given (capacity can't be evaluated).
+    capacity_ok           TINYINT(1) NULL,
+    capacity_shortfall_json TEXT NULL,         -- JSON {machine, required_hours, available_hours, shortfall_hours}
     CONSTRAINT fk_fl_feasibility FOREIGN KEY (feasibility_id) REFERENCES feasibility_checks(id) ON DELETE CASCADE,
     CONSTRAINT fk_fl_product FOREIGN KEY (product_id) REFERENCES products(id),
     INDEX idx_fl_feasibility (feasibility_id)
@@ -436,6 +480,7 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     batch_number    VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. PB-00001)
     product_id      BIGINT UNSIGNED NOT NULL,
+    machine_id      BIGINT UNSIGNED NULL,             -- which machine this batch occupies (defaults to the product's machine)
     order_id        BIGINT UNSIGNED NULL,             -- nullable: batch may be for stock, not a specific order
     planned_quantity DECIMAL(14,4) NOT NULL,
     produced_quantity DECIMAL(14,4) NOT NULL DEFAULT 0,
@@ -451,6 +496,7 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_ps_product FOREIGN KEY (product_id) REFERENCES products(id),
+    CONSTRAINT fk_ps_machine FOREIGN KEY (machine_id) REFERENCES machines(id),
     CONSTRAINT fk_ps_order FOREIGN KEY (order_id) REFERENCES orders(id),
     INDEX idx_ps_status (status),
     INDEX idx_ps_deleted_at (deleted_at)

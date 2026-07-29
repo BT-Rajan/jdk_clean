@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -7,6 +7,8 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, Spinner, TextField } from '@/components/ui'
 import { createProduct, getProduct, updateProduct } from '@/api/products'
+import { listMachines } from '@/api/machines'
+import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import {
   productEditSchema,
@@ -20,6 +22,11 @@ import {
 export function ProductFormPage() {
   const { id } = useParams()
   return id ? <ProductEditForm id={Number(id)} /> : <ProductCreateForm />
+}
+
+function useMachineOptions() {
+  const fetcher = useCallback(() => listMachines({ page: 1, page_size: 200, status: 'active' }), [])
+  return useSelectOptions(fetcher)
 }
 
 function FormShell({ title, children }: { title: string; children: ReactNode }) {
@@ -36,13 +43,14 @@ function FormShell({ title, children }: { title: string; children: ReactNode }) 
 function ProductCreateForm() {
   const navigate = useNavigate()
   const [formError, setFormError] = useState<string | null>(null)
+  const { options: machines } = useMachineOptions()
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<ProductFormValues, unknown, ProductSubmitValues>({
     resolver: zodResolver(productSchema),
-    defaultValues: { code: '', name: '', unit: '', product_type: 'finished_good', selling_price: 0, status: 'active' },
+    defaultValues: { code: '', name: '', unit: '', product_type: 'finished_good', selling_price: 0, machine_id: undefined, production_hours_per_unit: undefined, status: 'active' },
   })
 
   async function onSubmit(values: ProductSubmitValues) {
@@ -77,6 +85,26 @@ function ProductCreateForm() {
             <option value="inactive">Inactive</option>
           </SelectField>
         </div>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <SelectField label="Machine" error={errors.machine_id?.message} {...register('machine_id')}>
+            <option value="">None</option>
+            {machines.map((m) => (
+              <option key={m.id} value={m.id}>{m.code} — {m.name}</option>
+            ))}
+          </SelectField>
+          <TextField
+            label="Production hours per unit"
+            type="number"
+            step="0.01"
+            error={errors.production_hours_per_unit?.message}
+            {...register('production_hours_per_unit')}
+          />
+        </div>
+        <p className="text-xs text-white/40">
+          The machine and hours-per-unit are this product's "formula" for feasibility checks: they're used to work
+          out whether there's enough machine time to produce a requested quantity by the required date. Leave blank
+          to skip the machine-availability check for this product.
+        </p>
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
           <Button type="submit" isLoading={isSubmitting}>Create product</Button>
@@ -90,6 +118,7 @@ function ProductEditForm({ id }: { id: number }) {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [formError, setFormError] = useState<string | null>(null)
+  const { options: machines } = useMachineOptions()
   const {
     register,
     handleSubmit,
@@ -107,6 +136,8 @@ function ProductEditForm({ id }: { id: number }) {
           unit: product.unit,
           product_type: product.product_type,
           selling_price: product.selling_price,
+          machine_id: product.machine_id ?? undefined,
+          production_hours_per_unit: product.production_hours_per_unit ?? undefined,
           status: product.status,
         })
       })
@@ -147,6 +178,21 @@ function ProductEditForm({ id }: { id: number }) {
               <option value="active">Active</option>
               <option value="inactive">Inactive</option>
             </SelectField>
+          </div>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <SelectField label="Machine" error={errors.machine_id?.message} {...register('machine_id')}>
+              <option value="">None</option>
+              {machines.map((m) => (
+                <option key={m.id} value={m.id}>{m.code} — {m.name}</option>
+              ))}
+            </SelectField>
+            <TextField
+              label="Production hours per unit"
+              type="number"
+              step="0.01"
+              error={errors.production_hours_per_unit?.message}
+              {...register('production_hours_per_unit')}
+            />
           </div>
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>

@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DECIMAL, Boolean, DateTime, Enum, ForeignKey, String, Text
+from sqlalchemy import DATE, DECIMAL, Boolean, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -35,6 +35,15 @@ ALLOWED_TRANSITIONS = {
 # one of these statuses (see quotation_service.create_quotation).
 QUOTABLE_STATUSES = {"feasible", "exception_approved"}
 
+# A feasibility check counts as "open" (i.e. eligible for the 5-day stale
+# escalation) while it's in any status that hasn't yet reached a terminal
+# closed/converted state.
+OPEN_STATUSES = {"draft", "feasible", "exception_pending", "exception_approved", "exception_rejected"}
+
+# Why admin was notified: Sales overrode an infeasible result with a
+# comment, or the check sat open past the 5-day SLA.
+ADMIN_REVIEW_REASONS = ("override", "stale_open")
+
 
 class FeasibilityCheck(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "feasibility_checks"
@@ -45,14 +54,30 @@ class FeasibilityCheck(Base, TimestampMixin, SoftDeleteMixin):
     status: Mapped[str] = mapped_column(
         Enum(*FEASIBILITY_STATUSES, name="feasibility_status"), nullable=False, default="draft"
     )
+    # When the customer needs the requested quantity by, captured on the
+    # request itself alongside each line's product + quantity.
+    required_by_date: Mapped[date | None] = mapped_column(DATE, nullable=True)
     checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Sales' exception-approval decision (only set once exception_pending is
     # resolved) -- who decided it and why, separate from close_reason below.
+    # This IS the "override with comment": approve=True on an infeasible
+    # check means Sales chose to proceed anyway, and `exception_reason` is
+    # the mandatory comment explaining why.
     exception_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     exception_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
     # Set when Sales closes this check without generating a quotation from it.
     close_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Admin notification -- mirrors Order.admin_review_required exactly (see
+    # models/order.py), just with a `admin_review_reason` to distinguish the
+    # two triggers here (an override vs. sitting open past the 5-day SLA).
+    admin_review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    admin_review_reason: Mapped[str | None] = mapped_column(
+        Enum(*ADMIN_REVIEW_REASONS, name="feasibility_admin_review_reason"), nullable=True
+    )
+    admin_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    admin_reviewed_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+    admin_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     lines: Mapped[list["FeasibilityLine"]] = relationship(
@@ -77,6 +102,15 @@ class FeasibilityLine(Base):
     # JSON list of {raw_material_id, code, name, unit, required, on_hand, shortfall}
     # for materials this line was short on. Empty/NULL when is_feasible is true.
     shortfall_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Machine-availability / time-required result for this line: does the
+    # product's machine (products.machine_id) have enough free capacity,
+    # between today and the check's required_by_date, for this quantity at
+    # the product's production_hours_per_unit? NULL when the product has no
+    # machine/time formula set, or no required_by_date was given on the
+    # check (capacity can't be evaluated either way).
+    capacity_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # JSON {machine, required_hours, available_hours, shortfall_hours} when capacity_ok is False.
+    capacity_shortfall_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     feasibility: Mapped[FeasibilityCheck] = relationship(back_populates="lines")
     product: Mapped[Product] = relationship(lazy="joined")

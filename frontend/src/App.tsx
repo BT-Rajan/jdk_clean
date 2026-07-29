@@ -98,6 +98,19 @@ const QuotationDetailPage = lazy(() =>
 const FeasibilitiesListPage = lazy(() =>
   import('@/pages/feasibilities/FeasibilitiesListPage').then((m) => ({ default: m.FeasibilitiesListPage })),
 )
+const FeasibilityFormPage = lazy(() =>
+  import('@/pages/feasibilities/FeasibilityFormPage').then((m) => ({ default: m.FeasibilityFormPage })),
+)
+const FeasibilityDetailPage = lazy(() =>
+  import('@/pages/feasibilities/FeasibilityDetailPage').then((m) => ({ default: m.FeasibilityDetailPage })),
+)
+
+const MachinesListPage = lazy(() =>
+  import('@/pages/machines/MachinesListPage').then((m) => ({ default: m.MachinesListPage })),
+)
+const MachineFormPage = lazy(() =>
+  import('@/pages/machines/MachineFormPage').then((m) => ({ default: m.MachineFormPage })),
+)
 
 const OrdersListPage = lazy(() =>
   import('@/pages/orders/OrdersListPage').then((m) => ({ default: m.OrdersListPage })),
@@ -181,6 +194,12 @@ export function App() {
             <Route path="/delivery-notes/:id" element={<DeliveryNoteDetailPage />} />
 
             <Route path="/feasibilities" element={<FeasibilitiesListPage />} />
+            <Route path="/feasibilities/new" element={<FeasibilityFormPage />} />
+            <Route path="/feasibilities/:id" element={<FeasibilityDetailPage />} />
+
+            <Route path="/machines" element={<MachinesListPage />} />
+            <Route path="/machines/new" element={<MachineFormPage />} />
+            <Route path="/machines/:id/edit" element={<MachineFormPage />} />
 
             <Route path="/quotations" element={<QuotationsListPage />} />
             <Route path="/quotations/new" element={<QuotationFormPage />} />

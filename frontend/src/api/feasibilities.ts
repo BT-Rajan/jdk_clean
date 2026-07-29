@@ -46,6 +46,11 @@ export async function decideFeasibilityException(id: number, approve: boolean, r
   return data
 }
 
+export async function adminReviewFeasibility(id: number, notes: string): Promise<Feasibility> {
+  const { data } = await apiClient.post<Feasibility>(`/api/feasibility/${id}/admin-review`, { notes })
+  return data
+}
+
 export async function deleteFeasibility(id: number): Promise<MessageResponse> {
   const { data } = await apiClient.delete<MessageResponse>(`/api/feasibility/${id}`)
   return data
