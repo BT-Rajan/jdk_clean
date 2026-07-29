@@ -2,6 +2,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.validators import not_in_past
+
 
 class OrderLineIn(BaseModel):
     product_id: int
@@ -29,6 +31,11 @@ class OrderCreate(BaseModel):
     notes: str | None = None
     lines: list[OrderLineIn] = Field(min_length=1)
 
+    @field_validator("order_date", "requested_delivery_date")
+    @classmethod
+    def _dates_not_past(cls, v: date | None) -> date | None:
+        return not_in_past(v)
+
     @field_validator("lines")
     @classmethod
     def _lines_not_empty(cls, v: list[OrderLineIn]) -> list[OrderLineIn]:
@@ -46,6 +53,11 @@ class OrderUpdate(BaseModel):
     confirmed_delivery_date: date | None = None
     notes: str | None = None
     lines: list[OrderLineIn] | None = Field(default=None, min_length=1)
+
+    @field_validator("order_date", "requested_delivery_date", "confirmed_delivery_date")
+    @classmethod
+    def _dates_not_past(cls, v: date | None) -> date | None:
+        return not_in_past(v)
 
 
 class OrderStatusUpdate(BaseModel):

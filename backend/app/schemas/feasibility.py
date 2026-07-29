@@ -2,6 +2,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.validators import not_in_past
+
 
 class FeasibilityLineIn(BaseModel):
     product_id: int
@@ -44,6 +46,11 @@ class FeasibilityCreate(BaseModel):
     required_by_date: date | None = None
     notes: str | None = None
     lines: list[FeasibilityLineIn] = Field(min_length=1)
+
+    @field_validator("required_by_date")
+    @classmethod
+    def _required_by_date_not_past(cls, v: date | None) -> date | None:
+        return not_in_past(v)
 
     @field_validator("lines")
     @classmethod

@@ -11,6 +11,7 @@ import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import {
   deliveryNoteCreateSchema,
+  todayDateInputMin,
   type DeliveryNoteCreateFormValues,
   type DeliveryNoteCreateSubmitValues,
 } from '@/lib/validation'
@@ -76,6 +77,7 @@ export function DeliveryNoteFormPage() {
             <TextField
               label="Delivery date"
               type="date"
+              min={todayDateInputMin}
               error={errors.delivery_date?.message}
               {...register('delivery_date')}
             />

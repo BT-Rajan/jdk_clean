@@ -4,6 +4,7 @@
  * backend/app/schemas/<resource>.py -- instead of one growing flat file.
  */
 export * from './auth'
+export * from './dateRules'
 export * from './customer'
 export * from './supplier'
 export * from './rawMaterial'

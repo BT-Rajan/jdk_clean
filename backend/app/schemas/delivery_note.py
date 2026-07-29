@@ -1,6 +1,8 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
+
+from app.core.validators import not_in_past
 
 
 class DeliveryNoteLineIn(BaseModel):
@@ -29,6 +31,11 @@ class DeliveryNoteCreate(BaseModel):
     # editing them afterward while still draft.
     lines: list[DeliveryNoteLineIn] | None = None
 
+    @field_validator("delivery_date")
+    @classmethod
+    def _delivery_date_not_past(cls, v: date) -> date:
+        return not_in_past(v)
+
 
 class DeliveryNoteUpdate(BaseModel):
     """Only 'draft' notes may be edited (enforced in the service layer)."""
@@ -36,6 +43,11 @@ class DeliveryNoteUpdate(BaseModel):
     delivery_date: date | None = None
     notes: str | None = None
     lines: list[DeliveryNoteLineIn] | None = None
+
+    @field_validator("delivery_date")
+    @classmethod
+    def _delivery_date_not_past(cls, v: date | None) -> date | None:
+        return not_in_past(v)
 
 
 class DeliveryNoteStatusUpdate(BaseModel):

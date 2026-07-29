@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { NOT_PAST_DATE_MESSAGE, isNotPastDate } from './dateRules'
 
 // Mirrors backend/app/schemas/feasibility.py.
 export const feasibilityLineSchema = z.object({
@@ -8,7 +9,7 @@ export const feasibilityLineSchema = z.object({
 
 export const feasibilitySchema = z.object({
   customer_id: z.coerce.number().int().positive('Choose a customer'),
-  required_by_date: z.string().optional().or(z.literal('')),
+  required_by_date: z.string().optional().or(z.literal('')).refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
   notes: z.string().trim().optional().or(z.literal('')),
   lines: z.array(feasibilityLineSchema).min(1, 'At least one product line is required'),
 })

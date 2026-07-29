@@ -11,7 +11,7 @@ import { listCustomers } from '@/api/customers'
 import { listProducts } from '@/api/products'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
-import { feasibilitySchema, type FeasibilityFormValues, type FeasibilitySubmitValues } from '@/lib/validation'
+import { feasibilitySchema, todayDateInputMin, type FeasibilityFormValues, type FeasibilitySubmitValues } from '@/lib/validation'
 
 function useCustomerOptions() {
   const fetcher = useCallback(() => listCustomers({ page: 1, page_size: 200, status: 'active' }), [])
@@ -84,6 +84,7 @@ export function FeasibilityFormPage() {
           <TextField
             label="Required by"
             type="date"
+            min={todayDateInputMin}
             error={errors.required_by_date?.message}
             {...register('required_by_date')}
           />

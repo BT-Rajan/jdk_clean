@@ -2,6 +2,8 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.validators import not_in_past
+
 
 class QuotationLineIn(BaseModel):
     product_id: int
@@ -32,6 +34,11 @@ class QuotationCreate(BaseModel):
     notes: str | None = None
     lines: list[QuotationLineIn] = Field(min_length=1)
 
+    @field_validator("quotation_date", "valid_until")
+    @classmethod
+    def _dates_not_past(cls, v: date | None) -> date | None:
+        return not_in_past(v)
+
     @field_validator("lines")
     @classmethod
     def _lines_not_empty(cls, v: list[QuotationLineIn]) -> list[QuotationLineIn]:
@@ -48,6 +55,11 @@ class QuotationUpdate(BaseModel):
     valid_until: date | None = None
     notes: str | None = None
     lines: list[QuotationLineIn] | None = Field(default=None, min_length=1)
+
+    @field_validator("quotation_date", "valid_until")
+    @classmethod
+    def _dates_not_past(cls, v: date | None) -> date | None:
+        return not_in_past(v)
 
 
 class QuotationStatusUpdate(BaseModel):

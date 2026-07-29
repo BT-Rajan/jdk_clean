@@ -11,7 +11,7 @@ import { listCustomers } from '@/api/customers'
 import { listProducts } from '@/api/products'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
-import { orderSchema, type OrderFormValues, type OrderSubmitValues } from '@/lib/validation'
+import { orderSchema, todayDateInputMin, type OrderFormValues, type OrderSubmitValues } from '@/lib/validation'
 
 export function OrderFormPage() {
   const { id } = useParams()
@@ -149,8 +149,8 @@ function OrderCreateForm() {
               <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
             ))}
           </SelectField>
-          <TextField label="Order date" type="date" error={errors.order_date?.message} {...register('order_date')} />
-          <TextField label="Requested delivery" type="date" {...register('requested_delivery_date')} />
+          <TextField label="Order date" type="date" min={todayDateInputMin} error={errors.order_date?.message} {...register('order_date')} />
+          <TextField label="Requested delivery" type="date" min={todayDateInputMin} error={errors.requested_delivery_date?.message} {...register('requested_delivery_date')} />
         </div>
 
         <LineItemsEditor control={control} register={register} watch={watch} errors={errors} products={products} />
@@ -229,8 +229,8 @@ function OrderEditForm({ id }: { id: number }) {
                 <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
               ))}
             </SelectField>
-            <TextField label="Order date" type="date" error={errors.order_date?.message} {...register('order_date')} />
-            <TextField label="Requested delivery" type="date" {...register('requested_delivery_date')} />
+            <TextField label="Order date" type="date" min={todayDateInputMin} error={errors.order_date?.message} {...register('order_date')} />
+            <TextField label="Requested delivery" type="date" min={todayDateInputMin} error={errors.requested_delivery_date?.message} {...register('requested_delivery_date')} />
           </div>
 
           <LineItemsEditor control={control} register={register} watch={watch} errors={errors} products={products} />

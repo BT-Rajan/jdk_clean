@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { NOT_PAST_DATE_MESSAGE, isNotPastDate } from './dateRules'
 
 // Mirrors backend/app/schemas/order.py.
 export const orderLineSchema = z.object({
@@ -9,8 +10,8 @@ export const orderLineSchema = z.object({
 
 export const orderSchema = z.object({
   customer_id: z.coerce.number().int().positive('Choose a customer'),
-  order_date: z.string().min(1, 'Date is required'),
-  requested_delivery_date: z.string().optional().or(z.literal('')),
+  order_date: z.string().min(1, 'Date is required').refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
+  requested_delivery_date: z.string().optional().or(z.literal('')).refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
   notes: z.string().trim().optional().or(z.literal('')),
   lines: z.array(orderLineSchema).min(1, 'At least one line item is required'),
 })

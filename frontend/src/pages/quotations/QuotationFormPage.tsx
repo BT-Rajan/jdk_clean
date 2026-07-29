@@ -15,6 +15,7 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import type { Feasibility } from '@/types/feasibility'
 import {
   quotationSchema,
+  todayDateInputMin,
   type QuotationFormValues,
   type QuotationSubmitValues,
 } from '@/lib/validation'
@@ -238,8 +239,8 @@ function QuotationCreateForm() {
                 <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
               ))}
             </SelectField>
-            <TextField label="Quotation date" type="date" error={errors.quotation_date?.message} {...register('quotation_date')} />
-            <TextField label="Valid until" type="date" {...register('valid_until')} />
+            <TextField label="Quotation date" type="date" min={todayDateInputMin} error={errors.quotation_date?.message} {...register('quotation_date')} />
+            <TextField label="Valid until" type="date" min={todayDateInputMin} error={errors.valid_until?.message} {...register('valid_until')} />
           </div>
 
         <LineItemsEditor control={control} register={register} watch={watch} errors={errors} products={products} />
@@ -319,8 +320,8 @@ function QuotationEditForm({ id }: { id: number }) {
                 <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
               ))}
             </SelectField>
-            <TextField label="Quotation date" type="date" error={errors.quotation_date?.message} {...register('quotation_date')} />
-            <TextField label="Valid until" type="date" {...register('valid_until')} />
+            <TextField label="Quotation date" type="date" min={todayDateInputMin} error={errors.quotation_date?.message} {...register('quotation_date')} />
+            <TextField label="Valid until" type="date" min={todayDateInputMin} error={errors.valid_until?.message} {...register('valid_until')} />
             <TextField label="Feasibility ID" type="number" {...register('feasibility_id')} disabled />
           </div>
 
