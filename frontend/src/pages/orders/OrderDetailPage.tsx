@@ -9,6 +9,7 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
 import { ORDER_TRANSITIONS } from '@/lib/statusTransitions'
+import { OrderJourney } from './OrderJourney'
 
 export function OrderDetailPage() {
   const { id } = useParams()
@@ -207,6 +208,10 @@ export function OrderDetailPage() {
           </table>
         </div>
       </GlassCard>
+
+      <div className="mt-6">
+        <OrderJourney orderId={orderId} />
+      </div>
 
       <div className="mt-6">
         <Link to="/orders" className="text-sm text-white/50 hover:text-white">← Back to orders</Link>

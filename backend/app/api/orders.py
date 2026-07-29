@@ -14,7 +14,8 @@ from app.schemas.order import (
     OrderStatusUpdate,
     OrderUpdate,
 )
-from app.services import audit_service, email_service, order_service, pdf_generator
+from app.schemas.order_journey import OrderJourneyOut
+from app.services import audit_service, email_service, order_journey_service, order_service, pdf_generator
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 write_guard = require_department_write("sales")
@@ -54,6 +55,20 @@ def get_order(
     _: User = Depends(get_current_user),
 ):
     return OrderOut.from_model(order_service.get_order(db, order_id))
+
+
+@router.get("/{order_id}/journey", response_model=OrderJourneyOut)
+def get_order_journey(
+    order_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    """The single-page answer to 'where is this order right now' -- the
+    feasibility check it came from, the quotation it was raised on, the
+    order itself, every production batch scheduled against it, and every
+    delivery note issued for it. All read live off the existing foreign
+    keys between those five tables; nothing new is stored."""
+    return order_journey_service.get_order_journey(db, order_id)
 
 
 @router.get("/{order_id}/history")

@@ -1,5 +1,6 @@
 import type { PagedResponse, ListQueryParams, MessageResponse } from '@/types/common'
 import type { Order, OrderPayload, SettableOrderStatus } from '@/types/order'
+import type { OrderJourney } from '@/types/orderJourney'
 import { apiClient } from './client'
 
 export interface OrderListParams extends ListQueryParams {
@@ -13,6 +14,11 @@ export async function listOrders(params: OrderListParams): Promise<PagedResponse
 
 export async function getOrder(id: number): Promise<Order> {
   const { data } = await apiClient.get<Order>(`/api/orders/${id}`)
+  return data
+}
+
+export async function getOrderJourney(id: number): Promise<OrderJourney> {
+  const { data } = await apiClient.get<OrderJourney>(`/api/orders/${id}/journey`)
   return data
 }
 
