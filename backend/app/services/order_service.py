@@ -224,8 +224,56 @@ def change_status(
         _maybe_auto_schedule_production(db, order_id, user_id)
     elif new_status == "ready_to_ship":
         _maybe_auto_create_delivery_note(db, order_id, user_id)
+    elif new_status == "cancelled":
+        _cancel_active_production_batches(db, order_id, user_id)
 
     return get_order(db, order_id)
+
+
+def _cancel_active_production_batches(db: Session, order_id: int, user_id: int | None = None) -> None:
+    """Fires when an order is cancelled: any production batch still tied
+    to it that hasn't finished -- 'planned' (auto-scheduled or not, not
+    yet started) or 'in_progress' (started, but no materials consumed or
+    finished goods produced yet -- that only happens on completion, see
+    production_service._complete_batch) -- is cancelled too, freeing the
+    machine time and worker-hours it was holding for a request that no
+    longer exists. This is the resource-freeing half of what the
+    automation needs to stay honest: it auto-schedules real capacity on
+    confirmation, so it has to auto-release that capacity on cancellation
+    too, or a cancelled order would silently leave a phantom batch
+    occupying a slot forever.
+
+    A batch that already *completed* before the order was cancelled is
+    deliberately left alone -- see the comment on that case in
+    _complete_batch and the note in feasibility_service's finished-goods
+    netting: the materials are genuinely consumed and the units genuinely
+    exist, so there's nothing to reverse. The stock reservation on those
+    finished units is already released above (RESERVED_STATUSES), which
+    is what actually matters -- they become ordinary available inventory
+    a future feasibility check can find and use instead of ever
+    reproducing them.
+    """
+    from app.models.production_schedule import ProductionSchedule
+
+    from app.services import production_service
+
+    active_batches = (
+        db.query(ProductionSchedule)
+        .filter(
+            ProductionSchedule.order_id == order_id,
+            ProductionSchedule.deleted_at.is_(None),
+            ProductionSchedule.status.in_(("planned", "in_progress")),
+        )
+        .all()
+    )
+    for batch in active_batches:
+        try:
+            production_service.change_status(db, batch.id, "cancelled", user_id=user_id)
+        except (ConflictError, ValidationAppError):
+            # Best-effort -- if a batch can't be cancelled for some
+            # reason, leave it for a person to sort out rather than
+            # blocking the order cancellation itself.
+            continue
 
 
 def _maybe_auto_schedule_production(db: Session, order_id: int, user_id: int | None = None) -> None:

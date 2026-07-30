@@ -102,6 +102,11 @@ class FeasibilityLine(Base):
     )
     product_id: Mapped[int] = mapped_column(BigPK, ForeignKey("products.id"), nullable=False)
     quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False)
+    # How much of `quantity` was already sitting in unreserved
+    # finished-goods stock at check time, netted off before computing
+    # raw-material/capacity requirements for the remainder. NULL when
+    # nothing was covered by existing stock.
+    covered_by_stock: Mapped[float | None] = mapped_column(DECIMAL(14, 4), nullable=True)
     # NULL until run_check executes; then whether THIS line's raw-material
     # needs were fully covered by on-hand stock.
     is_feasible: Mapped[bool | None] = mapped_column(Boolean, nullable=True)

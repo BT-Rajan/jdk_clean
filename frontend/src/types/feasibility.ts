@@ -42,6 +42,11 @@ export interface FeasibilityLine extends FeasibilityLineInput {
   id: number
   product_code: string | null
   product_name: string | null
+  /** How much of `quantity` was already sitting in unreserved
+   * finished-goods stock at check time -- netted off before raw-material/
+   * capacity requirements were computed for the rest. Null if nothing was
+   * covered by existing stock. */
+  covered_by_stock: number | null
   is_feasible: boolean | null
   shortfalls: ShortfallItem[]
   capacity_ok: boolean | null

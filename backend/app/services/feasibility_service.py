@@ -240,7 +240,32 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
     today = datetime.now(timezone.utc).date()
     all_feasible = True
     for line in feasibility.lines:
-        requirements = bom_service.explode_requirements(db, line.product_id, float(line.quantity))
+        requested_qty = float(line.quantity)
+
+        # Net off finished-goods already sitting in stock (unreserved --
+        # inventory_service.get_stock's quantity_available already
+        # excludes anything held for other orders) before figuring out
+        # what actually needs producing. This is what makes units left
+        # over from a cancelled order (see order_service.
+        # _cancel_active_production_batches) genuinely reusable instead
+        # of every new request re-deriving fresh raw-material and machine
+        # -time requirements for materials that were, in reality, already
+        # consumed to make product that's just sitting there unclaimed.
+        finished_stock = inventory_service.get_stock(db, "product", line.product_id)
+        covered_by_stock = round(min(requested_qty, max(finished_stock["quantity_available"], 0.0)), 4)
+        quantity_to_produce = round(requested_qty - covered_by_stock, 4)
+        line.covered_by_stock = covered_by_stock if covered_by_stock > 0 else None
+
+        if quantity_to_produce <= 0:
+            # Fully covered by existing stock -- nothing to produce, so
+            # nothing to check materials or machine time for.
+            line.is_feasible = True
+            line.shortfall_json = None
+            line.capacity_ok = None
+            line.capacity_shortfall_json = None
+            continue
+
+        requirements = bom_service.explode_requirements(db, line.product_id, quantity_to_produce)
         shortfalls: list[dict] = []
         for raw_material_id, required_qty in requirements.items():
             stock = inventory_service.get_stock(db, "raw_material", raw_material_id)
@@ -263,7 +288,7 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
         line.shortfall_json = json.dumps(shortfalls) if shortfalls else None
 
         capacity_ok, capacity_shortfall = _check_capacity(
-            db, line.product, float(line.quantity), feasibility.required_by_date, today
+            db, line.product, quantity_to_produce, feasibility.required_by_date, today
         )
         line.capacity_ok = capacity_ok
         line.capacity_shortfall_json = json.dumps(capacity_shortfall) if capacity_shortfall else None

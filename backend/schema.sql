@@ -338,6 +338,11 @@ CREATE TABLE IF NOT EXISTS feasibility_lines (
     feasibility_id      BIGINT UNSIGNED NOT NULL,
     product_id          BIGINT UNSIGNED NOT NULL,
     quantity            DECIMAL(14,4) NOT NULL,
+    -- How much of `quantity` was already sitting in unreserved
+    -- finished-goods stock at check time, netted off before computing
+    -- raw-material/capacity requirements for the remainder (see
+    -- feasibility_service.run_check). NULL when nothing was covered.
+    covered_by_stock    DECIMAL(14,4) NULL,
     is_feasible         TINYINT(1) NULL,       -- NULL until run; then whether this line's raw materials were fully covered
     shortfall_json      TEXT NULL,             -- JSON list of {raw_material_id, code, name, unit, required, on_hand, shortfall}
     -- Machine-availability / time-required check: whether the product's

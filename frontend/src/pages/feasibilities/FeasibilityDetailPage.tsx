@@ -288,7 +288,14 @@ export function FeasibilityDetailPage() {
                   <td className="px-6 py-4 text-white">
                     {line.product_code ? `${line.product_code} — ${line.product_name}` : `#${line.product_id}`}
                   </td>
-                  <td className="px-6 py-4 text-white/60">{line.quantity}</td>
+                  <td className="px-6 py-4 text-white/60">
+                    {line.quantity}
+                    {line.covered_by_stock ? (
+                      <p className="mt-1 text-xs text-emerald-300">
+                        {line.covered_by_stock} already in stock — {Math.max(line.quantity - line.covered_by_stock, 0)} to produce
+                      </p>
+                    ) : null}
+                  </td>
                   <td className="px-6 py-4">
                     {line.is_feasible === null ? (
                       <span className="text-white/40">Not yet run</span>

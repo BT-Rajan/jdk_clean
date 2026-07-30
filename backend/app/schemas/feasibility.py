@@ -38,6 +38,7 @@ class FeasibilityLineOut(BaseModel):
     product_code: str | None = None
     product_name: str | None = None
     quantity: float
+    covered_by_stock: float | None
     is_feasible: bool | None
     shortfalls: list[ShortfallItem] = []
     capacity_ok: bool | None
