@@ -20,6 +20,9 @@ export interface DeliveryNote {
   customer_email: string | null
   delivery_date: string
   status: DeliveryNoteStatus
+  /** True when the system drafted this automatically once the order
+   * became ready to ship, rather than a person creating it. */
+  auto_created: boolean
   notes: string | null
   lines: DeliveryNoteLine[]
   created_at: string

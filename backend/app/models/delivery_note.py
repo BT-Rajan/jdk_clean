@@ -1,6 +1,6 @@
 from datetime import date
 
-from sqlalchemy import DATE, DECIMAL, Enum, ForeignKey, String, Text
+from sqlalchemy import DATE, DECIMAL, Boolean, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -35,6 +35,9 @@ class DeliveryNote(Base, TimestampMixin, SoftDeleteMixin):
         nullable=False,
         default="draft",
     )
+    # True when the system drafted this automatically once the order
+    # became ready to ship (see order_service.py), false otherwise.
+    auto_created: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     order: Mapped[Order] = relationship(foreign_keys=[order_id], lazy="joined")

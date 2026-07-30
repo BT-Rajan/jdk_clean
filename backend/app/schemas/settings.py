@@ -18,6 +18,8 @@ class SettingsOut(BaseModel):
     auto_create_quotation_from_feasibility: str
     # 'true' or 'false'. See settings_service.is_auto_schedule_production_enabled.
     auto_schedule_production_on_order_confirm: str
+    # 'true' or 'false'. See settings_service.is_auto_create_delivery_note_enabled.
+    auto_create_delivery_note_on_ready_to_ship: str
 
 
 class SettingsUpdate(BaseModel):
@@ -32,3 +34,4 @@ class SettingsUpdate(BaseModel):
     factory_workday_hours: str | None = None
     auto_create_quotation_from_feasibility: str | None = Field(default=None, pattern="^(true|false)$")
     auto_schedule_production_on_order_confirm: str | None = Field(default=None, pattern="^(true|false)$")
+    auto_create_delivery_note_on_ready_to_ship: str | None = Field(default=None, pattern="^(true|false)$")

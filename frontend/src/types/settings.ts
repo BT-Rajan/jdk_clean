@@ -23,6 +23,9 @@ export interface Settings {
    * schedules a production batch for each line whose product has a
    * machine/time formula set. Admin/manager-only to change. */
   auto_schedule_production_on_order_confirm: string
+  /** 'true' or 'false' -- whether an order becoming ready to ship
+   * automatically drafts a delivery note. Admin/manager-only to change. */
+  auto_create_delivery_note_on_ready_to_ship: string
 }
 
 export type SettingsPayload = Partial<Settings>

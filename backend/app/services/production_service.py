@@ -239,4 +239,44 @@ def change_status(
     )
     db.commit()
     db.refresh(batch)
+
+    if new_status == "completed":
+        _maybe_advance_order_to_ready_to_ship(db, batch.order_id, user_id)
+
     return get_batch(db, batch_id)
+
+
+def _maybe_advance_order_to_ready_to_ship(db: Session, order_id: int | None, user_id: int | None) -> None:
+    """The symmetric close of _start_batch's order -> 'in_production' hook
+    above: once every (non-cancelled) production batch tied to an order
+    has completed, the order genuinely is ready to ship -- advance it
+    automatically rather than leaving a person to notice and do it by
+    hand. Unlike the auto-create hooks elsewhere in this pipeline, this
+    one has no settings toggle: it's not creating a new record on a
+    judgement call, just recognizing a status that's already objectively
+    true (same as _start_batch's hook, which has always been
+    unconditional). Never raises -- best-effort, same as every other
+    auto-progression hook.
+    """
+    if order_id is None:
+        return
+    order = db.query(Order).filter(Order.id == order_id, Order.deleted_at.is_(None)).first()
+    if order is None or order.status != "in_production":
+        return
+
+    batches = (
+        db.query(ProductionSchedule)
+        .filter(ProductionSchedule.order_id == order_id, ProductionSchedule.deleted_at.is_(None))
+        .all()
+    )
+    if any(b.status not in ("completed", "cancelled") for b in batches):
+        return  # still waiting on at least one batch
+    if not any(b.status == "completed" for b in batches):
+        return  # every batch was cancelled -- nothing was actually produced
+
+    from app.services import order_service
+
+    try:
+        order_service.change_status(db, order_id, "ready_to_ship", user_id=user_id)
+    except (ConflictError, ValidationAppError):
+        pass

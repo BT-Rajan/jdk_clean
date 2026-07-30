@@ -447,6 +447,10 @@ CREATE TABLE IF NOT EXISTS delivery_notes (
     order_id              BIGINT UNSIGNED NOT NULL,
     delivery_date         DATE NOT NULL,
     status                ENUM('draft','issued','cancelled') NOT NULL DEFAULT 'draft',
+    -- True when the system drafted this automatically once the order
+    -- became ready to ship (see order_service.py's auto-creation hook),
+    -- false for a person-created delivery note.
+    auto_created          TINYINT(1) NOT NULL DEFAULT 0,
     notes                 TEXT NULL,
     deleted_at            DATETIME NULL,
     created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

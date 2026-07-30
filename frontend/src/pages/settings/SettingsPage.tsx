@@ -137,6 +137,21 @@ export function SettingsPage() {
             </GlassCard>
 
             <GlassCard className="p-8">
+              <h2 className="font-display text-lg font-medium text-white">Delivery workflow</h2>
+              <p className="mt-1 text-sm text-white/50">
+                When an order becomes ready to ship -- whether set directly, or automatically once every batch
+                producing it has completed -- the system can draft a delivery note for it right away, dated today
+                and pre-filled with the order's own lines, instead of Sales or Warehouse creating one by hand.
+              </p>
+              <div className="mt-6">
+                <SelectField label="Auto-create delivery note when order is ready to ship" {...register('auto_create_delivery_note_on_ready_to_ship')}>
+                  <option value="true">On</option>
+                  <option value="false">Off (create manually, as before)</option>
+                </SelectField>
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-8">
               <h2 className="font-display text-lg font-medium text-white">AI assistant provider</h2>
               <p className="mt-1 text-sm text-white/50">
                 Visible here only -- the assistant itself never names a provider anywhere else in the app.

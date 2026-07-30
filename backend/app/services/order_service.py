@@ -222,6 +222,8 @@ def change_status(
 
     if new_status == "confirmed":
         _maybe_auto_schedule_production(db, order_id, user_id)
+    elif new_status == "ready_to_ship":
+        _maybe_auto_create_delivery_note(db, order_id, user_id)
 
     return get_order(db, order_id)
 
@@ -308,6 +310,45 @@ def _maybe_auto_schedule_production(db: Session, order_id: int, user_id: int | N
             # Best-effort convenience, not a hard requirement -- a person
             # can still schedule this line's production by hand.
             continue
+
+
+def _maybe_auto_create_delivery_note(db: Session, order_id: int, user_id: int | None = None) -> None:
+    """Fires the moment an order becomes ready to ship -- whether a
+    person set that directly, or production_service auto-advanced it
+    once every batch completed. The last joint in the pipeline, same
+    "auto create, with role-based flexibility" pattern as the two
+    upstream hooks: if enabled (Settings -> Delivery, admin/manager-only
+    to change), drafts a delivery note automatically -- delivery_date
+    defaulted to today, lines auto-populated from the order itself (see
+    delivery_note_service.create_delivery_note) -- instead of leaving it
+    for Sales/Warehouse to create by hand. The draft is a completely
+    normal delivery note afterward: the delivery date, quantities, and
+    everything else can be adjusted before it's issued. Never raises.
+    """
+    if not settings_service.is_auto_create_delivery_note_enabled(db):
+        return
+
+    # Local import: delivery_note_service already imports order_service
+    # (to move an order to 'shipped' when its note is issued), so
+    # importing delivery_note_service back here at module level would be
+    # circular.
+    from app.services import delivery_note_service
+
+    try:
+        delivery_note_service.create_delivery_note(
+            db,
+            {
+                "order_id": order_id,
+                "delivery_date": datetime.now(timezone.utc).date(),
+                "auto_created": True,
+                "notes": "Auto-created when the order became ready to ship.",
+            },
+            user_id=user_id,
+        )
+    except (ConflictError, ValidationAppError):
+        # Best-effort convenience, not a hard requirement -- Sales or
+        # Warehouse can still create the delivery note by hand.
+        pass
 
 
 def delete_order(db: Session, order_id: int, user_id: int | None = None) -> None:

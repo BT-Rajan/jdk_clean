@@ -179,6 +179,11 @@ export function DeliveryNoteDetailPage() {
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-4">
           <StatusBadge status={note.status} />
+          {note.auto_created && (
+            <span className="rounded-full border border-gold-400/30 bg-gold-500/10 px-2.5 py-1 text-xs font-medium text-gold-200">
+              Auto-created when ready to ship
+            </span>
+          )}
           {allowWrite && !justDeleted && nextStatuses.length > 0 && (
             <div className="ml-auto flex gap-2">
               {nextStatuses.map((s) => (

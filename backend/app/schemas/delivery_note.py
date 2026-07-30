@@ -63,6 +63,7 @@ class DeliveryNoteOut(BaseModel):
     customer_email: str | None = None
     delivery_date: date
     status: str
+    auto_created: bool
     notes: str | None
     lines: list[DeliveryNoteLineOut]
     created_at: datetime
