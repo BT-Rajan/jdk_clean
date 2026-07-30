@@ -23,7 +23,13 @@ ORDER_STATUSES = (
 # Status transitions allowed from each current status.
 ALLOWED_TRANSITIONS = {
     "draft": {"confirmed", "cancelled"},
-    "confirmed": {"in_production", "cancelled"},
+    # 'ready_to_ship' is reachable directly from 'confirmed' -- not just
+    # via 'in_production' -- for the case where every line is already
+    # covered by existing finished-goods stock and nothing actually needs
+    # producing (see order_service._maybe_auto_schedule_production). A
+    # person can still choose it directly for the same reason (e.g.
+    # fulfilling entirely from stock without the automation ever running).
+    "confirmed": {"in_production", "ready_to_ship", "cancelled"},
     "in_production": {"ready_to_ship", "cancelled"},
     "ready_to_ship": {"shipped", "cancelled"},
     "shipped": {"delivered"},

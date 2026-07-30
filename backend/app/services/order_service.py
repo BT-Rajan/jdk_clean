@@ -301,21 +301,57 @@ def _maybe_auto_schedule_production(db: Session, order_id: int, user_id: int | N
     # importing production_service back here at module level would be
     # circular.
     from app.models.machine import Machine
-    from app.services import capacity_service, production_service
+    from app.services import capacity_service, inventory_service, production_service
 
     order = get_order(db, order_id)
     today = datetime.now(timezone.utc).date()
 
+    any_batch_created = False
+    any_line_unresolved = False
+
     for line in order.lines:
         product = line.product
+
+        # Net off finished-goods stock that already exists, same as
+        # feasibility_service.run_check does when first deciding whether
+        # this request is achievable -- without this, confirming an order
+        # that a feasibility check already recognized as fully (or
+        # partially) covered by existing stock would still auto-schedule
+        # production for the *entire* line, over-producing and cluttering
+        # the machine's calendar with a batch nobody actually needs. This
+        # check doesn't depend on the product having a machine/time
+        # formula -- stock can cover a line regardless of whether we'd
+        # even be able to auto-schedule its production.
+        #
+        # By the time this hook runs, reserve_stock has already claimed
+        # `line.quantity` of this product for this order (see the
+        # 'confirmed' branch above, which runs before this hook), so
+        # quantity_reserved includes this order's own hold on it.
+        # Subtracting that back out gives what's genuinely already
+        # on-hand and free to satisfy this exact line from existing
+        # stock, independent of what this order itself just reserved.
+        stock = inventory_service.get_stock(db, "product", line.product_id)
+        available_from_existing_stock = max(
+            stock["quantity_on_hand"] - (stock["quantity_reserved"] - float(line.quantity)), 0.0
+        )
+        covered_by_stock = min(float(line.quantity), available_from_existing_stock)
+        quantity_to_produce = round(float(line.quantity) - covered_by_stock, 4)
+        if quantity_to_produce <= 0:
+            continue  # nothing needed for this line -- resolved, no batch, no manual follow-up
+
         if product is None or product.machine_id is None or product.production_hours_per_unit is None:
+            # Genuinely needs producing, but there's no formula to
+            # auto-schedule against -- Production has to pick this up by
+            # hand, so the order can't be auto-advanced past it.
+            any_line_unresolved = True
             continue
 
         machine = db.query(Machine).filter(Machine.id == product.machine_id).first()
         if machine is None:
+            any_line_unresolved = True
             continue
 
-        required_hours = round(float(line.quantity) * float(product.production_hours_per_unit), 4)
+        required_hours = round(quantity_to_produce * float(product.production_hours_per_unit), 4)
 
         from app.models.production_schedule import ProductionSchedule as PS
 
@@ -337,6 +373,7 @@ def _maybe_auto_schedule_production(db: Session, order_id: int, user_id: int | N
             # Not achievable within the scan horizon -- leave it for a
             # person to schedule by hand with a judgement call this
             # automation isn't positioned to make.
+            any_line_unresolved = True
             continue
 
         try:
@@ -346,18 +383,40 @@ def _maybe_auto_schedule_production(db: Session, order_id: int, user_id: int | N
                     "product_id": line.product_id,
                     "machine_id": machine.id,
                     "order_id": order.id,
-                    "planned_quantity": float(line.quantity),
+                    "planned_quantity": quantity_to_produce,
                     "scheduled_start": today,
                     "scheduled_end": completion,
                     "auto_scheduled": True,
-                    "notes": f"Auto-scheduled on confirmation of {order.order_number}.",
+                    "notes": (
+                        f"Auto-scheduled on confirmation of {order.order_number}"
+                        + (
+                            f" ({covered_by_stock} of {float(line.quantity)} already covered by existing stock)."
+                            if covered_by_stock > 0
+                            else "."
+                        )
+                    ),
                 },
                 user_id=user_id,
             )
+            any_batch_created = True
         except (ConflictError, ValidationAppError):
             # Best-effort convenience, not a hard requirement -- a person
             # can still schedule this line's production by hand.
+            any_line_unresolved = True
             continue
+
+    if order.lines and not any_batch_created and not any_line_unresolved:
+        # Every line was fully covered by existing finished-goods stock --
+        # there is nothing left to produce at all, so no batch ever
+        # started to drive the usual 'confirmed' -> 'in_production' ->
+        # 'ready_to_ship' progression (see production_service's
+        # _start_batch / _maybe_advance_order_to_ready_to_ship hooks).
+        # Skip straight to 'ready_to_ship' instead of leaving the order
+        # stranded at 'confirmed' with nothing to move it forward.
+        try:
+            change_status(db, order_id, "ready_to_ship", user_id=user_id)
+        except (ConflictError, ValidationAppError):
+            pass
 
 
 def _maybe_auto_create_delivery_note(db: Session, order_id: int, user_id: int | None = None) -> None:
