@@ -206,6 +206,10 @@ def change_status(
         db, TABLE_NAME, quotation_id, {"status": (old_status, new_status)}, user_id
     )
     db.commit()
+
+    if new_status in ("rejected", "expired"):
+        deal_service.reconcile_deal_status(db, quotation.deal_id, user_id)
+
     return get_quotation(db, quotation_id)
 
 
@@ -262,5 +266,8 @@ def escalate_expired_quotations(db: Session, as_of: date | None = None) -> list[
             expired.append(quotation)
 
     if expired:
+        db.commit()
+        for quotation in expired:
+            deal_service.reconcile_deal_status(db, quotation.deal_id, None)
         db.commit()
     return expired

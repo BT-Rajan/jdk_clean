@@ -40,6 +40,10 @@ export interface DealDetail {
   customer_id: number
   customer_name: string | null
   furthest_stage: string
+  /** 'cancelled' once nothing under this deal could still move it
+   * forward and it never reached a delivered order; reopened
+   * automatically if a feasibility check under it is revived. */
+  status: 'open' | 'cancelled'
   created_at: string
   feasibility_checks: DealFeasibilityRef[]
   quotations: DealQuotationRef[]

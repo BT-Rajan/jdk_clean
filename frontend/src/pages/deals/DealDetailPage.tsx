@@ -73,6 +73,11 @@ export function DealDetailPage() {
 
       <GlassCard className="mb-6 p-6">
         <div className="flex flex-wrap items-center gap-3">
+          {deal.status === 'cancelled' && (
+            <span className="rounded-full border border-red-400/30 bg-red-500/10 px-2.5 py-1 text-xs font-medium text-red-300">
+              Cancelled
+            </span>
+          )}
           <span className="text-sm text-white/50">Furthest stage reached:</span>
           <StatusBadge status={STAGE_LABELS[deal.furthest_stage] ?? deal.furthest_stage} />
           <span className="text-xs text-white/30">Started {formatDateTime(deal.created_at)}</span>

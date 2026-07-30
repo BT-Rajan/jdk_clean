@@ -9,6 +9,7 @@ class DealOut(BaseModel):
     customer_id: int
     customer_name: str | None = None
     furthest_stage: str
+    status: str
     created_at: datetime
 
     model_config = {"from_attributes": True}

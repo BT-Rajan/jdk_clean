@@ -1,14 +1,48 @@
 import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { deleteCustomer, getCustomer, restoreCustomer } from '@/api/customers'
+import { listFeasibilities } from '@/api/feasibilities'
+import { listQuotations } from '@/api/quotations'
+import { listOrders } from '@/api/orders'
 import type { Customer } from '@/types/customer'
+import type { Feasibility } from '@/types/feasibility'
+import type { Quotation } from '@/types/quotation'
+import type { Order } from '@/types/order'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatCurrency } from '@/lib/currency'
+import { formatDate } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
 
+function ActivitySection<T>({
+  title,
+  items,
+  count,
+  renderRow,
+}: {
+  title: string
+  items: T[]
+  count: number
+  renderRow: (item: T) => { key: number | string; content: ReactNode }
+}) {
+  if (count === 0) return null
+  return (
+    <GlassCard className="p-6">
+      <h2 className="mb-4 font-display text-base font-medium text-white">
+        {title} <span className="text-sm text-white/40">({count})</span>
+      </h2>
+      <div className="space-y-2">
+        {items.map((item) => {
+          const { key, content } = renderRow(item)
+          return <div key={key}>{content}</div>
+        })}
+      </div>
+    </GlassCard>
+  )
+}
 
 export function CustomerDetailPage() {
   const { id } = useParams()
@@ -24,11 +58,27 @@ export function CustomerDetailPage() {
   const [justDeleted, setJustDeleted] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
+  const [feasibilityChecks, setFeasibilityChecks] = useState<Feasibility[]>([])
+  const [quotations, setQuotations] = useState<Quotation[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
+
   useEffect(() => {
     getCustomer(customerId)
       .then(setCustomer)
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
+  }, [customerId])
+
+  useEffect(() => {
+    listFeasibilities({ page: 1, page_size: 10, customer_id: customerId })
+      .then((res) => setFeasibilityChecks(res.items))
+      .catch(() => setFeasibilityChecks([]))
+    listQuotations({ page: 1, page_size: 10, customer_id: customerId })
+      .then((res) => setQuotations(res.items))
+      .catch(() => setQuotations([]))
+    listOrders({ page: 1, page_size: 10, customer_id: customerId })
+      .then((res) => setOrders(res.items))
+      .catch(() => setOrders([]))
   }, [customerId])
 
   async function handleDelete() {
@@ -120,6 +170,71 @@ export function CustomerDetailPage() {
           <Field label="Payment terms" value={`${customer.payment_terms_days} days`} />
         </dl>
       </GlassCard>
+
+      <div className="mt-6 flex flex-col gap-6">
+        <ActivitySection
+          title="Feasibility checks"
+          items={feasibilityChecks}
+          count={feasibilityChecks.length}
+          renderRow={(f) => ({
+            key: f.id,
+            content: (
+              <Link
+                to={`/feasibilities/${f.id}`}
+                className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
+              >
+                <span className="font-medium text-white">{f.feasibility_number}</span>
+                <span className="flex items-center gap-3">
+                  <span className="text-sm text-white/40">{formatDate(f.created_at)}</span>
+                  <StatusBadge status={f.status} />
+                </span>
+              </Link>
+            ),
+          })}
+        />
+
+        <ActivitySection
+          title="Quotations"
+          items={quotations}
+          count={quotations.length}
+          renderRow={(q) => ({
+            key: q.id,
+            content: (
+              <Link
+                to={`/quotations/${q.id}`}
+                className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
+              >
+                <span className="font-medium text-white">{q.quotation_number}</span>
+                <span className="flex items-center gap-3">
+                  <span className="text-sm text-white/40">{formatCurrency(q.total_amount)}</span>
+                  <StatusBadge status={q.status} />
+                </span>
+              </Link>
+            ),
+          })}
+        />
+
+        <ActivitySection
+          title="Orders"
+          items={orders}
+          count={orders.length}
+          renderRow={(o) => ({
+            key: o.id,
+            content: (
+              <Link
+                to={`/orders/${o.id}`}
+                className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
+              >
+                <span className="font-medium text-white">{o.order_number}</span>
+                <span className="flex items-center gap-3">
+                  <span className="text-sm text-white/40">{formatCurrency(o.total_amount)}</span>
+                  <StatusBadge status={o.status} />
+                </span>
+              </Link>
+            ),
+          })}
+        />
+      </div>
 
       <div className="mt-6">
         <Link to="/customers" className="text-sm text-white/50 hover:text-white">

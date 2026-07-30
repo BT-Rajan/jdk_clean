@@ -373,6 +373,8 @@ def decide_exception(
 
     if new_status == "exception_approved":
         _maybe_auto_create_quotation(db, feasibility_id, user_id)
+    elif new_status == "exception_rejected":
+        deal_service.reconcile_deal_status(db, feasibility.deal_id, user_id)
 
     return get_feasibility(db, feasibility_id)
 
@@ -481,6 +483,9 @@ def revive_feasibility(db: Session, feasibility_id: int, user_id: int | None = N
         db, TABLE_NAME, feasibility_id, {"status": (old_status, "draft")}, user_id
     )
     db.commit()
+
+    deal_service.reopen_deal(db, feasibility.deal_id, user_id)
+
     return get_feasibility(db, feasibility_id)
 
 
@@ -499,6 +504,9 @@ def close_feasibility(db: Session, feasibility_id: int, reason: str, user_id: in
         db, TABLE_NAME, feasibility_id, {"status": (old_status, "closed")}, user_id
     )
     db.commit()
+
+    deal_service.reconcile_deal_status(db, feasibility.deal_id, user_id)
+
     return get_feasibility(db, feasibility_id)
 
 

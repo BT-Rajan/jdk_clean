@@ -43,6 +43,7 @@ class DealDetailOut(BaseModel):
     customer_id: int
     customer_name: str | None
     furthest_stage: str
+    status: str
     created_at: datetime
     feasibility_checks: list[DealFeasibilityRef]
     quotations: list[DealQuotationRef]

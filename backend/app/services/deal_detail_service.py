@@ -71,6 +71,7 @@ def get_deal_detail(db: Session, deal_id: int) -> dict:
         "customer_id": deal.customer_id,
         "customer_name": deal.customer.name if deal.customer else None,
         "furthest_stage": deal.furthest_stage,
+        "status": deal.status,
         "created_at": deal.created_at,
         "feasibility_checks": [
             {"id": f.id, "feasibility_number": f.feasibility_number, "status": f.status}

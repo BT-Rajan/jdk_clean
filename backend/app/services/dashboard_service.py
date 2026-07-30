@@ -4,6 +4,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.customer import Customer
+from app.models.deal import Deal
+from app.models.delivery_note import DeliveryNote
+from app.models.feasibility import FeasibilityCheck, FeasibilityLine
 from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory, StockMovement
 from app.models.order import Order
 from app.models.product import Product
@@ -75,6 +78,54 @@ def get_stats(db: Session) -> dict:
             db.query(RawMaterial).filter(RawMaterial.deleted_at.is_(None), RawMaterial.status == "active").count()
         ),
         "total_users": _stat(db.query(User).filter(User.deleted_at.is_(None)).count()),
+        "open_deals": _stat(
+            db.query(Deal).filter(Deal.deleted_at.is_(None), Deal.status == "open").count()
+        ),
+        "cancelled_deals": _stat(
+            db.query(Deal).filter(Deal.deleted_at.is_(None), Deal.status == "cancelled").count()
+        ),
+        "auto_created_this_month": _stat(
+            db.query(Quotation)
+            .filter(
+                Quotation.deleted_at.is_(None),
+                Quotation.auto_created.is_(True),
+                Quotation.created_at >= month_start,
+            )
+            .count()
+            + db.query(ProductionSchedule)
+            .filter(
+                ProductionSchedule.deleted_at.is_(None),
+                ProductionSchedule.auto_scheduled.is_(True),
+                ProductionSchedule.created_at >= month_start,
+            )
+            .count()
+            + db.query(DeliveryNote)
+            .filter(
+                DeliveryNote.deleted_at.is_(None),
+                DeliveryNote.auto_created.is_(True),
+                DeliveryNote.created_at >= month_start,
+            )
+            .count()
+        ),
+        "bom_missing_count": _stat(
+            db.query(FeasibilityLine)
+            .join(FeasibilityCheck, FeasibilityLine.feasibility_id == FeasibilityCheck.id)
+            .filter(
+                FeasibilityCheck.deleted_at.is_(None),
+                FeasibilityCheck.status == "exception_pending",
+                FeasibilityLine.bom_missing.is_(True),
+            )
+            .count()
+        ),
+        "pending_admin_reviews": _stat(
+            db.query(FeasibilityCheck)
+            .filter(FeasibilityCheck.deleted_at.is_(None), FeasibilityCheck.admin_review_required.is_(True))
+            .count()
+            + db.query(Order).filter(Order.deleted_at.is_(None), Order.admin_review_required.is_(True)).count()
+            + db.query(PurchaseOrder)
+            .filter(PurchaseOrder.deleted_at.is_(None), PurchaseOrder.admin_review_required.is_(True))
+            .count()
+        ),
     }
 
     # Inventory: value + counts, joined against current stock levels.

@@ -30,5 +30,11 @@ class Deal(Base, TimestampMixin, SoftDeleteMixin):
     furthest_stage: Mapped[str] = mapped_column(
         Enum(*DEAL_STAGES, name="deal_stage"), nullable=False, default="feasibility"
     )
+    # 'cancelled' once nothing under this deal can still move it forward
+    # and it never reached a delivered order -- see deal_service.
+    # reconcile_deal_status.
+    status: Mapped[str] = mapped_column(
+        Enum("open", "cancelled", name="deal_status"), nullable=False, default="open"
+    )
 
     customer: Mapped[Customer] = relationship(lazy="joined")

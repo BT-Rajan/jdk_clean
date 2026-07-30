@@ -49,6 +49,11 @@ const availableWidgetsByRole: Record<string, DashboardWidget[]> = {
     { id: 'admin-orders', title: 'Orders (This Month)', type: 'stats', dataSource: 'orders_month', enabled: true },
     { id: 'admin-raw-materials', title: 'Raw Materials in Stock', type: 'stats', dataSource: 'raw_materials_count', enabled: true },
     { id: 'admin-inventory', title: 'Inventory Value', type: 'stats', dataSource: 'inventory_value', enabled: true },
+    { id: 'admin-open-deals', title: 'Open Deals', type: 'stats', dataSource: 'open_deals', enabled: true },
+    { id: 'admin-cancelled-deals', title: 'Cancelled Deals', type: 'stats', dataSource: 'cancelled_deals', enabled: false },
+    { id: 'admin-auto-created', title: 'Auto-Created This Month', type: 'stats', dataSource: 'auto_created_this_month', enabled: true },
+    { id: 'admin-bom-missing', title: 'Checks Blocked on Missing BOM', type: 'stats', dataSource: 'bom_missing_count', enabled: true },
+    { id: 'admin-pending-reviews', title: 'Pending Admin Reviews', type: 'stats', dataSource: 'pending_admin_reviews', enabled: true },
   ],
 }
 

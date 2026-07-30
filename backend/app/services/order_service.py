@@ -226,6 +226,7 @@ def change_status(
         _maybe_auto_create_delivery_note(db, order_id, user_id)
     elif new_status == "cancelled":
         _cancel_active_production_batches(db, order_id, user_id)
+        deal_service.reconcile_deal_status(db, order.deal_id, user_id)
 
     return get_order(db, order_id)
 

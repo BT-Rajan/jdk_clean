@@ -283,6 +283,12 @@ CREATE TABLE IF NOT EXISTS deals (
     -- Furthest stage reached so far -- purely descriptive/display, not a
     -- gate on anything. Updated whenever a new stage attaches to this deal.
     furthest_stage  ENUM('feasibility','quotation','order','production','delivery') NOT NULL DEFAULT 'feasibility',
+    -- 'cancelled' once nothing under this deal can still move it forward
+    -- (every order cancelled, every quotation rejected/expired, every
+    -- feasibility check closed/rejected -- see deal_service.
+    -- reconcile_deal_status) and it never reached a delivered order.
+    -- Reopened automatically if a feasibility check under it is revived.
+    status          ENUM('open','cancelled') NOT NULL DEFAULT 'open',
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
