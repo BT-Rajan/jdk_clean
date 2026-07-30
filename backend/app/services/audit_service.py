@@ -66,6 +66,12 @@ def log_restore(db: Session, table_name: str, record_id: int, user_id: int | Non
 
 
 def get_history(db: Session, table_name: str, record_id: int) -> list[dict]:
+    """Every module's history endpoint (12 of them -- see api/common.py's
+    generic CRUD router, plus orders/quotations/feasibility/production/
+    delivery-notes/purchase-orders/users' own) calls this one function,
+    so resolving changed_by to a real name here is a single change that
+    benefits all of them at once, rather than editing each endpoint.
+    """
     result = db.execute(
         text(
             """SELECT action, field_name, old_value, new_value, changed_by, changed_at
@@ -74,4 +80,22 @@ def get_history(db: Session, table_name: str, record_id: int) -> list[dict]:
         ),
         {"t": table_name, "r": record_id},
     )
-    return [dict(row._mapping) for row in result]
+    rows = [dict(row._mapping) for row in result]
+
+    user_ids = {row["changed_by"] for row in rows if row["changed_by"] is not None}
+    names: dict[int, str] = {}
+    if user_ids:
+        # Local import: audit_service is imported by nearly every other
+        # service, so importing the User model at module level here would
+        # risk a circular import depending on load order.
+        from app.models.user import User
+
+        for user_id, full_name in (
+            db.query(User.id, User.full_name).filter(User.id.in_(user_ids)).all()
+        ):
+            names[user_id] = full_name
+
+    for row in rows:
+        row["changed_by_name"] = names.get(row["changed_by"])
+
+    return rows

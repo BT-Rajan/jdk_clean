@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
@@ -226,3 +226,41 @@ def restore_quotation(db: Session, quotation_id: int, user_id: int | None = None
     audit_service.log_restore(db, TABLE_NAME, quotation_id, user_id)
     db.commit()
     return get_quotation(db, quotation_id)
+
+
+def escalate_expired_quotations(db: Session, as_of: date | None = None) -> list[Quotation]:
+    """'expired' is a real, reachable status (ALLOWED_TRANSITIONS allows
+    'sent' -> 'expired') but nothing ever actually moved a quotation there
+    -- a sent quotation whose valid_until had passed just sat in 'sent'
+    forever unless someone happened to notice and closed it by hand. This
+    is the same 'reachable but never triggered' gap the stale-feasibility-
+    check scan already covers for a different status; this is quotations'
+    version of it. Meant to be run periodically; idempotent -- only
+    'sent' quotations past their valid_until are ever touched, and once
+    expired they're excluded by the status filter on the next run.
+    """
+    today = as_of or datetime.now(timezone.utc).date()
+
+    candidates = (
+        db.query(Quotation)
+        .filter(
+            Quotation.deleted_at.is_(None),
+            Quotation.status == "sent",
+            Quotation.valid_until.isnot(None),
+        )
+        .all()
+    )
+
+    expired: list[Quotation] = []
+    for quotation in candidates:
+        if quotation.valid_until < today:
+            old_status = quotation.status
+            quotation.status = "expired"
+            audit_service.log_update(
+                db, TABLE_NAME, quotation.id, {"status": (old_status, "expired")}, None
+            )
+            expired.append(quotation)
+
+    if expired:
+        db.commit()
+    return expired

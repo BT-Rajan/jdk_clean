@@ -11,6 +11,7 @@ import {
 import type { ProductionBatch, SettableProductionStatus } from '@/types/production'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
+import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
 import { PRODUCTION_STATUSES_REQUIRING_REASON, PRODUCTION_TRANSITIONS } from '@/lib/statusTransitions'
@@ -211,6 +212,10 @@ export function ProductionDetailPage() {
           </div>
         )}
       </GlassCard>
+
+      <div className="mt-6">
+        <HistoryTimeline resourcePath="/api/production-schedules" id={batchId} />
+      </div>
 
       <div className="mt-6">
         <Link to="/production" className="text-sm text-white/50 hover:text-white">← Back to production</Link>

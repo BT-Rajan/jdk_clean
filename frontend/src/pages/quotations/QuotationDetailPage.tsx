@@ -16,6 +16,7 @@ import type { Quotation } from '@/types/quotation'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
+import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
 import { QUOTATION_STATUSES_REQUIRING_REASON, QUOTATION_TRANSITIONS } from '@/lib/statusTransitions'
@@ -244,6 +245,10 @@ export function QuotationDetailPage() {
           </table>
         </div>
       </GlassCard>
+
+      <div className="mt-6">
+        <HistoryTimeline resourcePath="/api/quotations" id={quotationId} />
+      </div>
 
       <div className="mt-6">
         <Link to="/quotations" className="text-sm text-white/50 hover:text-white">← Back to quotations</Link>

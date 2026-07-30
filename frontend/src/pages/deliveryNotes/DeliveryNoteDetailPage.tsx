@@ -15,6 +15,7 @@ import {
 import type { DeliveryNote } from '@/types/deliveryNote'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
+import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
 import { DELIVERY_NOTE_STATUSES_REQUIRING_REASON, DELIVERY_NOTE_TRANSITIONS } from '@/lib/statusTransitions'
@@ -249,6 +250,10 @@ export function DeliveryNoteDetailPage() {
           </div>
         )}
       </GlassCard>
+
+      <div className="mt-6">
+        <HistoryTimeline resourcePath="/api/delivery-notes" id={noteId} />
+      </div>
 
       <div className="mt-6">
         <Link to="/delivery-notes" className="text-sm text-white/50 hover:text-white">← Back to delivery notes</Link>

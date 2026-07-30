@@ -27,6 +27,7 @@ import {
 import type { Feasibility } from '@/types/feasibility'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
+import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment, isAdmin } from '@/lib/roles'
 import {
@@ -375,6 +376,10 @@ export function FeasibilityDetailPage() {
           </table>
         </div>
       </GlassCard>
+
+      <div className="mt-6">
+        <HistoryTimeline resourcePath="/api/feasibility" id={feasibilityId} />
+      </div>
 
       <div className="mt-6">
         <Link to="/feasibilities" className="text-sm text-white/50 hover:text-white">← Back to feasibility checks</Link>

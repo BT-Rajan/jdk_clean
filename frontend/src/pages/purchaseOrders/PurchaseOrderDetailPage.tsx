@@ -16,6 +16,7 @@ import type { PurchaseOrder } from '@/types/purchaseOrder'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
+import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
 import { PURCHASE_ORDER_STATUSES_REQUIRING_REASON, PURCHASE_ORDER_TRANSITIONS } from '@/lib/statusTransitions'
@@ -274,6 +275,10 @@ export function PurchaseOrderDetailPage() {
           </div>
         )}
       </GlassCard>
+
+      <div className="mt-6">
+        <HistoryTimeline resourcePath="/api/purchase-orders" id={poId} />
+      </div>
 
       <div className="mt-6">
         <Link to="/purchase-orders" className="text-sm text-white/50 hover:text-white">← Back to purchase orders</Link>

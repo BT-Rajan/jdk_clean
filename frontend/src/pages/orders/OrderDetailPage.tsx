@@ -8,6 +8,7 @@ import type { Order } from '@/types/order'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
+import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
 import { ORDER_STATUSES_REQUIRING_REASON, ORDER_TRANSITIONS } from '@/lib/statusTransitions'
@@ -214,6 +215,10 @@ export function OrderDetailPage() {
 
       <div className="mt-6">
         <OrderJourney orderId={orderId} />
+      </div>
+
+      <div className="mt-6">
+        <HistoryTimeline resourcePath="/api/orders" id={orderId} />
       </div>
 
       <div className="mt-6">

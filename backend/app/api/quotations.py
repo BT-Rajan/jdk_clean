@@ -3,7 +3,7 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
-from app.api.deps import get_current_user, require_department_write
+from app.api.deps import get_current_user, require_department_write, require_role
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.email import SendDocumentEmailRequest
@@ -17,6 +17,7 @@ from app.services import audit_service, email_service, pdf_generator, quotation_
 
 router = APIRouter(prefix="/api/quotations", tags=["quotations"])
 write_guard = require_department_write("sales")
+admin_guard = require_role("admin")
 
 
 @router.get("", response_model=PagedResponse)
@@ -90,6 +91,21 @@ def update_status(
         db, quotation_id, payload.status, reason=payload.reason, user_id=user.id
     )
     return QuotationOut.from_model(quotation)
+
+
+@router.post("/scan-expired")
+def scan_expired_quotations(
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    """Moves every 'sent' quotation whose valid_until has passed to
+    'expired'. Run this periodically (e.g. an external cron/scheduled
+    task hitting this endpoint daily)."""
+    expired = quotation_service.escalate_expired_quotations(db)
+    return {
+        "expired_count": len(expired),
+        "quotation_ids": [q.id for q in expired],
+    }
 
 
 @router.delete("/{quotation_id}")
