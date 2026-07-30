@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.customer import Customer
 from app.models.delivery_note import DeliveryNote
 from app.models.order import (
@@ -176,14 +177,10 @@ def change_status(
     user_id: int | None = None,
 ) -> Order:
     order = get_order(db, order_id)
-    allowed = ALLOWED_TRANSITIONS.get(order.status, set())
-    if new_status not in allowed:
-        raise ConflictError(f"Cannot move order from '{order.status}' to '{new_status}'.")
+    assert_transition_allowed(ALLOWED_TRANSITIONS, order.status, new_status, "order")
 
-    if new_status in STATUSES_REQUIRING_CLOSE_REASON and not (reason and reason.strip()):
-        raise ValidationAppError(
-            "A reason is required to cancel an order without a delivery note."
-        )
+    if new_status in STATUSES_REQUIRING_CLOSE_REASON:
+        assert_reason_given(reason, "A reason is required to cancel an order without a delivery note.")
 
     old_status = order.status
 

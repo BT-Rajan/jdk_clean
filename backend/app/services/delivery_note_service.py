@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.workflow import assert_transition_allowed
 from app.models.delivery_note import ALLOWED_TRANSITIONS, DeliveryNote, DeliveryNoteLine
 from app.models.order import Order
 from app.models.product import Product
@@ -160,9 +161,7 @@ def update_delivery_note(db: Session, note_id: int, data: dict, user_id: int | N
 
 def change_status(db: Session, note_id: int, new_status: str, user_id: int | None = None) -> DeliveryNote:
     note = get_delivery_note(db, note_id)
-    allowed = ALLOWED_TRANSITIONS.get(note.status, set())
-    if new_status not in allowed:
-        raise ConflictError(f"Cannot move delivery note from '{note.status}' to '{new_status}'.")
+    assert_transition_allowed(ALLOWED_TRANSITIONS, note.status, new_status, "delivery note")
 
     if new_status == "issued":
         # Local import to avoid a circular import, same pattern

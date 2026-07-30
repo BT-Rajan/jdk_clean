@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.workflow import assert_transition_allowed
 from app.models.order import Order
 from app.models.product import Product
 from app.models.production_schedule import ALLOWED_TRANSITIONS, ProductionSchedule
@@ -221,9 +222,7 @@ def change_status(
     user_id: int | None = None,
 ) -> ProductionSchedule:
     batch = get_batch(db, batch_id)
-    allowed = ALLOWED_TRANSITIONS.get(batch.status, set())
-    if new_status not in allowed:
-        raise ConflictError(f"Cannot move batch from '{batch.status}' to '{new_status}'.")
+    assert_transition_allowed(ALLOWED_TRANSITIONS, batch.status, new_status, "production batch")
 
     if new_status == "in_progress":
         _start_batch(db, batch, user_id)

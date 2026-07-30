@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.customer import Customer
 from app.models.product import Product
 from app.models.quotation import (
@@ -191,16 +192,10 @@ def change_status(
             "(POST /api/orders/from-quotation/{quotation_id}); it cannot be set directly."
         )
     quotation = get_quotation(db, quotation_id)
-    allowed = ALLOWED_TRANSITIONS.get(quotation.status, set())
-    if new_status not in allowed:
-        raise ConflictError(
-            f"Cannot move quotation from '{quotation.status}' to '{new_status}'."
-        )
+    assert_transition_allowed(ALLOWED_TRANSITIONS, quotation.status, new_status, "quotation")
 
-    if new_status in STATUSES_REQUIRING_CLOSE_REASON and not (reason and reason.strip()):
-        raise ValidationAppError(
-            "A reason is required to close a quotation without generating an order."
-        )
+    if new_status in STATUSES_REQUIRING_CLOSE_REASON:
+        assert_reason_given(reason, "A reason is required to close a quotation without generating an order.")
 
     old_status = quotation.status
     quotation.status = new_status

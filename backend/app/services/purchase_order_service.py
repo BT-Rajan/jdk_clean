@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.workflow import assert_transition_allowed
 from app.models.purchase_order import ALLOWED_TRANSITIONS, PurchaseOrder, PurchaseOrderLine
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
@@ -149,9 +150,7 @@ def change_status(db: Session, po_id: int, new_status: str, user_id: int | None 
     cancelling). Receiving goods is deliberately NOT one of these -- it
     needs per-line quantities, so it's its own action (receive_lines)."""
     po = get_purchase_order(db, po_id)
-    allowed = ALLOWED_TRANSITIONS.get(po.status, set())
-    if new_status not in allowed:
-        raise ConflictError(f"Cannot move purchase order from '{po.status}' to '{new_status}'.")
+    assert_transition_allowed(ALLOWED_TRANSITIONS, po.status, new_status, "purchase order")
 
     old_status = po.status
     po.status = new_status

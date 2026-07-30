@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.customer import Customer
 from app.models.feasibility import (
     ALLOWED_TRANSITIONS,
@@ -440,13 +441,8 @@ def close_feasibility(db: Session, feasibility_id: int, reason: str, user_id: in
     """Sales closing a feasible/exception-approved/exception-rejected check
     without ever generating a quotation from it. A reason is mandatory."""
     feasibility = get_feasibility(db, feasibility_id)
-    allowed = ALLOWED_TRANSITIONS.get(feasibility.status, set())
-    if "closed" not in allowed:
-        raise ConflictError(
-            f"Cannot close a feasibility check from status '{feasibility.status}'."
-        )
-    if not reason or not reason.strip():
-        raise ValidationAppError("A reason is required to close a feasibility check.")
+    assert_transition_allowed(ALLOWED_TRANSITIONS, feasibility.status, "closed", "feasibility check")
+    assert_reason_given(reason, "A reason is required to close a feasibility check.")
 
     old_status = feasibility.status
     feasibility.status = "closed"
