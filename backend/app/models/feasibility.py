@@ -107,6 +107,10 @@ class FeasibilityLine(Base):
     # raw-material/capacity requirements for the remainder. NULL when
     # nothing was covered by existing stock.
     covered_by_stock: Mapped[float | None] = mapped_column(DECIMAL(14, 4), nullable=True)
+    # True when the product genuinely has no BOM/formula configured at
+    # all (see bom_service.has_bom) -- feasibility can't be verified for
+    # this line, so it's forced infeasible rather than silently passing.
+    bom_missing: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     # NULL until run_check executes; then whether THIS line's raw-material
     # needs were fully covered by on-hand stock.
     is_feasible: Mapped[bool | None] = mapped_column(Boolean, nullable=True)

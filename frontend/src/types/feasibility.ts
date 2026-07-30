@@ -47,6 +47,10 @@ export interface FeasibilityLine extends FeasibilityLineInput {
    * capacity requirements were computed for the rest. Null if nothing was
    * covered by existing stock. */
   covered_by_stock: number | null
+  /** True when the product has no BOM/formula configured at all --
+   * feasibility couldn't be verified for this line, forced infeasible
+   * rather than silently passing. */
+  bom_missing: boolean | null
   is_feasible: boolean | null
   shortfalls: ShortfallItem[]
   capacity_ok: boolean | null

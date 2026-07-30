@@ -260,11 +260,31 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
             # Fully covered by existing stock -- nothing to produce, so
             # nothing to check materials or machine time for.
             line.is_feasible = True
+            line.bom_missing = None
             line.shortfall_json = None
             line.capacity_ok = None
             line.capacity_shortfall_json = None
             continue
 
+        if not bom_service.has_bom(db, line.product_id):
+            # Distinct from a BOM that resolves to zero requirements:
+            # this product has no formula configured at all, so there's
+            # nothing to actually verify against. Forced infeasible
+            # (not silently passed) -- same defensive stance as a
+            # missing machine/time formula being treated as "not
+            # evaluable" rather than "fine", except here the missing
+            # data blocks the raw-material check specifically, so the
+            # line can't be allowed through without Sales explicitly
+            # overriding it.
+            line.is_feasible = False
+            line.bom_missing = True
+            line.shortfall_json = None
+            line.capacity_ok = None
+            line.capacity_shortfall_json = None
+            all_feasible = False
+            continue
+
+        line.bom_missing = None
         requirements = bom_service.explode_requirements(db, line.product_id, quantity_to_produce)
         shortfalls: list[dict] = []
         for raw_material_id, required_qty in requirements.items():
@@ -414,6 +434,54 @@ def _maybe_auto_create_quotation(db: Session, feasibility_id: int, user_id: int 
         # now -- fine, this is a best-effort convenience, not a hard
         # requirement. Sales can still create one by hand.
         pass
+
+
+def revive_feasibility(db: Session, feasibility_id: int, user_id: int | None = None) -> FeasibilityCheck:
+    """Sales reviving a feasibility check that reached a dead end --
+    converted (a quotation was raised, but it was later rejected/expired
+    and nothing came of it), closed without quoting, or an exception
+    Sales rejected -- so it can be run and quoted from again. There's no
+    limit on how many times: each revive resets the check back to
+    'draft', clearing every prior verdict, so a fresh run_check verifies
+    current stock/capacity/BOM from scratch rather than re-opening a
+    stale result -- conditions may genuinely have changed since the
+    first attempt. Every subsequent quotation created from it (whether
+    auto-created or by hand) is simply another row pointing at the same
+    feasibility_id; there's no uniqueness constraint stopping that.
+    """
+    feasibility = get_feasibility(db, feasibility_id)
+    revivable = ("converted", "closed", "exception_rejected")
+    if feasibility.status not in revivable:
+        raise ConflictError(
+            f"Only a converted, closed, or rejected feasibility check can be revived "
+            f"(current status: '{feasibility.status}')."
+        )
+
+    old_status = feasibility.status
+    feasibility.status = "draft"
+    feasibility.checked_at = None
+    feasibility.exception_reason = None
+    feasibility.exception_by = None
+    feasibility.close_reason = None
+    feasibility.admin_review_required = False
+    feasibility.admin_review_reason = None
+    feasibility.admin_reviewed_at = None
+    feasibility.admin_reviewed_by = None
+    feasibility.admin_review_notes = None
+    feasibility.updated_by = user_id
+    for line in feasibility.lines:
+        line.is_feasible = None
+        line.shortfall_json = None
+        line.capacity_ok = None
+        line.capacity_shortfall_json = None
+        line.covered_by_stock = None
+        line.bom_missing = None
+
+    audit_service.log_update(
+        db, TABLE_NAME, feasibility_id, {"status": (old_status, "draft")}, user_id
+    )
+    db.commit()
+    return get_feasibility(db, feasibility_id)
 
 
 def close_feasibility(db: Session, feasibility_id: int, reason: str, user_id: int | None = None) -> FeasibilityCheck:

@@ -118,6 +118,19 @@ def close_feasibility(
     return FeasibilityOut.from_model(feasibility)
 
 
+@router.post("/{feasibility_id}/revive", response_model=FeasibilityOut)
+def revive_feasibility(
+    feasibility_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """Sales reviving a converted/closed/rejected check to run and quote
+    from it again, any number of times -- see feasibility_service.
+    revive_feasibility for what resets."""
+    feasibility = feasibility_service.revive_feasibility(db, feasibility_id, user_id=user.id)
+    return FeasibilityOut.from_model(feasibility)
+
+
 @router.post("/scan-stale")
 def scan_stale_feasibility_checks(
     db: Session = Depends(get_db),

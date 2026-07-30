@@ -60,3 +60,8 @@ export async function restoreFeasibility(id: number): Promise<Feasibility> {
   const { data } = await apiClient.post<Feasibility>(`/api/feasibility/${id}/restore`)
   return data
 }
+
+export async function reviveFeasibility(id: number): Promise<Feasibility> {
+  const { data } = await apiClient.post<Feasibility>(`/api/feasibility/${id}/revive`)
+  return data
+}

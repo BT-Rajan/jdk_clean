@@ -21,6 +21,7 @@ import {
   decideFeasibilityException,
   deleteFeasibility,
   getFeasibility,
+  reviveFeasibility,
   runFeasibilityCheck,
 } from '@/api/feasibilities'
 import type { Feasibility } from '@/types/feasibility'
@@ -161,6 +162,14 @@ export function FeasibilityDetailPage() {
     })
   }
 
+  async function handleRevive() {
+    await withBusy(async () => {
+      const updated = await reviveFeasibility(feasibilityId)
+      setFeasibility(updated)
+      setNotice('Revived — back to draft. Run the check again whenever you\'re ready.')
+    })
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -200,6 +209,9 @@ export function FeasibilityDetailPage() {
               )}
               {allowWrite && (f.status === 'feasible' || f.status === 'exception_approved' || f.status === 'exception_rejected') && (
                 <Button variant="ghost" onClick={() => setCloseOpen(true)}>Close without quotation</Button>
+              )}
+              {allowWrite && (f.status === 'converted' || f.status === 'closed' || f.status === 'exception_rejected') && (
+                <Button variant="ghost" onClick={handleRevive} isLoading={busy}>Revive &amp; re-check</Button>
               )}
               {allowWrite && f.status !== 'converted' && (
                 <Button variant="danger" onClick={() => setConfirmDeleteOpen(true)}>Delete</Button>
@@ -301,6 +313,16 @@ export function FeasibilityDetailPage() {
                       <span className="text-white/40">Not yet run</span>
                     ) : line.is_feasible ? (
                       <StatusBadge status="feasible" />
+                    ) : line.bom_missing ? (
+                      <div>
+                        <StatusBadge status="rejected" />
+                        <p className="mt-2 text-xs text-amber-300">
+                          No BOM (formula) set up for this product — feasibility can't be verified.{' '}
+                          <Link to={`/factory-setup/${line.product_id}`} className="underline hover:text-amber-200">
+                            Set it up
+                          </Link>
+                        </p>
+                      </div>
                     ) : (
                       <div>
                         <StatusBadge status="rejected" />

@@ -343,6 +343,11 @@ CREATE TABLE IF NOT EXISTS feasibility_lines (
     -- raw-material/capacity requirements for the remainder (see
     -- feasibility_service.run_check). NULL when nothing was covered.
     covered_by_stock    DECIMAL(14,4) NULL,
+    -- True when the product genuinely has no BOM/formula configured at
+    -- all (distinct from a BOM that resolves to zero requirements) --
+    -- feasibility can't be verified, so this line is forced infeasible
+    -- rather than silently reported as passing. NULL/false otherwise.
+    bom_missing         TINYINT(1) NULL,
     is_feasible         TINYINT(1) NULL,       -- NULL until run; then whether this line's raw materials were fully covered
     shortfall_json      TEXT NULL,             -- JSON list of {raw_material_id, code, name, unit, required, on_hand, shortfall}
     -- Machine-availability / time-required check: whether the product's

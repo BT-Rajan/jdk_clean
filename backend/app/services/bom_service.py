@@ -196,6 +196,22 @@ def delete_bom_line(db: Session, parent_product_id: int, line_id: int, user_id: 
     db.commit()
 
 
+def has_bom(db: Session, product_id: int) -> bool:
+    """Whether `product_id` has any BOM lines defined at all -- distinct
+    from explode_requirements() returning an empty dict, which can also
+    happen for a genuinely BOM-less product and would otherwise look
+    identical to 'nothing required, all good' when it's really 'nobody's
+    set up this product's formula yet'. Used by feasibility_service to
+    tell those two cases apart rather than silently reporting feasible.
+    """
+    return (
+        db.query(BomLine)
+        .filter(BomLine.parent_product_id == product_id, BomLine.deleted_at.is_(None))
+        .first()
+        is not None
+    )
+
+
 def explode_requirements(db: Session, product_id: int, quantity: float) -> dict[int, float]:
     """Recursively walks the (possibly multi-level) BOM for `product_id` and
     returns total raw-material requirements for producing `quantity` units,
