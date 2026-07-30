@@ -17,7 +17,7 @@ from app.models.order import (
     OrderDetail,
 )
 from app.models.product import Product
-from app.services import audit_service, deal_service, inventory_service, number_series_service
+from app.services import audit_service, deal_service, inventory_service, number_series_service, settings_service
 
 TABLE_NAME = "orders"
 
@@ -219,7 +219,95 @@ def change_status(
     order.updated_by = user_id
     audit_service.log_update(db, TABLE_NAME, order_id, {"status": (old_status, new_status)}, user_id)
     db.commit()
+
+    if new_status == "confirmed":
+        _maybe_auto_schedule_production(db, order_id, user_id)
+
     return get_order(db, order_id)
+
+
+def _maybe_auto_schedule_production(db: Session, order_id: int, user_id: int | None = None) -> None:
+    """Fires the moment an order is confirmed -- the same "auto create,
+    with role-based flexibility" pattern as feasibility_service's
+    auto-quotation hook, one joint further along: if enabled (Settings ->
+    Production, admin/manager-only to change), schedules a production
+    batch for each line whose product has a machine + time formula set
+    (machine_id and production_hours_per_unit -- see products' formula
+    fields), using the same vacant-slot capacity scan the feasibility
+    check itself uses to decide whether a request is achievable.
+
+    Lines whose product has no formula are silently skipped -- there's
+    nothing to schedule against, same as the feasibility capacity check
+    treating a formula-less product as "not evaluable" rather than an
+    error. Never raises: an auto-schedule failure should never break
+    order confirmation. Every batch it creates is a completely normal
+    batch afterward -- edit or cancel it like any other.
+    """
+    if not settings_service.is_auto_schedule_production_enabled(db):
+        return
+
+    # Local imports: production_service already imports order_service (to
+    # advance a batch's order to 'in_production' when it starts), so
+    # importing production_service back here at module level would be
+    # circular.
+    from app.models.machine import Machine
+    from app.services import capacity_service, production_service
+
+    order = get_order(db, order_id)
+    today = datetime.now(timezone.utc).date()
+
+    for line in order.lines:
+        product = line.product
+        if product is None or product.machine_id is None or product.production_hours_per_unit is None:
+            continue
+
+        machine = db.query(Machine).filter(Machine.id == product.machine_id).first()
+        if machine is None:
+            continue
+
+        required_hours = round(float(line.quantity) * float(product.production_hours_per_unit), 4)
+
+        from app.models.production_schedule import ProductionSchedule as PS
+
+        booked_batches = (
+            db.query(PS)
+            .filter(
+                PS.machine_id == machine.id,
+                PS.deleted_at.is_(None),
+                PS.status.in_(capacity_service.BOOKED_PRODUCTION_STATUSES),
+                PS.scheduled_end >= today,
+            )
+            .all()
+        )
+        daily_booked = capacity_service.daily_booked_hours(booked_batches, hours_field="machine")
+        completion = capacity_service.find_vacant_slot_completion(
+            float(machine.capacity_hours_per_day), daily_booked, required_hours, today
+        )
+        if completion is None:
+            # Not achievable within the scan horizon -- leave it for a
+            # person to schedule by hand with a judgement call this
+            # automation isn't positioned to make.
+            continue
+
+        try:
+            production_service.create_batch(
+                db,
+                {
+                    "product_id": line.product_id,
+                    "machine_id": machine.id,
+                    "order_id": order.id,
+                    "planned_quantity": float(line.quantity),
+                    "scheduled_start": today,
+                    "scheduled_end": completion,
+                    "auto_scheduled": True,
+                    "notes": f"Auto-scheduled on confirmation of {order.order_number}.",
+                },
+                user_id=user_id,
+            )
+        except (ConflictError, ValidationAppError):
+            # Best-effort convenience, not a hard requirement -- a person
+            # can still schedule this line's production by hand.
+            continue
 
 
 def delete_order(db: Session, order_id: int, user_id: int | None = None) -> None:

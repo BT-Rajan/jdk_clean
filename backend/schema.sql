@@ -528,6 +528,11 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     actual_start    DATETIME NULL,
     actual_end      DATETIME NULL,
     status          ENUM('planned','in_progress','completed','cancelled') NOT NULL DEFAULT 'planned',
+    -- True when the system created this batch automatically on order
+    -- confirmation (see order_service.py's auto-scheduling hook), false
+    -- for a person-created batch. Purely informational -- an
+    -- auto-scheduled batch is a completely normal batch otherwise.
+    auto_scheduled  TINYINT(1) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

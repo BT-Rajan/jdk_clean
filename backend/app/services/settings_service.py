@@ -19,16 +19,24 @@ FACTORY_FIELDS = ["factory_total_workers", "factory_workday_hours"]
 # role-gated at the settings level, and any quotation it drafts is a
 # completely normal, editable/deletable record afterward regardless.
 SALES_FIELDS = ["auto_create_quotation_from_feasibility"]
-ALL_FIELDS = COMPANY_FIELDS + AI_FIELDS + FACTORY_FIELDS + SALES_FIELDS
+# Production workflow: the same auto-create-with-override pattern, one
+# joint further along -- whether confirming an order automatically
+# schedules a production batch (using the same vacant-slot capacity scan
+# as the feasibility check) for each line whose product has a machine/
+# time formula set, or just leaves scheduling to be done by hand as before.
+PRODUCTION_FIELDS = ["auto_schedule_production_on_order_confirm"]
+ALL_FIELDS = COMPANY_FIELDS + AI_FIELDS + FACTORY_FIELDS + SALES_FIELDS + PRODUCTION_FIELDS
 
 DEFAULTS = {key: "" for key in ALL_FIELDS}
 # factory_workday_hours defaults to a standard shift length rather than
 # empty, since 0 would make every worker-hours check fail as "no capacity"
 # for factories that haven't touched this setting yet.
 DEFAULTS["factory_workday_hours"] = "8"
-# Auto-create defaults ON -- this is the behavior actually being asked
-# for; an admin who wants the old manual-only flow can switch it off.
+# Auto-create/auto-schedule default ON -- this is the behavior actually
+# being asked for; an admin who wants the old fully-manual flow can
+# switch either off independently.
 DEFAULTS["auto_create_quotation_from_feasibility"] = "true"
+DEFAULTS["auto_schedule_production_on_order_confirm"] = "true"
 
 
 def get_all(db: Session) -> dict:
@@ -72,6 +80,11 @@ def get_factory_labor_pool(db: Session) -> tuple[int, float]:
 def is_auto_create_quotation_enabled(db: Session) -> bool:
     values = get_all(db)
     return values.get("auto_create_quotation_from_feasibility", "true").strip().lower() in ("true", "1", "yes")
+
+
+def is_auto_schedule_production_enabled(db: Session) -> bool:
+    values = get_all(db)
+    return values.get("auto_schedule_production_on_order_confirm", "true").strip().lower() in ("true", "1", "yes")
 
 
 def update(db: Session, data: dict) -> dict:

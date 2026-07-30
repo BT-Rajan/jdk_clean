@@ -69,6 +69,7 @@ class ProductionScheduleOut(BaseModel):
     actual_start: datetime | None
     actual_end: datetime | None
     status: str
+    auto_scheduled: bool
     notes: str | None
     created_at: datetime
     updated_at: datetime

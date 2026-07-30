@@ -18,6 +18,9 @@ export interface ProductionBatch {
   actual_start: string | null
   actual_end: string | null
   status: ProductionStatus
+  /** True when the system created this batch automatically on order
+   * confirmation, rather than a person scheduling it by hand. */
+  auto_scheduled: boolean
   notes: string | null
   created_at: string
   updated_at: string

@@ -19,6 +19,10 @@ export interface Settings {
   /** 'true' or 'false' -- whether a passed/exception-approved feasibility
    * check automatically drafts a quotation. Admin/manager-only to change. */
   auto_create_quotation_from_feasibility: string
+  /** 'true' or 'false' -- whether confirming an order automatically
+   * schedules a production batch for each line whose product has a
+   * machine/time formula set. Admin/manager-only to change. */
+  auto_schedule_production_on_order_confirm: string
 }
 
 export type SettingsPayload = Partial<Settings>

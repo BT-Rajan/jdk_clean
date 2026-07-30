@@ -154,6 +154,11 @@ export function ProductionDetailPage() {
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-4">
           <StatusBadge status={batch.status} />
+          {batch.auto_scheduled && (
+            <span className="rounded-full border border-gold-400/30 bg-gold-500/10 px-2.5 py-1 text-xs font-medium text-gold-200">
+              Auto-scheduled on order confirmation
+            </span>
+          )}
           {!justDeleted && otherTransitions.length > 0 && (
             <div className="ml-auto flex gap-2">
               {otherTransitions.map((s) => (

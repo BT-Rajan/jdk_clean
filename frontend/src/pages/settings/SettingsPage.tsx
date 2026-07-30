@@ -121,6 +121,22 @@ export function SettingsPage() {
             </GlassCard>
 
             <GlassCard className="p-8">
+              <h2 className="font-display text-lg font-medium text-white">Production workflow</h2>
+              <p className="mt-1 text-sm text-white/50">
+                When an order is confirmed, the system can schedule a production batch automatically for each line
+                whose product has a machine and hours-per-unit set (its "formula") -- picking the earliest date that
+                machine actually has free capacity, the same way the feasibility check does. Lines without a formula
+                are left for Sales/Production to schedule by hand, same as today.
+              </p>
+              <div className="mt-6">
+                <SelectField label="Auto-schedule production when order is confirmed" {...register('auto_schedule_production_on_order_confirm')}>
+                  <option value="true">On</option>
+                  <option value="false">Off (schedule manually, as before)</option>
+                </SelectField>
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-8">
               <h2 className="font-display text-lg font-medium text-white">AI assistant provider</h2>
               <p className="mt-1 text-sm text-white/50">
                 Visible here only -- the assistant itself never names a provider anywhere else in the app.
