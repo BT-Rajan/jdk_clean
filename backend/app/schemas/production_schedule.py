@@ -49,6 +49,8 @@ class ProductionScheduleStatusUpdate(BaseModel):
     # Only required (and only used) when status == 'completed': the real
     # output of the batch, which may differ from planned_quantity.
     produced_quantity: float | None = Field(default=None, gt=0)
+    # Required when status == 'cancelled' (enforced in the service layer).
+    reason: str | None = None
 
 
 class ProductionScheduleOut(BaseModel):
@@ -70,6 +72,7 @@ class ProductionScheduleOut(BaseModel):
     actual_end: datetime | None
     status: str
     auto_scheduled: bool
+    cancel_reason: str | None
     notes: str | None
     created_at: datetime
     updated_at: datetime

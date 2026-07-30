@@ -421,14 +421,27 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     status          ENUM('draft','sent','confirmed','partially_received','received','cancelled') NOT NULL DEFAULT 'draft',
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
+    -- Sales/order and feasibility already require a reason to cancel; POs
+    -- didn't -- inconsistent. Mandatory when status becomes 'cancelled'.
+    cancel_reason   TEXT NULL,
+    -- Same admin-review escalation pattern as orders (admin_review_required
+    -- there): flagged when a PO is past expected_delivery_date with
+    -- nothing received and not cancelled -- a supplier running late, the
+    -- purchasing-side mirror of a customer order running overdue.
+    admin_review_required TINYINT(1) NOT NULL DEFAULT 0,
+    admin_reviewed_at      DATETIME NULL,
+    admin_reviewed_by      BIGINT UNSIGNED NULL,
+    admin_review_notes     TEXT NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
     updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_po_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    CONSTRAINT fk_po_admin_reviewed_by FOREIGN KEY (admin_reviewed_by) REFERENCES users(id),
     INDEX idx_po_status (status),
-    INDEX idx_po_deleted_at (deleted_at)
+    INDEX idx_po_deleted_at (deleted_at),
+    INDEX idx_po_admin_review (admin_review_required)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS purchase_order_lines (
@@ -461,6 +474,9 @@ CREATE TABLE IF NOT EXISTS delivery_notes (
     -- became ready to ship (see order_service.py's auto-creation hook),
     -- false for a person-created delivery note.
     auto_created          TINYINT(1) NOT NULL DEFAULT 0,
+    -- Mandatory when status becomes 'cancelled' -- same requirement as
+    -- orders/quotations/feasibility, previously missing here.
+    cancel_reason         TEXT NULL,
     notes                 TEXT NULL,
     deleted_at            DATETIME NULL,
     created_at            DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -547,6 +563,9 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     -- for a person-created batch. Purely informational -- an
     -- auto-scheduled batch is a completely normal batch otherwise.
     auto_scheduled  TINYINT(1) NOT NULL DEFAULT 0,
+    -- Mandatory when status becomes 'cancelled' -- same requirement as
+    -- orders/quotations/feasibility, previously missing here.
+    cancel_reason   TEXT NULL,
     notes           TEXT NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

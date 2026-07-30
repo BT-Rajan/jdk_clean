@@ -1,11 +1,11 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
-from app.core.workflow import assert_transition_allowed
+from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.purchase_order import ALLOWED_TRANSITIONS, PurchaseOrder, PurchaseOrderLine
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
@@ -145,12 +145,18 @@ def update_purchase_order(
     return get_purchase_order(db, po_id)
 
 
-def change_status(db: Session, po_id: int, new_status: str, user_id: int | None = None) -> PurchaseOrder:
+def change_status(
+    db: Session, po_id: int, new_status: str, reason: str | None = None, user_id: int | None = None
+) -> PurchaseOrder:
     """Handles the plain transitions (draft->sent->confirmed, and
     cancelling). Receiving goods is deliberately NOT one of these -- it
     needs per-line quantities, so it's its own action (receive_lines)."""
     po = get_purchase_order(db, po_id)
     assert_transition_allowed(ALLOWED_TRANSITIONS, po.status, new_status, "purchase order")
+
+    if new_status == "cancelled":
+        assert_reason_given(reason, "A reason is required to cancel a purchase order.")
+        po.cancel_reason = reason
 
     old_status = po.status
     po.status = new_status
@@ -234,5 +240,59 @@ def restore_purchase_order(db: Session, po_id: int, user_id: int | None = None) 
     po = get_purchase_order(db, po_id, include_deleted=True)
     po.deleted_at = None
     audit_service.log_restore(db, TABLE_NAME, po_id, user_id)
+    db.commit()
+    return get_purchase_order(db, po_id)
+
+
+def escalate_overdue_purchase_orders(db: Session, as_of: date | None = None) -> list[PurchaseOrder]:
+    """The purchasing-side mirror of order_service.escalate_overdue_orders:
+    flags every PO whose expected_delivery_date has passed with nothing
+    received and not cancelled -- a supplier running late -- for admin
+    attention. Meant to be run periodically (e.g. an external cron
+    hitting the scan endpoint); idempotent -- re-running only (re)flags
+    POs that still qualify, it never clears admin_review_required itself
+    (only change_status on cancel, or admin_review, does that).
+    """
+    today = as_of or datetime.now(timezone.utc).date()
+
+    candidates = (
+        db.query(PurchaseOrder)
+        .filter(
+            PurchaseOrder.deleted_at.is_(None),
+            PurchaseOrder.status.notin_(("received", "cancelled")),
+            PurchaseOrder.admin_review_required.is_(False),
+            PurchaseOrder.expected_delivery_date.isnot(None),
+        )
+        .all()
+    )
+
+    flagged: list[PurchaseOrder] = []
+    for po in candidates:
+        if po.expected_delivery_date < today:
+            po.admin_review_required = True
+            audit_service.log_update(
+                db, TABLE_NAME, po.id, {"admin_review_required": (False, True)}, None
+            )
+            flagged.append(po)
+
+    if flagged:
+        db.commit()
+    return flagged
+
+
+def admin_review(db: Session, po_id: int, notes: str, user_id: int | None = None) -> PurchaseOrder:
+    """Admin clears an overdue-delivery escalation, recording their decision."""
+    po = get_purchase_order(db, po_id)
+    if not po.admin_review_required:
+        raise ConflictError("This purchase order has no pending admin review.")
+
+    po.admin_review_required = False
+    po.admin_reviewed_at = datetime.now(timezone.utc)
+    po.admin_reviewed_by = user_id
+    po.admin_review_notes = notes
+    po.updated_by = user_id
+    audit_service.log_update(
+        db, TABLE_NAME, po_id, {"admin_review_required": (True, False)}, user_id
+    )
     db.commit()
     return get_purchase_order(db, po_id)

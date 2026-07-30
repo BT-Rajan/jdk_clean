@@ -38,8 +38,9 @@ export async function updatePurchaseOrder(
 export async function updatePurchaseOrderStatus(
   id: number,
   status: SettablePurchaseOrderStatus,
+  reason?: string,
 ): Promise<PurchaseOrder> {
-  const { data } = await apiClient.post<PurchaseOrder>(`/api/purchase-orders/${id}/status`, { status })
+  const { data } = await apiClient.post<PurchaseOrder>(`/api/purchase-orders/${id}/status`, { status, reason })
   return data
 }
 

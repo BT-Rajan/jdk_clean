@@ -15,17 +15,25 @@ export const QUOTATION_TRANSITIONS: Record<QuotationStatus, SettableQuotationSta
   expired: [],
   converted: [],
 }
+/** Mirrors backend/app/models/quotation.py STATUSES_REQUIRING_CLOSE_REASON. */
+export const QUOTATION_STATUSES_REQUIRING_REASON: SettableQuotationStatus[] = ['rejected']
 
-/** Mirrors ALLOWED_TRANSITIONS in backend/app/models/order.py. */
+/** Mirrors ALLOWED_TRANSITIONS in backend/app/models/order.py. 'ready_to_ship'
+ * is reachable directly from 'confirmed' -- not just via 'in_production' --
+ * for an order fully covered by existing finished-goods stock, where
+ * nothing actually needs producing (see order_service._maybe_auto_schedule_
+ * production); a person can choose it directly for the same reason. */
 export const ORDER_TRANSITIONS: Record<OrderStatus, SettableOrderStatus[]> = {
   draft: ['confirmed', 'cancelled'],
-  confirmed: ['in_production', 'cancelled'],
+  confirmed: ['in_production', 'ready_to_ship', 'cancelled'],
   in_production: ['ready_to_ship', 'cancelled'],
   ready_to_ship: ['shipped', 'cancelled'],
   shipped: ['delivered'],
   delivered: [],
   cancelled: [],
 }
+/** Mirrors backend/app/models/order.py STATUSES_REQUIRING_CLOSE_REASON. */
+export const ORDER_STATUSES_REQUIRING_REASON: SettableOrderStatus[] = ['cancelled']
 
 /** Mirrors ALLOWED_TRANSITIONS in backend/app/models/production_schedule.py.
  * 'completed' additionally requires a produced_quantity, handled by the
@@ -37,6 +45,9 @@ export const PRODUCTION_TRANSITIONS: Record<ProductionStatus, SettableProduction
   completed: [],
   cancelled: [],
 }
+/** Cancelling a batch now requires a reason, same as orders/quotations/
+ * feasibility -- previously the only module missing this. */
+export const PRODUCTION_STATUSES_REQUIRING_REASON: SettableProductionStatus[] = ['cancelled']
 
 /** Mirrors ALLOWED_TRANSITIONS in backend/app/models/purchase_order.py.
  * 'partially_received' and 'received' are reached via the dedicated
@@ -51,6 +62,9 @@ export const PURCHASE_ORDER_TRANSITIONS: Record<PurchaseOrderStatus, SettablePur
   received: [],
   cancelled: [],
 }
+/** Cancelling a PO now requires a reason, same as orders/quotations/
+ * feasibility -- previously the only module missing this. */
+export const PURCHASE_ORDER_STATUSES_REQUIRING_REASON: SettablePurchaseOrderStatus[] = ['cancelled']
 
 /** Mirrors ALLOWED_TRANSITIONS in backend/app/models/delivery_note.py.
  * 'issued' is terminal on purpose -- it drives the linked order to
@@ -61,3 +75,6 @@ export const DELIVERY_NOTE_TRANSITIONS: Record<DeliveryNoteStatus, SettableDeliv
   issued: [],
   cancelled: [],
 }
+/** Cancelling a delivery note now requires a reason, same as orders/
+ * quotations/feasibility -- previously the only module missing this. */
+export const DELIVERY_NOTE_STATUSES_REQUIRING_REASON: SettableDeliveryNoteStatus[] = ['cancelled']

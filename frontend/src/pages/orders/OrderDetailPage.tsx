@@ -10,7 +10,8 @@ import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
-import { ORDER_TRANSITIONS } from '@/lib/statusTransitions'
+import { ORDER_STATUSES_REQUIRING_REASON, ORDER_TRANSITIONS } from '@/lib/statusTransitions'
+import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
 import { OrderJourney } from './OrderJourney'
 
 export function OrderDetailPage() {
@@ -39,11 +40,11 @@ export function OrderDetailPage() {
 
   useEffect(load, [orderId])
 
-  async function handleStatusChange(status: (typeof ORDER_TRANSITIONS)['draft'][number]) {
+  async function handleStatusChange(status: (typeof ORDER_TRANSITIONS)['draft'][number], reason?: string) {
     setBusy(true)
     setError(null)
     try {
-      const updated = await updateOrderStatus(orderId, status)
+      const updated = await updateOrderStatus(orderId, status, reason)
       setOrder(updated)
       setNotice(`Status changed to ${status}.`)
     } catch (err) {
@@ -156,12 +157,14 @@ export function OrderDetailPage() {
             </Link>
           )}
           {allowWrite && nextStatuses.length > 0 && !justDeleted && (
-            <div className="ml-auto flex gap-2">
-              {nextStatuses.map((s) => (
-                <Button key={s} variant="ghost" size="sm" isLoading={busy} onClick={() => handleStatusChange(s)}>
-                  Mark {s.replace(/_/g, ' ')}
-                </Button>
-              ))}
+            <div className="ml-auto">
+              <StatusTransitionButtons
+                nextStatuses={nextStatuses}
+                reasonRequiredFor={ORDER_STATUSES_REQUIRING_REASON}
+                reasonLabel="Reason for cancelling"
+                busy={busy}
+                onChange={handleStatusChange}
+              />
             </div>
           )}
         </div>

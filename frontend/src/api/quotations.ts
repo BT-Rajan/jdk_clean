@@ -27,8 +27,8 @@ export async function updateQuotation(id: number, payload: Partial<QuotationPayl
   return data
 }
 
-export async function updateQuotationStatus(id: number, status: SettableQuotationStatus): Promise<Quotation> {
-  const { data } = await apiClient.post<Quotation>(`/api/quotations/${id}/status`, { status })
+export async function updateQuotationStatus(id: number, status: SettableQuotationStatus, reason?: string): Promise<Quotation> {
+  const { data } = await apiClient.post<Quotation>(`/api/quotations/${id}/status`, { status, reason })
   return data
 }
 

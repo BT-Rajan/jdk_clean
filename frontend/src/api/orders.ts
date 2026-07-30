@@ -32,8 +32,8 @@ export async function updateOrder(id: number, payload: Partial<OrderPayload>): P
   return data
 }
 
-export async function updateOrderStatus(id: number, status: SettableOrderStatus): Promise<Order> {
-  const { data } = await apiClient.post<Order>(`/api/orders/${id}/status`, { status })
+export async function updateOrderStatus(id: number, status: SettableOrderStatus, reason?: string): Promise<Order> {
+  const { data } = await apiClient.post<Order>(`/api/orders/${id}/status`, { status, reason })
   return data
 }
 

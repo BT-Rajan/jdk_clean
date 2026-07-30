@@ -38,10 +38,12 @@ export async function updateProductionBatchStatus(
   id: number,
   status: SettableProductionStatus,
   producedQuantity?: number,
+  reason?: string,
 ): Promise<ProductionBatch> {
   const { data } = await apiClient.post<ProductionBatch>(`/api/production-schedules/${id}/status`, {
     status,
     produced_quantity: producedQuantity,
+    reason,
   })
   return data
 }

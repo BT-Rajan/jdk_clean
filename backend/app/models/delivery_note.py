@@ -38,6 +38,9 @@ class DeliveryNote(Base, TimestampMixin, SoftDeleteMixin):
     # True when the system drafted this automatically once the order
     # became ready to ship (see order_service.py), false otherwise.
     auto_created: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Mandatory when status becomes 'cancelled' -- same requirement as
+    # orders/quotations/feasibility.
+    cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     order: Mapped[Order] = relationship(foreign_keys=[order_id], lazy="joined")

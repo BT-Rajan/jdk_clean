@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
-from app.core.workflow import assert_transition_allowed
+from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.delivery_note import ALLOWED_TRANSITIONS, DeliveryNote, DeliveryNoteLine
 from app.models.order import Order
 from app.models.product import Product
@@ -159,7 +159,9 @@ def update_delivery_note(db: Session, note_id: int, data: dict, user_id: int | N
     return get_delivery_note(db, note_id)
 
 
-def change_status(db: Session, note_id: int, new_status: str, user_id: int | None = None) -> DeliveryNote:
+def change_status(
+    db: Session, note_id: int, new_status: str, reason: str | None = None, user_id: int | None = None
+) -> DeliveryNote:
     note = get_delivery_note(db, note_id)
     assert_transition_allowed(ALLOWED_TRANSITIONS, note.status, new_status, "delivery note")
 
@@ -169,6 +171,9 @@ def change_status(db: Session, note_id: int, new_status: str, user_id: int | Non
         from app.services import order_service
 
         order_service.change_status(db, note.order_id, "shipped", user_id=user_id)
+    elif new_status == "cancelled":
+        assert_reason_given(reason, "A reason is required to cancel a delivery note.")
+        note.cancel_reason = reason
 
     old_status = note.status
     note.status = new_status

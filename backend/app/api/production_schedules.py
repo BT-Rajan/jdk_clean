@@ -96,6 +96,7 @@ def update_status(
         batch_id,
         payload.status,
         produced_quantity=payload.produced_quantity,
+        reason=payload.reason,
         user_id=user.id,
     )
     return ProductionScheduleOut.from_model(batch)

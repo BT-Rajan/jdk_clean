@@ -18,7 +18,8 @@ import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
-import { PURCHASE_ORDER_TRANSITIONS } from '@/lib/statusTransitions'
+import { PURCHASE_ORDER_STATUSES_REQUIRING_REASON, PURCHASE_ORDER_TRANSITIONS } from '@/lib/statusTransitions'
+import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
 
 export function PurchaseOrderDetailPage() {
   const { id } = useParams()
@@ -55,11 +56,11 @@ export function PurchaseOrderDetailPage() {
 
   useEffect(load, [poId])
 
-  async function handleStatusChange(status: 'sent' | 'confirmed' | 'cancelled') {
+  async function handleStatusChange(status: 'sent' | 'confirmed' | 'cancelled', reason?: string) {
     setBusy(true)
     setError(null)
     try {
-      const updated = await updatePurchaseOrderStatus(poId, status)
+      const updated = await updatePurchaseOrderStatus(poId, status, reason)
       setPo(updated)
       setNotice(`Status changed to ${status}.`)
     } catch (err) {
@@ -186,13 +187,15 @@ export function PurchaseOrderDetailPage() {
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-4">
           <StatusBadge status={po.status} />
-          {!justDeleted && nextStatuses.length > 0 && (
-            <div className="ml-auto flex gap-2">
-              {nextStatuses.map((s) => (
-                <Button key={s} variant="ghost" size="sm" isLoading={busy} onClick={() => handleStatusChange(s)}>
-                  Mark {s}
-                </Button>
-              ))}
+          {allowWrite && !justDeleted && nextStatuses.length > 0 && (
+            <div className="ml-auto">
+              <StatusTransitionButtons
+                nextStatuses={nextStatuses}
+                reasonRequiredFor={PURCHASE_ORDER_STATUSES_REQUIRING_REASON}
+                reasonLabel="Reason for cancelling"
+                busy={busy}
+                onChange={handleStatusChange}
+              />
             </div>
           )}
         </div>

@@ -162,6 +162,69 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
                 }
             )
 
+    # 6. Feasibility checks stuck on a missing formula (BOM) rather than a
+    # genuine shortage -- a data-setup gap in Factory Setup, not something
+    # Sales can resolve by overriding. Distinct from #3 above (which is
+    # about a real material/capacity shortfall) so it routes to whoever
+    # actually owns product setup, not Sales.
+    if _visible(user, ("warehouse",)):
+        bom_gaps = (
+            db.query(FeasibilityCheck)
+            .options(joinedload(FeasibilityCheck.customer), joinedload(FeasibilityCheck.lines))
+            .filter(
+                FeasibilityCheck.deleted_at.is_(None),
+                FeasibilityCheck.status == "exception_pending",
+            )
+            .all()
+        )
+        for c in bom_gaps:
+            missing_products = {
+                line.product.code for line in c.lines if line.bom_missing and line.product
+            }
+            if not missing_products:
+                continue
+            items.append(
+                {
+                    "id": f"feasibility-bom-missing-{c.id}",
+                    "type": "feasibility_bom_missing",
+                    "severity": "medium",
+                    "title": f"{c.feasibility_number} is blocked on a missing formula",
+                    "message": f"No BOM set up for {', '.join(sorted(missing_products))} — set it up in Factory Setup.",
+                    "link": "/factory-setup",
+                    "created_at": c.checked_at or c.created_at,
+                }
+            )
+
+    # 7. Auto-created quotations still sitting in draft, never sent --
+    # Sales needs to review and either send or discard them, since the
+    # system drafted them but deliberately doesn't send anything itself.
+    if _visible(user, ("sales",)):
+        from app.models.quotation import Quotation
+
+        unreviewed = (
+            db.query(Quotation)
+            .options(joinedload(Quotation.customer))
+            .filter(
+                Quotation.deleted_at.is_(None),
+                Quotation.auto_created.is_(True),
+                Quotation.status == "draft",
+            )
+            .order_by(Quotation.created_at)
+            .all()
+        )
+        for q in unreviewed:
+            items.append(
+                {
+                    "id": f"quotation-auto-draft-{q.id}",
+                    "type": "quotation_auto_draft_unreviewed",
+                    "severity": "low",
+                    "title": f"{q.quotation_number} was auto-drafted and needs review",
+                    "message": f"Auto-created from a passed feasibility check — review and send, or discard — {q.customer.name if q.customer else 'unknown customer'}.",
+                    "link": f"/quotations/{q.id}",
+                    "created_at": q.created_at,
+                }
+            )
+
     def _sort_key(item: dict):
         created = item["created_at"]
         if created is None:

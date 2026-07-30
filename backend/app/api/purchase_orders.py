@@ -3,11 +3,12 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
-from app.api.deps import get_current_user, require_department_write
+from app.api.deps import get_current_user, require_department_write, require_role
 from app.core.database import get_db
 from app.models.user import User
 from app.schemas.email import SendDocumentEmailRequest
 from app.schemas.purchase_order import (
+    PurchaseOrderAdminReview,
     PurchaseOrderCreate,
     PurchaseOrderOut,
     PurchaseOrderStatusUpdate,
@@ -18,6 +19,7 @@ from app.services import audit_service, email_service, pdf_generator, purchase_o
 
 router = APIRouter(prefix="/api/purchase-orders", tags=["purchase-orders"])
 write_guard = require_department_write("procurement")
+admin_guard = require_role("admin")
 
 
 @router.get("", response_model=PagedResponse)
@@ -87,7 +89,34 @@ def update_status(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
-    po = purchase_order_service.change_status(db, po_id, payload.status, user_id=user.id)
+    po = purchase_order_service.change_status(db, po_id, payload.status, reason=payload.reason, user_id=user.id)
+    return PurchaseOrderOut.from_model(po)
+
+
+@router.post("/scan-overdue")
+def scan_overdue_purchase_orders(
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    """Flags purchase orders past their expected delivery date with
+    nothing received and not cancelled -- a supplier running late -- for
+    admin approval. Run this periodically (e.g. an external cron/
+    scheduled task hitting this endpoint daily)."""
+    flagged = purchase_order_service.escalate_overdue_purchase_orders(db)
+    return {
+        "flagged_count": len(flagged),
+        "purchase_order_ids": [po.id for po in flagged],
+    }
+
+
+@router.post("/{po_id}/admin-review", response_model=PurchaseOrderOut)
+def admin_review_purchase_order(
+    po_id: int,
+    payload: PurchaseOrderAdminReview,
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    po = purchase_order_service.admin_review(db, po_id, payload.notes, user_id=user.id)
     return PurchaseOrderOut.from_model(po)
 
 

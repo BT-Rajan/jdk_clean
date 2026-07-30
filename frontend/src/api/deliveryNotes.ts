@@ -39,8 +39,9 @@ export async function updateDeliveryNote(
 export async function updateDeliveryNoteStatus(
   id: number,
   status: SettableDeliveryNoteStatus,
+  reason?: string,
 ): Promise<DeliveryNote> {
-  const { data } = await apiClient.post<DeliveryNote>(`/api/delivery-notes/${id}/status`, { status })
+  const { data } = await apiClient.post<DeliveryNote>(`/api/delivery-notes/${id}/status`, { status, reason })
   return data
 }
 

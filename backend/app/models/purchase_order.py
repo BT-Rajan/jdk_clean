@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import DATE, DECIMAL, Enum, ForeignKey, String, Text
+from sqlalchemy import DATE, DECIMAL, Boolean, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -50,6 +50,17 @@ class PurchaseOrder(Base, TimestampMixin, SoftDeleteMixin):
     )
     total_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Mandatory when status becomes 'cancelled' -- same requirement as
+    # orders/quotations/feasibility.
+    cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Same admin-review escalation pattern as orders: flagged when this PO
+    # is past expected_delivery_date with nothing received and not
+    # cancelled -- a supplier running late, the purchasing-side mirror of
+    # a customer order running overdue.
+    admin_review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    admin_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    admin_reviewed_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+    admin_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     supplier: Mapped[Supplier] = relationship(lazy="joined")
     lines: Mapped[list["PurchaseOrderLine"]] = relationship(

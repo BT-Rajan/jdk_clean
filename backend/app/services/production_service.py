@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
-from app.core.workflow import assert_transition_allowed
+from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.order import Order
 from app.models.product import Product
 from app.models.production_schedule import ALLOWED_TRANSITIONS, ProductionSchedule
@@ -219,6 +219,7 @@ def change_status(
     batch_id: int,
     new_status: str,
     produced_quantity: float | None = None,
+    reason: str | None = None,
     user_id: int | None = None,
 ) -> ProductionSchedule:
     batch = get_batch(db, batch_id)
@@ -230,6 +231,9 @@ def change_status(
         if not produced_quantity:
             raise ValidationAppError("produced_quantity is required to complete a batch.")
         _complete_batch(db, batch, produced_quantity, user_id)
+    elif new_status == "cancelled":
+        assert_reason_given(reason, "A reason is required to cancel a production batch.")
+        batch.cancel_reason = reason
 
     old_status = batch.status
     batch.status = new_status

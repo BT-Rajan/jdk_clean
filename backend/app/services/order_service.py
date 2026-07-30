@@ -266,9 +266,16 @@ def _cancel_active_production_batches(db: Session, order_id: int, user_id: int |
         )
         .all()
     )
+    if not active_batches:
+        return
+
+    order = db.query(Order).filter(Order.id == order_id).first()
+    order_number = order.order_number if order else f"#{order_id}"
+    reason = f"Order {order_number} was cancelled" + (f": {order.close_reason}" if order and order.close_reason else ".")
+
     for batch in active_batches:
         try:
-            production_service.change_status(db, batch.id, "cancelled", user_id=user_id)
+            production_service.change_status(db, batch.id, "cancelled", reason=reason, user_id=user_id)
         except (ConflictError, ValidationAppError):
             # Best-effort -- if a batch can't be cancelled for some
             # reason, leave it for a person to sort out rather than

@@ -52,6 +52,8 @@ class DeliveryNoteUpdate(BaseModel):
 
 class DeliveryNoteStatusUpdate(BaseModel):
     status: str = Field(pattern="^(issued|cancelled)$")
+    # Required when status == 'cancelled' (enforced in the service layer).
+    reason: str | None = None
 
 
 class DeliveryNoteOut(BaseModel):
@@ -64,6 +66,7 @@ class DeliveryNoteOut(BaseModel):
     delivery_date: date
     status: str
     auto_created: bool
+    cancel_reason: str | None
     notes: str | None
     lines: list[DeliveryNoteLineOut]
     created_at: datetime

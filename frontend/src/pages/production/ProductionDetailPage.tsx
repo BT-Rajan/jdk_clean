@@ -8,12 +8,13 @@ import {
   restoreProductionBatch,
   updateProductionBatchStatus,
 } from '@/api/production'
-import type { ProductionBatch } from '@/types/production'
+import type { ProductionBatch, SettableProductionStatus } from '@/types/production'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
-import { PRODUCTION_TRANSITIONS } from '@/lib/statusTransitions'
+import { PRODUCTION_STATUSES_REQUIRING_REASON, PRODUCTION_TRANSITIONS } from '@/lib/statusTransitions'
+import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
 
 export function ProductionDetailPage() {
   const { id } = useParams()
@@ -44,11 +45,11 @@ export function ProductionDetailPage() {
 
   useEffect(load, [batchId])
 
-  async function handleStatusChange(status: 'in_progress' | 'cancelled') {
+  async function handleStatusChange(status: SettableProductionStatus, reason?: string) {
     setBusy(true)
     setError(null)
     try {
-      const updated = await updateProductionBatchStatus(batchId, status)
+      const updated = await updateProductionBatchStatus(batchId, status, undefined, reason)
       setBatch(updated)
       setNotice(`Status changed to ${status.replace(/_/g, ' ')}.`)
     } catch (err) {
@@ -160,12 +161,14 @@ export function ProductionDetailPage() {
             </span>
           )}
           {!justDeleted && otherTransitions.length > 0 && (
-            <div className="ml-auto flex gap-2">
-              {otherTransitions.map((s) => (
-                <Button key={s} variant="ghost" size="sm" isLoading={busy} onClick={() => handleStatusChange(s)}>
-                  Mark {s.replace(/_/g, ' ')}
-                </Button>
-              ))}
+            <div className="ml-auto">
+              <StatusTransitionButtons
+                nextStatuses={otherTransitions}
+                reasonRequiredFor={PRODUCTION_STATUSES_REQUIRING_REASON}
+                reasonLabel="Reason for cancelling"
+                busy={busy}
+                onChange={handleStatusChange}
+              />
             </div>
           )}
         </div>

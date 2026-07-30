@@ -55,6 +55,9 @@ class ProductionSchedule(Base, TimestampMixin, SoftDeleteMixin):
     # True when the system created this batch automatically on order
     # confirmation (see order_service.py), false for a person-created batch.
     auto_scheduled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Mandatory when status becomes 'cancelled' -- same requirement as
+    # orders/quotations/feasibility.
+    cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     product: Mapped[Product] = relationship(foreign_keys=[product_id], lazy="joined")

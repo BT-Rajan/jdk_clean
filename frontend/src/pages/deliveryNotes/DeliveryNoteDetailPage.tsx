@@ -17,7 +17,8 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
-import { DELIVERY_NOTE_TRANSITIONS } from '@/lib/statusTransitions'
+import { DELIVERY_NOTE_STATUSES_REQUIRING_REASON, DELIVERY_NOTE_TRANSITIONS } from '@/lib/statusTransitions'
+import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
 
 export function DeliveryNoteDetailPage() {
   const { id } = useParams()
@@ -69,11 +70,11 @@ export function DeliveryNoteDetailPage() {
     }
   }
 
-  async function handleStatusChange(status: 'issued' | 'cancelled') {
+  async function handleStatusChange(status: 'issued' | 'cancelled', reason?: string) {
     setBusy(true)
     setError(null)
     try {
-      const updated = await updateDeliveryNoteStatus(noteId, status)
+      const updated = await updateDeliveryNoteStatus(noteId, status, reason)
       setNote(updated)
       setNotice(
         status === 'issued'
@@ -185,12 +186,14 @@ export function DeliveryNoteDetailPage() {
             </span>
           )}
           {allowWrite && !justDeleted && nextStatuses.length > 0 && (
-            <div className="ml-auto flex gap-2">
-              {nextStatuses.map((s) => (
-                <Button key={s} variant="ghost" size="sm" isLoading={busy} onClick={() => handleStatusChange(s)}>
-                  {s === 'issued' ? 'Issue' : 'Cancel'}
-                </Button>
-              ))}
+            <div className="ml-auto">
+              <StatusTransitionButtons
+                nextStatuses={nextStatuses}
+                reasonRequiredFor={DELIVERY_NOTE_STATUSES_REQUIRING_REASON}
+                reasonLabel="Reason for cancelling"
+                busy={busy}
+                onChange={handleStatusChange}
+              />
             </div>
           )}
         </div>

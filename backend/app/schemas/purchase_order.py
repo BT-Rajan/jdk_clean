@@ -57,6 +57,12 @@ class PurchaseOrderUpdate(BaseModel):
 
 class PurchaseOrderStatusUpdate(BaseModel):
     status: str = Field(pattern="^(sent|confirmed|cancelled)$")
+    # Required when status == 'cancelled' (enforced in the service layer).
+    reason: str | None = None
+
+
+class PurchaseOrderAdminReview(BaseModel):
+    notes: str = Field(min_length=1)
 
 
 class ReceiveLine(BaseModel):
@@ -80,6 +86,10 @@ class PurchaseOrderOut(BaseModel):
     status: str
     total_amount: float
     notes: str | None
+    cancel_reason: str | None
+    admin_review_required: bool
+    admin_reviewed_at: datetime | None
+    admin_review_notes: str | None
     lines: list[PurchaseOrderLineOut]
     created_at: datetime
     updated_at: datetime

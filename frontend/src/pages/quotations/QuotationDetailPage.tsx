@@ -18,7 +18,8 @@ import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
-import { QUOTATION_TRANSITIONS } from '@/lib/statusTransitions'
+import { QUOTATION_STATUSES_REQUIRING_REASON, QUOTATION_TRANSITIONS } from '@/lib/statusTransitions'
+import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
 
 export function QuotationDetailPage() {
   const { id } = useParams()
@@ -46,11 +47,11 @@ export function QuotationDetailPage() {
 
   useEffect(load, [quotationId])
 
-  async function handleStatusChange(status: (typeof QUOTATION_TRANSITIONS)['draft'][number]) {
+  async function handleStatusChange(status: (typeof QUOTATION_TRANSITIONS)['draft'][number], reason?: string) {
     setBusy(true)
     setError(null)
     try {
-      const updated = await updateQuotationStatus(quotationId, status)
+      const updated = await updateQuotationStatus(quotationId, status, reason)
       setQuotation(updated)
       setNotice(`Status changed to ${status}.`)
     } catch (err) {
@@ -189,12 +190,14 @@ export function QuotationDetailPage() {
             </Link>
           )}
           {allowWrite && nextStatuses.length > 0 && !justDeleted && (
-            <div className="ml-auto flex gap-2">
-              {nextStatuses.map((s) => (
-                <Button key={s} variant="ghost" size="sm" isLoading={busy} onClick={() => handleStatusChange(s)}>
-                  Mark {s}
-                </Button>
-              ))}
+            <div className="ml-auto">
+              <StatusTransitionButtons
+                nextStatuses={nextStatuses}
+                reasonRequiredFor={QUOTATION_STATUSES_REQUIRING_REASON}
+                reasonLabel="Reason for rejecting"
+                busy={busy}
+                onChange={handleStatusChange}
+              />
             </div>
           )}
         </div>
