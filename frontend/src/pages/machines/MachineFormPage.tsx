@@ -6,6 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, Spinner, TextField } from '@/components/ui'
+import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { createMachine, getMachine, updateMachine } from '@/api/machines'
 import { getApiErrorMessage } from '@/lib/apiError'
 import {
@@ -22,12 +23,21 @@ export function MachineFormPage() {
   return id ? <MachineEditForm id={Number(id)} /> : <MachineCreateForm />
 }
 
-function FormShell({ title, children }: { title: string; children: ReactNode }) {
+function FormShell({
+  title,
+  children,
+  after,
+}: {
+  title: string
+  children: ReactNode
+  after?: ReactNode
+}) {
   return (
     <AppLayout>
       <PageContainer>
         <h1 className="font-display text-2xl font-medium text-white">{title}</h1>
         <GlassCard className="mt-8 p-8">{children}</GlassCard>
+        {after}
       </PageContainer>
     </AppLayout>
   )
@@ -126,7 +136,14 @@ function MachineEditForm({ id }: { id: number }) {
   }
 
   return (
-    <FormShell title="Edit machine">
+    <FormShell
+      title="Edit machine"
+      after={
+        <div className="mt-6">
+          <HistoryTimeline resourcePath="/api/machines" id={id} />
+        </div>
+      }
+    >
       <Alert variant="error">{formError}</Alert>
       {loading ? (
         <div className="flex justify-center py-12">

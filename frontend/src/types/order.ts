@@ -40,6 +40,10 @@ export interface Order {
   tax_amount: number
   total_amount: number
   notes: string | null
+  close_reason: string | null
+  admin_review_required: boolean
+  admin_reviewed_at: string | null
+  admin_review_notes: string | null
   lines: OrderLine[]
   created_at: string
   updated_at: string

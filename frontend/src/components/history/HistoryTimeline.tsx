@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { GlassCard, Spinner } from '@/components/ui'
-import { getHistory } from '@/api/history'
+import { getHistory, getHistoryAtUrl } from '@/api/history'
 import type { HistoryEntry } from '@/api/history'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDateTime } from '@/lib/dateFormat'
@@ -8,9 +8,14 @@ import { formatDateTime } from '@/lib/dateFormat'
 interface HistoryTimelineProps {
   /** The API path this record's history lives under, e.g. '/api/orders'
    * for an order, '/api/feasibility' for a feasibility check. Matches
-   * whatever prefix that module's router uses. */
-  resourcePath: string
-  id: number
+   * whatever prefix that module's router uses. Ignored if `url` is set. */
+  resourcePath?: string
+  id?: number
+  /** Full history URL to use as-is, for routes that don't follow the
+   * `/{id}/history` pattern (e.g. BOM history at
+   * /api/products/{id}/bom/history). Takes precedence over
+   * resourcePath/id when provided. */
+  url?: string
 }
 
 function describeEntry(entry: HistoryEntry): string {
@@ -36,7 +41,7 @@ function describeEntry(entry: HistoryEntry): string {
  * show -- one shared component instead of building this per page.
  * Collapsed by default; fetches only when first expanded, so it costs
  * nothing on pages where nobody looks at it. */
-export function HistoryTimeline({ resourcePath, id }: HistoryTimelineProps) {
+export function HistoryTimeline({ resourcePath, id, url }: HistoryTimelineProps) {
   const [open, setOpen] = useState(false)
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -47,7 +52,8 @@ export function HistoryTimeline({ resourcePath, id }: HistoryTimelineProps) {
     setOpen(next)
     if (next && entries === null && !loading) {
       setLoading(true)
-      getHistory(resourcePath, id)
+      const request = url ? getHistoryAtUrl(url) : getHistory(resourcePath ?? '', id ?? 0)
+      request
         .then(setEntries)
         .catch((err) => setError(getApiErrorMessage(err)))
         .finally(() => setLoading(false))

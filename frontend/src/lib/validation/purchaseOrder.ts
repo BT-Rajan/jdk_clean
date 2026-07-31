@@ -19,3 +19,8 @@ export const purchaseOrderSchema = z.object({
 
 export type PurchaseOrderFormValues = z.input<typeof purchaseOrderSchema>
 export type PurchaseOrderSubmitValues = z.output<typeof purchaseOrderSchema>
+
+export const purchaseOrderAdminReviewSchema = z.object({
+  notes: z.string().trim().min(1, 'Notes are required.'),
+})
+export type PurchaseOrderAdminReviewFormValues = z.infer<typeof purchaseOrderAdminReviewSchema>

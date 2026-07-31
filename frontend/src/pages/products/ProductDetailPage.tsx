@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Badge, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { deleteProduct, getProduct, restoreProduct } from '@/api/products'
 import { getStock } from '@/api/inventory'
 import type { Product } from '@/types/product'
@@ -126,6 +127,10 @@ export function ProductDetailPage() {
       </GlassCard>
 
       <BomEditor productId={productId} canEdit={canWrite(user?.role)} />
+
+      <div className="mt-6">
+        <HistoryTimeline resourcePath="/api/products" id={productId} />
+      </div>
 
       <div className="mt-6">
         <Link to="/products" className="text-sm text-white/50 hover:text-white">← Back to products</Link>

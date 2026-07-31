@@ -1,19 +1,55 @@
 import { useEffect, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
-import { deleteOrder, downloadOrderPdf, emailOrder, getOrder, restoreOrder, updateOrderStatus } from '@/api/orders'
+import { adminReviewOrder, deleteOrder, downloadOrderPdf, emailOrder, getOrder, restoreOrder, updateOrderStatus } from '@/api/orders'
 import type { Order } from '@/types/order'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
-import { canWriteDepartment } from '@/lib/roles'
+import { canWriteDepartment, isAdmin } from '@/lib/roles'
 import { ORDER_STATUSES_REQUIRING_REASON, ORDER_TRANSITIONS } from '@/lib/statusTransitions'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
+import { orderAdminReviewSchema, type OrderAdminReviewFormValues } from '@/lib/validation'
 import { OrderJourney } from './OrderJourney'
+
+function AdminReviewModal({
+  open,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean
+  onClose: () => void
+  onSubmit: (notes: string) => Promise<void>
+}) {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<OrderAdminReviewFormValues>({ resolver: zodResolver(orderAdminReviewSchema) })
+
+  useEffect(() => {
+    if (open) reset({ notes: '' })
+  }, [open, reset])
+
+  return (
+    <Modal open={open} title="Acknowledge admin review" onClose={onClose}>
+      <form onSubmit={handleSubmit((v) => onSubmit(v.notes))} noValidate className="flex flex-col gap-4">
+        <TextareaField label="Notes" error={errors.notes?.message} {...register('notes')} />
+        <div className="mt-2 flex justify-end gap-3">
+          <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
+          <Button type="submit" isLoading={isSubmitting}>Acknowledge</Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
 
 export function OrderDetailPage() {
   const { id } = useParams()
@@ -21,6 +57,7 @@ export function OrderDetailPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const allowWrite = canWriteDepartment(user, 'sales')
+  const allowAdmin = isAdmin(user?.role)
 
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
@@ -29,6 +66,7 @@ export function OrderDetailPage() {
   const [busy, setBusy] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
+  const [adminReviewOpen, setAdminReviewOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
 
   function load() {
@@ -146,6 +184,13 @@ export function OrderDetailPage() {
         </div>
       )}
 
+      {order.admin_review_required && allowAdmin && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <span>This order is flagged for admin review.</span>
+          <Button variant="ghost" size="sm" onClick={() => setAdminReviewOpen(true)}>Acknowledge</Button>
+        </div>
+      )}
+
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-4">
           <StatusBadge status={order.status} />
@@ -250,6 +295,24 @@ export function OrderDetailPage() {
         onSend={async (toEmail, message) => {
           await emailOrder(order.id, toEmail, message)
           setNotice(`Emailed to ${toEmail}.`)
+        }}
+      />
+
+      <AdminReviewModal
+        open={adminReviewOpen}
+        onClose={() => setAdminReviewOpen(false)}
+        onSubmit={async (notes) => {
+          setBusy(true)
+          try {
+            const updated = await adminReviewOrder(orderId, notes)
+            setOrder(updated)
+            setAdminReviewOpen(false)
+            setNotice('Admin review acknowledged.')
+          } catch (err) {
+            setError(getApiErrorMessage(err))
+          } finally {
+            setBusy(false)
+          }
         }}
       />
     </AppLayout>

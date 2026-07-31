@@ -43,6 +43,9 @@ export interface PurchaseOrder {
    * (Settings -> large_po_approval_threshold). Null if never required or
    * not yet approved. */
   approved_at: string | null
+  admin_review_required: boolean
+  admin_reviewed_at: string | null
+  admin_review_notes: string | null
   lines: PurchaseOrderLine[]
   created_at: string
   updated_at: string

@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Badge, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner } from '@/components/ui'
+import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { deleteUser, getUser, restoreUser } from '@/api/users'
 import type { User } from '@/types/auth'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
+import { isAdmin } from '@/lib/roles'
 
 export function UserDetailPage() {
   const { id } = useParams()
@@ -110,6 +112,12 @@ export function UserDetailPage() {
           <Field label="Status" value={<Badge tone={record.is_active ? 'success' : 'neutral'}>{record.is_active ? 'active' : 'inactive'}</Badge>} />
         </dl>
       </GlassCard>
+
+      {isAdmin(viewer?.role) && (
+        <div className="mt-6">
+          <HistoryTimeline resourcePath="/api/users" id={userId} />
+        </div>
+      )}
 
       <div className="mt-6">
         <Link to="/users" className="text-sm text-white/50 hover:text-white">← Back to users</Link>
