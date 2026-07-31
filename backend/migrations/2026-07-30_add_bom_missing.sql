@@ -18,7 +18,13 @@ SET @col_exists = (
   WHERE table_schema = DATABASE() AND table_name = 'feasibility_lines' AND column_name = 'bom_missing'
 );
 SET @sql = IF(@col_exists = 0,
-  'ALTER TABLE feasibility_lines ADD COLUMN bom_missing TINYINT(1) NULL AFTER covered_by_stock',
+  -- Deliberately no 'AFTER covered_by_stock' here: that column comes
+  -- from a different migration file (2026-07-30_add_covered_by_stock.sql)
+  -- that happens to sort *after* this one alphabetically, which would
+  -- make this ALTER fail on a database that hasn't run that one yet.
+  -- Column position is purely cosmetic, so it's not worth the ordering
+  -- dependency between two same-day migration files.
+  'ALTER TABLE feasibility_lines ADD COLUMN bom_missing TINYINT(1) NULL',
   'SELECT ''bom_missing column already exists, skipping'' AS status'
 );
 PREPARE stmt FROM @sql;
