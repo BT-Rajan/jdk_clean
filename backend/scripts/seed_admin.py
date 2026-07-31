@@ -57,9 +57,21 @@ def parse_args() -> argparse.Namespace:
 
 
 def seed_admin_user(db, username: str, email: str, full_name: str, password: str) -> None:
-    existing = db.query(User).filter(User.username == username).first()
+    """Idempotent by *either* username or email -- not just username.
+    A wrapper/installer that generates a fresh random username on every
+    run (while pointing at the same fixed email, e.g. admin@jdk.com)
+    would otherwise never match an existing row here, and the INSERT
+    would fail on the database's own email-uniqueness constraint instead
+    of being skipped cleanly. Checking both means re-running this script
+    is safe regardless of which of the two callers happen to hold
+    steady across runs.
+    """
+    existing = db.query(User).filter((User.username == username) | (User.email == email)).first()
     if existing:
-        print(f"[skip] User '{username}' already exists -- leaving it untouched.")
+        print(
+            f"[skip] User already exists (username='{existing.username}', "
+            f"email='{existing.email}') -- leaving it untouched."
+        )
         return
 
     db.add(
