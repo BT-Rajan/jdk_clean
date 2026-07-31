@@ -262,6 +262,10 @@ else
   warn "Left the existing backend/.env untouched."
 fi
 
+info "Applying database migrations (safe to re-run; already-applied changes are skipped)..."
+"$PY" scripts/run_migrations.py
+ok "Migrations applied."
+
 if [[ "$SEED_ADMIN" == "y" ]]; then
   info "Seeding bootstrap admin + number series..."
   "$PY" scripts/seed_admin.py \

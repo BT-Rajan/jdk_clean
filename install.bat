@@ -292,6 +292,15 @@ if /i "!WRITE_BACKEND_ENV!"=="Y" (
   call :Info "Using existing backend\.env as-is."
 )
 
+call :Info "Applying database migrations (safe to re-run; already-applied changes are skipped)..."
+"%PY%" scripts\run_migrations.py
+if errorlevel 1 (
+  call :Fail "Applying migrations failed -- see the output above."
+  popd
+  goto :EndFail
+)
+call :Ok "Migrations applied."
+
 if /i "!SEED_ADMIN!"=="Y" (
   call :Info "Seeding bootstrap admin + number series..."
   "%PY%" scripts\seed_admin.py --username "!ADMIN_USERNAME!" --email "!ADMIN_EMAIL!" --full-name "!ADMIN_FULL_NAME!" --password "!ADMIN_PASSWORD!"
