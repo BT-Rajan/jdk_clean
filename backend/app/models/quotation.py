@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import DATE, DECIMAL, Boolean, Enum, ForeignKey, String, Text
+from sqlalchemy import DATE, DECIMAL, Boolean, DateTime, Enum, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -45,6 +45,10 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
         Enum(*QUOTATION_STATUSES, name="quotation_status"), nullable=False, default="draft"
     )
     subtotal_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
+    # Percentage, e.g. 0 or 10 -- a whole-document discount applied on
+    # top of the already line-discounted subtotal, before tax.
+    discount_percent: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
+    discount_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     tax_rate: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
     tax_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     total_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
@@ -63,6 +67,11 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
     auto_created: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Set when Sales closes this quotation without converting it to an order.
     close_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # A quotation whose discount (document-level or any single line's) is
+    # at/above Settings -> large_discount_approval_threshold can't leave
+    # 'draft' until an admin approves it.
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    approved_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     deal: Mapped[Deal | None] = relationship(lazy="joined")
@@ -83,6 +92,9 @@ class QuotationDetail(Base):
     product_id: Mapped[int] = mapped_column(BigPK, ForeignKey("products.id"), nullable=False)
     quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False)
     unit_price: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False)
+    # Percentage, e.g. 0 or 10 -- this line's own discount, applied
+    # before the document-level discount_percent.
+    discount_percent: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
     line_total: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False)
 
     quotation: Mapped[Quotation] = relationship(back_populates="lines")

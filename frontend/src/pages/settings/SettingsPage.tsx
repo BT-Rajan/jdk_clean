@@ -205,6 +205,26 @@ export function SettingsPage() {
             </GlassCard>
 
             <GlassCard className="p-8">
+              <h2 className="font-display text-lg font-medium text-white">Large discount approval</h2>
+              <p className="mt-1 text-sm text-white/50">
+                A quotation, order, or purchase order with a discount (document-level or any single line's) at or
+                above this percentage can't leave draft until an admin approves it. Leave blank to turn this off
+                entirely.
+              </p>
+              <div className="mt-6">
+                <TextField
+                  label="Approval threshold (%)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  placeholder="No threshold set -- approval not required"
+                  {...register('large_discount_approval_threshold')}
+                />
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-8">
               <h2 className="font-display text-lg font-medium text-white">AI assistant provider</h2>
               <p className="mt-1 text-sm text-white/50">
                 Visible here only -- the assistant itself never names a provider anywhere else in the app.

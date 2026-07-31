@@ -93,6 +93,19 @@ def update_status(
     return QuotationOut.from_model(quotation)
 
 
+@router.post("/{quotation_id}/approve", response_model=QuotationOut)
+def approve_quotation(
+    quotation_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    """Admin sign-off clearing the large-discount approval gate (Settings
+    -> large_discount_approval_threshold) -- a draft quotation with a
+    large discount can't move to 'sent' until this has been called."""
+    quotation = quotation_service.approve_quotation(db, quotation_id, user_id=user.id)
+    return QuotationOut.from_model(quotation)
+
+
 @router.post("/scan-expired")
 def scan_expired_quotations(
     db: Session = Depends(get_db),

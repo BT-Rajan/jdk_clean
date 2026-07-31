@@ -35,6 +35,10 @@ export interface Settings {
   /** KWD amount, or "" to disable. A PO at/above this can't be sent
    * until an admin approves it. */
   large_po_approval_threshold: string
+  /** Percentage, or "" to disable. A document-level discount, or any
+   * single line's discount, at/above this can't leave draft until an
+   * admin approves it. */
+  large_discount_approval_threshold: string
 }
 
 export type SettingsPayload = Partial<Settings>

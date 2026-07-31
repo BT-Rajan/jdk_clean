@@ -48,6 +48,11 @@ TAX_FIELDS = ["default_tax_rate"]
 # service.approve_purchase_order). Empty/unset means the gate is off --
 # admin has to explicitly set a threshold to turn it on.
 APPROVAL_FIELDS = ["large_po_approval_threshold"]
+# Large-discount admin approval: a document (quotation, order, or
+# purchase order) whose document-level discount_percent, or any single
+# line's discount_percent, is at or above this percentage can't leave
+# 'draft' until an admin approves it. Empty/unset means the gate is off.
+DISCOUNT_APPROVAL_FIELDS = ["large_discount_approval_threshold"]
 ALL_FIELDS = (
     COMPANY_FIELDS
     + AI_FIELDS
@@ -58,6 +63,7 @@ ALL_FIELDS = (
     + PROCUREMENT_FIELDS
     + TAX_FIELDS
     + APPROVAL_FIELDS
+    + DISCOUNT_APPROVAL_FIELDS
 )
 
 DEFAULTS = {key: "" for key in ALL_FIELDS}
@@ -149,6 +155,20 @@ def get_large_po_approval_threshold(db: Session) -> float | None:
     treated the same as "off" rather than "gate at zero"."""
     values = get_all(db)
     raw = values.get("large_po_approval_threshold", "").strip()
+    if not raw:
+        return None
+    try:
+        threshold = float(raw)
+    except ValueError:
+        return None
+    return threshold if threshold > 0 else None
+
+
+def get_large_discount_approval_threshold(db: Session) -> float | None:
+    """Same off-by-default semantics as get_large_po_approval_threshold,
+    but a percentage (e.g. 15 for 15%) rather than a KWD amount."""
+    values = get_all(db)
+    raw = values.get("large_discount_approval_threshold", "").strip()
     if not raw:
         return None
     try:

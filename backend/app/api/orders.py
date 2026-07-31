@@ -127,6 +127,19 @@ def update_status(
     return OrderOut.from_model(order)
 
 
+@router.post("/{order_id}/approve", response_model=OrderOut)
+def approve_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    """Admin sign-off clearing the large-discount approval gate (Settings
+    -> large_discount_approval_threshold) -- a draft order with a large
+    discount can't move to 'confirmed' until this has been called."""
+    order = order_service.approve_order(db, order_id, user_id=user.id)
+    return OrderOut.from_model(order)
+
+
 @router.delete("/{order_id}")
 def delete_order(
     order_id: int,

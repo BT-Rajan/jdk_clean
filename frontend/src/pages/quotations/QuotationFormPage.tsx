@@ -72,7 +72,7 @@ function LineItemsEditor({
           variant="ghost"
           size="sm"
           type="button"
-          onClick={() => append({ product_id: 0, quantity: 1, unit_price: 0 })}
+          onClick={() => append({ product_id: 0, quantity: 1, unit_price: 0, discount_percent: 0 })}
         >
           Add line
         </Button>
@@ -84,9 +84,11 @@ function LineItemsEditor({
         {fields.map((field, index) => {
           const quantity = Number(lines?.[index]?.quantity ?? 0)
           const unitPrice = Number(lines?.[index]?.unit_price ?? 0)
+          const discountPercent = Number(lines?.[index]?.discount_percent ?? 0)
+          const lineTotal = quantity * unitPrice * (1 - discountPercent / 100)
           return (
             <div key={field.id} className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-end">
-              <div className="sm:col-span-5">
+              <div className="sm:col-span-4">
                 <SelectField label="Product" {...register(`lines.${index}.product_id` as const)}>
                   <option value="">Choose…</option>
                   {products.map((p) => (
@@ -100,8 +102,11 @@ function LineItemsEditor({
               <div className="sm:col-span-2">
                 <TextField label="Unit price" type="number" step="0.01" {...register(`lines.${index}.unit_price` as const)} />
               </div>
+              <div className="sm:col-span-1">
+                <TextField label="Disc. %" type="number" step="0.01" min="0" max="100" {...register(`lines.${index}.discount_percent` as const)} />
+              </div>
               <div className="sm:col-span-2 text-sm text-white/60">
-                Line total: {formatCurrency(quantity * unitPrice)}
+                Line total: {formatCurrency(lineTotal)}
               </div>
               <div className="sm:col-span-1">
                 <Button variant="ghost" size="sm" type="button" onClick={() => remove(index)}>Remove</Button>
@@ -245,16 +250,28 @@ function QuotationCreateForm() {
             <TextField label="Valid until" type="date" min={todayDateInputMin} error={errors.valid_until?.message} {...register('valid_until')} />
           </div>
 
-          <TextField
-            label="Tax rate (%)"
-            type="number"
-            step="0.01"
-            min="0"
-            max="100"
-            placeholder="Leave blank to use the default (0% -- Kuwait has no GST/VAT)"
-            error={errors.tax_rate?.message}
-            {...register('tax_rate')}
-          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <TextField
+              label="Discount (%)"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              placeholder="Whole-document discount, on top of any per-line discounts"
+              error={errors.discount_percent?.message}
+              {...register('discount_percent')}
+            />
+            <TextField
+              label="Tax rate (%)"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              placeholder="Leave blank to use the default (0% -- Kuwait has no GST/VAT)"
+              error={errors.tax_rate?.message}
+              {...register('tax_rate')}
+            />
+          </div>
 
         <LineItemsEditor control={control} register={register} watch={watch} errors={errors} products={products} />
 

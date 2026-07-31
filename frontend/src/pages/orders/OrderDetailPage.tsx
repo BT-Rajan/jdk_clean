@@ -5,7 +5,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
-import { adminReviewOrder, deleteOrder, downloadOrderPdf, emailOrder, getOrder, restoreOrder, updateOrderStatus } from '@/api/orders'
+import { adminReviewOrder, approveOrder, deleteOrder, downloadOrderPdf, emailOrder, getOrder, restoreOrder, updateOrderStatus } from '@/api/orders'
 import type { Order } from '@/types/order'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
@@ -86,6 +86,20 @@ export function OrderDetailPage() {
       const updated = await updateOrderStatus(orderId, status, reason)
       setOrder(updated)
       setNotice(`Status changed to ${status}.`)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleApprove() {
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await approveOrder(orderId)
+      setOrder(updated)
+      setNotice('Approved.')
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -202,6 +216,16 @@ export function OrderDetailPage() {
               {order.deal_number}
             </Link>
           )}
+          {order.approved_at && (
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200">
+              Approved {formatDate(order.approved_at)}
+            </span>
+          )}
+          {allowAdmin && order.status === 'draft' && !order.approved_at && (
+            <Button variant="ghost" size="sm" isLoading={busy} onClick={handleApprove}>
+              Approve
+            </Button>
+          )}
           {allowWrite && nextStatuses.length > 0 && !justDeleted && (
             <div className="ml-auto">
               <StatusTransitionButtons
@@ -220,10 +244,14 @@ export function OrderDetailPage() {
           <Field label="Requested delivery" value={formatDate(order.requested_delivery_date)} />
           <Field label="Total" value={formatCurrency(order.total_amount)} />
         </dl>
-        {order.tax_rate > 0 && (
+        {(order.tax_rate > 0 || order.discount_percent > 0) && (
           <p className="mt-3 text-xs text-white/40">
-            Subtotal {formatCurrency(order.subtotal_amount)} + {order.tax_rate}% tax ({formatCurrency(order.tax_amount)}) ={' '}
-            {formatCurrency(order.total_amount)}
+            Subtotal {formatCurrency(order.subtotal_amount)}
+            {order.discount_percent > 0 && (
+              <> − {order.discount_percent}% discount ({formatCurrency(order.discount_amount)})</>
+            )}
+            {order.tax_rate > 0 && <> + {order.tax_rate}% tax ({formatCurrency(order.tax_amount)})</>}
+            {' '}= {formatCurrency(order.total_amount)}
           </p>
         )}
 

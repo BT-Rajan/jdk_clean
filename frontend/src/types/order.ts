@@ -13,6 +13,7 @@ export interface OrderLineInput {
   product_id: number
   quantity: number
   unit_price: number
+  discount_percent?: number
 }
 
 export interface OrderLine extends OrderLineInput {
@@ -20,6 +21,7 @@ export interface OrderLine extends OrderLineInput {
   product_code: string | null
   product_name: string | null
   unit: string | null
+  discount_percent: number
   line_total: number
 }
 
@@ -36,11 +38,17 @@ export interface Order {
   confirmed_delivery_date: string | null
   status: OrderStatus
   subtotal_amount: number
+  discount_percent: number
+  discount_amount: number
   tax_rate: number
   tax_amount: number
   total_amount: number
   notes: string | null
   close_reason: string | null
+  /** Set once an admin has approved a large discount on this order
+   * (Settings -> large_discount_approval_threshold). Null if never
+   * required or not yet approved. */
+  approved_at: string | null
   admin_review_required: boolean
   admin_reviewed_at: string | null
   admin_review_notes: string | null
@@ -55,6 +63,7 @@ export interface OrderPayload {
   requested_delivery_date?: string | null
   notes?: string | null
   tax_rate?: number
+  discount_percent?: number
   lines: OrderLineInput[]
 }
 

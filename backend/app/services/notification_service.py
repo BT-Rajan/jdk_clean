@@ -289,6 +289,44 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
                     }
                 )
 
+    # 10. Draft documents (quotation, order, or purchase order) with a
+    # discount at/above the large-discount approval threshold that
+    # haven't been approved yet.
+    if _visible(user, None):
+        from app.models.quotation import Quotation as Q
+        from app.services import settings_service as ss
+
+        discount_threshold = ss.get_large_discount_approval_threshold(db)
+        if discount_threshold is not None:
+            for label, model, number_field, name_getter in (
+                ("quotation", Q, "quotation_number", lambda d: d.customer.name if d.customer else None),
+                ("order", Order, "order_number", lambda d: d.customer.name if d.customer else None),
+                ("purchase order", PO, "po_number", lambda d: d.supplier.name if d.supplier else None),
+            ):
+                candidates = (
+                    db.query(model)
+                    .filter(model.deleted_at.is_(None), model.status == "draft", model.approved_at.is_(None))
+                    .all()
+                )
+                for doc in candidates:
+                    largest = max(
+                        [float(doc.discount_percent)] + [float(line.discount_percent) for line in doc.lines],
+                        default=0.0,
+                    )
+                    if largest < discount_threshold:
+                        continue
+                    items.append(
+                        {
+                            "id": f"{label.replace(' ', '-')}-needs-discount-approval-{doc.id}",
+                            "type": "document_needs_discount_approval",
+                            "severity": "high",
+                            "title": f"{getattr(doc, number_field)} needs approval before it can proceed",
+                            "message": f"{largest}% discount is at or above the large-discount threshold — {name_getter(doc) or 'unknown'}.",
+                            "link": f"/{'quotations' if label == 'quotation' else 'orders' if label == 'order' else 'purchase-orders'}/{doc.id}",
+                            "created_at": doc.created_at,
+                        }
+                    )
+
     def _sort_key(item: dict):
         created = item["created_at"]
         if created is None:

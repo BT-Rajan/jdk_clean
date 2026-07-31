@@ -6,6 +6,7 @@ export const quotationLineSchema = z.object({
   product_id: z.coerce.number().int().positive('Choose a product'),
   quantity: z.coerce.number().positive('Must be greater than 0'),
   unit_price: z.coerce.number().min(0, 'Must be 0 or more'),
+  discount_percent: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),
 })
 
 export const quotationSchema = z.object({
@@ -17,6 +18,9 @@ export const quotationSchema = z.object({
   // Percentage, e.g. 0 or 5. Left blank, the backend defaults to
   // Settings -> default_tax_rate (0% -- Kuwait has no GST/VAT).
   tax_rate: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),
+  // Percentage, e.g. 0 or 10 -- a whole-document discount on top of the
+  // already line-discounted subtotal.
+  discount_percent: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),
   lines: z.array(quotationLineSchema).min(1, 'At least one line item is required'),
 })
 

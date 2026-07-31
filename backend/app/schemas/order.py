@@ -9,6 +9,7 @@ class OrderLineIn(BaseModel):
     product_id: int
     quantity: float = Field(gt=0)
     unit_price: float = Field(ge=0)
+    discount_percent: float = Field(default=0, ge=0, le=100)
 
 
 class OrderLineOut(BaseModel):
@@ -19,6 +20,7 @@ class OrderLineOut(BaseModel):
     unit: str | None = None
     quantity: float
     unit_price: float
+    discount_percent: float
     line_total: float
 
     model_config = {"from_attributes": True}
@@ -30,6 +32,7 @@ class OrderCreate(BaseModel):
     requested_delivery_date: date | None = None
     notes: str | None = None
     tax_rate: float | None = Field(default=None, ge=0, le=100)
+    discount_percent: float | None = Field(default=None, ge=0, le=100)
     lines: list[OrderLineIn] = Field(min_length=1)
 
     @field_validator("order_date", "requested_delivery_date")
@@ -54,6 +57,7 @@ class OrderUpdate(BaseModel):
     confirmed_delivery_date: date | None = None
     notes: str | None = None
     tax_rate: float | None = Field(default=None, ge=0, le=100)
+    discount_percent: float | None = Field(default=None, ge=0, le=100)
     lines: list[OrderLineIn] | None = Field(default=None, min_length=1)
 
     @field_validator("order_date", "requested_delivery_date", "confirmed_delivery_date")
@@ -88,11 +92,14 @@ class OrderOut(BaseModel):
     confirmed_delivery_date: date | None
     status: str
     subtotal_amount: float
+    discount_percent: float
+    discount_amount: float
     tax_rate: float
     tax_amount: float
     total_amount: float
     notes: str | None
     close_reason: str | None
+    approved_at: datetime | None
     admin_review_required: bool
     admin_reviewed_at: datetime | None
     admin_review_notes: str | None

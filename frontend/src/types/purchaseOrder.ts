@@ -16,6 +16,7 @@ export interface PurchaseOrderLine {
   unit: string | null
   quantity: number
   unit_price: number
+  discount_percent: number
   line_total: number
   received_quantity: number
 }
@@ -31,6 +32,8 @@ export interface PurchaseOrder {
   expected_delivery_date: string | null
   status: PurchaseOrderStatus
   subtotal_amount: number
+  discount_percent: number
+  discount_amount: number
   tax_rate: number
   tax_amount: number
   total_amount: number
@@ -55,6 +58,7 @@ export interface PurchaseOrderLineInput {
   raw_material_id: number
   quantity: number
   unit_price: number
+  discount_percent?: number
 }
 
 export interface PurchaseOrderPayload {
@@ -63,6 +67,7 @@ export interface PurchaseOrderPayload {
   expected_delivery_date?: string | null
   notes?: string | null
   tax_rate?: number
+  discount_percent?: number
   lines: PurchaseOrderLineInput[]
 }
 

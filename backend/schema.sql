@@ -384,6 +384,10 @@ CREATE TABLE IF NOT EXISTS orders (
     status          ENUM('draft','confirmed','in_production','ready_to_ship','shipped','delivered','cancelled') NOT NULL DEFAULT 'draft',
     -- Sum of line totals, before tax.
     subtotal_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+    -- Percentage, e.g. 0 or 10 -- a whole-document discount applied on
+    -- top of the already line-discounted subtotal, before tax.
+    discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
+    discount_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
     -- Percentage (e.g. 0, 5) captured at creation from Settings ->
     -- default_tax_rate, editable per document. Kuwait has no GST/VAT --
     -- this is provisioned at 0% by default, not active.
@@ -395,6 +399,11 @@ CREATE TABLE IF NOT EXISTS orders (
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
     close_reason    TEXT NULL,                        -- Sales' reason for cancelling without a delivery note
+    -- A document whose discount (document-level or any single line's)
+    -- is at/above Settings -> large_discount_approval_threshold can't
+    -- leave 'draft' until an admin approves it.
+    approved_at     DATETIME NULL,
+    approved_by     BIGINT UNSIGNED NULL,
     admin_review_required TINYINT(1) NOT NULL DEFAULT 0, -- flagged when overdue with no delivery note and no close_reason
     admin_reviewed_at      DATETIME NULL,
     admin_reviewed_by      BIGINT UNSIGNED NULL,
@@ -406,6 +415,7 @@ CREATE TABLE IF NOT EXISTS orders (
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_orders_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
     CONSTRAINT fk_orders_admin_reviewed_by FOREIGN KEY (admin_reviewed_by) REFERENCES users(id),
+    CONSTRAINT fk_orders_approved_by FOREIGN KEY (approved_by) REFERENCES users(id),
     CONSTRAINT fk_orders_deal FOREIGN KEY (deal_id) REFERENCES deals(id),
     INDEX idx_orders_status (status),
     INDEX idx_orders_deal (deal_id),
@@ -418,6 +428,9 @@ CREATE TABLE IF NOT EXISTS order_details (
     product_id      BIGINT UNSIGNED NOT NULL,
     quantity        DECIMAL(14,4) NOT NULL,
     unit_price      DECIMAL(14,2) NOT NULL,
+    -- Percentage, e.g. 0 or 10 -- this line's own discount, applied
+    -- before the document-level discount_percent (see orders table).
+    discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
     line_total      DECIMAL(14,2) NOT NULL,
     CONSTRAINT fk_od_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     CONSTRAINT fk_od_product FOREIGN KEY (product_id) REFERENCES products(id),
@@ -436,6 +449,10 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     expected_delivery_date DATE NULL,
     status          ENUM('draft','sent','confirmed','partially_received','received','cancelled') NOT NULL DEFAULT 'draft',
     subtotal_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+    -- Percentage, e.g. 0 or 10 -- a whole-document discount applied on
+    -- top of the already line-discounted subtotal, before tax.
+    discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
+    discount_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
     tax_rate        DECIMAL(5,2) NOT NULL DEFAULT 0,
     tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
@@ -481,6 +498,9 @@ CREATE TABLE IF NOT EXISTS purchase_order_lines (
     raw_material_id     BIGINT UNSIGNED NOT NULL,
     quantity            DECIMAL(14,4) NOT NULL,
     unit_price          DECIMAL(14,2) NOT NULL,
+    -- Percentage, e.g. 0 or 10 -- this line's own discount, applied
+    -- before the document-level discount_percent (see purchase_orders table).
+    discount_percent    DECIMAL(5,2) NOT NULL DEFAULT 0,
     line_total          DECIMAL(14,2) NOT NULL,
     received_quantity   DECIMAL(14,4) NOT NULL DEFAULT 0,
     CONSTRAINT fk_pol_po FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
@@ -542,6 +562,10 @@ CREATE TABLE IF NOT EXISTS quotations (
     valid_until     DATE NULL,
     status          ENUM('draft','sent','accepted','rejected','expired','converted') NOT NULL DEFAULT 'draft',
     subtotal_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+    -- Percentage, e.g. 0 or 10 -- a whole-document discount applied on
+    -- top of the already line-discounted subtotal, before tax.
+    discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
+    discount_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
     tax_rate        DECIMAL(5,2) NOT NULL DEFAULT 0,
     tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
@@ -550,6 +574,11 @@ CREATE TABLE IF NOT EXISTS quotations (
     feasibility_id  BIGINT UNSIGNED NULL,             -- the passed/exception-approved feasibility check this came from
     auto_created    TINYINT(1) NOT NULL DEFAULT 0,    -- true when the system drafted this from a passed feasibility check, not a person
     close_reason    TEXT NULL,                        -- Sales' reason for closing without converting to an order
+    -- A quotation whose discount (document-level or any single line's)
+    -- is at/above Settings -> large_discount_approval_threshold can't
+    -- leave 'draft' until an admin approves it.
+    approved_at     DATETIME NULL,
+    approved_by     BIGINT UNSIGNED NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -559,6 +588,7 @@ CREATE TABLE IF NOT EXISTS quotations (
     CONSTRAINT fk_quotations_order FOREIGN KEY (converted_order_id) REFERENCES orders(id),
     CONSTRAINT fk_quotations_feasibility FOREIGN KEY (feasibility_id) REFERENCES feasibility_checks(id),
     CONSTRAINT fk_quotations_deal FOREIGN KEY (deal_id) REFERENCES deals(id),
+    CONSTRAINT fk_quotations_approved_by FOREIGN KEY (approved_by) REFERENCES users(id),
     INDEX idx_quotations_status (status),
     INDEX idx_quotations_deal (deal_id),
     INDEX idx_quotations_deleted_at (deleted_at)
@@ -570,6 +600,9 @@ CREATE TABLE IF NOT EXISTS quotation_details (
     product_id      BIGINT UNSIGNED NOT NULL,
     quantity        DECIMAL(14,4) NOT NULL,
     unit_price      DECIMAL(14,2) NOT NULL,
+    -- Percentage, e.g. 0 or 10 -- this line's own discount, applied
+    -- before the document-level discount_percent (see quotations table).
+    discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
     line_total      DECIMAL(14,2) NOT NULL,
     CONSTRAINT fk_qd_quotation FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE CASCADE,
     CONSTRAINT fk_qd_product FOREIGN KEY (product_id) REFERENCES products(id),

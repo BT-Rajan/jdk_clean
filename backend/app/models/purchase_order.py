@@ -49,6 +49,8 @@ class PurchaseOrder(Base, TimestampMixin, SoftDeleteMixin):
         default="draft",
     )
     subtotal_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
+    discount_percent: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
+    discount_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     tax_rate: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
     tax_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     total_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
@@ -93,6 +95,7 @@ class PurchaseOrderLine(Base):
     raw_material_id: Mapped[int] = mapped_column(BigPK, ForeignKey("raw_materials.id"), nullable=False)
     quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False)
     unit_price: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False)
+    discount_percent: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
     line_total: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False)
     received_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
 

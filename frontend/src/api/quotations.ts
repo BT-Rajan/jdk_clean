@@ -17,6 +17,11 @@ export async function getQuotation(id: number): Promise<Quotation> {
   return data
 }
 
+export async function approveQuotation(id: number): Promise<Quotation> {
+  const { data } = await apiClient.post<Quotation>(`/api/quotations/${id}/approve`)
+  return data
+}
+
 export async function createQuotation(payload: QuotationPayload): Promise<Quotation> {
   const { data } = await apiClient.post<Quotation>('/api/quotations', payload)
   return data

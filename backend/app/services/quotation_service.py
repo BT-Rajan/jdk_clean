@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
-from app.core.tax import compute_tax
+from app.core.pricing import compute_document_totals, price_line
 from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.customer import Customer
 from app.models.product import Product
@@ -21,7 +21,8 @@ TABLE_NAME = "quotations"
 
 
 def _price_lines(db: Session, lines: list[dict]) -> list[dict]:
-    """Validate referenced products exist and compute each line's total."""
+    """Validate referenced products exist and compute each line's total,
+    net of that line's own discount_percent (default 0)."""
     priced: list[dict] = []
     for line in lines:
         product = (
@@ -31,8 +32,9 @@ def _price_lines(db: Session, lines: list[dict]) -> list[dict]:
         )
         if product is None:
             raise ValidationAppError(f"Product {line['product_id']} not found.")
-        line_total = round(float(line["quantity"]) * float(line["unit_price"]), 2)
-        priced.append({**line, "line_total": line_total})
+        discount_percent = float(line.get("discount_percent") or 0)
+        line_total = price_line(float(line["quantity"]), float(line["unit_price"]), discount_percent)
+        priced.append({**line, "discount_percent": discount_percent, "line_total": line_total})
     return priced
 
 
@@ -122,7 +124,8 @@ def create_quotation(db: Session, data: dict, user_id: int | None = None) -> Quo
     tax_rate = data.pop("tax_rate", None)
     if tax_rate is None:
         tax_rate = settings_service.get_default_tax_rate(db)
-    tax_amount, total_amount = compute_tax(subtotal_amount, tax_rate)
+    discount_percent = float(data.pop("discount_percent", None) or 0)
+    totals = compute_document_totals(subtotal_amount, discount_percent, tax_rate)
 
     quotation_number = number_series_service.next_number(db, "QUOTATION")
 
@@ -130,8 +133,10 @@ def create_quotation(db: Session, data: dict, user_id: int | None = None) -> Quo
         quotation_number=quotation_number,
         subtotal_amount=subtotal_amount,
         tax_rate=tax_rate,
-        tax_amount=tax_amount,
-        total_amount=total_amount,
+        discount_percent=discount_percent,
+        discount_amount=totals["discount_amount"],
+        tax_amount=totals["tax_amount"],
+        total_amount=totals["total_amount"],
         created_by=user_id,
         **data,
     )
@@ -163,6 +168,7 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
 
     lines = data.pop("lines", None)
     tax_rate_update = data.pop("tax_rate", None)
+    discount_percent_update = data.pop("discount_percent", None)
     # customer_id is required on the model; a None here means "not supplied"
     # rather than "clear it", so drop it if absent/blank.
     if data.get("customer_id") is None:
@@ -178,6 +184,12 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
         changes["tax_rate"] = (quotation.tax_rate, tax_rate_update)
         quotation.tax_rate = tax_rate_update
 
+    if discount_percent_update is not None and float(discount_percent_update) != float(quotation.discount_percent):
+        changes["discount_percent"] = (quotation.discount_percent, discount_percent_update)
+        quotation.discount_percent = discount_percent_update
+        quotation.approved_at = None
+        quotation.approved_by = None
+
     if lines is not None:
         priced = _price_lines(db, [dict(line) for line in lines])
         quotation.lines.clear()
@@ -185,11 +197,16 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
         quotation.lines = [QuotationDetail(**line) for line in priced]
         quotation.subtotal_amount = round(sum(line["line_total"] for line in priced), 2)
         changes["lines"] = ("(previous lines)", "(updated lines)")
+        quotation.approved_at = None
+        quotation.approved_by = None
 
-    if lines is not None or tax_rate_update is not None:
-        quotation.tax_amount, quotation.total_amount = compute_tax(
-            float(quotation.subtotal_amount), float(quotation.tax_rate)
+    if lines is not None or tax_rate_update is not None or discount_percent_update is not None:
+        totals = compute_document_totals(
+            float(quotation.subtotal_amount), float(quotation.discount_percent), float(quotation.tax_rate)
         )
+        quotation.discount_amount = totals["discount_amount"]
+        quotation.tax_amount = totals["tax_amount"]
+        quotation.total_amount = totals["total_amount"]
 
     quotation.updated_by = user_id
     audit_service.log_update(db, TABLE_NAME, quotation_id, changes, user_id)
@@ -212,6 +229,19 @@ def change_status(
     quotation = get_quotation(db, quotation_id)
     assert_transition_allowed(ALLOWED_TRANSITIONS, quotation.status, new_status, "quotation")
 
+    if new_status == "sent":
+        threshold = settings_service.get_large_discount_approval_threshold(db)
+        if threshold is not None and quotation.approved_at is None:
+            largest = max(
+                [float(quotation.discount_percent)] + [float(line.discount_percent) for line in quotation.lines],
+                default=0.0,
+            )
+            if largest >= threshold:
+                raise ConflictError(
+                    f"This quotation has a discount of {largest}%, at or above the large-discount "
+                    f"approval threshold ({threshold}%), and needs admin approval before it can be sent."
+                )
+
     if new_status in STATUSES_REQUIRING_CLOSE_REASON:
         assert_reason_given(reason, "A reason is required to close a quotation without generating an order.")
 
@@ -228,6 +258,24 @@ def change_status(
     if new_status in ("rejected", "expired"):
         deal_service.reconcile_deal_status(db, quotation.deal_id, user_id)
 
+    return get_quotation(db, quotation_id)
+
+
+def approve_quotation(db: Session, quotation_id: int, user_id: int | None = None) -> Quotation:
+    """Admin sign-off clearing the large-discount gate above -- can be
+    called any time a quotation is still draft, whether or not it's
+    actually at/above the current threshold (the threshold can change
+    after the quotation was drafted; approving early never hurts)."""
+    quotation = get_quotation(db, quotation_id)
+    if quotation.status != "draft":
+        raise ConflictError("Only a draft quotation can be approved.")
+    quotation.approved_at = datetime.now(timezone.utc)
+    quotation.approved_by = user_id
+    quotation.updated_by = user_id
+    audit_service.log_update(
+        db, TABLE_NAME, quotation_id, {"approved_at": (None, quotation.approved_at.isoformat())}, user_id
+    )
+    db.commit()
     return get_quotation(db, quotation_id)
 
 

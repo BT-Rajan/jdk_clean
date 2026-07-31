@@ -29,6 +29,11 @@ class SettingsOut(BaseModel):
     # until an admin approves it. See settings_service.
     # get_large_po_approval_threshold.
     large_po_approval_threshold: str
+    # Percentage, or "" to disable. A document-level discount, or any
+    # single line's discount, at/above this can't leave draft until an
+    # admin approves it. See settings_service.
+    # get_large_discount_approval_threshold.
+    large_discount_approval_threshold: str
 
 
 class SettingsUpdate(BaseModel):
@@ -47,3 +52,4 @@ class SettingsUpdate(BaseModel):
     auto_draft_purchase_orders_from_mrp: str | None = Field(default=None, pattern="^(true|false)$")
     default_tax_rate: str | None = None
     large_po_approval_threshold: str | None = None
+    large_discount_approval_threshold: str | None = None

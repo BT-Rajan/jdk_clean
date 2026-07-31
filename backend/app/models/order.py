@@ -67,6 +67,8 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
         Enum(*ORDER_STATUSES, name="order_status"), nullable=False, default="draft"
     )
     subtotal_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
+    discount_percent: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
+    discount_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     # Percentage, e.g. 0 or 5. Kuwait has no GST/VAT -- defaults to 0 from
     # Settings -> default_tax_rate, editable per document.
     tax_rate: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
@@ -76,6 +78,11 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     # Set when Sales cancels this order without a delivery note ever
     # having been issued for it.
     close_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # An order whose discount (document-level or any single line's) is
+    # at/above Settings -> large_discount_approval_threshold can't leave
+    # 'draft' until an admin approves it.
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    approved_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
     # Set by order_service.escalate_overdue_orders when the (confirmed or
     # requested) delivery date has passed with neither a delivery note nor
     # close_reason recorded. Cleared by an admin via admin_review().
@@ -103,6 +110,7 @@ class OrderDetail(Base):
     product_id: Mapped[int] = mapped_column(BigPK, ForeignKey("products.id"), nullable=False)
     quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False)
     unit_price: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False)
+    discount_percent: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
     line_total: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False)
 
     order: Mapped[Order] = relationship(back_populates="lines")

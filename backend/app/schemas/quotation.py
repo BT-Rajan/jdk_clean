@@ -9,6 +9,8 @@ class QuotationLineIn(BaseModel):
     product_id: int
     quantity: float = Field(gt=0)
     unit_price: float = Field(ge=0)
+    # Percentage, e.g. 0 or 10 -- this line's own discount.
+    discount_percent: float = Field(default=0, ge=0, le=100)
 
 
 class QuotationLineOut(BaseModel):
@@ -19,6 +21,7 @@ class QuotationLineOut(BaseModel):
     unit: str | None = None
     quantity: float
     unit_price: float
+    discount_percent: float
     line_total: float
 
     model_config = {"from_attributes": True}
@@ -35,6 +38,7 @@ class QuotationCreate(BaseModel):
     # Percentage, e.g. 0 or 5. Defaults to Settings -> default_tax_rate
     # (0% -- Kuwait has no GST/VAT) when not given.
     tax_rate: float | None = Field(default=None, ge=0, le=100)
+    discount_percent: float | None = Field(default=None, ge=0, le=100)
     lines: list[QuotationLineIn] = Field(min_length=1)
 
     @field_validator("quotation_date", "valid_until")
@@ -58,6 +62,7 @@ class QuotationUpdate(BaseModel):
     valid_until: date | None = None
     notes: str | None = None
     tax_rate: float | None = Field(default=None, ge=0, le=100)
+    discount_percent: float | None = Field(default=None, ge=0, le=100)
     lines: list[QuotationLineIn] | None = Field(default=None, min_length=1)
 
     @field_validator("quotation_date", "valid_until")
@@ -88,6 +93,8 @@ class QuotationOut(BaseModel):
     valid_until: date | None
     status: str
     subtotal_amount: float
+    discount_percent: float
+    discount_amount: float
     tax_rate: float
     tax_amount: float
     total_amount: float
@@ -96,6 +103,7 @@ class QuotationOut(BaseModel):
     feasibility_id: int | None
     auto_created: bool
     close_reason: str | None
+    approved_at: datetime | None
     lines: list[QuotationLineOut] = []
     created_at: datetime
     updated_at: datetime

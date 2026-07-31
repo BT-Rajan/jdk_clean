@@ -4,6 +4,7 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
+  approveQuotation,
   convertQuotationToOrder,
   deleteQuotation,
   downloadQuotationPdf,
@@ -18,7 +19,7 @@ import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
-import { canWriteDepartment } from '@/lib/roles'
+import { canWriteDepartment, isAdmin } from '@/lib/roles'
 import { QUOTATION_STATUSES_REQUIRING_REASON, QUOTATION_TRANSITIONS } from '@/lib/statusTransitions'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
 
@@ -28,6 +29,7 @@ export function QuotationDetailPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const allowWrite = canWriteDepartment(user, 'sales')
+  const allowAdmin = isAdmin(user?.role)
 
   const [quotation, setQuotation] = useState<Quotation | null>(null)
   const [loading, setLoading] = useState(true)
@@ -55,6 +57,20 @@ export function QuotationDetailPage() {
       const updated = await updateQuotationStatus(quotationId, status, reason)
       setQuotation(updated)
       setNotice(`Status changed to ${status}.`)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleApprove() {
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await approveQuotation(quotationId)
+      setQuotation(updated)
+      setNotice('Approved.')
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -185,6 +201,16 @@ export function QuotationDetailPage() {
               {quotation.deal_number}
             </Link>
           )}
+          {quotation.approved_at && (
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200">
+              Approved {formatDate(quotation.approved_at)}
+            </span>
+          )}
+          {allowAdmin && quotation.status === 'draft' && !quotation.approved_at && (
+            <Button variant="ghost" size="sm" isLoading={busy} onClick={handleApprove}>
+              Approve
+            </Button>
+          )}
           {quotation.converted_order_id && (
             <Link to={`/orders/${quotation.converted_order_id}`} className="text-sm text-gold-300 hover:text-gold-200">
               View converted order →
@@ -208,10 +234,16 @@ export function QuotationDetailPage() {
           <Field label="Valid until" value={formatDate(quotation.valid_until)} />
           <Field label="Total" value={formatCurrency(quotation.total_amount)} />
         </dl>
-        {quotation.tax_rate > 0 && (
+        {(quotation.tax_rate > 0 || quotation.discount_percent > 0) && (
           <p className="mt-3 text-xs text-white/40">
-            Subtotal {formatCurrency(quotation.subtotal_amount)} + {quotation.tax_rate}% tax (
-            {formatCurrency(quotation.tax_amount)}) = {formatCurrency(quotation.total_amount)}
+            Subtotal {formatCurrency(quotation.subtotal_amount)}
+            {quotation.discount_percent > 0 && (
+              <> − {quotation.discount_percent}% discount ({formatCurrency(quotation.discount_amount)})</>
+            )}
+            {quotation.tax_rate > 0 && (
+              <> + {quotation.tax_rate}% tax ({formatCurrency(quotation.tax_amount)})</>
+            )}
+            {' '}= {formatCurrency(quotation.total_amount)}
           </p>
         )}
 

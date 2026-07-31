@@ -17,6 +17,11 @@ export async function getOrder(id: number): Promise<Order> {
   return data
 }
 
+export async function approveOrder(id: number): Promise<Order> {
+  const { data } = await apiClient.post<Order>(`/api/orders/${id}/approve`)
+  return data
+}
+
 export async function getOrderJourney(id: number): Promise<OrderJourney> {
   const { data } = await apiClient.get<OrderJourney>(`/api/orders/${id}/journey`)
   return data

@@ -6,6 +6,7 @@ export interface QuotationLineInput {
   product_id: number
   quantity: number
   unit_price: number
+  discount_percent?: number
 }
 
 export interface QuotationLine extends QuotationLineInput {
@@ -13,6 +14,7 @@ export interface QuotationLine extends QuotationLineInput {
   product_code: string | null
   product_name: string | null
   unit: string | null
+  discount_percent: number
   line_total: number
 }
 
@@ -32,11 +34,17 @@ export interface Quotation {
   valid_until: string | null
   status: QuotationStatus
   subtotal_amount: number
+  discount_percent: number
+  discount_amount: number
   tax_rate: number
   tax_amount: number
   total_amount: number
   notes: string | null
   converted_order_id: number | null
+  /** Set once an admin has approved a large discount on this quotation
+   * (Settings -> large_discount_approval_threshold). Null if never
+   * required or not yet approved. */
+  approved_at: string | null
   lines: QuotationLine[]
   created_at: string
   updated_at: string
@@ -51,6 +59,9 @@ export interface QuotationPayload {
   /** Percentage, e.g. 0 or 5. Omit to use the backend's default
    * (Settings -> default_tax_rate, 0% -- Kuwait has no GST/VAT). */
   tax_rate?: number
+  /** Percentage, e.g. 0 or 10 -- a whole-document discount on top of
+   * any per-line discounts. */
+  discount_percent?: number
   lines: QuotationLineInput[]
 }
 
