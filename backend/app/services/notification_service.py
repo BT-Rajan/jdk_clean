@@ -225,6 +225,37 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
                 }
             )
 
+    # 8. Auto-drafted purchase orders still sitting in draft, never sent
+    # -- Procurement needs to review and either send or discard them,
+    # same as the auto-created-quotation notification above but for the
+    # procurement side.
+    if _visible(user, ("procurement",)):
+        from app.models.purchase_order import PurchaseOrder
+
+        unreviewed_pos = (
+            db.query(PurchaseOrder)
+            .options(joinedload(PurchaseOrder.supplier))
+            .filter(
+                PurchaseOrder.deleted_at.is_(None),
+                PurchaseOrder.auto_created.is_(True),
+                PurchaseOrder.status == "draft",
+            )
+            .order_by(PurchaseOrder.created_at)
+            .all()
+        )
+        for po in unreviewed_pos:
+            items.append(
+                {
+                    "id": f"po-auto-draft-{po.id}",
+                    "type": "purchase_order_auto_draft_unreviewed",
+                    "severity": "low",
+                    "title": f"{po.po_number} was auto-drafted from an MRP shortage",
+                    "message": f"Review quantities and pricing, then send or discard — {po.supplier.name if po.supplier else 'unknown supplier'}.",
+                    "link": f"/purchase-orders/{po.id}",
+                    "created_at": po.created_at,
+                }
+            )
+
     def _sort_key(item: dict):
         created = item["created_at"]
         if created is None:

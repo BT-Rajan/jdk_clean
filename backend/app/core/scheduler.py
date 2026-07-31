@@ -49,6 +49,19 @@ def _run_all_scans() -> None:
                     logger.info("Scheduled scan: %d %s flagged.", len(flagged), label)
             except Exception:
                 logger.exception("Scheduled scan for %s failed.", label)
+
+        # Not a plain flag/escalate check like the others -- this one
+        # creates new draft POs, gated by its own settings toggle (see
+        # settings_service.is_auto_draft_purchase_orders_enabled).
+        from app.services import settings_service
+
+        try:
+            if settings_service.is_auto_draft_purchase_orders_enabled(db):
+                drafted = purchase_order_service.auto_draft_from_mrp_shortages(db)
+                if drafted:
+                    logger.info("Scheduled scan: %d purchase order(s) auto-drafted from MRP shortages.", len(drafted))
+        except Exception:
+            logger.exception("Scheduled MRP auto-draft failed.")
     finally:
         db.close()
 

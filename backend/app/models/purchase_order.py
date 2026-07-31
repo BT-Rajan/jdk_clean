@@ -50,6 +50,10 @@ class PurchaseOrder(Base, TimestampMixin, SoftDeleteMixin):
     )
     total_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # True when the system drafted this automatically from an MRP
+    # shortage, false for a person-created PO. Never auto-sent -- always
+    # lands in 'draft' for procurement to review, edit, and send by hand.
+    auto_created: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Mandatory when status becomes 'cancelled' -- same requirement as
     # orders/quotations/feasibility.
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)

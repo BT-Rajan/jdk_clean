@@ -31,7 +31,13 @@ PRODUCTION_FIELDS = ["auto_schedule_production_on_order_confirm"]
 # automatically -- delivery_date defaulted to today, adjustable
 # afterward -- or leaves it for Sales/Warehouse to create by hand.
 DELIVERY_FIELDS = ["auto_create_delivery_note_on_ready_to_ship"]
-ALL_FIELDS = COMPANY_FIELDS + AI_FIELDS + FACTORY_FIELDS + SALES_FIELDS + PRODUCTION_FIELDS + DELIVERY_FIELDS
+# Procurement workflow: whether an MRP-identified raw material shortage
+# automatically drafts a purchase order (grouped by supplier, using the
+# same supplier-suggestion logic the MRP report itself already shows) --
+# always landing in 'draft', never sent automatically -- or is left for
+# Procurement to act on by hand from the MRP report as before.
+PROCUREMENT_FIELDS = ["auto_draft_purchase_orders_from_mrp"]
+ALL_FIELDS = COMPANY_FIELDS + AI_FIELDS + FACTORY_FIELDS + SALES_FIELDS + PRODUCTION_FIELDS + DELIVERY_FIELDS + PROCUREMENT_FIELDS
 
 DEFAULTS = {key: "" for key in ALL_FIELDS}
 # factory_workday_hours defaults to a standard shift length rather than
@@ -44,6 +50,7 @@ DEFAULTS["factory_workday_hours"] = "8"
 DEFAULTS["auto_create_quotation_from_feasibility"] = "true"
 DEFAULTS["auto_schedule_production_on_order_confirm"] = "true"
 DEFAULTS["auto_create_delivery_note_on_ready_to_ship"] = "true"
+DEFAULTS["auto_draft_purchase_orders_from_mrp"] = "true"
 
 
 def get_all(db: Session) -> dict:
@@ -97,6 +104,11 @@ def is_auto_schedule_production_enabled(db: Session) -> bool:
 def is_auto_create_delivery_note_enabled(db: Session) -> bool:
     values = get_all(db)
     return values.get("auto_create_delivery_note_on_ready_to_ship", "true").strip().lower() in ("true", "1", "yes")
+
+
+def is_auto_draft_purchase_orders_enabled(db: Session) -> bool:
+    values = get_all(db)
+    return values.get("auto_draft_purchase_orders_from_mrp", "true").strip().lower() in ("true", "1", "yes")
 
 
 def update(db: Session, data: dict) -> dict:

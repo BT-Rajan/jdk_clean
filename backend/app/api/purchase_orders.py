@@ -109,6 +109,23 @@ def scan_overdue_purchase_orders(
     }
 
 
+@router.post("/auto-draft-from-mrp")
+def auto_draft_from_mrp(
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """Drafts a purchase order (always 'draft', never sent) for every
+    MRP-identified shortage with a known supplier, grouped by supplier.
+    Runs automatically on a schedule (see core/scheduler.py, gated by
+    Settings -> Procurement) -- this lets Procurement trigger the same
+    pass on demand instead of waiting for the next scheduled run."""
+    drafted = purchase_order_service.auto_draft_from_mrp_shortages(db, user_id=user.id)
+    return {
+        "drafted_count": len(drafted),
+        "purchase_order_ids": [po.id for po in drafted],
+    }
+
+
 @router.post("/{po_id}/admin-review", response_model=PurchaseOrderOut)
 def admin_review_purchase_order(
     po_id: int,

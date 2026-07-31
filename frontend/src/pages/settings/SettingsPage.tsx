@@ -152,6 +152,22 @@ export function SettingsPage() {
             </GlassCard>
 
             <GlassCard className="p-8">
+              <h2 className="font-display text-lg font-medium text-white">Procurement workflow</h2>
+              <p className="mt-1 text-sm text-white/50">
+                When MRP identifies a raw material shortage with a known supplier, the system can draft a purchase
+                order automatically -- grouped by supplier, priced from the material's cost as a starting estimate.
+                It always lands in draft and is never sent automatically; Procurement gets notified to review,
+                adjust, and send it by hand.
+              </p>
+              <div className="mt-6">
+                <SelectField label="Auto-draft purchase orders from MRP shortages" {...register('auto_draft_purchase_orders_from_mrp')}>
+                  <option value="true">On</option>
+                  <option value="false">Off (act on MRP report manually, as before)</option>
+                </SelectField>
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-8">
               <h2 className="font-display text-lg font-medium text-white">AI assistant provider</h2>
               <p className="mt-1 text-sm text-white/50">
                 Visible here only -- the assistant itself never names a provider anywhere else in the app.

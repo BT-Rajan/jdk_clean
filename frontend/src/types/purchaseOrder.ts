@@ -32,6 +32,10 @@ export interface PurchaseOrder {
   status: PurchaseOrderStatus
   total_amount: number
   notes: string | null
+  /** True when the system drafted this automatically from an MRP
+   * shortage, rather than a person creating it. */
+  auto_created: boolean
+  cancel_reason: string | null
   lines: PurchaseOrderLine[]
   created_at: string
   updated_at: string

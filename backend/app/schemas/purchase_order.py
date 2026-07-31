@@ -86,6 +86,7 @@ class PurchaseOrderOut(BaseModel):
     status: str
     total_amount: float
     notes: str | None
+    auto_created: bool
     cancel_reason: str | None
     admin_review_required: bool
     admin_reviewed_at: datetime | None

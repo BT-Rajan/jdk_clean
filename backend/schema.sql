@@ -427,6 +427,11 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     status          ENUM('draft','sent','confirmed','partially_received','received','cancelled') NOT NULL DEFAULT 'draft',
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
+    -- True when the system drafted this automatically from an MRP
+    -- shortage (see purchase_order_service.auto_draft_from_mrp_shortages),
+    -- false for a person-created PO. Never auto-sent -- always lands in
+    -- 'draft' for procurement to review, edit, and send by hand.
+    auto_created    TINYINT(1) NOT NULL DEFAULT 0,
     -- Sales/order and feasibility already require a reason to cancel; POs
     -- didn't -- inconsistent. Mandatory when status becomes 'cancelled'.
     cancel_reason   TEXT NULL,

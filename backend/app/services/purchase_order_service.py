@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
@@ -9,7 +9,7 @@ from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.purchase_order import ALLOWED_TRANSITIONS, PurchaseOrder, PurchaseOrderLine
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
-from app.services import audit_service, inventory_service, number_series_service
+from app.services import audit_service, inventory_service, mrp_service, number_series_service
 
 TABLE_NAME = "purchase_orders"
 
@@ -107,6 +107,104 @@ def create_purchase_order(db: Session, data: dict, user_id: int | None = None) -
     db.commit()
     db.refresh(po)
     return get_purchase_order(db, po.id)
+
+
+def auto_draft_from_mrp_shortages(db: Session, user_id: int | None = None) -> list[PurchaseOrder]:
+    """MRP already knows exactly what's short and, for each material,
+    which supplier(s) could cover it (mrp_service.compute_requirements's
+    suggested_purchases -- a real greedy allocation across known
+    suppliers by lead time, respecting each one's max_supply_quantity).
+    This turns that into actual draft purchase orders: one per supplier,
+    grouping every material that supplier was suggested for. Always
+    lands in 'draft' -- never sent automatically -- for procurement to
+    review, adjust, and send by hand (see notification_service.py for
+    the accompanying "needs review" notification).
+
+    Materials with no known supplier (no SupplierMaterial row at all)
+    are skipped -- there's nothing to draft a PO against; the shortage
+    still shows on the MRP report itself for a person to source
+    manually. Materials already covered by an existing non-cancelled PO
+    line are also skipped, so re-running this periodically (see
+    core/scheduler.py) doesn't pile up duplicate drafts for the same
+    shortage.
+    """
+    requirements = mrp_service.compute_requirements(db)
+    if not requirements:
+        return []
+
+    already_pending = {
+        row.raw_material_id
+        for row in db.query(PurchaseOrderLine.raw_material_id)
+        .join(PurchaseOrder, PurchaseOrderLine.purchase_order_id == PurchaseOrder.id)
+        .filter(
+            PurchaseOrder.deleted_at.is_(None),
+            PurchaseOrder.status.in_(("draft", "sent", "confirmed", "partially_received")),
+        )
+        .all()
+    }
+
+    # Group this run's supplier suggestions -- one PO per supplier,
+    # covering every material that supplier was suggested for.
+    by_supplier: dict[int, list[dict]] = {}
+    for req in requirements:
+        raw_material_id = req["raw_material_id"]
+        if raw_material_id in already_pending:
+            continue
+        for suggestion in req["suggested_purchases"]:
+            by_supplier.setdefault(suggestion["supplier_id"], []).append(
+                {
+                    "raw_material_id": raw_material_id,
+                    "quantity": suggestion["quantity"],
+                    "lead_time_days": suggestion["lead_time_days"],
+                }
+            )
+
+    if not by_supplier:
+        return []
+
+    material_ids = {line["raw_material_id"] for lines in by_supplier.values() for line in lines}
+    materials = {m.id: m for m in db.query(RawMaterial).filter(RawMaterial.id.in_(material_ids)).all()}
+
+    created: list[PurchaseOrder] = []
+    today = datetime.now(timezone.utc).date()
+    for supplier_id, lines in by_supplier.items():
+        max_lead_time = max((line["lead_time_days"] or 7) for line in lines)
+        po_lines = []
+        for line in lines:
+            material = materials.get(line["raw_material_id"])
+            if material is None:
+                continue
+            po_lines.append(
+                {
+                    "raw_material_id": line["raw_material_id"],
+                    "quantity": line["quantity"],
+                    # A starting estimate procurement adjusts before
+                    # sending -- this is a draft, not a commitment.
+                    "unit_price": float(material.unit_cost),
+                }
+            )
+        if not po_lines:
+            continue
+        try:
+            po = create_purchase_order(
+                db,
+                {
+                    "supplier_id": supplier_id,
+                    "order_date": today,
+                    "expected_delivery_date": today + timedelta(days=max_lead_time),
+                    "notes": "Auto-drafted from an MRP shortage. Review quantities and pricing before sending.",
+                    "auto_created": True,
+                    "lines": po_lines,
+                },
+                user_id=user_id,
+            )
+            created.append(po)
+        except (ConflictError, ValidationAppError):
+            # Best-effort convenience, not a hard requirement -- the
+            # shortage is still visible on the MRP report either way.
+            continue
+
+    return created
 
 
 def update_purchase_order(

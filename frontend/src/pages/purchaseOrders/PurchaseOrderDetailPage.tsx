@@ -188,6 +188,11 @@ export function PurchaseOrderDetailPage() {
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-4">
           <StatusBadge status={po.status} />
+          {po.auto_created && (
+            <span className="rounded-full border border-gold-400/30 bg-gold-500/10 px-2.5 py-1 text-xs font-medium text-gold-200">
+              Auto-drafted from MRP shortage
+            </span>
+          )}
           {allowWrite && !justDeleted && nextStatuses.length > 0 && (
             <div className="ml-auto">
               <StatusTransitionButtons

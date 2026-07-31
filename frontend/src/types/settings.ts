@@ -26,6 +26,9 @@ export interface Settings {
   /** 'true' or 'false' -- whether an order becoming ready to ship
    * automatically drafts a delivery note. Admin/manager-only to change. */
   auto_create_delivery_note_on_ready_to_ship: string
+  /** 'true' or 'false' -- whether an MRP shortage automatically drafts a
+   * purchase order. Admin/manager-only to change. */
+  auto_draft_purchase_orders_from_mrp: string
 }
 
 export type SettingsPayload = Partial<Settings>
