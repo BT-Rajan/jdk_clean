@@ -31,6 +31,9 @@ export interface Quotation {
   quotation_date: string
   valid_until: string | null
   status: QuotationStatus
+  subtotal_amount: number
+  tax_rate: number
+  tax_amount: number
   total_amount: number
   notes: string | null
   converted_order_id: number | null
@@ -45,6 +48,9 @@ export interface QuotationPayload {
   quotation_date: string
   valid_until?: string | null
   notes?: string | null
+  /** Percentage, e.g. 0 or 5. Omit to use the backend's default
+   * (Settings -> default_tax_rate, 0% -- Kuwait has no GST/VAT). */
+  tax_rate?: number
   lines: QuotationLineInput[]
 }
 

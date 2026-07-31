@@ -5,11 +5,12 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.tax import compute_tax
 from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.purchase_order import ALLOWED_TRANSITIONS, PurchaseOrder, PurchaseOrderLine
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
-from app.services import audit_service, inventory_service, mrp_service, number_series_service
+from app.services import audit_service, inventory_service, mrp_service, number_series_service, settings_service
 
 TABLE_NAME = "purchase_orders"
 
@@ -94,11 +95,23 @@ def create_purchase_order(db: Session, data: dict, user_id: int | None = None) -
     _validate_supplier(db, data["supplier_id"])
 
     lines = _price_lines(db, [dict(line) for line in data.pop("lines")])
-    total_amount = round(sum(line["line_total"] for line in lines), 2)
+    subtotal_amount = round(sum(line["line_total"] for line in lines), 2)
+    tax_rate = data.pop("tax_rate", None)
+    if tax_rate is None:
+        tax_rate = settings_service.get_default_tax_rate(db)
+    tax_amount, total_amount = compute_tax(subtotal_amount, tax_rate)
 
     po_number = number_series_service.next_number(db, "PURCHASE_ORDER")
 
-    po = PurchaseOrder(po_number=po_number, total_amount=total_amount, created_by=user_id, **data)
+    po = PurchaseOrder(
+        po_number=po_number,
+        subtotal_amount=subtotal_amount,
+        tax_rate=tax_rate,
+        tax_amount=tax_amount,
+        total_amount=total_amount,
+        created_by=user_id,
+        **data,
+    )
     po.lines = [PurchaseOrderLine(**line) for line in lines]
 
     db.add(po)
@@ -220,6 +233,7 @@ def update_purchase_order(
         _validate_supplier(db, data["supplier_id"])
 
     lines = data.pop("lines", None)
+    tax_rate_update = data.pop("tax_rate", None)
     if data.get("supplier_id") is None:
         data.pop("supplier_id", None)
 
@@ -229,13 +243,20 @@ def update_purchase_order(
             changes[field] = (old_value, new_value)
             setattr(po, field, new_value)
 
+    if tax_rate_update is not None and float(tax_rate_update) != float(po.tax_rate):
+        changes["tax_rate"] = (po.tax_rate, tax_rate_update)
+        po.tax_rate = tax_rate_update
+
     if lines is not None:
         priced = _price_lines(db, [dict(line) for line in lines])
         po.lines.clear()
         db.flush()
         po.lines = [PurchaseOrderLine(**line) for line in priced]
-        po.total_amount = round(sum(line["line_total"] for line in priced), 2)
+        po.subtotal_amount = round(sum(line["line_total"] for line in priced), 2)
         changes["lines"] = ("(previous lines)", "(updated lines)")
+
+    if lines is not None or tax_rate_update is not None:
+        po.tax_amount, po.total_amount = compute_tax(float(po.subtotal_amount), float(po.tax_rate))
 
     po.updated_by = user_id
     audit_service.log_update(db, TABLE_NAME, po_id, changes, user_id)
@@ -252,7 +273,15 @@ def change_status(
     po = get_purchase_order(db, po_id)
     assert_transition_allowed(ALLOWED_TRANSITIONS, po.status, new_status, "purchase order")
 
-    if new_status == "cancelled":
+    if new_status == "sent":
+        threshold = settings_service.get_large_po_approval_threshold(db)
+        if threshold is not None and float(po.total_amount) >= threshold and po.approved_at is None:
+            raise ConflictError(
+                f"This purchase order (KWD {float(po.total_amount):,.2f}) is at or above the "
+                f"large-PO approval threshold (KWD {threshold:,.2f}) and needs admin approval "
+                f"before it can be sent."
+            )
+    elif new_status == "cancelled":
         assert_reason_given(reason, "A reason is required to cancel a purchase order.")
         po.cancel_reason = reason
 
@@ -260,6 +289,24 @@ def change_status(
     po.status = new_status
     po.updated_by = user_id
     audit_service.log_update(db, TABLE_NAME, po_id, {"status": (old_status, new_status)}, user_id)
+    db.commit()
+    return get_purchase_order(db, po_id)
+
+
+def approve_purchase_order(db: Session, po_id: int, user_id: int | None = None) -> PurchaseOrder:
+    """Admin sign-off clearing the large-PO gate above -- can be called
+    any time a PO is still draft, whether or not it's actually at/above
+    the current threshold (the threshold can change after the PO was
+    drafted; approving early never hurts)."""
+    po = get_purchase_order(db, po_id)
+    if po.status != "draft":
+        raise ConflictError("Only a draft purchase order can be approved.")
+    po.approved_at = datetime.now(timezone.utc)
+    po.approved_by = user_id
+    po.updated_by = user_id
+    audit_service.log_update(
+        db, TABLE_NAME, po_id, {"approved_at": (None, po.approved_at.isoformat())}, user_id
+    )
     db.commit()
     return get_purchase_order(db, po_id)
 

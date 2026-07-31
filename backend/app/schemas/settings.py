@@ -22,6 +22,13 @@ class SettingsOut(BaseModel):
     auto_create_delivery_note_on_ready_to_ship: str
     # 'true' or 'false'. See settings_service.is_auto_draft_purchase_orders_enabled.
     auto_draft_purchase_orders_from_mrp: str
+    # Percentage, e.g. "0" or "5". Kuwait has no GST/VAT -- defaults to 0,
+    # provisioned for later. See settings_service.get_default_tax_rate.
+    default_tax_rate: str
+    # KWD amount, or "" to disable. A PO at/above this can't be sent
+    # until an admin approves it. See settings_service.
+    # get_large_po_approval_threshold.
+    large_po_approval_threshold: str
 
 
 class SettingsUpdate(BaseModel):
@@ -38,3 +45,5 @@ class SettingsUpdate(BaseModel):
     auto_schedule_production_on_order_confirm: str | None = Field(default=None, pattern="^(true|false)$")
     auto_create_delivery_note_on_ready_to_ship: str | None = Field(default=None, pattern="^(true|false)$")
     auto_draft_purchase_orders_from_mrp: str | None = Field(default=None, pattern="^(true|false)$")
+    default_tax_rate: str | None = None
+    large_po_approval_threshold: str | None = None

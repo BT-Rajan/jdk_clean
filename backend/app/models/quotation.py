@@ -44,6 +44,9 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
     status: Mapped[str] = mapped_column(
         Enum(*QUOTATION_STATUSES, name="quotation_status"), nullable=False, default="draft"
     )
+    subtotal_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
+    tax_rate: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
+    tax_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     total_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     converted_order_id: Mapped[int | None] = mapped_column(BigPK, nullable=True)

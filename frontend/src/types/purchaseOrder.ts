@@ -30,12 +30,19 @@ export interface PurchaseOrder {
   order_date: string
   expected_delivery_date: string | null
   status: PurchaseOrderStatus
+  subtotal_amount: number
+  tax_rate: number
+  tax_amount: number
   total_amount: number
   notes: string | null
   /** True when the system drafted this automatically from an MRP
    * shortage, rather than a person creating it. */
   auto_created: boolean
   cancel_reason: string | null
+  /** Set once an admin has approved this PO past the large-PO threshold
+   * (Settings -> large_po_approval_threshold). Null if never required or
+   * not yet approved. */
+  approved_at: string | null
   lines: PurchaseOrderLine[]
   created_at: string
   updated_at: string
@@ -52,6 +59,7 @@ export interface PurchaseOrderPayload {
   order_date: string
   expected_delivery_date?: string | null
   notes?: string | null
+  tax_rate?: number
   lines: PurchaseOrderLineInput[]
 }
 

@@ -382,6 +382,16 @@ CREATE TABLE IF NOT EXISTS orders (
     requested_delivery_date DATE NULL,
     confirmed_delivery_date DATE NULL,
     status          ENUM('draft','confirmed','in_production','ready_to_ship','shipped','delivered','cancelled') NOT NULL DEFAULT 'draft',
+    -- Sum of line totals, before tax.
+    subtotal_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+    -- Percentage (e.g. 0, 5) captured at creation from Settings ->
+    -- default_tax_rate, editable per document. Kuwait has no GST/VAT --
+    -- this is provisioned at 0% by default, not active.
+    tax_rate        DECIMAL(5,2) NOT NULL DEFAULT 0,
+    tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,
+    -- subtotal_amount + tax_amount. Every other part of the app that
+    -- reads total_amount (dashboard, deal detail, etc.) keeps working
+    -- unchanged, since it equals subtotal_amount whenever tax_rate is 0.
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
     close_reason    TEXT NULL,                        -- Sales' reason for cancelling without a delivery note
@@ -425,6 +435,9 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     order_date      DATE NOT NULL,
     expected_delivery_date DATE NULL,
     status          ENUM('draft','sent','confirmed','partially_received','received','cancelled') NOT NULL DEFAULT 'draft',
+    subtotal_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+    tax_rate        DECIMAL(5,2) NOT NULL DEFAULT 0,
+    tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
     -- True when the system drafted this automatically from an MRP
@@ -435,6 +448,12 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     -- Sales/order and feasibility already require a reason to cancel; POs
     -- didn't -- inconsistent. Mandatory when status becomes 'cancelled'.
     cancel_reason   TEXT NULL,
+    -- A PO at/above Settings -> large_po_approval_threshold can't move
+    -- 'draft' -> 'sent' until an admin approves it (see
+    -- purchase_order_service.approve_purchase_order). NULL threshold
+    -- means the gate is off entirely.
+    approved_at     DATETIME NULL,
+    approved_by     BIGINT UNSIGNED NULL,
     -- Same admin-review escalation pattern as orders (admin_review_required
     -- there): flagged when a PO is past expected_delivery_date with
     -- nothing received and not cancelled -- a supplier running late, the
@@ -450,6 +469,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_po_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
     CONSTRAINT fk_po_admin_reviewed_by FOREIGN KEY (admin_reviewed_by) REFERENCES users(id),
+    CONSTRAINT fk_po_approved_by FOREIGN KEY (approved_by) REFERENCES users(id),
     INDEX idx_po_status (status),
     INDEX idx_po_deleted_at (deleted_at),
     INDEX idx_po_admin_review (admin_review_required)
@@ -521,6 +541,9 @@ CREATE TABLE IF NOT EXISTS quotations (
     quotation_date  DATE NOT NULL,
     valid_until     DATE NULL,
     status          ENUM('draft','sent','accepted','rejected','expired','converted') NOT NULL DEFAULT 'draft',
+    subtotal_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+    tax_rate        DECIMAL(5,2) NOT NULL DEFAULT 0,
+    tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
     converted_order_id BIGINT UNSIGNED NULL,

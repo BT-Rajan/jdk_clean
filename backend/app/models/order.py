@@ -66,6 +66,11 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     status: Mapped[str] = mapped_column(
         Enum(*ORDER_STATUSES, name="order_status"), nullable=False, default="draft"
     )
+    subtotal_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
+    # Percentage, e.g. 0 or 5. Kuwait has no GST/VAT -- defaults to 0 from
+    # Settings -> default_tax_rate, editable per document.
+    tax_rate: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
+    tax_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     total_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Set when Sales cancels this order without a delivery note ever

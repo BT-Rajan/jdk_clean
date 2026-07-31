@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.tax import compute_tax
 from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.customer import Customer
 from app.models.product import Product
@@ -14,7 +15,7 @@ from app.models.quotation import (
     Quotation,
     QuotationDetail,
 )
-from app.services import audit_service, deal_service, feasibility_service, number_series_service
+from app.services import audit_service, deal_service, feasibility_service, number_series_service, settings_service
 
 TABLE_NAME = "quotations"
 
@@ -117,12 +118,19 @@ def create_quotation(db: Session, data: dict, user_id: int | None = None) -> Quo
     data["deal_id"] = deal.id
 
     lines = _price_lines(db, [dict(line) for line in data.pop("lines")])
-    total_amount = round(sum(line["line_total"] for line in lines), 2)
+    subtotal_amount = round(sum(line["line_total"] for line in lines), 2)
+    tax_rate = data.pop("tax_rate", None)
+    if tax_rate is None:
+        tax_rate = settings_service.get_default_tax_rate(db)
+    tax_amount, total_amount = compute_tax(subtotal_amount, tax_rate)
 
     quotation_number = number_series_service.next_number(db, "QUOTATION")
 
     quotation = Quotation(
         quotation_number=quotation_number,
+        subtotal_amount=subtotal_amount,
+        tax_rate=tax_rate,
+        tax_amount=tax_amount,
         total_amount=total_amount,
         created_by=user_id,
         **data,
@@ -154,6 +162,7 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
             raise ValidationAppError(f"Customer {data['customer_id']} not found.")
 
     lines = data.pop("lines", None)
+    tax_rate_update = data.pop("tax_rate", None)
     # customer_id is required on the model; a None here means "not supplied"
     # rather than "clear it", so drop it if absent/blank.
     if data.get("customer_id") is None:
@@ -165,13 +174,22 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
             changes[field] = (old_value, new_value)
             setattr(quotation, field, new_value)
 
+    if tax_rate_update is not None and float(tax_rate_update) != float(quotation.tax_rate):
+        changes["tax_rate"] = (quotation.tax_rate, tax_rate_update)
+        quotation.tax_rate = tax_rate_update
+
     if lines is not None:
         priced = _price_lines(db, [dict(line) for line in lines])
         quotation.lines.clear()
         db.flush()
         quotation.lines = [QuotationDetail(**line) for line in priced]
-        quotation.total_amount = round(sum(line["line_total"] for line in priced), 2)
+        quotation.subtotal_amount = round(sum(line["line_total"] for line in priced), 2)
         changes["lines"] = ("(previous lines)", "(updated lines)")
+
+    if lines is not None or tax_rate_update is not None:
+        quotation.tax_amount, quotation.total_amount = compute_tax(
+            float(quotation.subtotal_amount), float(quotation.tax_rate)
+        )
 
     quotation.updated_by = user_id
     audit_service.log_update(db, TABLE_NAME, quotation_id, changes, user_id)

@@ -35,6 +35,9 @@ export interface Order {
   requested_delivery_date: string | null
   confirmed_delivery_date: string | null
   status: OrderStatus
+  subtotal_amount: number
+  tax_rate: number
+  tax_amount: number
   total_amount: number
   notes: string | null
   lines: OrderLine[]
@@ -47,6 +50,7 @@ export interface OrderPayload {
   order_date: string
   requested_delivery_date?: string | null
   notes?: string | null
+  tax_rate?: number
   lines: OrderLineInput[]
 }
 

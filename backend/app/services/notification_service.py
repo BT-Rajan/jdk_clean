@@ -256,6 +256,39 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
                 }
             )
 
+    # 9. Draft purchase orders at/above the large-PO approval threshold
+    # that haven't been approved yet -- admin needs to sign off before
+    # this can be sent to its supplier.
+    if _visible(user, None):
+        from app.models.purchase_order import PurchaseOrder as PO
+        from app.services import settings_service
+
+        threshold = settings_service.get_large_po_approval_threshold(db)
+        if threshold is not None:
+            awaiting_approval = (
+                db.query(PO)
+                .options(joinedload(PO.supplier))
+                .filter(
+                    PO.deleted_at.is_(None),
+                    PO.status == "draft",
+                    PO.approved_at.is_(None),
+                    PO.total_amount >= threshold,
+                )
+                .all()
+            )
+            for po in awaiting_approval:
+                items.append(
+                    {
+                        "id": f"po-needs-approval-{po.id}",
+                        "type": "purchase_order_needs_approval",
+                        "severity": "high",
+                        "title": f"{po.po_number} needs approval before it can be sent",
+                        "message": f"KWD {float(po.total_amount):,.2f} is at or above the large-PO threshold — {po.supplier.name if po.supplier else 'unknown supplier'}.",
+                        "link": f"/purchase-orders/{po.id}",
+                        "created_at": po.created_at,
+                    }
+                )
+
     def _sort_key(item: dict):
         created = item["created_at"]
         if created is None:

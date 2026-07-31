@@ -22,6 +22,11 @@ export async function getPurchaseOrder(id: number): Promise<PurchaseOrder> {
   return data
 }
 
+export async function approvePurchaseOrder(id: number): Promise<PurchaseOrder> {
+  const { data } = await apiClient.post<PurchaseOrder>(`/api/purchase-orders/${id}/approve`)
+  return data
+}
+
 export async function createPurchaseOrder(payload: PurchaseOrderPayload): Promise<PurchaseOrder> {
   const { data } = await apiClient.post<PurchaseOrder>('/api/purchase-orders', payload)
   return data

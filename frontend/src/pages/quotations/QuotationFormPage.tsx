@@ -245,6 +245,17 @@ function QuotationCreateForm() {
             <TextField label="Valid until" type="date" min={todayDateInputMin} error={errors.valid_until?.message} {...register('valid_until')} />
           </div>
 
+          <TextField
+            label="Tax rate (%)"
+            type="number"
+            step="0.01"
+            min="0"
+            max="100"
+            placeholder="Leave blank to use the default (0% -- Kuwait has no GST/VAT)"
+            error={errors.tax_rate?.message}
+            {...register('tax_rate')}
+          />
+
         <LineItemsEditor control={control} register={register} watch={watch} errors={errors} products={products} />
 
         <TextareaField label="Notes" {...register('notes')} />

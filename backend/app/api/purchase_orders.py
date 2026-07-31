@@ -93,6 +93,19 @@ def update_status(
     return PurchaseOrderOut.from_model(po)
 
 
+@router.post("/{po_id}/approve", response_model=PurchaseOrderOut)
+def approve_purchase_order(
+    po_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    """Admin sign-off clearing the large-PO approval gate (Settings ->
+    large_po_approval_threshold) -- a draft PO at/above that amount can't
+    move to 'sent' until this has been called."""
+    po = purchase_order_service.approve_purchase_order(db, po_id, user_id=user.id)
+    return PurchaseOrderOut.from_model(po)
+
+
 @router.post("/scan-overdue")
 def scan_overdue_purchase_orders(
     db: Session = Depends(get_db),

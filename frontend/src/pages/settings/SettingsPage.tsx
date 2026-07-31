@@ -168,6 +168,43 @@ export function SettingsPage() {
             </GlassCard>
 
             <GlassCard className="p-8">
+              <h2 className="font-display text-lg font-medium text-white">Tax</h2>
+              <p className="mt-1 text-sm text-white/50">
+                Kuwait doesn't currently have GST/VAT. This rate is provisioned at 0% by default and applied to every
+                new quotation, order, and purchase order -- editable per document, and ready to switch on if that
+                ever changes, with no rework needed.
+              </p>
+              <div className="mt-6">
+                <TextField
+                  label="Default tax rate (%)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  {...register('default_tax_rate')}
+                />
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-8">
+              <h2 className="font-display text-lg font-medium text-white">Large purchase order approval</h2>
+              <p className="mt-1 text-sm text-white/50">
+                A purchase order at or above this amount (in KWD) can't be sent to its supplier until an admin
+                approves it. Leave blank to turn this off entirely.
+              </p>
+              <div className="mt-6">
+                <TextField
+                  label="Approval threshold (KWD)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="No threshold set -- approval not required"
+                  {...register('large_po_approval_threshold')}
+                />
+              </div>
+            </GlassCard>
+
+            <GlassCard className="p-8">
               <h2 className="font-display text-lg font-medium text-white">AI assistant provider</h2>
               <p className="mt-1 text-sm text-white/50">
                 Visible here only -- the assistant itself never names a provider anywhere else in the app.

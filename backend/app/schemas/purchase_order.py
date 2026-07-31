@@ -30,6 +30,9 @@ class PurchaseOrderCreate(BaseModel):
     order_date: date
     expected_delivery_date: date | None = None
     notes: str | None = None
+    # Percentage, e.g. 0 or 5. Defaults to Settings -> default_tax_rate
+    # (0% -- Kuwait has no GST/VAT) when not given.
+    tax_rate: float | None = Field(default=None, ge=0, le=100)
     lines: list[PurchaseOrderLineIn] = Field(min_length=1)
 
     @field_validator("order_date", "expected_delivery_date")
@@ -47,6 +50,7 @@ class PurchaseOrderUpdate(BaseModel):
     order_date: date | None = None
     expected_delivery_date: date | None = None
     notes: str | None = None
+    tax_rate: float | None = Field(default=None, ge=0, le=100)
     lines: list[PurchaseOrderLineIn] | None = None
 
     @field_validator("order_date", "expected_delivery_date")
@@ -84,10 +88,14 @@ class PurchaseOrderOut(BaseModel):
     order_date: date
     expected_delivery_date: date | None
     status: str
+    subtotal_amount: float
+    tax_rate: float
+    tax_amount: float
     total_amount: float
     notes: str | None
     auto_created: bool
     cancel_reason: str | None
+    approved_at: datetime | None
     admin_review_required: bool
     admin_reviewed_at: datetime | None
     admin_review_notes: str | None

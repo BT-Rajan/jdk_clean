@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.tax import compute_tax
 from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.customer import Customer
 from app.models.delivery_note import DeliveryNote
@@ -109,12 +110,19 @@ def create_order(db: Session, data: dict, user_id: int | None = None) -> Order:
     data["deal_id"] = deal.id
 
     lines = _price_lines(db, [dict(line) for line in data.pop("lines")])
-    total_amount = round(sum(line["line_total"] for line in lines), 2)
+    subtotal_amount = round(sum(line["line_total"] for line in lines), 2)
+    tax_rate = data.pop("tax_rate", None)
+    if tax_rate is None:
+        tax_rate = settings_service.get_default_tax_rate(db)
+    tax_amount, total_amount = compute_tax(subtotal_amount, tax_rate)
 
     order_number = number_series_service.next_number(db, "ORDER")
 
     order = Order(
         order_number=order_number,
+        subtotal_amount=subtotal_amount,
+        tax_rate=tax_rate,
+        tax_amount=tax_amount,
         total_amount=total_amount,
         created_by=user_id,
         **data,
@@ -146,6 +154,7 @@ def update_order(db: Session, order_id: int, data: dict, user_id: int | None = N
             raise ValidationAppError(f"Customer {data['customer_id']} not found.")
 
     lines = data.pop("lines", None)
+    tax_rate_update = data.pop("tax_rate", None)
     if data.get("customer_id") is None:
         data.pop("customer_id", None)
 
@@ -155,13 +164,20 @@ def update_order(db: Session, order_id: int, data: dict, user_id: int | None = N
             changes[field] = (old_value, new_value)
             setattr(order, field, new_value)
 
+    if tax_rate_update is not None and float(tax_rate_update) != float(order.tax_rate):
+        changes["tax_rate"] = (order.tax_rate, tax_rate_update)
+        order.tax_rate = tax_rate_update
+
     if lines is not None:
         priced = _price_lines(db, [dict(line) for line in lines])
         order.lines.clear()
         db.flush()
         order.lines = [OrderDetail(**line) for line in priced]
-        order.total_amount = round(sum(line["line_total"] for line in priced), 2)
+        order.subtotal_amount = round(sum(line["line_total"] for line in priced), 2)
         changes["lines"] = ("(previous lines)", "(updated lines)")
+
+    if lines is not None or tax_rate_update is not None:
+        order.tax_amount, order.total_amount = compute_tax(float(order.subtotal_amount), float(order.tax_rate))
 
     order.updated_by = user_id
     audit_service.log_update(db, TABLE_NAME, order_id, changes, user_id)
@@ -585,6 +601,9 @@ def create_order_from_quotation(db: Session, quotation_id: int, user_id: int | N
         customer_id=quotation.customer_id,
         deal_id=deal.id,
         order_date=datetime.now(timezone.utc).date(),
+        subtotal_amount=quotation.subtotal_amount,
+        tax_rate=quotation.tax_rate,
+        tax_amount=quotation.tax_amount,
         total_amount=quotation.total_amount,
         notes=f"Converted from quotation {quotation.quotation_number}.",
         created_by=user_id,

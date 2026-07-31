@@ -4,6 +4,7 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
+  approvePurchaseOrder,
   deletePurchaseOrder,
   downloadPurchaseOrderPdf,
   emailPurchaseOrder,
@@ -18,7 +19,7 @@ import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
-import { canWriteDepartment } from '@/lib/roles'
+import { canWriteDepartment, isAdmin } from '@/lib/roles'
 import { PURCHASE_ORDER_STATUSES_REQUIRING_REASON, PURCHASE_ORDER_TRANSITIONS } from '@/lib/statusTransitions'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
 
@@ -28,6 +29,7 @@ export function PurchaseOrderDetailPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const allowWrite = canWriteDepartment(user, 'procurement')
+  const allowAdmin = isAdmin(user?.role)
 
   const [po, setPo] = useState<PurchaseOrder | null>(null)
   const [loading, setLoading] = useState(true)
@@ -64,6 +66,20 @@ export function PurchaseOrderDetailPage() {
       const updated = await updatePurchaseOrderStatus(poId, status, reason)
       setPo(updated)
       setNotice(`Status changed to ${status}.`)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleApprove() {
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await approvePurchaseOrder(poId)
+      setPo(updated)
+      setNotice('Approved.')
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -193,6 +209,16 @@ export function PurchaseOrderDetailPage() {
               Auto-drafted from MRP shortage
             </span>
           )}
+          {po.approved_at && (
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200">
+              Approved {formatDate(po.approved_at)}
+            </span>
+          )}
+          {allowAdmin && po.status === 'draft' && !po.approved_at && (
+            <Button variant="ghost" size="sm" isLoading={busy} onClick={handleApprove}>
+              Approve
+            </Button>
+          )}
           {allowWrite && !justDeleted && nextStatuses.length > 0 && (
             <div className="ml-auto">
               <StatusTransitionButtons
@@ -211,6 +237,12 @@ export function PurchaseOrderDetailPage() {
           <Field label="Expected delivery" value={formatDate(po.expected_delivery_date)} />
           <Field label="Total" value={formatCurrency(po.total_amount)} />
         </dl>
+        {po.tax_rate > 0 && (
+          <p className="mt-3 text-xs text-white/40">
+            Subtotal {formatCurrency(po.subtotal_amount)} + {po.tax_rate}% tax ({formatCurrency(po.tax_amount)}) ={' '}
+            {formatCurrency(po.total_amount)}
+          </p>
+        )}
 
         {po.notes && (
           <div className="mt-6">

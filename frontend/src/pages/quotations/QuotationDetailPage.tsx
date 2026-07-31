@@ -208,6 +208,12 @@ export function QuotationDetailPage() {
           <Field label="Valid until" value={formatDate(quotation.valid_until)} />
           <Field label="Total" value={formatCurrency(quotation.total_amount)} />
         </dl>
+        {quotation.tax_rate > 0 && (
+          <p className="mt-3 text-xs text-white/40">
+            Subtotal {formatCurrency(quotation.subtotal_amount)} + {quotation.tax_rate}% tax (
+            {formatCurrency(quotation.tax_amount)}) = {formatCurrency(quotation.total_amount)}
+          </p>
+        )}
 
         {quotation.notes && (
           <div className="mt-6">

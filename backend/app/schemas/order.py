@@ -29,6 +29,7 @@ class OrderCreate(BaseModel):
     order_date: date
     requested_delivery_date: date | None = None
     notes: str | None = None
+    tax_rate: float | None = Field(default=None, ge=0, le=100)
     lines: list[OrderLineIn] = Field(min_length=1)
 
     @field_validator("order_date", "requested_delivery_date")
@@ -52,6 +53,7 @@ class OrderUpdate(BaseModel):
     requested_delivery_date: date | None = None
     confirmed_delivery_date: date | None = None
     notes: str | None = None
+    tax_rate: float | None = Field(default=None, ge=0, le=100)
     lines: list[OrderLineIn] | None = Field(default=None, min_length=1)
 
     @field_validator("order_date", "requested_delivery_date", "confirmed_delivery_date")
@@ -85,6 +87,9 @@ class OrderOut(BaseModel):
     requested_delivery_date: date | None
     confirmed_delivery_date: date | None
     status: str
+    subtotal_amount: float
+    tax_rate: float
+    tax_amount: float
     total_amount: float
     notes: str | None
     close_reason: str | None

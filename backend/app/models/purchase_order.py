@@ -48,6 +48,9 @@ class PurchaseOrder(Base, TimestampMixin, SoftDeleteMixin):
         nullable=False,
         default="draft",
     )
+    subtotal_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
+    tax_rate: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
+    tax_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     total_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # True when the system drafted this automatically from an MRP
@@ -57,6 +60,12 @@ class PurchaseOrder(Base, TimestampMixin, SoftDeleteMixin):
     # Mandatory when status becomes 'cancelled' -- same requirement as
     # orders/quotations/feasibility.
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # A PO at/above Settings -> large_po_approval_threshold can't move
+    # 'draft' -> 'sent' until an admin approves it (see
+    # purchase_order_service.approve_purchase_order). An unset threshold
+    # means the gate is off entirely, so these stay NULL forever.
+    approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    approved_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
     # Same admin-review escalation pattern as orders: flagged when this PO
     # is past expected_delivery_date with nothing received and not
     # cancelled -- a supplier running late, the purchasing-side mirror of

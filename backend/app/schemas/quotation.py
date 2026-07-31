@@ -32,6 +32,9 @@ class QuotationCreate(BaseModel):
     quotation_date: date
     valid_until: date | None = None
     notes: str | None = None
+    # Percentage, e.g. 0 or 5. Defaults to Settings -> default_tax_rate
+    # (0% -- Kuwait has no GST/VAT) when not given.
+    tax_rate: float | None = Field(default=None, ge=0, le=100)
     lines: list[QuotationLineIn] = Field(min_length=1)
 
     @field_validator("quotation_date", "valid_until")
@@ -54,6 +57,7 @@ class QuotationUpdate(BaseModel):
     quotation_date: date | None = None
     valid_until: date | None = None
     notes: str | None = None
+    tax_rate: float | None = Field(default=None, ge=0, le=100)
     lines: list[QuotationLineIn] | None = Field(default=None, min_length=1)
 
     @field_validator("quotation_date", "valid_until")
@@ -83,6 +87,9 @@ class QuotationOut(BaseModel):
     quotation_date: date
     valid_until: date | None
     status: str
+    subtotal_amount: float
+    tax_rate: float
+    tax_amount: float
     total_amount: float
     notes: str | None
     converted_order_id: int | None
