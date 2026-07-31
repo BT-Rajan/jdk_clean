@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { deleteCustomer, getCustomer, restoreCustomer } from '@/api/customers'
 import { listFeasibilities } from '@/api/feasibilities'
 import { listQuotations } from '@/api/quotations'
@@ -234,6 +235,10 @@ export function CustomerDetailPage() {
             ),
           })}
         />
+      </div>
+
+      <div className="mt-6">
+        <HistoryTimeline resourcePath="/api/customers" id={customerId} />
       </div>
 
       <div className="mt-6">

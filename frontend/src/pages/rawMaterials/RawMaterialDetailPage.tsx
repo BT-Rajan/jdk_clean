@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { deleteRawMaterial, getRawMaterial, restoreRawMaterial } from '@/api/rawMaterials'
 import { getStock } from '@/api/inventory'
 import { getSupplier } from '@/api/suppliers'
@@ -131,6 +132,10 @@ export function RawMaterialDetailPage() {
           />
         </dl>
       </GlassCard>
+
+      <div className="mt-6">
+        <HistoryTimeline resourcePath="/api/raw-materials" id={materialId} />
+      </div>
 
       <div className="mt-6">
         <Link to="/raw-materials" className="text-sm text-white/50 hover:text-white">← Back to raw materials</Link>

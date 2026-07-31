@@ -24,3 +24,8 @@ export const orderStatusSchema = z.object({
 })
 
 export type OrderStatusFormValues = z.infer<typeof orderStatusSchema>
+
+export const orderAdminReviewSchema = z.object({
+  notes: z.string().trim().min(1, 'Notes are required.'),
+})
+export type OrderAdminReviewFormValues = z.infer<typeof orderAdminReviewSchema>

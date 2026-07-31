@@ -36,6 +36,9 @@ export interface PurchaseOrder {
    * shortage, rather than a person creating it. */
   auto_created: boolean
   cancel_reason: string | null
+  admin_review_required: boolean
+  admin_reviewed_at: string | null
+  admin_review_notes: string | null
   lines: PurchaseOrderLine[]
   created_at: string
   updated_at: string

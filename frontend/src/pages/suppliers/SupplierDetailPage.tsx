@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, RatingStars, Spinner, StatusBadge } from '@/components/ui'
+import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { deleteSupplier, getSupplier, restoreSupplier } from '@/api/suppliers'
 import type { Supplier } from '@/types/supplier'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -129,6 +130,10 @@ export function SupplierDetailPage() {
 
       <div className="mt-6">
         <SuppliedMaterialsEditor supplierId={supplierId} canEdit={canWrite(user?.role)} />
+      </div>
+
+      <div className="mt-6">
+        <HistoryTimeline resourcePath="/api/suppliers" id={supplierId} />
       </div>
 
       <div className="mt-6">

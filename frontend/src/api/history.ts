@@ -18,3 +18,11 @@ export async function getHistory(resourcePath: string, id: number): Promise<Hist
   const { data } = await apiClient.get<HistoryEntry[]>(`${resourcePath}/${id}/history`)
   return data
 }
+
+/** For endpoints whose history route isn't a plain /{id}/history suffix
+ * (e.g. BOM history lives at /api/products/{id}/bom/history). Pass the
+ * full path. */
+export async function getHistoryAtUrl(url: string): Promise<HistoryEntry[]> {
+  const { data } = await apiClient.get<HistoryEntry[]>(url)
+  return data
+}

@@ -44,6 +44,11 @@ export async function updatePurchaseOrderStatus(
   return data
 }
 
+export async function adminReviewPurchaseOrder(id: number, notes: string): Promise<PurchaseOrder> {
+  const { data } = await apiClient.post<PurchaseOrder>(`/api/purchase-orders/${id}/admin-review`, { notes })
+  return data
+}
+
 export async function receivePurchaseOrder(
   id: number,
   lines: { line_id: number; quantity: number }[],

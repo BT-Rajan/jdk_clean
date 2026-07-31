@@ -37,6 +37,11 @@ export async function updateOrderStatus(id: number, status: SettableOrderStatus,
   return data
 }
 
+export async function adminReviewOrder(id: number, notes: string): Promise<Order> {
+  const { data } = await apiClient.post<Order>(`/api/orders/${id}/admin-review`, { notes })
+  return data
+}
+
 export async function deleteOrder(id: number): Promise<MessageResponse> {
   const { data } = await apiClient.delete<MessageResponse>(`/api/orders/${id}`)
   return data
