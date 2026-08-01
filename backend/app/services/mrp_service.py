@@ -96,7 +96,14 @@ def _suggest_purchases(db: Session, raw_material_id: int, shortfall: float) -> t
             Supplier.deleted_at.is_(None),
             Supplier.status == "active",
         )
-        .order_by(SupplierMaterial.lead_time_days.asc().nulls_last())
+        # MariaDB has never implemented ANSI NULLS LAST syntax (unlike
+        # PostgreSQL, or MySQL 8.0.13+) -- SQLAlchemy's .nulls_last()
+        # compiles straight through to that keyword rather than
+        # emulating it, which fails outright on MariaDB. This achieves
+        # the same ordering portably: NULL sorts as boolean True (1),
+        # so "is this NULL" ascending puts every non-NULL row first,
+        # then lead_time_days breaks ties among those.
+        .order_by(SupplierMaterial.lead_time_days.is_(None), SupplierMaterial.lead_time_days.asc())
         .all()
     )
 
