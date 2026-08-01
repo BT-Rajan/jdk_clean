@@ -164,8 +164,35 @@ REFRESH_TOKEN_EXPIRE_DAYS=$(ask "Refresh token lifetime (days)" "7")
 heading "Frontend"
 
 FRONTEND_PORT=$(ask "Frontend port" "4173")
-FRONTEND_ORIGIN=$(ask "Frontend origin (used for the backend's CORS_ORIGINS)" "http://localhost:${FRONTEND_PORT}")
-BACKEND_URL=$(ask "Backend base URL (used for the frontend's VITE_API_BASE_URL)" "http://localhost:${BACKEND_PORT}")
+
+echo
+echo "  If this server will only ever be opened from this same machine"
+echo "  (http://localhost:${FRONTEND_PORT}), leave the next answer blank."
+echo "  If people will open it from elsewhere -- another machine on your"
+echo "  network, or the internet -- enter the address they'll actually"
+echo "  type into their browser: a bare IP (203.0.113.10), or a domain"
+echo "  (erp.example.com) if you have DNS/HTTPS set up already. Don't"
+echo "  include http(s):// or a port -- those are added for you below."
+echo
+SERVER_HOST=$(ask "Server IP or domain (blank = localhost only)" "")
+
+if [[ -z "$SERVER_HOST" ]]; then
+  DEFAULT_FRONTEND_ORIGIN="http://localhost:${FRONTEND_PORT}"
+  DEFAULT_BACKEND_URL="http://localhost:${BACKEND_PORT}"
+else
+  # Both localhost AND the given host are allowed to call the backend --
+  # this is a comma-separated list (see core/config.py's cors_origin_list),
+  # so local testing on the machine itself keeps working alongside real
+  # access from wherever SERVER_HOST actually resolves.
+  DEFAULT_FRONTEND_ORIGIN="http://localhost:${FRONTEND_PORT},http://${SERVER_HOST}:${FRONTEND_PORT}"
+  # The frontend build can only point at one backend address, and it has
+  # to be one a real browser elsewhere can actually reach -- localhost
+  # would resolve to the *visitor's own machine*, not this server.
+  DEFAULT_BACKEND_URL="http://${SERVER_HOST}:${BACKEND_PORT}"
+fi
+
+FRONTEND_ORIGIN=$(ask "Frontend origin(s) (used for the backend's CORS_ORIGINS -- comma-separated is fine)" "$DEFAULT_FRONTEND_ORIGIN")
+BACKEND_URL=$(ask "Backend base URL (used for the frontend's VITE_API_BASE_URL)" "$DEFAULT_BACKEND_URL")
 
 heading "Bootstrap admin account"
 

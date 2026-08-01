@@ -139,11 +139,37 @@ call :Heading "Frontend"
 
 call :AskPortFree "Frontend port" "4173" FRONTEND_PORT
 
-set "FRONTEND_ORIGIN=http://localhost:!FRONTEND_PORT!"
-if /i "!DO_DB_ENV_SETUP!"=="Y" (
-  call :AskDefault "Frontend origin (used for the backend's CORS_ORIGINS)" "!FRONTEND_ORIGIN!" FRONTEND_ORIGIN
+echo.
+echo   If this server will only ever be opened from this same machine
+echo   (http://localhost:!FRONTEND_PORT!), leave the next answer blank.
+echo   If people will open it from elsewhere -- another machine on your
+echo   network, or the internet -- enter the address they'll actually
+echo   type into their browser: a bare IP (203.0.113.10), or a domain
+echo   (erp.example.com) if you have DNS/HTTPS set up already. Don't
+echo   include http(s):// or a port -- those are added for you below.
+echo.
+call :AskDefault "Server IP or domain (blank = localhost only)" "" SERVER_HOST
+
+if "!SERVER_HOST!"=="" (
+  set "FRONTEND_ORIGIN=http://localhost:!FRONTEND_PORT!"
+  set "BACKEND_URL=http://localhost:!BACKEND_PORT!"
+) else (
+  REM Both localhost AND the given host are allowed to call the backend --
+  REM this is a comma-separated list (see core/config.py's
+  REM cors_origin_list), so local testing on the machine itself keeps
+  REM working alongside real access from wherever SERVER_HOST resolves.
+  set "FRONTEND_ORIGIN=http://localhost:!FRONTEND_PORT!,http://!SERVER_HOST!:!FRONTEND_PORT!"
+  REM The frontend build can only point at one backend address, and it
+  REM has to be one a real browser elsewhere can actually reach --
+  REM localhost would resolve to the *visitor's own machine*, not this
+  REM server.
+  set "BACKEND_URL=http://!SERVER_HOST!:!BACKEND_PORT!"
 )
-call :AskDefault "Backend base URL (used for the frontend's VITE_API_BASE_URL)" "http://localhost:!BACKEND_PORT!" BACKEND_URL
+
+if /i "!DO_DB_ENV_SETUP!"=="Y" (
+  call :AskDefault "Frontend origin(s) (used for the backend's CORS_ORIGINS -- comma-separated is fine)" "!FRONTEND_ORIGIN!" FRONTEND_ORIGIN
+)
+call :AskDefault "Backend base URL (used for the frontend's VITE_API_BASE_URL)" "!BACKEND_URL!" BACKEND_URL
 
 call :Heading "Bootstrap admin account"
 
