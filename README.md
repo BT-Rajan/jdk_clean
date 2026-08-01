@@ -82,6 +82,31 @@ If you didn't generate `ecosystem.config.js` via `install.sh`/`install.bat`, you
 start each app manually — see the "Run the server" sections in each
 app's README — and skip pm2 entirely.
 
+### Relaunching cleanly
+
+`pm2 restart all` is fine day to day, but a full stop/start after
+config changes (a new server IP, a rebuilt frontend, a fresh
+`.env`) is where things tend to go wrong -- a stray process from an
+earlier run still squatting on the port, the frontend's backend URL
+having drifted out of sync between `.env` and the build, that kind of
+thing. `./relaunch.sh` (repo root) checks for exactly that class of
+problem before and after restarting, and prints a plain pass/fail
+report instead of leaving you to read pm2 logs:
+
+```bash
+./relaunch.sh
+```
+
+It checks: `frontend/.env`'s `VITE_API_BASE_URL` against
+`ecosystem.config.js`'s own copy of it (the static server prefers the
+latter at runtime -- see `frontend/scripts/serve-static.mjs`), whether
+`frontend/dist/` is older than `.env` (a sign it needs rebuilding),
+whether `backend/.env`'s `CORS_ORIGINS` actually covers the frontend's
+real origin, whether anything other than the real `jdk-backend`/
+`jdk-frontend` pm2 processes is holding either port, and finally does
+a live health check against both once restarted -- not just trusting
+that pm2 says "online."
+
 ## Testing the login
 
 See [backend/README.md](backend/README.md#testing-the-login) for a full
