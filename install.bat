@@ -457,8 +457,9 @@ REM Summary
 REM -------------------------------------------------------------------
 call :Heading "Setup complete"
 
-echo   Backend:   http://localhost:!BACKEND_PORT!  (docs at /docs)
-echo   Frontend:  http://localhost:!FRONTEND_PORT!
+if "!SERVER_HOST!"=="" (set "DISPLAY_HOST=localhost") else (set "DISPLAY_HOST=!SERVER_HOST!")
+echo   Backend:   http://!DISPLAY_HOST!:!BACKEND_PORT!  (docs at /docs)
+echo   Frontend:  http://!DISPLAY_HOST!:!FRONTEND_PORT!
 
 if /i "!SEED_ADMIN!"=="Y" (
   echo.

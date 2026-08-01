@@ -409,8 +409,9 @@ fi
 # ---------------------------------------------------------------------
 heading "${GREEN}Setup complete${RESET}"
 
-echo "  Backend:   http://localhost:${BACKEND_PORT}  (docs at /docs)"
-echo "  Frontend:  http://localhost:${FRONTEND_PORT}"
+DISPLAY_HOST="${SERVER_HOST:-localhost}"
+echo "  Backend:   http://${DISPLAY_HOST}:${BACKEND_PORT}  (docs at /docs)"
+echo "  Frontend:  http://${DISPLAY_HOST}:${FRONTEND_PORT}"
 
 if [[ "$SEED_ADMIN" == "y" ]]; then
   echo ""

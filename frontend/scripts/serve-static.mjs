@@ -153,5 +153,10 @@ const server = createServer((req, res) => {
 })
 
 server.listen(PORT, () => {
-  console.log(`Serving dist/ on http://localhost:${PORT}`)
+  // No host given to listen() -- Node defaults to all interfaces (0.0.0.0
+  // / ::), so this is reachable from wherever the machine's real IP/
+  // domain resolves, not just from this machine itself. The message
+  // below says so explicitly rather than printing 'localhost', which
+  // would wrongly suggest remote access doesn't work.
+  console.log(`Serving dist/ on http://0.0.0.0:${PORT} (reachable at this machine's real IP/domain too, not just localhost)`)
 })
