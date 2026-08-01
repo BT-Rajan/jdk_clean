@@ -1,9 +1,25 @@
 from functools import lru_cache
+from pathlib import Path
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# backend/app/core/config.py -> backend/ is three parents up. Anchored to
+# an absolute path rather than the plain relative ".env" that used to be
+# here: pydantic-settings resolves a relative env_file against whatever
+# directory the process happens to be started from, not the project
+# root -- fine for the app itself (pm2 sets cwd to backend/), but every
+# script in backend/scripts/ is run directly (`cd scripts && python3
+# reset_password.py`), which silently pointed env_file at a
+# backend/scripts/.env that's never existed. pydantic-settings doesn't
+# error when the file is missing -- it just falls through to every
+# field's hardcoded default (DB_USER "erp_user", no password, ...),
+# which is exactly the class of bug that looked like ".env isn't being
+# read" when .env was correct all along.
+BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(env_file=BACKEND_DIR / ".env", extra="ignore")
 
     APP_NAME: str = "Manufacturing ERP"
     ENV: str = "development"
