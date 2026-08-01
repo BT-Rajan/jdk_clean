@@ -175,34 +175,7 @@ check_port_owner "$BACKEND_PORT" "jdk-backend"
 check_port_owner "$FRONTEND_PORT" "jdk-frontend"
 
 # -----------------------------------------------------------------
-# 5. Look for unexpected/duplicate pm2 entries under any other name.
-# -----------------------------------------------------------------
-heading "Checking pm2 process list for unexpected entries"
-
-if command -v pm2 >/dev/null 2>&1; then
-  UNEXPECTED=$(pm2 jlist 2>/dev/null | python3 -c "
-import json, sys
-try:
-    procs = json.load(sys.stdin)
-except Exception:
-    sys.exit(0)
-names = [p.get('name') for p in procs]
-unexpected = [n for n in names if n not in ('jdk-backend', 'jdk-frontend')]
-print('\n'.join(unexpected))
-" 2>/dev/null)
-  if [[ -n "$UNEXPECTED" ]]; then
-    warn "pm2 is also running processes this project didn't create: ${UNEXPECTED}"
-    warn "If any of these are old/misconfigured leftovers (e.g. from an earlier manual 'pm2 start'), delete them with: pm2 delete <name>"
-    PROBLEMS=$((PROBLEMS+1))
-  else
-    ok "No unexpected pm2 processes found."
-  fi
-else
-  warn "pm2 isn't installed or isn't on PATH -- skipping process-list check."
-fi
-
-# -----------------------------------------------------------------
-# 6. Restart cleanly.
+# 5. Restart cleanly.
 # -----------------------------------------------------------------
 heading "Restarting"
 
@@ -220,7 +193,7 @@ info "Waiting 5 seconds for both processes to come up..."
 sleep 5
 
 # -----------------------------------------------------------------
-# 7. Live health checks -- not just "pm2 says online."
+# 6. Live health checks -- not just "pm2 says online."
 # -----------------------------------------------------------------
 heading "Health checks"
 
@@ -252,7 +225,7 @@ if [[ -n "$CSP_HEADER" && -n "$ECOSYSTEM_API_BASE_URL" ]]; then
 fi
 
 # -----------------------------------------------------------------
-# 8. Summary.
+# 7. Summary.
 # -----------------------------------------------------------------
 heading "Summary"
 
