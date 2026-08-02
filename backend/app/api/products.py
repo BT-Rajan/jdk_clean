@@ -9,4 +9,5 @@ router = build_crud_router(
     out_schema=ProductOut,
     prefix="/api/products",
     tags=["products"],
+    page_key="products",
 )

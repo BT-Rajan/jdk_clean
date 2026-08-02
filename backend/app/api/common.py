@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import ListParams, get_current_user, require_role
 from app.core.database import get_db
+from app.core.permissions import require_page_access
 from app.crud.base import BaseCRUD
 from app.models.user import User
 from app.services import audit_service
@@ -28,15 +29,28 @@ def build_crud_router(
     prefix: str,
     tags: list[str],
     write_roles: tuple[str, ...] = ("admin", "manager"),
+    page_key: str | None = None,
 ) -> APIRouter:
+    """page_key, when given, gates every endpoint here through the
+    department_permissions matrix (see app/core/permissions.py) instead
+    of the old fixed write_roles check -- admin/manager still always
+    pass regardless, this only changes what unlocks access for staff.
+    Leave page_key unset for resources not yet migrated to the new
+    system (falls back to the original get_current_user/write_roles
+    behavior)."""
     router = APIRouter(prefix=prefix, tags=tags)
-    write_guard = require_role(*write_roles)
+    if page_key is not None:
+        read_guard = require_page_access(page_key, "read")
+        write_guard = require_page_access(page_key, "write")
+    else:
+        read_guard = get_current_user
+        write_guard = require_role(*write_roles)
 
     @router.get("", response_model=PagedResponse)
     def list_items(
         params: ListParams = Depends(),
         db: Session = Depends(get_db),
-        _: User = Depends(get_current_user),
+        _: User = Depends(read_guard),
     ):
         result = crud.read_all(
             db,
@@ -53,7 +67,7 @@ def build_crud_router(
     def get_item(
         item_id: int,
         db: Session = Depends(get_db),
-        _: User = Depends(get_current_user),
+        _: User = Depends(read_guard),
     ):
         return crud.read_one(db, item_id)
 
@@ -61,7 +75,7 @@ def build_crud_router(
     def get_item_history(
         item_id: int,
         db: Session = Depends(get_db),
-        _: User = Depends(get_current_user),
+        _: User = Depends(read_guard),
     ):
         crud.read_one(db, item_id, include_deleted=True)  # 404s if it never existed
         return audit_service.get_history(db, crud.table_name, item_id)

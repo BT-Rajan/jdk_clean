@@ -5,6 +5,7 @@ import { Avatar, Logo, Button } from '@/components/ui'
 import { AssistantDrawer } from '@/components/assistant/AssistantDrawer'
 import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
+import { getPageKeyForPath } from '@/lib/pagePermissions'
 import { cn } from '@/lib/cn'
 import { AmbientBackground } from './AmbientBackground'
 import { NavDropdown } from './NavDropdown'
@@ -34,7 +35,7 @@ function isNavGroup(entry: NavEntry): entry is NavGroup {
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
-  const { user, logoutUser, avatarVersion } = useAuth()
+  const { user, permissions, logoutUser, avatarVersion } = useAuth()
   const navigate = useNavigate()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
@@ -136,6 +137,27 @@ export function AppLayout({ children }: AppLayoutProps) {
       : []),
   ]
 
+  // Hides a nav link/group the user's department has no access to at
+  // all -- PagePermissionGuard already blocks direct navigation to a
+  // denied page, this just keeps the link from showing in the first
+  // place. While permissions are still loading (null), show everything
+  // rather than flash an empty nav that fills in a moment later --
+  // the route guard is what actually protects content either way.
+  function isPathVisible(to: string): boolean {
+    const pageKey = getPageKeyForPath(to)
+    if (pageKey === null) return true
+    if (!permissions) return true
+    return permissions[pageKey] !== undefined && permissions[pageKey] !== 'none'
+  }
+
+  const visibleNavEntries: NavEntry[] = navEntries.flatMap<NavEntry>((entry) => {
+    if (!isNavGroup(entry)) {
+      return isPathVisible(entry.to) ? [entry] : []
+    }
+    const visibleItems = entry.items.filter((item) => isPathVisible(item.to))
+    return visibleItems.length > 0 ? [{ ...entry, items: visibleItems }] : []
+  })
+
   async function handleLogout() {
     setIsLoggingOut(true)
     try {
@@ -227,7 +249,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
 
         <nav className="flex flex-wrap gap-1">
-          {navEntries.map((entry) =>
+          {visibleNavEntries.map((entry) =>
             isNavGroup(entry) ? (
               <NavDropdown key={entry.label} label={entry.label} items={entry.items} />
             ) : (

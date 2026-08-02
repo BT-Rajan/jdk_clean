@@ -9,4 +9,5 @@ router = build_crud_router(
     out_schema=MachineOut,
     prefix="/api/machines",
     tags=["machines"],
+    page_key="machines",
 )

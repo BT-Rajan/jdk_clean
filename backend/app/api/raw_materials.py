@@ -9,4 +9,5 @@ router = build_crud_router(
     out_schema=RawMaterialOut,
     prefix="/api/raw-materials",
     tags=["raw-materials"],
+    page_key="raw_materials",
 )
