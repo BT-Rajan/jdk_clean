@@ -8,6 +8,7 @@ import { isAdmin } from '@/lib/roles'
 import { getPageKeyForPath } from '@/lib/pagePermissions'
 import { cn } from '@/lib/cn'
 import { AmbientBackground } from './AmbientBackground'
+import { CalendarModal } from './CalendarModal'
 import { NavDropdown } from './NavDropdown'
 import { NotificationsModal } from './NotificationsModal'
 import { listNotifications } from '@/api/notifications'
@@ -40,6 +41,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [isScrolled, setIsScrolled] = useState(false)
   const [isAssistantOpen, setIsAssistantOpen] = useState(false)
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [notifLoading, setNotifLoading] = useState(true)
@@ -184,6 +186,20 @@ export function AppLayout({ children }: AppLayoutProps) {
             {user && (
               <button
                 type="button"
+                onClick={() => setIsCalendarOpen(true)}
+                aria-label="Calendar"
+                className="flex items-center justify-center rounded-xl border border-white/10 p-2 text-white/40 transition-colors hover:border-white/20 hover:text-white/60"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                  <rect x="3" y="5" width="18" height="16" rx="2" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M3 9.5h18" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="M8 3v4M16 3v4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+              </button>
+            )}
+            {user && (
+              <button
+                type="button"
                 onClick={() => setIsNotificationsOpen(true)}
                 aria-label="Notifications"
                 className="relative flex items-center justify-center rounded-xl border border-white/10 p-2 text-white/40 transition-colors hover:text-white/60 hover:border-white/20"
@@ -275,6 +291,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       {user && (
         <>
           <AssistantDrawer open={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
+          <CalendarModal open={isCalendarOpen} onClose={() => setIsCalendarOpen(false)} />
           <NotificationsModal
             open={isNotificationsOpen}
             onClose={() => setIsNotificationsOpen(false)}
