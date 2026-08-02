@@ -11,14 +11,59 @@ export const apiClient = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
-// Attach the current access token, if any, to every outgoing request.
+// Off by default -- turn on from the browser console with
+// `localStorage.setItem('jdk_debug', '1')` and reload, no rebuild
+// needed, so this works against a real deployed build, not just local
+// dev. Exists to answer "did OUR code even send this, and what did it
+// get back" with a distinctive, easy-to-grep console prefix -- useful
+// specifically when something else in the browser (an extension, for
+// instance) might also be logging its own unrelated errors to the same
+// console and making it hard to tell which is which.
+function debugLoggingEnabled(): boolean {
+  try {
+    return localStorage.getItem('jdk_debug') === '1'
+  } catch {
+    return false
+  }
+}
+
 apiClient.interceptors.request.use((config) => {
+  if (debugLoggingEnabled()) {
+    // eslint-disable-next-line no-console
+    console.log(`[jdk-diag] -> ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`)
+  }
   const token = tokenStore.getAccessToken()
   if (token) {
     config.headers.set('Authorization', `Bearer ${token}`)
   }
   return config
 })
+
+apiClient.interceptors.response.use(
+  (response) => {
+    if (debugLoggingEnabled()) {
+      // eslint-disable-next-line no-console
+      console.log(`[jdk-diag] <- ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`)
+    }
+    return response
+  },
+  (error: AxiosError) => {
+    if (debugLoggingEnabled()) {
+      if (error.response) {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[jdk-diag] <- ${error.response.status} ${error.config?.method?.toUpperCase()} ${error.config?.url} (server responded)`,
+        )
+      } else {
+        // eslint-disable-next-line no-console
+        console.log(
+          `[jdk-diag] <- NO RESPONSE for ${error.config?.method?.toUpperCase()} ${error.config?.url} -- request left the browser but nothing came back (network/CORS/CSP block, or the request never reached the server at all). error.message: ${error.message}`,
+        )
+      }
+    }
+    throw error
+  },
+)
 
 // These must never trigger a refresh-and-retry themselves, or a bad
 // credential/refresh call could recurse into itself.

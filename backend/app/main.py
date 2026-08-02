@@ -27,6 +27,7 @@ from app.api.supplier_materials import router as supplier_materials_router
 from app.api.users import router as users_router
 from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
+from app.core.request_logging import install_request_logging
 
 settings = get_settings()
 
@@ -51,6 +52,12 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Logs every request in / response out to backend/logs/requests.log --
+# see app/core/request_logging.py for exactly what's captured (never
+# request bodies, so credentials never end up on disk). Meant to be
+# left on; the file only grows with one or two short lines per request.
+install_request_logging(app)
 
 register_exception_handlers(app)
 app.include_router(auth_router)
