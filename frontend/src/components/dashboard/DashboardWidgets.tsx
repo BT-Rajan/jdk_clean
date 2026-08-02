@@ -1,4 +1,6 @@
+import { Link } from 'react-router-dom'
 import { GlassCard } from '@/components/ui'
+import { cn } from '@/lib/cn'
 
 export interface StatsWidgetProps {
   title: string
@@ -9,11 +11,18 @@ export interface StatsWidgetProps {
     isPositive: boolean
   }
   icon?: React.ReactNode
+  /** Route to navigate to when the card is clicked, e.g. '/quotations'. Omit for a static card. */
+  to?: string
 }
 
-export function StatsWidget({ title, value, unit, trend, icon }: StatsWidgetProps) {
-  return (
-    <GlassCard className="p-6">
+export function StatsWidget({ title, value, unit, trend, icon, to }: StatsWidgetProps) {
+  const card = (
+    <GlassCard
+      className={cn(
+        'p-6',
+        to && 'cursor-pointer transition-colors hover:border-gold-400/30 hover:bg-white/[0.07]',
+      )}
+    >
       <div className="flex items-start justify-between">
         <div>
           <p className="text-sm text-white/50">{title}</p>
@@ -48,6 +57,14 @@ export function StatsWidget({ title, value, unit, trend, icon }: StatsWidgetProp
         {icon && <div className="text-gold-300/30">{icon}</div>}
       </div>
     </GlassCard>
+  )
+
+  return to ? (
+    <Link to={to} aria-label={`Open ${title}`}>
+      {card}
+    </Link>
+  ) : (
+    card
   )
 }
 

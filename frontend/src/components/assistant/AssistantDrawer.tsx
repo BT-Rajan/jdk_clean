@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { sendAssistantMessage, type AssistantMessage } from '@/api/assistant'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { findLocalHelpAnswer } from '@/lib/helpContent'
+import { renderMarkdownLite } from '@/lib/markdown'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/cn'
 
@@ -122,13 +123,13 @@ export function AssistantDrawer({ open, onClose }: AssistantDrawerProps) {
                 >
                   <div
                     className={cn(
-                      'max-w-[85%] whitespace-pre-wrap rounded-2xl px-4 py-2.5 text-sm',
+                      'max-w-[85%] rounded-2xl px-4 py-2.5 text-sm',
                       m.role === 'user'
                         ? 'bg-gold-500/15 text-gold-100'
                         : 'glass-inset text-white/80',
                     )}
                   >
-                    {m.content}
+                    {renderMarkdownLite(m.content)}
                   </div>
                 </div>
               ))}

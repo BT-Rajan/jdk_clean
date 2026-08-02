@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 export interface DashboardWidget {
   id: string
@@ -61,6 +61,14 @@ export function useDashboardPreferences(role?: string) {
   const [preferences, setPreferences] = useState<DashboardPreferences | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
+  const initializePreferences = useCallback(() => {
+    const roleKey = (role || 'admin').toLowerCase()
+    const widgets = availableWidgetsByRole[roleKey] || availableWidgetsByRole.admin
+    const prefs: DashboardPreferences = { widgets }
+    setPreferences(prefs)
+    localStorage.setItem(DASHBOARD_PREFS_KEY, JSON.stringify(prefs))
+  }, [role])
+
   useEffect(() => {
     // Load preferences from localStorage
     const savedPrefs = localStorage.getItem(DASHBOARD_PREFS_KEY)
@@ -75,15 +83,7 @@ export function useDashboardPreferences(role?: string) {
       initializePreferences()
     }
     setIsLoading(false)
-  }, [])
-
-  const initializePreferences = () => {
-    const roleKey = (role || 'admin').toLowerCase()
-    const widgets = availableWidgetsByRole[roleKey] || availableWidgetsByRole.admin
-    const prefs: DashboardPreferences = { widgets }
-    setPreferences(prefs)
-    localStorage.setItem(DASHBOARD_PREFS_KEY, JSON.stringify(prefs))
-  }
+  }, [initializePreferences])
 
   const updateWidgetEnabled = (widgetId: string, enabled: boolean) => {
     if (!preferences) return

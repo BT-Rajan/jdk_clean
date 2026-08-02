@@ -215,6 +215,11 @@ When the question IS in-domain:
   don't have that on file — don't guess or invent figures.
 - For "how do I..." questions, use the Help Guide below (if present) as
   ground truth instead of guessing at menu names.
+- Formatting: wrap menu paths and button/field labels in **double
+  asterisks** for bold (e.g. **Admin > Users**, **"New user"**). Use a
+  leading "- " for each step on its own line when listing more than one
+  step. Don't use any other markdown (no headers, no numbered lists,
+  no code fences).
 
 Current data:
 {context}

@@ -62,7 +62,7 @@ export function findLocalHelpAnswer(role: UserRole, question: string): string | 
   // present in the question -- so a vague message falls through to the
   // AI instead of returning a wrong canned answer.
   if (best && best.score >= 0.6) {
-    return `${best.item.title}\n${best.item.steps.map((s) => `• ${s}`).join('\n')}`
+    return `**${best.item.title}**\n${best.item.steps.map((s) => `- ${s}`).join('\n')}`
   }
   return null
 }

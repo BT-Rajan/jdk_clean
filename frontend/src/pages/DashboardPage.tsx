@@ -10,6 +10,27 @@ import { formatCurrency } from '@/lib/currency'
 import type { DashboardStatsResponse } from '@/types/dashboard'
 import { StatsWidget, GraphWidget, SkeletonWidget } from '@/components/dashboard/DashboardWidgets'
 
+// Only mapped when a stat corresponds to exactly one list page -- a few
+// stats (open/cancelled deals, auto-created this month, pending admin
+// reviews) span multiple record types with no single page to land on,
+// so those cards are intentionally left unmapped and stay static.
+const STAT_ROUTES: Record<string, string> = {
+  customers_month: '/customers',
+  quotations_month: '/quotations',
+  orders_month: '/orders',
+  purchase_orders: '/purchase-orders',
+  purchase_orders_pending: '/purchase-orders',
+  suppliers_count: '/suppliers',
+  inventory_items: '/inventory',
+  inventory_value: '/inventory',
+  low_stock_count: '/inventory',
+  raw_materials_count: '/raw-materials',
+  production_active: '/production',
+  production_completion: '/production',
+  production_delayed: '/production',
+  bom_missing_count: '/feasibilities',
+}
+
 export function DashboardPage() {
   const { user } = useAuth()
   const { isLoading: prefsLoading, getEnabledWidgets } = useDashboardPreferences(user?.role)
@@ -47,7 +68,7 @@ export function DashboardPage() {
             </Link>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-2">
             {enabledWidgets.map((widget) => {
               if (widget.type === 'stats') {
                 const stat = data?.stats[widget.dataSource]
@@ -64,6 +85,7 @@ export function DashboardPage() {
                     title={widget.title}
                     value={value}
                     trend={stat?.trend}
+                    to={STAT_ROUTES[widget.dataSource]}
                   />
                 )
               }
@@ -77,7 +99,7 @@ export function DashboardPage() {
       {isLoading && (
         <div className="mt-8">
           <h2 className="mb-6 font-display text-xl font-medium text-white">Loading Dashboard...</h2>
-          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-6 sm:grid-cols-2">
             {[1, 2, 3].map((i) => (
               <SkeletonWidget key={i} type={i % 2 === 0 ? 'graph' : 'stats'} />
             ))}
