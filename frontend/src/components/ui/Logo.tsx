@@ -25,7 +25,7 @@ export function Logo({ className, withWordmark = true }: LogoProps) {
       </svg>
       {withWordmark && (
         <span className="font-display text-lg font-medium tracking-wide text-white">
-          JDK <span className="text-gradient-gold">ERP</span>
+          JDK <span className="text-gradient-gold">MEA</span>
         </span>
       )}
     </div>

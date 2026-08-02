@@ -33,7 +33,7 @@ export function DashboardPage() {
       <h1 className="font-display text-3xl font-medium text-white">
         Welcome, <span className="text-gradient-gold">{user?.full_name}</span>
       </h1>
-      <p className="mt-2 text-sm text-white/50">You're signed in to the JDK ERP workspace.</p>
+      <p className="mt-2 text-sm text-white/50">You're signed in to the JDK MEA workspace.</p>
 
       <Alert variant="error">{error}</Alert>
 

@@ -25,22 +25,22 @@ export function AuthLayout({ title, subtitle, children }: AuthLayoutProps) {
         >
           <Logo className="mb-10" />
           <h1 className="font-display text-4xl leading-[1.15] font-medium text-white sm:text-5xl">
-            Precision manufacturing,
+            <span className="text-gradient-gold">M</span>aking it{' '}
+            <span className="text-gradient-gold">E</span>xcellent with{' '}
+            <span className="text-gradient-gold">A</span>I
             <br />
-            <span className="text-gradient-gold">run beautifully.</span>
+            <span className="text-gradient-gold">Everything. Everyone. Excellent.</span>
           </h1>
           <p className="mt-6 max-w-md text-[15px] leading-relaxed text-white/50">
-            Orders, quotations, bills of material, and inventory in one
+            Sales, Orders, quotations, bills of material, and inventory in one
             tightly connected workspace -- built for the people who keep the
             floor running.
           </p>
 
           <div className="mt-14 flex items-center gap-6 text-xs tracking-[0.2em] text-white/30 uppercase">
-            <span>Encrypted sessions</span>
+            <span>Secure Data</span>
             <span className="h-1 w-1 rounded-full bg-white/20" />
-            <span>Role-based access</span>
-            <span className="h-1 w-1 rounded-full bg-white/20" />
-            <span>Full audit trail</span>
+            <span>Smart Insights</span>
           </div>
         </motion.div>
 
