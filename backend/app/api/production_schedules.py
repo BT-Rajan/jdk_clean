@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
-from app.api.deps import get_current_user, require_role
 from app.core.database import get_db
+from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.production_schedule import (
     ProductionScheduleCreate,
@@ -14,7 +14,8 @@ from app.schemas.production_schedule import (
 from app.services import audit_service, production_service
 
 router = APIRouter(prefix="/api/production-schedules", tags=["production"])
-write_guard = require_role("admin", "manager")
+read_guard = require_page_access("production", "read")
+write_guard = require_page_access("production", "write")
 
 
 @router.get("", response_model=PagedResponse)
@@ -27,7 +28,7 @@ def list_batches(
     order_id: int | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     result = production_service.list_batches(
         db,
@@ -47,7 +48,7 @@ def list_batches(
 def get_batch(
     batch_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return ProductionScheduleOut.from_model(production_service.get_batch(db, batch_id))
 
@@ -56,7 +57,7 @@ def get_batch(
 def get_batch_history(
     batch_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     production_service.get_batch(db, batch_id, include_deleted=True)  # 404s if never existed
     return audit_service.get_history(db, "production_schedules", batch_id)

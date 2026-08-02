@@ -3,8 +3,9 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
-from app.api.deps import get_current_user, require_department_write, require_role
+from app.api.deps import require_role
 from app.core.database import get_db
+from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.email import SendDocumentEmailRequest
 from app.schemas.order import (
@@ -18,7 +19,8 @@ from app.schemas.order_journey import OrderJourneyOut
 from app.services import audit_service, email_service, order_journey_service, order_service, pdf_generator
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
-write_guard = require_department_write("sales")
+read_guard = require_page_access("orders", "read")
+write_guard = require_page_access("orders", "write")
 admin_guard = require_role("admin")
 
 
@@ -32,7 +34,7 @@ def list_orders(
     admin_review_required: bool | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     result = order_service.list_orders(
         db,
@@ -52,7 +54,7 @@ def list_orders(
 def get_order(
     order_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return OrderOut.from_model(order_service.get_order(db, order_id))
 
@@ -61,7 +63,7 @@ def get_order(
 def get_order_journey(
     order_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     """The single-page answer to 'where is this order right now' -- the
     feasibility check it came from, the quotation it was raised on, the
@@ -75,7 +77,7 @@ def get_order_journey(
 def get_order_history(
     order_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     order_service.get_order(db, order_id, include_deleted=True)  # 404s if never existed
     return audit_service.get_history(db, "orders", order_id)
@@ -190,7 +192,7 @@ def admin_review_order(
 def download_order_pdf(
     order_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     order = order_service.get_order(db, order_id)
     company_settings = pdf_generator.get_company_settings(db)

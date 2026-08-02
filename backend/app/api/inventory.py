@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_role
 from app.core.database import get_db
+from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.inventory import (
     LowStockItem,
@@ -13,7 +13,8 @@ from app.schemas.inventory import (
 from app.services import inventory_service
 
 router = APIRouter(prefix="/api/inventory", tags=["inventory"])
-write_guard = require_role("admin", "manager", "staff")
+read_guard = require_page_access("inventory", "read")
+write_guard = require_page_access("inventory", "write")
 
 
 @router.get("/stock/{item_type}/{item_id}", response_model=StockLevelOut)
@@ -21,7 +22,7 @@ def get_stock(
     item_type: str,
     item_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return inventory_service.get_stock(db, item_type, item_id)
 
@@ -46,7 +47,7 @@ def adjust_stock(
 @router.get("/low-stock", response_model=list[LowStockItem])
 def low_stock(
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return inventory_service.get_low_stock(db)
 
@@ -61,7 +62,7 @@ def movements(
     page_size: int = Query(10, ge=1, le=200),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     result = inventory_service.get_movement_history(
         db,

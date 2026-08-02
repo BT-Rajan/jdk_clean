@@ -2,8 +2,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
-from app.api.deps import get_current_user, require_department_write, require_role
+from app.api.deps import require_role
 from app.core.database import get_db
+from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.feasibility import (
     FeasibilityAdminReview,
@@ -15,7 +16,8 @@ from app.schemas.feasibility import (
 from app.services import audit_service, feasibility_service
 
 router = APIRouter(prefix="/api/feasibility", tags=["feasibility"])
-write_guard = require_department_write("sales")
+read_guard = require_page_access("feasibilities", "read")
+write_guard = require_page_access("feasibilities", "write")
 admin_guard = require_role("admin")
 
 
@@ -28,7 +30,7 @@ def list_feasibility_checks(
     customer_id: int | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     result = feasibility_service.list_feasibility_checks(
         db, page=page, page_size=page_size, search=search, status=status, customer_id=customer_id, sort=sort
@@ -41,7 +43,7 @@ def list_feasibility_checks(
 def list_available_for_quotation(
     customer_id: int | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     """List feasibility checks available for quotation generation.
     Only returns checks in quotable statuses that haven't been converted or closed."""
@@ -53,7 +55,7 @@ def list_available_for_quotation(
 def get_feasibility(
     feasibility_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return FeasibilityOut.from_model(feasibility_service.get_feasibility(db, feasibility_id))
 
@@ -62,7 +64,7 @@ def get_feasibility(
 def get_feasibility_history(
     feasibility_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     feasibility_service.get_feasibility(db, feasibility_id, include_deleted=True)  # 404s if never existed
     return audit_service.get_history(db, "feasibility_checks", feasibility_id)

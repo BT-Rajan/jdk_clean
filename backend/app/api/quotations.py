@@ -3,8 +3,9 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
-from app.api.deps import get_current_user, require_department_write, require_role
+from app.api.deps import require_role
 from app.core.database import get_db
+from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.email import SendDocumentEmailRequest
 from app.schemas.quotation import (
@@ -16,7 +17,8 @@ from app.schemas.quotation import (
 from app.services import audit_service, email_service, pdf_generator, quotation_service
 
 router = APIRouter(prefix="/api/quotations", tags=["quotations"])
-write_guard = require_department_write("sales")
+read_guard = require_page_access("quotations", "read")
+write_guard = require_page_access("quotations", "write")
 admin_guard = require_role("admin")
 
 
@@ -29,7 +31,7 @@ def list_quotations(
     customer_id: int | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     result = quotation_service.list_quotations(
         db, page=page, page_size=page_size, search=search, status=status, customer_id=customer_id, sort=sort
@@ -42,7 +44,7 @@ def list_quotations(
 def get_quotation(
     quotation_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return QuotationOut.from_model(quotation_service.get_quotation(db, quotation_id))
 
@@ -51,7 +53,7 @@ def get_quotation(
 def get_quotation_history(
     quotation_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     quotation_service.get_quotation(db, quotation_id, include_deleted=True)  # 404s if never existed
     return audit_service.get_history(db, "quotations", quotation_id)
@@ -145,7 +147,7 @@ def restore_quotation(
 def download_quotation_pdf(
     quotation_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     quotation = quotation_service.get_quotation(db, quotation_id)
     company_settings = pdf_generator.get_company_settings(db)

@@ -3,8 +3,9 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
-from app.api.deps import get_current_user, require_department_write, require_role
+from app.api.deps import require_role
 from app.core.database import get_db
+from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.email import SendDocumentEmailRequest
 from app.schemas.purchase_order import (
@@ -18,7 +19,11 @@ from app.schemas.purchase_order import (
 from app.services import audit_service, email_service, pdf_generator, purchase_order_service
 
 router = APIRouter(prefix="/api/purchase-orders", tags=["purchase-orders"])
-write_guard = require_department_write("procurement")
+read_guard = require_page_access("purchase_orders", "read")
+write_guard = require_page_access("purchase_orders", "write")
+# Large-PO/discount approval, overdue escalation, and admin-review are
+# governance actions, not regular page content -- these stay admin-only
+# regardless of the department matrix (unchanged from before).
 admin_guard = require_role("admin")
 
 
@@ -31,7 +36,7 @@ def list_purchase_orders(
     supplier_id: int | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     result = purchase_order_service.list_purchase_orders(
         db, page=page, page_size=page_size, search=search, status=status, supplier_id=supplier_id, sort=sort
@@ -44,7 +49,7 @@ def list_purchase_orders(
 def get_purchase_order(
     po_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return PurchaseOrderOut.from_model(purchase_order_service.get_purchase_order(db, po_id))
 
@@ -53,7 +58,7 @@ def get_purchase_order(
 def get_purchase_order_history(
     po_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     purchase_order_service.get_purchase_order(db, po_id, include_deleted=True)  # 404s if never existed
     return audit_service.get_history(db, "purchase_orders", po_id)
@@ -186,7 +191,7 @@ def restore_purchase_order(
 def download_purchase_order_pdf(
     po_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     po = purchase_order_service.get_purchase_order(db, po_id)
     company_settings = pdf_generator.get_company_settings(db)

@@ -3,8 +3,8 @@ from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
-from app.api.deps import get_current_user, require_department_write
 from app.core.database import get_db
+from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.delivery_note import (
     DeliveryNoteCreate,
@@ -16,7 +16,8 @@ from app.schemas.email import SendDocumentEmailRequest
 from app.services import audit_service, delivery_note_service, email_service, pdf_generator
 
 router = APIRouter(prefix="/api/delivery-notes", tags=["delivery-notes"])
-write_guard = require_department_write("warehouse")
+read_guard = require_page_access("delivery_notes", "read")
+write_guard = require_page_access("delivery_notes", "write")
 
 
 @router.get("", response_model=PagedResponse)
@@ -28,7 +29,7 @@ def list_delivery_notes(
     order_id: int | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     result = delivery_note_service.list_delivery_notes(
         db, page=page, page_size=page_size, search=search, status=status, order_id=order_id, sort=sort
@@ -41,7 +42,7 @@ def list_delivery_notes(
 def get_delivery_note(
     note_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return DeliveryNoteOut.from_model(delivery_note_service.get_delivery_note(db, note_id))
 
@@ -50,7 +51,7 @@ def get_delivery_note(
 def get_delivery_note_history(
     note_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     delivery_note_service.get_delivery_note(db, note_id, include_deleted=True)  # 404s if never existed
     return audit_service.get_history(db, "delivery_notes", note_id)
@@ -114,7 +115,7 @@ def restore_delivery_note(
 def download_delivery_note_pdf(
     note_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     note = delivery_note_service.get_delivery_note(db, note_id)
     company_settings = pdf_generator.get_company_settings(db)
