@@ -1,13 +1,14 @@
 import type { ReactNode } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
-import { Avatar, Logo, Button } from '@/components/ui'
+import { Logo, Button } from '@/components/ui'
 import { AssistantDrawer } from '@/components/assistant/AssistantDrawer'
 import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
 import { getPageKeyForPath } from '@/lib/pagePermissions'
 import { cn } from '@/lib/cn'
 import { AmbientBackground } from './AmbientBackground'
+import { HelpMenu } from './HelpMenu'
 import { NavDropdown } from './NavDropdown'
 import { NotificationsModal } from './NotificationsModal'
 import { listNotifications } from '@/api/notifications'
@@ -230,18 +231,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                 <span className="hidden sm:inline">AI</span>
               </button>
             )}
-            {user && (
-              <Link
-                to="/profile"
-                className="flex items-center gap-3 rounded-xl px-2 py-1 transition-colors hover:bg-white/5"
-              >
-                <div className="hidden text-right sm:block">
-                  <p className="text-sm font-medium text-white">{user.full_name}</p>
-                  <p className="text-xs tracking-wide text-gold-300/80 capitalize">{user.role}</p>
-                </div>
-                <Avatar key={avatarVersion} avatarUrl={user.avatar_url} name={user.full_name} size="sm" />
-              </Link>
-            )}
+            {user && <HelpMenu user={user} avatarVersion={avatarVersion} />}
             <Button variant="ghost" size="sm" isLoading={isLoggingOut} onClick={handleLogout}>
               Sign out
             </Button>
