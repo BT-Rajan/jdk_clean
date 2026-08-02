@@ -9,12 +9,14 @@ import type { Settings } from '@/types/settings'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
+import { AccessControlTab } from './AccessControlTab'
 
 export function SettingsPage() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [formError, setFormError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<'general' | 'access-control'>('general')
 
   const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<Settings>()
 
@@ -53,7 +55,36 @@ export function SettingsPage() {
           Company details used on outbound documents, and the AI provider used by the assistant.
         </p>
 
-        {loading ? (
+        <div className="mt-6 flex gap-2 border-b border-white/10">
+          <button
+            type="button"
+            onClick={() => setActiveTab('general')}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'general'
+                ? 'border-b-2 border-gold-400 text-white'
+                : 'text-white/50 hover:text-white/80'
+            }`}
+          >
+            General
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('access-control')}
+            className={`px-4 py-2 text-sm font-medium transition-colors ${
+              activeTab === 'access-control'
+                ? 'border-b-2 border-gold-400 text-white'
+                : 'text-white/50 hover:text-white/80'
+            }`}
+          >
+            Access Control
+          </button>
+        </div>
+
+        {activeTab === 'access-control' ? (
+          <div className="mt-8">
+            <AccessControlTab />
+          </div>
+        ) : loading ? (
           <div className="flex justify-center py-16">
             <Spinner size={24} className="text-gold-300" />
           </div>

@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import * as authApi from '@/api/auth'
+import { getMyPermissions } from '@/api/permissions'
 import { tokenStore } from '@/api/tokenStore'
 import { refreshTokenStorage } from '@/lib/storage'
 import type { ChangePasswordPayload, LoginPayload, User } from '@/types/auth'
+import type { MyPermissions } from '@/types/permission'
 import { AuthContext, type AuthContextValue, type AuthStatus } from './AuthContext'
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
+  const [permissions, setPermissions] = useState<MyPermissions | null>(null)
   const [status, setStatus] = useState<AuthStatus>('bootstrapping')
   const hasBootstrapped = useRef(false)
 
@@ -15,6 +18,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tokenStore.setAccessToken(null)
     refreshTokenStorage.clear()
     setUser(null)
+    setPermissions(null)
     setStatus('unauthenticated')
   }, [])
 
@@ -36,8 +40,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then(async (tokens) => {
         tokenStore.setAccessToken(tokens.access_token)
         refreshTokenStorage.set(tokens.refresh_token)
-        const currentUser = await authApi.getCurrentUser()
+        const [currentUser, myPermissions] = await Promise.all([authApi.getCurrentUser(), getMyPermissions()])
         setUser(currentUser)
+        setPermissions(myPermissions)
         setStatus('authenticated')
       })
       .catch(() => {
@@ -56,8 +61,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const tokens = await authApi.login(payload)
     tokenStore.setAccessToken(tokens.access_token)
     refreshTokenStorage.set(tokens.refresh_token)
-    const currentUser: User = await authApi.getCurrentUser()
+    const [currentUser, myPermissions] = await Promise.all([authApi.getCurrentUser(), getMyPermissions()])
     setUser(currentUser)
+    setPermissions(myPermissions)
     setStatus('authenticated')
   }, [])
 
@@ -95,6 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(
     () => ({
       user,
+      permissions,
       status,
       loginUser,
       logoutUser,
@@ -103,7 +110,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       avatarVersion,
       refreshAvatar,
     }),
-    [user, status, loginUser, logoutUser, changeUserPassword, updateUser, avatarVersion, refreshAvatar],
+    [user, permissions, status, loginUser, logoutUser, changeUserPassword, updateUser, avatarVersion, refreshAvatar],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

@@ -15,6 +15,7 @@ from app.api.inventory import router as inventory_router
 from app.api.machines import router as machines_router
 from app.api.mrp import router as mrp_router
 from app.api.notifications import router as notifications_router
+from app.api.permissions import router as permissions_router
 from app.api.orders import router as orders_router
 from app.api.products import router as products_router
 from app.api.production_schedules import router as production_schedules_router
@@ -63,6 +64,7 @@ register_exception_handlers(app)
 app.include_router(auth_router)
 app.include_router(assistant_router)
 app.include_router(users_router)
+app.include_router(permissions_router)
 app.include_router(settings_router)
 app.include_router(customers_router)
 app.include_router(dashboard_router)

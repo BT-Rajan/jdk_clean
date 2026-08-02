@@ -1,11 +1,18 @@
 import { createContext } from 'react'
 import type { ChangePasswordPayload, LoginPayload, User } from '@/types/auth'
+import type { MyPermissions } from '@/types/permission'
 
 export type AuthStatus = 'bootstrapping' | 'authenticated' | 'unauthenticated'
 
 export interface AuthContextValue {
   user: User | null
   status: AuthStatus
+  /** This user's own effective access per page (department-governed for
+   * staff, always-write for admin/manager, always-read for viewer). Null
+   * while not yet loaded -- PagePermissionGuard treats that the same as
+   * bootstrapping, not as "no access", so it never flashes a denial
+   * before the real answer arrives. */
+  permissions: MyPermissions | null
   loginUser: (payload: LoginPayload) => Promise<void>
   logoutUser: () => Promise<void>
   changeUserPassword: (payload: ChangePasswordPayload) => Promise<void>

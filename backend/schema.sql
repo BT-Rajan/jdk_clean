@@ -657,6 +657,28 @@ CREATE TABLE IF NOT EXISTS settings (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- DEPARTMENT PERMISSIONS: governs which pages a 'staff' user (identified
+-- by their department) can view or edit. admin/manager always have full
+-- access everywhere and never consult this table; 'viewer' always has
+-- read-only access everywhere and never consults this table either --
+-- this table only ever applies to 'staff' users, since department is
+-- the whole basis for the permission (see app/core/permissions.py).
+-- A department/page combination with no row here means 'none' (no
+-- access at all) -- deny by default until a super-admin (via Settings ->
+-- Access Control) explicitly grants read or write.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS department_permissions (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    department      ENUM('sales','procurement','warehouse') NOT NULL,
+    page_key        VARCHAR(40) NOT NULL,
+    access_level    ENUM('none','read','write') NOT NULL DEFAULT 'none',
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_dept_perm_updated_by FOREIGN KEY (updated_by) REFERENCES users(id),
+    UNIQUE KEY uq_dept_perm (department, page_key)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
 -- AUTH: Revocable refresh tokens
 -- Access tokens are short-lived and stateless (JWT only).
 -- Refresh tokens are tracked here so logout/compromise can revoke them.

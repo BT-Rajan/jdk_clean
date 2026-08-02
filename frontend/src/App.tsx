@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthProvider'
+import { PagePermissionGuard } from '@/routes/PagePermissionGuard'
 import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { PublicOnlyRoute } from '@/routes/PublicOnlyRoute'
 import { LoginPage } from '@/pages/LoginPage'
@@ -167,6 +168,7 @@ export function App() {
           </Route>
 
           <Route element={<ProtectedRoute />}>
+           <Route element={<PagePermissionGuard />}>
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/dashboard/customize" element={<DashboardCustomizePage />} />
             <Route path="/profile" element={<ProfilePage />} />
@@ -236,6 +238,7 @@ export function App() {
             <Route path="/users/new" element={<UserFormPage />} />
             <Route path="/users/:id" element={<UserDetailPage />} />
             <Route path="/users/:id/edit" element={<UserFormPage />} />
+           </Route>
           </Route>
 
           <Route path="*" element={<NotFoundPage />} />
