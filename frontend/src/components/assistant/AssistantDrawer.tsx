@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { sendAssistantMessage, type AssistantMessage } from '@/api/assistant'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { findLocalHelpAnswer } from '@/lib/helpContent'
+import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/cn'
 
 interface AssistantDrawerProps {
@@ -11,10 +13,12 @@ interface AssistantDrawerProps {
 
 const GREETING: AssistantMessage = {
   role: 'assistant',
-  content: "Hi! I'm the JDK Assistant. Ask me about orders, stock, production, or anything else in this system.",
+  content:
+    "Hi! I'm the JDK Assistant. Ask me about orders, stock, production, or how to do something in this system.",
 }
 
 export function AssistantDrawer({ open, onClose }: AssistantDrawerProps) {
+  const { user } = useAuth()
   const [messages, setMessages] = useState<AssistantMessage[]>([GREETING])
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
@@ -48,6 +52,18 @@ export function AssistantDrawer({ open, onClose }: AssistantDrawerProps) {
     const history = messages
     const next = [...history, { role: 'user', content: message } satisfies AssistantMessage]
     setMessages(next)
+
+    // Deal with it locally first: a confident match against this role's
+    // Help Guide answers instantly, no API call needed (and works even
+    // if no AI provider is configured). Only reaches the AI -- which is
+    // itself grounded in this same Help data server-side -- when nothing
+    // local matches well enough.
+    const localAnswer = user ? findLocalHelpAnswer(user.role, message) : null
+    if (localAnswer) {
+      setMessages([...next, { role: 'assistant', content: localAnswer }])
+      return
+    }
+
     setIsSending(true)
 
     try {
@@ -86,7 +102,7 @@ export function AssistantDrawer({ open, onClose }: AssistantDrawerProps) {
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="font-display text-lg font-medium text-white">JDK Assistant</h2>
-                <p className="text-xs text-white/40">Ask about orders, stock, or production</p>
+                <p className="text-xs text-white/40">Ask about orders, stock, production, or how to use it</p>
               </div>
               <button
                 type="button"

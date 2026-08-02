@@ -21,6 +21,52 @@ export interface HelpSection {
   items: HelpItem[]
 }
 
+/**
+ * Finds the best-matching help item for a free-text question, purely by
+ * keyword overlap against each item's title -- no network call. Used by
+ * the assistant drawer to answer "how do I..." questions instantly from
+ * this file before ever reaching the LLM. Returns null when nothing
+ * scores a confident match, so the caller can fall back to the AI (which
+ * is itself grounded in this same content server-side).
+ */
+export function findLocalHelpAnswer(role: UserRole, question: string): string | null {
+  const sections = HELP_CONTENT[role]
+  if (!sections) return null
+
+  const STOPWORDS = new Set([
+    'the', 'a', 'an', 'to', 'do', 'i', 'how', 'can', 'where', 'is', 'are', 'my', 'me',
+    'and', 'or', 'of', 'for', 'in', 'on', 'what', 'this', 'that', 'you', 'your', 'it',
+  ])
+  const words = (s: string) =>
+    s
+      .toLowerCase()
+      .split(/[^a-z0-9]+/)
+      .filter((w) => w.length > 1 && !STOPWORDS.has(w))
+
+  const qWords = new Set(words(question))
+  if (qWords.size === 0) return null
+
+  let best: { item: HelpItem; score: number } | null = null
+  for (const section of sections) {
+    for (const item of section.items) {
+      const titleWords = words(item.title)
+      if (titleWords.length === 0) continue
+      const overlap = titleWords.filter((w) => qWords.has(w)).length
+      const score = overlap / titleWords.length
+      if (overlap === 0) continue
+      if (!best || score > best.score) best = { item, score }
+    }
+  }
+
+  // Require a fairly confident match -- most of the item's title words
+  // present in the question -- so a vague message falls through to the
+  // AI instead of returning a wrong canned answer.
+  if (best && best.score >= 0.6) {
+    return `${best.item.title}\n${best.item.steps.map((s) => `• ${s}`).join('\n')}`
+  }
+  return null
+}
+
 export const HELP_CONTENT: Partial<Record<UserRole, HelpSection[]>> = {
   admin: [
     {
@@ -119,6 +165,166 @@ export const HELP_CONTENT: Partial<Record<UserRole, HelpSection[]>> = {
           ],
         },
         { title: 'Save', steps: ['Click "Save settings" at the bottom of the General tab'] },
+      ],
+    },
+    {
+      title: 'Your profile',
+      items: [
+        {
+          title: 'Update photo, contact info, or password',
+          steps: ['Avatar (top right) > Profile', 'Photo / Contact details / Password cards -- edit and save each'],
+        },
+        {
+          title: 'Customize your dashboard',
+          steps: ['Avatar (top right) > Profile > "Customize Dashboard"', 'Toggle widgets on/off'],
+        },
+      ],
+    },
+  ],
+  manager: [
+    {
+      title: 'Getting started',
+      items: [
+        {
+          title: 'Find your way around',
+          steps: [
+            'Top menu: Dashboard, Sales, Purchasing, Inventory, Production',
+            'Bell icon (top right) -- Notifications',
+            'Gold "AI" button (top right) -- JDK Assistant chat, also answers "how do I..." questions',
+            'Avatar (top right) -- your Profile',
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Sales',
+      items: [
+        {
+          title: 'Customers, feasibility checks, quotations, orders, delivery notes',
+          steps: [
+            'Sales menu -- pick the page',
+            '"New" button (top right of any list) to create one',
+            'Open a record to edit it or move it through its status steps',
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Purchasing',
+      items: [
+        {
+          title: 'Suppliers and purchase orders',
+          steps: ['Purchasing menu -- Suppliers or Purchase orders', '"New" button to create, open a record to edit or send it'],
+        },
+      ],
+    },
+    {
+      title: 'Inventory & Production',
+      items: [
+        {
+          title: 'Raw materials, products, stock levels',
+          steps: ['Inventory menu -- pick the page', 'Open a record to edit; Stock levels has an "Adjust" action'],
+        },
+        {
+          title: 'Production schedule, machines, MRP',
+          steps: ['Production menu -- Schedule, Machines, Factory setup, or MRP', '"New" button to schedule a batch or add a machine'],
+        },
+      ],
+    },
+    {
+      title: 'Your profile',
+      items: [
+        {
+          title: 'Update photo, contact info, or password',
+          steps: ['Avatar (top right) > Profile', 'Photo / Contact details / Password cards -- edit and save each'],
+        },
+        {
+          title: 'Customize your dashboard',
+          steps: ['Avatar (top right) > Profile > "Customize Dashboard"', 'Toggle widgets on/off'],
+        },
+      ],
+    },
+  ],
+  staff: [
+    {
+      title: 'Getting started',
+      items: [
+        {
+          title: 'Find your way around',
+          steps: [
+            'Top menu only shows the pages your admin has given you access to',
+            'Bell icon (top right) -- Notifications',
+            'Gold "AI" button (top right) -- JDK Assistant chat, also answers "how do I..." questions',
+            'Avatar (top right) -- your Profile',
+          ],
+        },
+        {
+          title: 'What you can do',
+          steps: [
+            'What you see and can edit depends on your department (Sales, Procurement, or Warehouse) and what your admin has granted',
+            'A page with no access is simply hidden from your menu',
+            'On a page you can view but not edit, buttons like "New" or "Edit" won\'t appear',
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Everyday tasks',
+      items: [
+        {
+          title: 'Sales department',
+          steps: ['Sales menu -- Customers, Feasibility checks, Quotations, Orders, Delivery notes'],
+        },
+        {
+          title: 'Procurement department',
+          steps: ['Purchasing menu -- Suppliers, Purchase orders'],
+        },
+        {
+          title: 'Warehouse department',
+          steps: ['Sales menu -- Delivery notes', 'Inventory menu -- Stock levels has an "Adjust" action'],
+        },
+      ],
+    },
+    {
+      title: 'Your profile',
+      items: [
+        {
+          title: 'Update photo, contact info, or password',
+          steps: ['Avatar (top right) > Profile', 'Photo / Contact details / Password cards -- edit and save each'],
+        },
+        {
+          title: 'Customize your dashboard',
+          steps: ['Avatar (top right) > Profile > "Customize Dashboard"', 'Toggle widgets on/off'],
+        },
+      ],
+    },
+  ],
+  viewer: [
+    {
+      title: 'Getting started',
+      items: [
+        {
+          title: 'Find your way around',
+          steps: [
+            'Top menu: Dashboard, Sales, Purchasing, Inventory, Production',
+            'Bell icon (top right) -- Notifications',
+            'Gold "AI" button (top right) -- JDK Assistant chat, also answers "how do I..." questions',
+            'Avatar (top right) -- your Profile',
+          ],
+        },
+      ],
+    },
+    {
+      title: 'What you can do',
+      items: [
+        {
+          title: 'View everything, edit nothing',
+          steps: [
+            'You have read-only access to every page in the system',
+            'Open any record to see its full detail -- customers, orders, quotations, purchase orders, stock, production schedules',
+            'No "New", "Edit", or "Delete" buttons will appear for you',
+          ],
+        },
       ],
     },
     {

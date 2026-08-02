@@ -37,8 +37,8 @@ export function NotificationsModal({ open, onClose, notifications, loading, erro
   }
 
   return (
-    <Modal open={open} title={`Notifications (${notifications.length})`} onClose={onClose}>
-      <div className="max-h-96 space-y-3 overflow-y-auto">
+    <Modal open={open} title={`Notifications (${notifications.length})`} onClose={onClose} wide>
+      <div className="max-h-[28rem] space-y-3 overflow-y-auto">
         {loading ? (
           <p className="py-6 text-center text-sm text-white/40">Loading…</p>
         ) : error ? (

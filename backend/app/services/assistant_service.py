@@ -34,7 +34,7 @@ from app.models.quotation import Quotation
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
 from app.models.user import User
-from app.services import settings_service
+from app.services import help_content, settings_service
 
 REFUSAL_MESSAGE = "I'm a JDK Assistant, I can't answer this."
 
@@ -177,6 +177,19 @@ Suppliers on file: {supplier_count}"""
 
 
 def _system_prompt(context: str, user: User) -> str:
+    help_guide = help_content.get_help_guide(user.role)
+    help_block = (
+        f"""
+
+Help Guide for this user's role ({user.role}) -- the exact menu paths and
+steps for using this system. When the question is "how do I..." / "where
+is..." / how-to in nature, answer strictly from this guide (paraphrase
+it, don't invent menus or steps that aren't in it):
+{help_guide}"""
+        if help_guide
+        else ""
+    )
+
     return f"""You are the JDK Assistant, embedded in a manufacturing ERP web app
 (customers, quotations, orders, delivery notes, suppliers, purchase orders,
 raw materials, products, inventory, production schedules, MRP/BOM).
@@ -200,9 +213,12 @@ When the question IS in-domain:
 - Keep answers short: 1-3 plain-language sentences, lead with the number.
 - If something genuinely isn't in the data below, say plainly that you
   don't have that on file — don't guess or invent figures.
+- For "how do I..." questions, use the Help Guide below (if present) as
+  ground truth instead of guessing at menu names.
 
 Current data:
 {context}
+{help_block}
 
 User asking: {user.full_name} ({user.role})"""
 
