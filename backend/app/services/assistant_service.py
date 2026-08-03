@@ -17,6 +17,7 @@ narrower than the original on two counts:
 """
 
 import json
+import logging
 import urllib.error
 import urllib.request
 from typing import Any
@@ -24,6 +25,7 @@ from typing import Any
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import generate_support_code
 from app.models.customer import Customer
 from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory
 from app.models.order import Order
@@ -48,6 +50,8 @@ ORDER_OPEN_STATUSES = ("draft", "confirmed", "in_production", "ready_to_ship")
 QUOTATION_OPEN_STATUSES = ("draft", "sent")
 PO_OPEN_STATUSES = ("draft", "sent", "partially_received")
 SCHEDULE_ACTIVE_STATUSES = ("planned", "in_progress")
+
+logger = logging.getLogger("app")
 
 
 class AssistantNotConfigured(Exception):
@@ -301,7 +305,9 @@ def chat(db: Session, user: User, message: str, history: list[dict]) -> str:
             reply = _call_claude(api_key, system, messages)
         else:
             reply = _call_deepseek(api_key, system, messages)
-    except (urllib.error.URLError, urllib.error.HTTPError, KeyError, IndexError, json.JSONDecodeError):
-        return "The AI assistant is temporarily unavailable. Please try again shortly."
+    except (urllib.error.URLError, urllib.error.HTTPError, KeyError, IndexError, json.JSONDecodeError) as exc:
+        code = generate_support_code()
+        logger.error("[%s] assistant chat -> AI provider call failed: %s", code, exc, exc_info=True)
+        return f"[{code}] The AI assistant is temporarily unavailable. Please try again shortly."
 
     return reply or REFUSAL_MESSAGE

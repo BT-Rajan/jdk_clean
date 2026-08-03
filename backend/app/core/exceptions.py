@@ -1,4 +1,5 @@
 import logging
+import secrets
 
 from fastapi import Request, status
 from fastapi.exceptions import RequestValidationError
@@ -42,14 +43,37 @@ class PermissionError_(AppError):
         super().__init__(message, status.HTTP_403_FORBIDDEN)
 
 
-def _error_response(message: str, status_code: int) -> JSONResponse:
-    return JSONResponse(status_code=status_code, content={"error": message})
+def generate_support_code() -> str:
+    """Short per-error reference code, e.g. 'A1B2C3'. Not a secret --
+    just enough entropy that two errors basically never collide, so a
+    person can quote the code they see on screen to support and support
+    can grep the server log for that exact same code to find what
+    actually happened (endpoint, status, and for 500s the full
+    traceback) without ever showing that detail to the person themselves.
+    """
+    return secrets.token_hex(3).upper()
+
+
+def _log_error(request: Request, code: str, status_code: int, message: str, *, exc_info: bool = False) -> None:
+    line = "[%s] %s %s -> %s: %s" % (code, request.method, request.url.path, status_code, message)
+    if exc_info:
+        logger.error(line, exc_info=True)
+    elif status_code >= 500:
+        logger.error(line)
+    else:
+        logger.info(line)
+
+
+def _error_response(request: Request, status_code: int, message: str, *, exc_info: bool = False) -> JSONResponse:
+    code = generate_support_code()
+    _log_error(request, code, status_code, message, exc_info=exc_info)
+    return JSONResponse(status_code=status_code, content={"error": f"[{code}] {message}"})
 
 
 def register_exception_handlers(app) -> None:
     @app.exception_handler(AppError)
     async def app_error_handler(request: Request, exc: AppError):
-        return _error_response(exc.message, exc.status_code)
+        return _error_response(request, exc.status_code, exc.message)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
@@ -57,26 +81,31 @@ def register_exception_handlers(app) -> None:
         first = exc.errors()[0] if exc.errors() else None
         field = ".".join(str(p) for p in first["loc"] if p != "body") if first else ""
         message = f"Please check the '{field}' field." if field else "Please check your input."
-        return _error_response(message, status.HTTP_422_UNPROCESSABLE_ENTITY)
+        return _error_response(request, status.HTTP_422_UNPROCESSABLE_ENTITY, message)
 
     @app.exception_handler(IntegrityError)
     async def integrity_error_handler(request: Request, exc: IntegrityError):
-        logger.warning("Integrity error: %s", exc)
         return _error_response(
-            "This action conflicts with existing data (e.g. a duplicate or linked record).",
+            request,
             status.HTTP_409_CONFLICT,
+            "This action conflicts with existing data (e.g. a duplicate or linked record).",
+            exc_info=True,
         )
 
     @app.exception_handler(SQLAlchemyError)
     async def db_error_handler(request: Request, exc: SQLAlchemyError):
-        logger.error("Database error: %s", exc)
         return _error_response(
-            "A database error occurred. Please try again.", status.HTTP_500_INTERNAL_SERVER_ERROR
+            request,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "A database error occurred. Please try again.",
+            exc_info=True,
         )
 
     @app.exception_handler(Exception)
     async def unhandled_error_handler(request: Request, exc: Exception):
-        logger.exception("Unhandled error")
         return _error_response(
-            "Something went wrong. Please try again.", status.HTTP_500_INTERNAL_SERVER_ERROR
+            request,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Something went wrong. Please try again.",
+            exc_info=True,
         )
