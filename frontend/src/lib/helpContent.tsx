@@ -157,11 +157,11 @@ export const HELP_CONTENT: Partial<Record<UserRole, HelpSection[]>> = {
           ],
         },
         {
-          title: 'Tax rate & AI provider',
+          title: 'Tax rate & AI assistant key',
           steps: [
             'Admin > Settings > General tab',
             'Tax card -- default tax rate %',
-            'AI assistant card -- pick provider, paste API key',
+            'AI assistant card -- paste API key (provider is detected automatically)',
           ],
         },
         { title: 'Save', steps: ['Click "Save settings" at the bottom of the General tab'] },

@@ -52,7 +52,7 @@ export function SettingsPage() {
       <PageContainer>
         <h1 className="font-display text-2xl font-medium text-white">Settings</h1>
         <p className="mt-2 text-sm text-white/50">
-          Company details used on outbound documents, and the AI provider used by the assistant.
+          Company details used on outbound documents, and the AI assistant's API key.
         </p>
 
         <div className="mt-6 flex gap-2 border-b border-white/10">
@@ -256,16 +256,12 @@ export function SettingsPage() {
             </GlassCard>
 
             <GlassCard className="p-8">
-              <h2 className="font-display text-lg font-medium text-white">AI assistant provider</h2>
+              <h2 className="font-display text-lg font-medium text-white">AI assistant</h2>
               <p className="mt-1 text-sm text-white/50">
-                Visible here only -- the assistant itself never names a provider anywhere else in the app.
+                Paste a Claude or DeepSeek API key -- which provider it is gets detected automatically from the key
+                itself, nothing else to pick here.
               </p>
-              <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <SelectField label="Provider" {...register('ai_provider')}>
-                  <option value="">Not configured</option>
-                  <option value="claude">Claude (Anthropic)</option>
-                  <option value="deepseek">DeepSeek</option>
-                </SelectField>
+              <div className="mt-6">
                 <TextField
                   label="API key"
                   type="password"

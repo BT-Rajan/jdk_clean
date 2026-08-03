@@ -273,12 +273,21 @@ def _call_deepseek(api_key: str, system: str, messages: list[dict]) -> str:
     return result["choices"][0]["message"]["content"].strip()
 
 
+def _detect_provider(api_key: str) -> str:
+    """Claude (Anthropic) keys are always prefixed 'sk-ant-'; every other
+    non-empty key is treated as DeepSeek. This is the only place the
+    provider is chosen -- there's no separate admin picker or stored
+    setting for it, so plugging in a different key is all it takes to
+    switch providers."""
+    return "claude" if api_key.startswith("sk-ant-") else "deepseek"
+
+
 def chat(db: Session, user: User, message: str, history: list[dict]) -> str:
     settings = settings_service.get_all(db)
-    provider = settings.get("ai_provider") or ""
     api_key = settings.get("ai_api_key") or ""
-    if not provider or not api_key:
+    if not api_key:
         raise AssistantNotConfigured()
+    provider = _detect_provider(api_key)
 
     context = _build_context(db)
     system = _system_prompt(context, user)
@@ -290,10 +299,8 @@ def chat(db: Session, user: User, message: str, history: list[dict]) -> str:
     try:
         if provider == "claude":
             reply = _call_claude(api_key, system, messages)
-        elif provider == "deepseek":
-            reply = _call_deepseek(api_key, system, messages)
         else:
-            raise AssistantNotConfigured()
+            reply = _call_deepseek(api_key, system, messages)
     except (urllib.error.URLError, urllib.error.HTTPError, KeyError, IndexError, json.JSONDecodeError):
         return "The AI assistant is temporarily unavailable. Please try again shortly."
 

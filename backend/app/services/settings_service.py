@@ -3,10 +3,11 @@ from sqlalchemy.orm import Session
 from app.models.setting import Setting
 
 COMPANY_FIELDS = ["company_name", "company_address", "company_phone", "company_email", "company_gstin"]
-# ai_provider is 'claude' or 'deepseek' (or '' for not configured yet). The
-# frontend never shows either name outside the admin-only settings screen
-# (see SettingsPage.tsx) -- the chat feature itself just says "AI Assistant".
-AI_FIELDS = ["ai_provider", "ai_api_key"]
+# The AI API key (Claude or DeepSeek). Which provider it belongs to is
+# auto-detected server-side from the key's own format (see
+# assistant_service._detect_provider) -- there's no separate stored
+# choice or admin picker for it anymore.
+AI_FIELDS = ["ai_api_key"]
 # The factory-wide worker pool used alongside each machine's own capacity
 # in the feasibility check's capacity scan (see feasibility_service.py).
 # Stored as text like every other setting; parsed by whoever reads them.

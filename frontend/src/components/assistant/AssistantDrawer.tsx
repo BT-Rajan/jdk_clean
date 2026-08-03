@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { sendAssistantMessage, type AssistantMessage } from '@/api/assistant'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { findLocalHelpAnswer } from '@/lib/helpContent'
 import { renderMarkdownLite } from '@/lib/markdown'
+import { runGlobalSearch, type GlobalSearchResult } from '@/lib/globalSearch'
 import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/cn'
 
@@ -15,15 +17,18 @@ interface AssistantDrawerProps {
 const GREETING: AssistantMessage = {
   role: 'assistant',
   content:
-    "Hi! I'm the JDK Assistant. Ask me about orders, stock, production, or how to do something in this system.",
+    "Hi! I'm the JDK Assistant. Ask me about orders, stock, production, or how to do something -- or just start typing a customer, order, or PO number to search for it.",
 }
 
 export function AssistantDrawer({ open, onClose }: AssistantDrawerProps) {
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [messages, setMessages] = useState<AssistantMessage[]>([GREETING])
   const [input, setInput] = useState('')
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [searchResults, setSearchResults] = useState<GlobalSearchResult[]>([])
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -44,10 +49,46 @@ export function AssistantDrawer({ open, onClose }: AssistantDrawerProps) {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight })
   }, [messages, isSending])
 
+  // The same input the user chats/asks-for-help in also doubles as a
+  // live search box: as they type, this fires a debounced cross-entity
+  // search (customers, orders, quotations, POs, etc.) and shows matches
+  // in a dropdown above the input. Sending the message (Enter/the send
+  // button) is unaffected -- it still goes through the normal chat/help
+  // flow below; picking a search result is a separate, explicit action.
+  useEffect(() => {
+    const query = input.trim()
+    if (query.length < 2) {
+      setSearchResults([])
+      setIsSearchOpen(false)
+      return
+    }
+    const timer = setTimeout(() => {
+      runGlobalSearch(query)
+        .then((results) => {
+          setSearchResults(results)
+          setIsSearchOpen(results.length > 0)
+        })
+        .catch(() => {
+          setSearchResults([])
+          setIsSearchOpen(false)
+        })
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [input])
+
+  function goToSearchResult(result: GlobalSearchResult) {
+    setIsSearchOpen(false)
+    setInput('')
+    setSearchResults([])
+    onClose()
+    navigate(result.path)
+  }
+
   async function handleSend() {
     const message = input.trim()
     if (!message || isSending) return
 
+    setIsSearchOpen(false)
     setInput('')
     setError(null)
     const history = messages
@@ -103,7 +144,7 @@ export function AssistantDrawer({ open, onClose }: AssistantDrawerProps) {
             <div className="mb-4 flex items-center justify-between">
               <div>
                 <h2 className="font-display text-lg font-medium text-white">JDK Assistant</h2>
-                <p className="text-xs text-white/40">Ask about orders, stock, production, or how to use it</p>
+                <p className="text-xs text-white/40">Ask about orders, stock, production -- or search for a record</p>
               </div>
               <button
                 type="button"
@@ -144,7 +185,44 @@ export function AssistantDrawer({ open, onClose }: AssistantDrawerProps) {
 
             {error && <p className="mt-2 text-xs text-red-400">{error}</p>}
 
-            <div className="mt-4 flex items-end gap-2">
+            <div className="relative mt-4 flex items-end gap-2">
+              <AnimatePresence>
+                {isSearchOpen && searchResults.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: 6 }}
+                    transition={{ duration: 0.12 }}
+                    className="glass-panel-header-scrolled absolute bottom-full left-0 right-0 mb-2 max-h-64 overflow-y-auto rounded-xl p-2"
+                  >
+                    {Object.entries(
+                      searchResults.reduce<Record<string, GlobalSearchResult[]>>((acc, r) => {
+                        ;(acc[r.group] ??= []).push(r)
+                        return acc
+                      }, {}),
+                    ).map(([group, items]) => (
+                      <div key={group} className="mb-1 last:mb-0">
+                        <p className="px-2 py-1 text-[10px] font-semibold tracking-wide text-gold-300/70 uppercase">
+                          {group}
+                        </p>
+                        {items.map((r) => (
+                          <button
+                            key={r.id}
+                            type="button"
+                            onClick={() => goToSearchResult(r)}
+                            className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm text-white/80 transition-colors hover:bg-white/10"
+                          >
+                            <span className="truncate">{r.label}</span>
+                            {r.sublabel && (
+                              <span className="ml-2 shrink-0 truncate text-xs text-white/40">{r.sublabel}</span>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    ))}
+                  </motion.div>
+                )}
+              </AnimatePresence>
               <textarea
                 ref={inputRef}
                 value={input}
@@ -154,9 +232,12 @@ export function AssistantDrawer({ open, onClose }: AssistantDrawerProps) {
                     e.preventDefault()
                     handleSend()
                   }
+                  if (e.key === 'Escape' && isSearchOpen) {
+                    setIsSearchOpen(false)
+                  }
                 }}
                 rows={1}
-                placeholder="Ask a question…"
+                placeholder="Ask a question, or search…"
                 className="max-h-28 flex-1 resize-none rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-white placeholder-white/30 focus:border-gold-400/50 focus:outline-none"
               />
               <button

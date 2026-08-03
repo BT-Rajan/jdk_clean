@@ -36,7 +36,7 @@ Company & workflow settings (Admin > Settings > General tab)
 - Automation toggles: auto-create quotation from feasibility, auto-schedule production on order confirm, auto-create delivery note, auto-draft purchase orders from MRP
 - Approval thresholds: KWD amount for large purchase orders, % for large discounts (blank = off)
 - Tax card: default tax rate %
-- AI assistant card: provider + API key
+- AI assistant card: paste API key (provider is auto-detected)
 - "Save settings"
 
 Your profile (Avatar > Profile)

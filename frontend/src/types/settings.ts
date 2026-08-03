@@ -1,15 +1,15 @@
 /** Mirrors backend/app/schemas/settings.py. Admin-only. */
 
-export type AiProvider = '' | 'claude' | 'deepseek'
-
 export interface Settings {
   company_name: string
   company_address: string
   company_phone: string
   company_email: string
   company_gstin: string
-  ai_provider: AiProvider
-  /** Masked (e.g. "••••••••ab12") once set -- never the real key. */
+  /** Masked (e.g. "••••••••ab12") once set -- never the real key. Which
+   * provider (Claude or DeepSeek) it belongs to is auto-detected
+   * server-side from the key's own format -- there's no separate
+   * provider choice to make here. */
   ai_api_key: string
   /** Factory-wide worker pool used by the feasibility check's capacity
    * scan alongside each machine's own capacity. Stored/sent as strings
