@@ -90,3 +90,17 @@ def change_password(db: Session, user: User, current_password: str, new_password
         RefreshToken.user_id == user.id, RefreshToken.revoked.is_(False)
     ).update({"revoked": True})
     db.commit()
+
+
+def reset_password_by_admin(db: Session, target_user: User, new_password: str) -> None:
+    """Admin-initiated reset -- no current password needed, since this is the
+    account-recovery path for a user who is locked out. Only reachable via the
+    admin-only /users/{id}/reset-password route (see api/users.py)."""
+    target_user.password_hash = hash_password(new_password)
+    db.commit()
+    # Force re-login everywhere by revoking all outstanding refresh tokens,
+    # same as a self-service change -- an old session shouldn't survive a reset.
+    db.query(RefreshToken).filter(
+        RefreshToken.user_id == target_user.id, RefreshToken.revoked.is_(False)
+    ).update({"revoked": True})
+    db.commit()

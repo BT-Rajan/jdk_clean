@@ -51,6 +51,8 @@ export function LoginPage() {
             type="text"
             autoComplete="username"
             autoFocus
+            disabled={isSubmitting}
+            aria-invalid={Boolean(formError) || undefined}
             error={errors.username?.message}
             {...register('username')}
           />
@@ -58,6 +60,8 @@ export function LoginPage() {
           <PasswordField
             label="Password"
             autoComplete="current-password"
+            disabled={isSubmitting}
+            aria-invalid={Boolean(formError) || undefined}
             error={errors.password?.message}
             {...register('password')}
           />
@@ -66,6 +70,10 @@ export function LoginPage() {
         <Button type="submit" isLoading={isSubmitting} className="mt-8 w-full">
           Sign in
         </Button>
+
+        <p className="mt-5 text-center text-xs text-white/40">
+          Forgotten your password? Contact your admin to have it reset.
+        </p>
       </form>
     </AuthLayout>
   )

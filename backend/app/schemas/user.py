@@ -20,6 +20,10 @@ class UserUpdate(BaseModel):
     is_active: bool | None = None
 
 
+class AdminResetPasswordRequest(BaseModel):
+    new_password: str = Field(min_length=8)
+
+
 class UserOut(BaseModel):
     id: int
     username: str
