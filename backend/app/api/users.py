@@ -9,11 +9,14 @@ from app.core.exceptions import NotFoundError
 from app.core.security import hash_password
 from app.crud.master_data import user_crud
 from app.models.user import User
-from app.schemas.user import UserCreate, UserOut, UserUpdate
-from app.services import audit_service, signature_service
+from app.schemas.user import AdminResetPasswordRequest, UserCreate, UserOut, UserUpdate
+from app.services import audit_service, auth_service, signature_service
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 admin_only = require_role("admin", "manager")
+# Password resets are more sensitive than the general user-edit actions above
+# (email, role, department, etc.) -- restricted to admin, not manager.
+admin_strict = require_role("admin")
 
 
 @router.get("", response_model=PagedResponse)
@@ -75,6 +78,26 @@ def delete_user(
 ):
     user_crud.delete(db, user_id, user_id=current_user.id)
     return {"message": "Deleted."}
+
+
+@router.post("/{user_id}/reset-password")
+def reset_user_password(
+    user_id: int,
+    payload: AdminResetPasswordRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(admin_strict),
+):
+    """Account-recovery path for a locked-out user: an admin sets a new
+    password directly, no current password required. This is the only way
+    to reset a password other than the logged-in self-service change on
+    /api/auth/change-password."""
+    target = user_crud.read_one(db, user_id)
+    auth_service.reset_password_by_admin(db, target, payload.new_password)
+    # Redacted audit entry -- record that a reset happened, never the value.
+    audit_service.log_update(
+        db, "users", user_id, {"password": ("[redacted]", "[reset by admin]")}, _.id
+    )
+    return {"message": "Password reset."}
 
 
 @router.post("/{user_id}/restore", response_model=UserOut)

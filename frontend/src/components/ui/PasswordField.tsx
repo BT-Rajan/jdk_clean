@@ -16,7 +16,6 @@ export const PasswordField = forwardRef<HTMLInputElement, Omit<TextFieldProps, '
             onClick={() => setVisible((v) => !v)}
             className="shrink-0 text-xs font-medium text-white/40 transition-colors hover:text-gold-300"
             aria-label={visible ? 'Hide password' : 'Show password'}
-            tabIndex={-1}
           >
             {visible ? 'Hide' : 'Show'}
           </button>
