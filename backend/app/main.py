@@ -7,24 +7,26 @@ from app.api.assistant import router as assistant_router
 from app.api.auth import router as auth_router
 from app.api.bom import router as bom_router
 from app.api.calendar import router as calendar_router
-from app.api.customers import router as customers_router
 from app.api.dashboard import router as dashboard_router
 from app.api.deals import router as deals_router
 from app.api.delivery_notes import router as delivery_notes_router
 from app.api.feasibility import router as feasibility_router
 from app.api.inventory import router as inventory_router
-from app.api.machines import router as machines_router
+from app.api.master_data import (
+    customers_router,
+    machines_router,
+    products_router,
+    raw_materials_router,
+    suppliers_router,
+)
 from app.api.mrp import router as mrp_router
 from app.api.notifications import router as notifications_router
 from app.api.permissions import router as permissions_router
 from app.api.orders import router as orders_router
-from app.api.products import router as products_router
 from app.api.production_schedules import router as production_schedules_router
 from app.api.purchase_orders import router as purchase_orders_router
 from app.api.quotations import router as quotations_router
-from app.api.raw_materials import router as raw_materials_router
 from app.api.settings import router as settings_router
-from app.api.suppliers import router as suppliers_router
 from app.api.supplier_materials import router as supplier_materials_router
 from app.api.users import router as users_router
 from app.core.config import get_settings
