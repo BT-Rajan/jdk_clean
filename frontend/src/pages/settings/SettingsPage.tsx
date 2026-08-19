@@ -11,6 +11,16 @@ import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
 import { AccessControlTab } from './AccessControlTab'
 
+const DAY_OPTIONS: { code: string; label: string }[] = [
+  { code: 'Mon', label: 'Mon' },
+  { code: 'Tue', label: 'Tue' },
+  { code: 'Wed', label: 'Wed' },
+  { code: 'Thu', label: 'Thu' },
+  { code: 'Fri', label: 'Fri' },
+  { code: 'Sat', label: 'Sat' },
+  { code: 'Sun', label: 'Sun' },
+]
+
 export function SettingsPage() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(true)
@@ -18,7 +28,19 @@ export function SettingsPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'general' | 'access-control'>('general')
 
-  const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<Settings>()
+  const { register, handleSubmit, reset, watch, setValue, formState: { isSubmitting } } = useForm<Settings>()
+  const workingDays = (watch('factory_working_days') || '').split(',').map((d) => d.trim()).filter(Boolean)
+
+  function toggleWorkingDay(code: string) {
+    const next = workingDays.includes(code)
+      ? workingDays.filter((d) => d !== code)
+      : [...workingDays, code]
+    // Keep the stored order matching DAY_OPTIONS rather than click order,
+    // so the string is stable/readable regardless of which day was
+    // toggled last.
+    const ordered = DAY_OPTIONS.map((d) => d.code).filter((c) => next.includes(c))
+    setValue('factory_working_days', ordered.join(','), { shouldDirty: true })
+  }
 
   useEffect(() => {
     if (!isAdmin(user?.role)) return
@@ -132,6 +154,33 @@ export function SettingsPage() {
                   min="0"
                   {...register('factory_workday_hours')}
                 />
+              </div>
+              <div className="mt-6">
+                <span className="text-sm font-medium text-white/80">Working days</span>
+                <p className="mt-1 text-xs text-white/50">
+                  Days the factory runs. Every feasibility check's capacity estimate starts counting from the next
+                  working day after today (today itself is always left out) and skips whatever's off here.
+                </p>
+                <input type="hidden" {...register('factory_working_days')} />
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {DAY_OPTIONS.map((day) => {
+                    const active = workingDays.includes(day.code)
+                    return (
+                      <button
+                        key={day.code}
+                        type="button"
+                        onClick={() => toggleWorkingDay(day.code)}
+                        className={`rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                          active
+                            ? 'border-gold-400 bg-gold-400/10 text-gold-200'
+                            : 'border-white/10 text-white/50 hover:border-white/20 hover:text-white/80'
+                        }`}
+                      >
+                        {day.label}
+                      </button>
+                    )
+                  })}
+                </div>
               </div>
             </GlassCard>
 

@@ -431,8 +431,9 @@ def _maybe_auto_schedule_production(db: Session, order_id: int, user_id: int | N
             .all()
         )
         daily_booked = capacity_service.daily_booked_hours(booked_batches, hours_field="machine")
+        working_days = settings_service.get_working_days(db)
         completion = capacity_service.find_vacant_slot_completion(
-            float(machine.capacity_hours_per_day), daily_booked, required_hours, today
+            float(machine.capacity_hours_per_day), daily_booked, required_hours, today, working_days
         )
         if completion is None:
             # Not achievable within the scan horizon -- leave it for a

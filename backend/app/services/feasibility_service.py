@@ -125,34 +125,49 @@ def _daily_booked_hours(batches, hours_field: str = "machine"):
     return capacity_service.daily_booked_hours(batches, hours_field)
 
 
-def _find_vacant_slot_completion(daily_capacity, daily_booked, required_hours, today):
-    return capacity_service.find_vacant_slot_completion(daily_capacity, daily_booked, required_hours, today)
+def _find_vacant_slot_completion(daily_capacity, daily_booked, required_hours, today, working_days=None):
+    return capacity_service.find_vacant_slot_completion(daily_capacity, daily_booked, required_hours, today, working_days)
 
 
 def _check_capacity(
-    db: Session, product: Product, quantity: float, required_by_date: date | None, today: date
-) -> tuple[bool | None, dict | None]:
-    """Machine-availability + time-required (+ labor) check for one line:
-    scans forward from today for the first vacant slot -- on the product's
+    db: Session,
+    product: Product,
+    quantity: float,
+    required_by_date: date | None,
+    today: date,
+    working_days: set[int],
+) -> tuple[bool | None, dict | None, date | None]:
+    """Machine-availability + time-required (+ labor) estimate for one
+    line: scans forward for the first vacant slot -- on the product's
     machine, and in the factory's shared worker pool -- with enough free
     capacity to produce `quantity` units at the product's formula
     (production_hours_per_unit, workers_required), net of what's already
-    booked in production_schedules. capacity_ok is True only if that
-    projected completion date is on or before required_by_date.
+    booked in production_schedules.
 
-    Returns (capacity_ok, shortfall_dict). capacity_ok is None -- meaning
-    "not evaluable" -- when the product has no machine/time formula set, or
-    the check has no required_by_date to measure against.
+    The scan always starts from the next working day after `today` --
+    today itself is never counted (whatever capacity exists today is
+    already spoken for), and weekends/off-days per `working_days` are
+    skipped entirely -- so the estimate always reflects a day the
+    factory can actually start fresh work on.
+
+    Returns (capacity_ok, shortfall_dict, estimated_ready_date):
+    - estimated_ready_date is the projected completion date, always
+      computed when the product has a machine/time formula, regardless
+      of whether required_by_date was given -- this is what lets Sales
+      see *when* the remainder can be supplied, not just pass/fail.
+    - capacity_ok is the pass/fail verdict against required_by_date;
+      None when there's nothing to compare against (no required_by_date)
+      or nothing to evaluate (no machine/time formula on the product) --
+      "not evaluable" either way.
     """
     if product.machine_id is None or product.production_hours_per_unit is None:
-        return None, None
-    if required_by_date is None:
-        return None, None
+        return None, None, None
 
     machine = db.query(Machine).filter(Machine.id == product.machine_id).first()
     if machine is None:
-        return None, None
+        return None, None, None
 
+    scan_start = settings_service.next_working_day(today, working_days)
     required_hours = round(float(quantity) * float(product.production_hours_per_unit), 4)
 
     # Machine slot: only this machine's own bookings compete for its time.
@@ -163,18 +178,18 @@ def _check_capacity(
             ProductionSchedule.machine_id == machine.id,
             ProductionSchedule.deleted_at.is_(None),
             ProductionSchedule.status.in_(BOOKED_PRODUCTION_STATUSES),
-            ProductionSchedule.scheduled_end >= today,
+            ProductionSchedule.scheduled_end >= scan_start,
         )
         .all()
     )
     machine_daily_booked = _daily_booked_hours(machine_batches, hours_field="machine")
     machine_completion = _find_vacant_slot_completion(
-        float(machine.capacity_hours_per_day), machine_daily_booked, required_hours, today
+        float(machine.capacity_hours_per_day), machine_daily_booked, required_hours, scan_start, working_days
     )
 
     # Worker slot: every batch factory-wide competes for the shared pool,
     # not just this machine's -- workers move between machines.
-    worker_completion = today
+    worker_completion = scan_start
     workers_required = product.workers_required
     required_worker_hours = None
     total_workers, workday_hours = settings_service.get_factory_labor_pool(db)
@@ -186,13 +201,13 @@ def _check_capacity(
             .filter(
                 ProductionSchedule.deleted_at.is_(None),
                 ProductionSchedule.status.in_(BOOKED_PRODUCTION_STATUSES),
-                ProductionSchedule.scheduled_end >= today,
+                ProductionSchedule.scheduled_end >= scan_start,
             )
             .all()
         )
         worker_daily_booked = _daily_booked_hours(worker_batches, hours_field="workers")
         worker_completion = _find_vacant_slot_completion(
-            total_workers * workday_hours, worker_daily_booked, required_worker_hours, today
+            total_workers * workday_hours, worker_daily_booked, required_worker_hours, scan_start, working_days
         )
     elif workers_required and total_workers == 0:
         # Workers required by the formula but no factory-wide pool
@@ -206,20 +221,23 @@ def _check_capacity(
     else:
         projected_completion = max(machine_completion, worker_completion)
 
-    capacity_ok = projected_completion is not None and projected_completion <= required_by_date
-    if capacity_ok:
-        return True, None
+    capacity_ok = None
+    if required_by_date is not None:
+        capacity_ok = projected_completion is not None and projected_completion <= required_by_date
 
-    return False, {
-        "machine": f"{machine.code} — {machine.name}",
-        "required_hours": required_hours,
-        "projected_completion_date": projected_completion.isoformat() if projected_completion else None,
-        "shortfall_days": (
-            (projected_completion - required_by_date).days if projected_completion else None
-        ),
-        "workers_required": workers_required,
-        "required_worker_hours": required_worker_hours,
-    }
+    if capacity_ok is False:
+        return False, {
+            "machine": f"{machine.code} — {machine.name}",
+            "required_hours": required_hours,
+            "projected_completion_date": projected_completion.isoformat() if projected_completion else None,
+            "shortfall_days": (
+                (projected_completion - required_by_date).days if projected_completion else None
+            ),
+            "workers_required": workers_required,
+            "required_worker_hours": required_worker_hours,
+        }, projected_completion
+
+    return capacity_ok, None, projected_completion
 
 
 def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> FeasibilityCheck:
@@ -238,6 +256,7 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
         )
 
     today = datetime.now(timezone.utc).date()
+    working_days = settings_service.get_working_days(db)
     all_feasible = True
     for line in feasibility.lines:
         requested_qty = float(line.quantity)
@@ -258,12 +277,14 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
 
         if quantity_to_produce <= 0:
             # Fully covered by existing stock -- nothing to produce, so
-            # nothing to check materials or machine time for.
+            # nothing to check materials or machine time for, and it's
+            # ready right now.
             line.is_feasible = True
             line.bom_missing = None
             line.shortfall_json = None
             line.capacity_ok = None
             line.capacity_shortfall_json = None
+            line.estimated_ready_date = today
             continue
 
         if not bom_service.has_bom(db, line.product_id):
@@ -281,6 +302,7 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
             line.shortfall_json = None
             line.capacity_ok = None
             line.capacity_shortfall_json = None
+            line.estimated_ready_date = None
             all_feasible = False
             continue
 
@@ -307,13 +329,26 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
         line.is_feasible = not shortfalls
         line.shortfall_json = json.dumps(shortfalls) if shortfalls else None
 
-        capacity_ok, capacity_shortfall = _check_capacity(
-            db, line.product, quantity_to_produce, feasibility.required_by_date, today
-        )
-        line.capacity_ok = capacity_ok
-        line.capacity_shortfall_json = json.dumps(capacity_shortfall) if capacity_shortfall else None
+        if shortfalls:
+            # Raw materials are short -- production can't be scheduled off
+            # a supply that doesn't exist yet, so there's nothing honest to
+            # tell Sales about a finish date until Procurement resolves the
+            # shortfall (see the MRP report / purchase-order flow). Machine
+            # time genuinely isn't evaluable in that state.
+            line.capacity_ok = None
+            line.capacity_shortfall_json = None
+            line.estimated_ready_date = None
+        else:
+            capacity_ok, capacity_shortfall, estimated_ready_date = _check_capacity(
+                db, line.product, quantity_to_produce, feasibility.required_by_date, today, working_days
+            )
+            line.capacity_ok = capacity_ok
+            line.capacity_shortfall_json = json.dumps(capacity_shortfall) if capacity_shortfall else None
+            line.estimated_ready_date = estimated_ready_date
+            if capacity_ok is False:
+                all_feasible = False
 
-        if shortfalls or capacity_ok is False:
+        if shortfalls:
             all_feasible = False
 
     old_status = feasibility.status

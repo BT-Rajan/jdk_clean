@@ -44,6 +44,10 @@ class FeasibilityLineOut(BaseModel):
     shortfalls: list[ShortfallItem] = []
     capacity_ok: bool | None
     capacity_shortfall: CapacityShortfall | None = None
+    # When the remainder (after stock) can actually be supplied -- today
+    # if fully covered by stock, otherwise the capacity scan's projected
+    # date. None if raw materials are short or it isn't evaluable.
+    estimated_ready_date: date | None = None
 
     model_config = {"from_attributes": True}
 

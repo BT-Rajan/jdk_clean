@@ -291,6 +291,7 @@ export function FeasibilityDetailPage() {
               <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
                 <th className="px-6 py-4 font-medium">Product</th>
                 <th className="px-6 py-4 font-medium">Quantity</th>
+                <th className="px-6 py-4 font-medium">Supply plan</th>
                 <th className="px-6 py-4 font-medium">Materials</th>
                 <th className="px-6 py-4 font-medium">Machine time</th>
               </tr>
@@ -301,13 +302,31 @@ export function FeasibilityDetailPage() {
                   <td className="px-6 py-4 text-white">
                     {line.product_code ? `${line.product_code} — ${line.product_name}` : `#${line.product_id}`}
                   </td>
-                  <td className="px-6 py-4 text-white/60">
-                    {line.quantity}
-                    {line.covered_by_stock ? (
-                      <p className="mt-1 text-xs text-emerald-300">
-                        {line.covered_by_stock} already in stock — {Math.max(line.quantity - line.covered_by_stock, 0)} to produce
-                      </p>
-                    ) : null}
+                  <td className="px-6 py-4 text-white/60">{line.quantity}</td>
+                  <td className="px-6 py-4 text-xs">
+                    {line.is_feasible === null ? (
+                      <span className="text-white/40">Not yet run</span>
+                    ) : (
+                      <div className="space-y-1">
+                        {line.covered_by_stock ? (
+                          <p className="text-emerald-300">{line.covered_by_stock} ready in stock now</p>
+                        ) : null}
+                        {Math.max(line.quantity - (line.covered_by_stock ?? 0), 0) > 0 && (
+                          <p className="text-white/60">
+                            {Math.round((line.quantity - (line.covered_by_stock ?? 0)) * 10000) / 10000} to produce
+                            {line.estimated_ready_date ? (
+                              <> — supplied by {formatDate(line.estimated_ready_date)}</>
+                            ) : line.shortfalls.length > 0 ? (
+                              <span className="text-amber-300"> — date unknown until material shortfall is resolved</span>
+                            ) : line.bom_missing ? (
+                              <span className="text-amber-300"> — no formula to estimate from</span>
+                            ) : (
+                              <span className="text-white/40"> — not evaluable</span>
+                            )}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     {line.is_feasible === null ? (

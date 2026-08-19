@@ -50,20 +50,34 @@ def daily_booked_hours(
 
 
 def find_vacant_slot_completion(
-    daily_capacity: float, daily_booked: dict[date, float], required_hours: float, today: date
+    daily_capacity: float,
+    daily_booked: dict[date, float],
+    required_hours: float,
+    today: date,
+    working_days: set[int] | None = None,
 ) -> date | None:
     """Scans forward day by day from `today`, accumulating free capacity
     (daily_capacity minus whatever's already booked that day), and returns
     the first date by which enough cumulative free time has opened up to
     cover `required_hours` -- i.e. identifies the actual vacant slot rather
     than just comparing aggregate totals. None if not achievable within
-    MAX_SCAN_DAYS."""
+    MAX_SCAN_DAYS.
+
+    `working_days` (Python date.weekday() ints, Monday=0..Sunday=6) --
+    when given, any day not in the set contributes zero free capacity
+    (the factory isn't running that day, so nothing accumulates), rather
+    than being scanned as a normal working day. None means every day
+    counts, unchanged from before this parameter existed.
+    """
     if required_hours <= 0:
         return today
     cumulative_free = 0.0
     d = today
     for _ in range(MAX_SCAN_DAYS):
-        free_today = max(daily_capacity - daily_booked.get(d, 0.0), 0.0)
+        if working_days is not None and d.weekday() not in working_days:
+            free_today = 0.0
+        else:
+            free_today = max(daily_capacity - daily_booked.get(d, 0.0), 0.0)
         cumulative_free += free_today
         if cumulative_free >= required_hours:
             return d

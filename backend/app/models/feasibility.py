@@ -126,6 +126,17 @@ class FeasibilityLine(Base):
     capacity_ok: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     # JSON {machine, required_hours, available_hours, shortfall_hours} when capacity_ok is False.
     capacity_shortfall_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # The date by which the remainder (quantity_to_produce) can actually
+    # be supplied: today, if fully covered by finished-goods stock;
+    # otherwise the machine/labor capacity scan's projected completion
+    # date, starting from the next working day after today and skipping
+    # non-working days (see settings_service.next_working_day). NULL when
+    # raw materials are short (nothing honest to estimate until that's
+    # resolved) or machine/time capacity isn't evaluable (no formula set,
+    # or the scan found no vacant slot within its horizon). This is what
+    # Sales sees as "when can the remainder be supplied" regardless of
+    # whether a required_by_date was given on the check.
+    estimated_ready_date: Mapped[date | None] = mapped_column(DATE, nullable=True)
 
     feasibility: Mapped[FeasibilityCheck] = relationship(back_populates="lines")
     product: Mapped[Product] = relationship(lazy="joined")

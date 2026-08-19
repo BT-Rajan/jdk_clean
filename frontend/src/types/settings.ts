@@ -16,6 +16,11 @@ export interface Settings {
    * (numeric text) like every other setting. */
   factory_total_workers: string
   factory_workday_hours: string
+  /** Comma-separated 3-letter day codes, e.g. "Sun,Mon,Tue,Wed,Thu" --
+   * which days the factory runs. Drives the feasibility check's capacity
+   * scan (and order-confirm auto-scheduling): the scan always starts on
+   * the next working day after today and skips non-working days. */
+  factory_working_days: string
   /** 'true' or 'false' -- whether a passed/exception-approved feasibility
    * check automatically drafts a quotation. Admin/manager-only to change. */
   auto_create_quotation_from_feasibility: string

@@ -55,6 +55,11 @@ export interface FeasibilityLine extends FeasibilityLineInput {
   shortfalls: ShortfallItem[]
   capacity_ok: boolean | null
   capacity_shortfall: CapacityShortfall | null
+  /** When the remainder (after stock) can actually be supplied -- today
+   * if fully covered by stock, otherwise the capacity scan's projected
+   * date starting from the next working day. Null if raw materials are
+   * short, or it isn't evaluable. */
+  estimated_ready_date: string | null
 }
 
 export interface Feasibility {

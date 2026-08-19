@@ -1,3 +1,5 @@
+from datetime import date, timedelta
+
 from sqlalchemy.orm import Session
 
 from app.models.setting import Setting
@@ -38,6 +40,15 @@ DELIVERY_FIELDS = ["auto_create_delivery_note_on_ready_to_ship"]
 # always landing in 'draft', never sent automatically -- or is left for
 # Procurement to act on by hand from the MRP report as before.
 PROCUREMENT_FIELDS = ["auto_draft_purchase_orders_from_mrp"]
+# Which calendar days the factory actually runs -- used by the
+# feasibility check's capacity scan (and order confirmation's
+# auto-scheduling) to know which days can carry production hours at all.
+# Stored as a comma-separated list of 3-letter day codes, e.g.
+# "Sun,Mon,Tue,Wed,Thu". Kuwait's standard work week is Sunday-Thursday
+# (Friday/Saturday off), so that's the seeded default below -- an admin
+# running a different week (e.g. Mon-Fri, or Mon-Sat) changes this once
+# in Settings and every capacity estimate picks it up from then on.
+WORKING_DAYS_FIELDS = ["factory_working_days"]
 # Kuwait has no GST/VAT today -- this exists so tax can be switched on
 # later (a rate change, a law change) without any schema or workflow
 # rework, not because it's active now. Stored as a percentage string,
@@ -62,6 +73,7 @@ ALL_FIELDS = (
     + PRODUCTION_FIELDS
     + DELIVERY_FIELDS
     + PROCUREMENT_FIELDS
+    + WORKING_DAYS_FIELDS
     + TAX_FIELDS
     + APPROVAL_FIELDS
     + DISCOUNT_APPROVAL_FIELDS
@@ -81,6 +93,15 @@ DEFAULTS["auto_create_delivery_note_on_ready_to_ship"] = "true"
 DEFAULTS["auto_draft_purchase_orders_from_mrp"] = "true"
 # 0% -- Kuwait has no GST/VAT. Provisioned, not active.
 DEFAULTS["default_tax_rate"] = "0"
+# Kuwait's standard work week: Sunday-Thursday, Friday/Saturday off.
+# Admin changes this in Settings for a different week; every capacity
+# estimate (feasibility check, order auto-scheduling) reads it fresh via
+# get_working_days below, nothing else needs updating.
+DEFAULTS["factory_working_days"] = "Sun,Mon,Tue,Wed,Thu"
+
+# Maps the 3-letter day codes stored in factory_working_days to Python's
+# date.weekday() convention (Monday=0 .. Sunday=6).
+_DAY_CODE_TO_WEEKDAY = {"Mon": 0, "Tue": 1, "Wed": 2, "Thu": 3, "Fri": 4, "Sat": 5, "Sun": 6}
 
 
 def get_all(db: Session) -> dict:
@@ -119,6 +140,45 @@ def get_factory_labor_pool(db: Session) -> tuple[int, float]:
     except (ValueError, KeyError):
         workday_hours = 8.0
     return max(total_workers, 0), max(workday_hours, 0.0)
+
+
+def get_working_days(db: Session) -> set[int]:
+    """Which weekdays the factory runs, as Python date.weekday() ints
+    (Monday=0 .. Sunday=6) -- parsed from the admin-set
+    factory_working_days setting (comma-separated 3-letter day codes,
+    e.g. "Sun,Mon,Tue,Wed,Thu"). Unrecognized codes are ignored; an
+    empty/unparseable setting falls back to every day being a working
+    day, so a factory that hasn't touched this setting yet behaves
+    exactly as before (no days silently excluded from the capacity
+    scan) rather than the scan finding zero capacity anywhere.
+    """
+    values = get_all(db)
+    raw = values.get("factory_working_days", "").strip()
+    if not raw:
+        return set(_DAY_CODE_TO_WEEKDAY.values())
+    days = {
+        _DAY_CODE_TO_WEEKDAY[code.strip().title()]
+        for code in raw.split(",")
+        if code.strip().title() in _DAY_CODE_TO_WEEKDAY
+    }
+    return days or set(_DAY_CODE_TO_WEEKDAY.values())
+
+
+def next_working_day(today: date, working_days: set[int]) -> date:
+    """First working day strictly after `today` -- i.e. today itself is
+    always excluded ("leave today": whatever's already in progress
+    today is spoken for, so nothing new can start until at least
+    tomorrow), then skipped forward past any further non-working days
+    (e.g. today is Thursday and Friday/Saturday are off -> lands on
+    Sunday). This is the scan's start date for every feasibility
+    capacity estimate.
+    """
+    candidate = today + timedelta(days=1)
+    for _ in range(14):  # a full non-working stretch is never this long in practice
+        if candidate.weekday() in working_days:
+            return candidate
+        candidate += timedelta(days=1)
+    return candidate
 
 
 def is_auto_create_quotation_enabled(db: Session) -> bool:

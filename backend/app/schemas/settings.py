@@ -12,6 +12,11 @@ class SettingsOut(BaseModel):
     # capacity by the feasibility check's capacity scan.
     factory_total_workers: str
     factory_workday_hours: str
+    # Comma-separated 3-letter day codes, e.g. "Sun,Mon,Tue,Wed,Thu" --
+    # which days the factory runs. Used by the feasibility check's
+    # capacity scan (and order-confirm auto-scheduling) to skip
+    # non-working days. See settings_service.get_working_days.
+    factory_working_days: str
     # 'true' or 'false' (stored as text like every setting). See
     # settings_service.is_auto_create_quotation_enabled.
     auto_create_quotation_from_feasibility: str
@@ -44,6 +49,7 @@ class SettingsUpdate(BaseModel):
     ai_api_key: str | None = None
     factory_total_workers: str | None = None
     factory_workday_hours: str | None = None
+    factory_working_days: str | None = None
     auto_create_quotation_from_feasibility: str | None = Field(default=None, pattern="^(true|false)$")
     auto_schedule_production_on_order_confirm: str | None = Field(default=None, pattern="^(true|false)$")
     auto_create_delivery_note_on_ready_to_ship: str | None = Field(default=None, pattern="^(true|false)$")

@@ -365,6 +365,12 @@ CREATE TABLE IF NOT EXISTS feasibility_lines (
     -- required_by_date was given (capacity can't be evaluated).
     capacity_ok           TINYINT(1) NULL,
     capacity_shortfall_json TEXT NULL,         -- JSON {machine, required_hours, available_hours, shortfall_hours}
+    -- Date the remainder can actually be supplied: today if fully
+    -- covered by stock, otherwise the capacity scan's projected
+    -- completion date (starting the next working day, skipping
+    -- non-working days per the factory_working_days setting). NULL when
+    -- raw materials are short or capacity isn't evaluable.
+    estimated_ready_date DATE NULL,
     CONSTRAINT fk_fl_feasibility FOREIGN KEY (feasibility_id) REFERENCES feasibility_checks(id) ON DELETE CASCADE,
     CONSTRAINT fk_fl_product FOREIGN KEY (product_id) REFERENCES products(id),
     INDEX idx_fl_feasibility (feasibility_id)
