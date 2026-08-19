@@ -24,15 +24,19 @@ TABLE_NAME = "orders"
 
 
 def _price_lines(db: Session, lines: list[dict]) -> list[dict]:
+    product_ids = {line["product_id"] for line in lines}
+    found_ids = {
+        pid
+        for (pid,) in db.query(Product.id)
+        .filter(Product.id.in_(product_ids), Product.deleted_at.is_(None))
+        .all()
+    }
+    missing = product_ids - found_ids
+    if missing:
+        raise ValidationAppError(f"Product {sorted(missing)[0]} not found.")
+
     priced: list[dict] = []
     for line in lines:
-        product = (
-            db.query(Product)
-            .filter(Product.id == line["product_id"], Product.deleted_at.is_(None))
-            .first()
-        )
-        if product is None:
-            raise ValidationAppError(f"Product {line['product_id']} not found.")
         discount_percent = float(line.get("discount_percent") or 0)
         line_total = price_line(float(line["quantity"]), float(line["unit_price"]), discount_percent)
         priced.append({**line, "discount_percent": discount_percent, "line_total": line_total})
@@ -101,15 +105,7 @@ def create_order(db: Session, data: dict, user_id: int | None = None) -> Order:
     if customer is None:
         raise ValidationAppError(f"Customer {data['customer_id']} not found.")
 
-    deal = deal_service.get_or_create_for_new_stage(
-        db,
-        deal_id=data.pop("deal_id", None),
-        customer_id=data["customer_id"],
-        stage="order",
-        user_id=user_id,
-    )
-    data["deal_id"] = deal.id
-
+    deal_id = data.pop("deal_id", None)
     lines = _price_lines(db, [dict(line) for line in data.pop("lines")])
     subtotal_amount = round(sum(line["line_total"] for line in lines), 2)
     tax_rate = data.pop("tax_rate", None)
@@ -117,6 +113,20 @@ def create_order(db: Session, data: dict, user_id: int | None = None) -> Order:
         tax_rate = settings_service.get_default_tax_rate(db)
     discount_percent = float(data.pop("discount_percent", None) or 0)
     totals = compute_document_totals(subtotal_amount, discount_percent, tax_rate)
+
+    # Everything above is validation/pricing with no row locks held. Only
+    # from here do we touch number_series (SELECT ... FOR UPDATE) so the
+    # lock is held for the shortest possible window instead of spanning
+    # the whole pricing loop -- that gap was serializing every concurrent
+    # order create behind whichever request happened to be pricing lines.
+    deal = deal_service.get_or_create_for_new_stage(
+        db,
+        deal_id=deal_id,
+        customer_id=data["customer_id"],
+        stage="order",
+        user_id=user_id,
+    )
+    data["deal_id"] = deal.id
 
     order_number = number_series_service.next_number(db, "ORDER")
 
