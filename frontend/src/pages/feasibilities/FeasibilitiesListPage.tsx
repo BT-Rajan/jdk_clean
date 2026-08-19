@@ -68,6 +68,7 @@ export function FeasibilitiesListPage() {
           <option value="exception_rejected">Exception rejected</option>
           <option value="closed">Closed</option>
           <option value="converted">Converted</option>
+          <option value="expired">Expired</option>
         </SelectField>
       </div>
 

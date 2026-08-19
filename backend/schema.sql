@@ -309,7 +309,7 @@ CREATE TABLE IF NOT EXISTS feasibility_checks (
     feasibility_number  VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. FSB-00001)
     customer_id         BIGINT UNSIGNED NOT NULL,
     deal_id             BIGINT UNSIGNED NULL,             -- see `deals` above
-    status              ENUM('draft','feasible','exception_pending','exception_approved','exception_rejected','closed','converted') NOT NULL DEFAULT 'draft',
+    status              ENUM('draft','feasible','exception_pending','exception_approved','exception_rejected','closed','converted','expired') NOT NULL DEFAULT 'draft',
     required_by_date    DATE NULL,        -- when the customer needs this quantity
     checked_at          DATETIME NULL,
     exception_reason    TEXT NULL,        -- Sales' reason for approving/rejecting a shortfall exception (the "override" comment)

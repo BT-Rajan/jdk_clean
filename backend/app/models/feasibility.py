@@ -18,27 +18,38 @@ FEASIBILITY_STATUSES = (
     "exception_rejected",
     "closed",
     "converted",
+    "expired",
 )
 
 # 'feasible' / 'exception_pending' are reached by the system-run check
 # (feasibility_service.run_check), not a direct user-driven status jump.
+# 'expired' is likewise system-driven (feasibility_service.
+# escalate_expired_feasibility_checks) -- reachable from every open
+# status, since a check that hasn't been converted by 11:59pm Kuwait
+# time on the day it was generated expires regardless of where in the
+# workflow it was sitting.
 ALLOWED_TRANSITIONS = {
-    "draft": {"feasible", "exception_pending"},
-    "feasible": {"converted", "closed"},
-    "exception_pending": {"exception_approved", "exception_rejected"},
-    "exception_approved": {"converted", "closed"},
-    "exception_rejected": {"closed"},
+    "draft": {"feasible", "exception_pending", "expired"},
+    "feasible": {"converted", "closed", "expired"},
+    "exception_pending": {"exception_approved", "exception_rejected", "expired"},
+    "exception_approved": {"converted", "closed", "expired"},
+    "exception_rejected": {"closed", "expired"},
     "closed": set(),
     "converted": set(),
+    "expired": set(),
 }
 
 # A quotation may only be generated against a feasibility check sitting in
-# one of these statuses (see quotation_service.create_quotation).
+# one of these statuses (see quotation_service.create_quotation). An
+# expired check is never quotable -- that's the entire point of expiry.
 QUOTABLE_STATUSES = {"feasible", "exception_approved"}
 
 # A feasibility check counts as "open" (i.e. eligible for the 5-day stale
 # escalation) while it's in any status that hasn't yet reached a terminal
-# closed/converted state.
+# closed/converted/expired state. In practice a check almost always
+# expires same-day long before it could ever reach 5 days stale -- this
+# still exists for the (rare) case expiry itself is misconfigured or
+# skipped for a run.
 OPEN_STATUSES = {"draft", "feasible", "exception_pending", "exception_approved", "exception_rejected"}
 
 # Why admin was notified: Sales overrode an infeasible result with a

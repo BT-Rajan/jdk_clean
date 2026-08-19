@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 
 from sqlalchemy.orm import Session, joinedload
 
@@ -22,6 +22,11 @@ from app.services import audit_service, bom_service, capacity_service, deal_serv
 
 TABLE_NAME = "feasibility_checks"
 
+# Kuwait is UTC+3 year-round (no DST) -- a fixed offset rather than a
+# zoneinfo/tzdata lookup, so this doesn't depend on the OS/container
+# having a timezone database installed.
+KUWAIT_TZ = timezone(timedelta(hours=3))
+
 # A feasibility check open (not closed/converted) longer than this many days
 # gets flagged for admin review by escalate_stale_feasibility_checks.
 STALE_AFTER_DAYS = 5
@@ -41,10 +46,46 @@ def _base_query(db: Session, include_deleted: bool = False):
     return query
 
 
+def _expiry_deadline_kuwait(feasibility: FeasibilityCheck) -> datetime | None:
+    """11:59pm Kuwait time on the Kuwait calendar day `feasibility` was
+    generated -- None if created_at somehow isn't set yet (shouldn't
+    happen post-creation, but this is read on every fetch so it's worth
+    being defensive)."""
+    if feasibility.created_at is None:
+        return None
+    created_at = feasibility.created_at
+    created_utc = created_at if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc)
+    generated_date_kuwait = created_utc.astimezone(KUWAIT_TZ).date()
+    return datetime.combine(generated_date_kuwait, time(23, 59, 59), tzinfo=KUWAIT_TZ)
+
+
+def _expire_if_due(db: Session, feasibility: FeasibilityCheck) -> bool:
+    """Expires a single check in place, right now, if it's open and past
+    its Kuwait-time cutoff -- called on every read/action path (not just
+    the periodic scan in core/scheduler.py) so a check never *displays*
+    or *acts* on a status that's already a few hours stale. The periodic
+    scan still exists to catch checks nobody happens to look at."""
+    if feasibility.deleted_at is not None or feasibility.status not in OPEN_STATUSES:
+        return False
+    deadline = _expiry_deadline_kuwait(feasibility)
+    if deadline is None:
+        return False
+    if datetime.now(timezone.utc).astimezone(KUWAIT_TZ) <= deadline:
+        return False
+
+    old_status = feasibility.status
+    feasibility.status = "expired"
+    audit_service.log_update(db, TABLE_NAME, feasibility.id, {"status": (old_status, "expired")}, None)
+    db.commit()
+    deal_service.reconcile_deal_status(db, feasibility.deal_id, None)
+    return True
+
+
 def get_feasibility(db: Session, feasibility_id: int, include_deleted: bool = False) -> FeasibilityCheck:
     obj = _base_query(db, include_deleted).filter(FeasibilityCheck.id == feasibility_id).first()
     if obj is None:
         raise NotFoundError("Feasibility check")
+    _expire_if_due(db, obj)
     return obj
 
 
@@ -74,7 +115,13 @@ def list_feasibility_checks(
         query = query.join(Customer).filter(
             (FeasibilityCheck.feasibility_number.ilike(like)) | (Customer.name.ilike(like))
         )
-    return sort_and_paginate(query, FeasibilityCheck, _SORTABLE_FIELDS, sort, page, page_size)
+    result = sort_and_paginate(query, FeasibilityCheck, _SORTABLE_FIELDS, sort, page, page_size)
+    # Same reasoning as get_feasibility: correct this page's statuses in
+    # place rather than only relying on the periodic scan, so a list view
+    # never shows a status that's already past its Kuwait-time cutoff.
+    for item in result["items"]:
+        _expire_if_due(db, item)
+    return result
 
 
 def create_feasibility(db: Session, data: dict, user_id: int | None = None) -> FeasibilityCheck:
@@ -476,26 +523,32 @@ def _maybe_auto_create_quotation(db: Session, feasibility_id: int, user_id: int 
 def revive_feasibility(db: Session, feasibility_id: int, user_id: int | None = None) -> FeasibilityCheck:
     """Sales reviving a feasibility check that reached a dead end --
     converted (a quotation was raised, but it was later rejected/expired
-    and nothing came of it), closed without quoting, or an exception
-    Sales rejected -- so it can be run and quoted from again. There's no
-    limit on how many times: each revive resets the check back to
-    'draft', clearing every prior verdict, so a fresh run_check verifies
-    current stock/capacity/BOM from scratch rather than re-opening a
-    stale result -- conditions may genuinely have changed since the
-    first attempt. Every subsequent quotation created from it (whether
-    auto-created or by hand) is simply another row pointing at the same
-    feasibility_id; there's no uniqueness constraint stopping that.
+    and nothing came of it), closed without quoting, expired without
+    ever being converted, or an exception Sales rejected -- so it can be
+    run and quoted from again. There's no limit on how many times: each
+    revive resets the check back to 'draft', clearing every prior
+    verdict, so a fresh run_check verifies current stock/capacity/BOM
+    from scratch rather than re-opening a stale result -- conditions may
+    genuinely have changed since the first attempt. Every subsequent
+    quotation created from it (whether auto-created or by hand) is
+    simply another row pointing at the same feasibility_id; there's no
+    uniqueness constraint stopping that. created_at is reset to now --
+    a revive is treated as a fresh generation, so the check gets a full
+    new same-day expiry window (11:59pm Kuwait time *today*) rather than
+    being immediately re-expired on the next scan for a deadline that
+    already passed; this also restarts its 5-day stale-review clock.
     """
     feasibility = get_feasibility(db, feasibility_id)
-    revivable = ("converted", "closed", "exception_rejected")
+    revivable = ("converted", "closed", "exception_rejected", "expired")
     if feasibility.status not in revivable:
         raise ConflictError(
-            f"Only a converted, closed, or rejected feasibility check can be revived "
+            f"Only a converted, closed, expired, or rejected feasibility check can be revived "
             f"(current status: '{feasibility.status}')."
         )
 
     old_status = feasibility.status
     feasibility.status = "draft"
+    feasibility.created_at = datetime.now(timezone.utc)
     feasibility.checked_at = None
     feasibility.exception_reason = None
     feasibility.exception_by = None
@@ -581,6 +634,60 @@ def escalate_stale_feasibility_checks(db: Session, as_of: date | None = None) ->
     return flagged
 
 
+def escalate_expired_feasibility_checks(db: Session, as_of: datetime | None = None) -> list[FeasibilityCheck]:
+    """Expires every feasibility check not yet converted to a quotation
+    by 11:59pm Kuwait time on the calendar day it was generated
+    (created_at, read in Kuwait local time -- 'the day it was generated'
+    means Kuwait's day, not UTC's, so a check created just before
+    midnight UTC doesn't get an extra few hours or lose them). Reachable
+    from any open status (draft, feasible, exception_pending,
+    exception_approved, exception_rejected) -- wherever it was sitting
+    in the workflow when its day ended. Closed/converted checks are
+    already terminal and untouched here; an already-expired check is
+    excluded by the status filter on the next run, same idempotent
+    pattern as escalate_stale_feasibility_checks and quotation_service.
+    escalate_expired_quotations.
+
+    Meant to be run periodically -- see core/scheduler.py, which runs
+    this (and the other scan/escalate checks) every 6 hours, frequent
+    enough that nothing sits unexpired for long past its actual cutoff.
+    """
+    now_utc = as_of or datetime.now(timezone.utc)
+    if now_utc.tzinfo is None:
+        now_utc = now_utc.replace(tzinfo=timezone.utc)
+    now_kuwait = now_utc.astimezone(KUWAIT_TZ)
+
+    candidates = (
+        db.query(FeasibilityCheck)
+        .filter(
+            FeasibilityCheck.deleted_at.is_(None),
+            FeasibilityCheck.status.in_(OPEN_STATUSES),
+        )
+        .all()
+    )
+
+    expired: list[FeasibilityCheck] = []
+    for feasibility in candidates:
+        deadline_kuwait = _expiry_deadline_kuwait(feasibility)
+        if deadline_kuwait is None:
+            continue
+
+        if now_kuwait > deadline_kuwait:
+            old_status = feasibility.status
+            feasibility.status = "expired"
+            audit_service.log_update(
+                db, TABLE_NAME, feasibility.id, {"status": (old_status, "expired")}, None
+            )
+            expired.append(feasibility)
+
+    if expired:
+        db.commit()
+        for feasibility in expired:
+            deal_service.reconcile_deal_status(db, feasibility.deal_id, None)
+        db.commit()
+    return expired
+
+
 def admin_review(db: Session, feasibility_id: int, notes: str, user_id: int | None = None) -> FeasibilityCheck:
     """Admin clears a pending override/stale-open escalation, recording
     their decision. Mirrors order_service.admin_review exactly."""
@@ -603,11 +710,16 @@ def admin_review(db: Session, feasibility_id: int, notes: str, user_id: int | No
 def list_available_for_quotation(db: Session, customer_id: int | None = None) -> list[FeasibilityCheck]:
     """List feasibility checks available for quotation generation.
     Only returns checks in quotable statuses (feasible, exception_approved)
-    that haven't been converted or closed."""
+    that haven't been converted, closed, or expired."""
     query = _base_query(db).filter(FeasibilityCheck.status.in_(QUOTABLE_STATUSES))
     if customer_id:
         query = query.filter(FeasibilityCheck.customer_id == customer_id)
-    return query.order_by(FeasibilityCheck.feasibility_number.desc()).all()
+    candidates = query.order_by(FeasibilityCheck.feasibility_number.desc()).all()
+    # Same reasoning as get_feasibility/list_feasibility_checks: a check
+    # can be sitting in a quotable status but already past its Kuwait
+    # cutoff if the periodic scan hasn't reached it yet -- never offer
+    # one of those for quoting.
+    return [f for f in candidates if not _expire_if_due(db, f)]
 
 
 def mark_converted(db: Session, feasibility_id: int, user_id: int | None = None) -> None:

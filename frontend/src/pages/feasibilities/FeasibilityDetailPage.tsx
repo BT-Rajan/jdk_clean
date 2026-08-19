@@ -211,7 +211,7 @@ export function FeasibilityDetailPage() {
               {allowWrite && (f.status === 'feasible' || f.status === 'exception_approved' || f.status === 'exception_rejected') && (
                 <Button variant="ghost" onClick={() => setCloseOpen(true)}>Close without quotation</Button>
               )}
-              {allowWrite && (f.status === 'converted' || f.status === 'closed' || f.status === 'exception_rejected') && (
+              {allowWrite && (f.status === 'converted' || f.status === 'closed' || f.status === 'exception_rejected' || f.status === 'expired') && (
                 <Button variant="ghost" onClick={handleRevive} isLoading={busy}>Revive &amp; re-check</Button>
               )}
               {allowWrite && f.status !== 'converted' && (

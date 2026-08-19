@@ -8,6 +8,7 @@ export type FeasibilityStatus =
   | 'exception_rejected'
   | 'closed'
   | 'converted'
+  | 'expired'
 
 export type AdminReviewReason = 'override' | 'stale_open'
 

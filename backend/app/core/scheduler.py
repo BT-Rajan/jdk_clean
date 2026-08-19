@@ -38,6 +38,7 @@ def _run_all_scans() -> None:
     try:
         checks = (
             ("stale feasibility checks", feasibility_service.escalate_stale_feasibility_checks),
+            ("expired feasibility checks", feasibility_service.escalate_expired_feasibility_checks),
             ("overdue orders", order_service.escalate_overdue_orders),
             ("overdue purchase orders", purchase_order_service.escalate_overdue_purchase_orders),
             ("expired quotations", quotation_service.escalate_expired_quotations),

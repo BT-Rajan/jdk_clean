@@ -149,6 +149,24 @@ def scan_stale_feasibility_checks(
     }
 
 
+@router.post("/scan-expired")
+def scan_expired_feasibility_checks(
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    """Expires feasibility checks not converted to a quotation by 11:59pm
+    Kuwait time on the day they were generated. Already runs automatically
+    every 6 hours (see core/scheduler.py) and lazily on every read (see
+    feasibility_service.get_feasibility/list_feasibility_checks) -- this
+    endpoint exists for the same reason scan-stale does, in case an
+    external cron is preferred over relying on either of those."""
+    expired = feasibility_service.escalate_expired_feasibility_checks(db)
+    return {
+        "expired_count": len(expired),
+        "feasibility_ids": [f.id for f in expired],
+    }
+
+
 @router.post("/{feasibility_id}/admin-review", response_model=FeasibilityOut)
 def admin_review_feasibility(
     feasibility_id: int,
