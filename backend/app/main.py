@@ -18,6 +18,7 @@ from app.api.mrp import router as mrp_router
 from app.api.notifications import router as notifications_router
 from app.api.permissions import router as permissions_router
 from app.api.orders import router as orders_router
+from app.api.packaging import router as packaging_router
 from app.api.products import router as products_router
 from app.api.production_schedules import router as production_schedules_router
 from app.api.purchase_orders import router as purchase_orders_router
@@ -86,6 +87,7 @@ app.include_router(delivery_notes_router)
 app.include_router(production_schedules_router)
 app.include_router(purchase_orders_router)
 app.include_router(bom_router)
+app.include_router(packaging_router)
 
 
 @app.get("/api/health")

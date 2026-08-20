@@ -338,7 +338,7 @@ export function FeasibilityDetailPage() {
                         <StatusBadge status="rejected" />
                         <p className="mt-2 text-xs text-amber-300">
                           No BOM (formula) set up for this product — feasibility can't be verified.{' '}
-                          <Link to={`/factory-setup/${line.product_id}`} className="underline hover:text-amber-200">
+                          <Link to={`/products/${line.product_id}`} className="underline hover:text-amber-200">
                             Set it up
                           </Link>
                         </p>

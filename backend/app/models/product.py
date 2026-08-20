@@ -20,6 +20,16 @@ class Product(Base, TimestampMixin, SoftDeleteMixin):
         default="finished_good",
     )
     selling_price: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
+    # How this product's production time is actually specified day to
+    # day: as one batch (e.g. "500 units, 6 hours"), not a per-unit
+    # number nobody would naturally quote. Both optional; when both are
+    # set, production_hours_per_unit below is kept in sync as
+    # batch_production_hours / batch_size (see crud.master_data.
+    # ProductCRUD) -- everything downstream (feasibility_service,
+    # capacity_service, order_service's auto-scheduling) keeps working
+    # off the per-unit figure unchanged, this is purely how it's entered.
+    batch_size: Mapped[float | None] = mapped_column(DECIMAL(14, 4), nullable=True)
+    batch_production_hours: Mapped[float | None] = mapped_column(DECIMAL(10, 4), nullable=True)
     # The "formula" inputs for feasibility's time-required calculation:
     # which machine makes this product, how many hours of that machine's
     # time one unit consumes, and how many workers are needed concurrently

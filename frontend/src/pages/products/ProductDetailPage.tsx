@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
 import { formatCurrency } from '@/lib/currency'
 import { BomEditor } from './BomEditor'
+import { PackagingEditor } from './PackagingEditor'
 
 export function ProductDetailPage() {
   const { id } = useParams()
@@ -123,10 +124,27 @@ export function ProductDetailPage() {
                 : undefined
             }
           />
+          <Field
+            label="Batch"
+            value={
+              product.batch_size && product.batch_production_hours != null
+                ? `${product.batch_size} ${product.unit} / ${product.batch_production_hours} hrs`
+                : '—'
+            }
+          />
+          <Field
+            label="Production hours per unit"
+            value={product.production_hours_per_unit ?? '—'}
+          />
+          <Field label="Workers required" value={product.workers_required ?? '—'} />
         </dl>
       </GlassCard>
 
       <BomEditor productId={productId} canEdit={canWrite(user?.role)} />
+
+      <div className="mt-6">
+        <PackagingEditor productId={productId} canEdit={canWrite(user?.role)} />
+      </div>
 
       <div className="mt-6">
         <HistoryTimeline resourcePath="/api/products" id={productId} />

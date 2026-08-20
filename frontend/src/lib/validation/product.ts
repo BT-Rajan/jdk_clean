@@ -7,6 +7,8 @@ export const productSchema = z.object({
   unit: z.string().trim().min(1, 'Unit is required').max(20),
   product_type: z.enum(['finished_good', 'sub_assembly']),
   selling_price: z.coerce.number().min(0, 'Must be 0 or more'),
+  batch_size: z.coerce.number().positive('Must be greater than 0').optional().or(z.literal('').transform(() => undefined)),
+  batch_production_hours: z.coerce.number().min(0, 'Must be 0 or more').optional().or(z.literal('').transform(() => undefined)),
   machine_id: z.coerce.number().int().positive().optional().or(z.literal('').transform(() => undefined)),
   production_hours_per_unit: z.coerce.number().min(0, 'Must be 0 or more').optional().or(z.literal('').transform(() => undefined)),
   workers_required: z.coerce.number().int().min(0, 'Must be 0 or more').optional().or(z.literal('').transform(() => undefined)),

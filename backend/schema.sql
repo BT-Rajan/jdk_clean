@@ -187,6 +187,14 @@ CREATE TABLE IF NOT EXISTS products (
     unit            VARCHAR(20)  NOT NULL,
     product_type    ENUM('finished_good','sub_assembly') NOT NULL DEFAULT 'finished_good',
     selling_price   DECIMAL(14,2) NOT NULL DEFAULT 0,
+    -- How production time is actually entered: as one batch (e.g. "500
+    -- units, 6 hours"), not a per-unit figure. When both are set,
+    -- production_hours_per_unit below is kept in sync as
+    -- batch_production_hours / batch_size (see crud.master_data.
+    -- ProductCRUD) -- every downstream capacity calculation still reads
+    -- the per-unit column unchanged.
+    batch_size                 DECIMAL(14,4) NULL,
+    batch_production_hours     DECIMAL(10,4) NULL,
     -- The "formula" inputs for the feasibility check's time-required
     -- calculation: which machine makes this product, how many hours of
     -- that machine's time one unit consumes, and how many workers are
@@ -229,6 +237,31 @@ CREATE TABLE IF NOT EXISTS bom_lines (
     INDEX idx_bom_parent (parent_product_id),
     INDEX idx_bom_component (component_type, component_id),
     INDEX idx_bom_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- PACKAGING -- distinct from BOM: a packaging material (box, label,
+-- wrap) is never produced *into* the product, it's procured/stocked
+-- like a raw material (hence the FK to raw_materials, not a new
+-- table) and consumed when the product ships, not during production.
+-- Not wired into automatic stock deduction anywhere yet -- see
+-- app/models/product_packaging.py.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS product_packaging_lines (
+    id                      BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    product_id              BIGINT UNSIGNED NOT NULL,
+    packaging_material_id   BIGINT UNSIGNED NOT NULL,  -- raw_materials.id
+    quantity_per_unit       DECIMAL(14,4) NOT NULL,
+    unit                    VARCHAR(20) NOT NULL,
+    deleted_at              DATETIME NULL,
+    created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by              BIGINT UNSIGNED NULL,
+    updated_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by              BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_packaging_product FOREIGN KEY (product_id) REFERENCES products(id),
+    CONSTRAINT fk_packaging_material FOREIGN KEY (packaging_material_id) REFERENCES raw_materials(id),
+    INDEX idx_packaging_product (product_id),
+    INDEX idx_packaging_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================

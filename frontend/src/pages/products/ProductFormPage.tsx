@@ -50,7 +50,7 @@ function ProductCreateForm() {
     formState: { errors, isSubmitting },
   } = useForm<ProductFormValues, unknown, ProductSubmitValues>({
     resolver: zodResolver(productSchema),
-    defaultValues: { code: '', name: '', unit: '', product_type: 'finished_good', selling_price: 0, machine_id: undefined, production_hours_per_unit: undefined, status: 'active' },
+    defaultValues: { code: '', name: '', unit: '', product_type: 'finished_good', selling_price: 0, batch_size: undefined, batch_production_hours: undefined, machine_id: undefined, production_hours_per_unit: undefined, workers_required: undefined, status: 'active' },
   })
 
   async function onSubmit(values: ProductSubmitValues) {
@@ -86,6 +86,27 @@ function ProductCreateForm() {
           </SelectField>
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <TextField
+            label="Batch size (units)"
+            type="number"
+            step="0.01"
+            error={errors.batch_size?.message}
+            {...register('batch_size')}
+          />
+          <TextField
+            label="Hours to produce one batch"
+            type="number"
+            step="0.01"
+            error={errors.batch_production_hours?.message}
+            {...register('batch_production_hours')}
+          />
+        </div>
+        <p className="text-xs text-white/40">
+          E.g. "500 units, 6 hours" -- the per-unit time the feasibility check actually uses is worked out from
+          these two automatically. Leave both blank and set production hours per unit directly below instead if
+          this product doesn't naturally come in batches.
+        </p>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <SelectField label="Machine" error={errors.machine_id?.message} {...register('machine_id')}>
             <option value="">None</option>
             {machines.map((m) => (
@@ -100,10 +121,18 @@ function ProductCreateForm() {
             {...register('production_hours_per_unit')}
           />
         </div>
+        <TextField
+          label="Workers required (concurrent)"
+          type="number"
+          step="1"
+          error={errors.workers_required?.message}
+          {...register('workers_required')}
+        />
         <p className="text-xs text-white/40">
           The machine and hours-per-unit are this product's "formula" for feasibility checks: they're used to work
           out whether there's enough machine time to produce a requested quantity by the required date. Leave blank
-          to skip the machine-availability check for this product.
+          to skip the machine-availability check for this product. Workers required draws on the shared factory
+          labor pool (Settings → Factory setup).
         </p>
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
@@ -136,8 +165,11 @@ function ProductEditForm({ id }: { id: number }) {
           unit: product.unit,
           product_type: product.product_type,
           selling_price: product.selling_price,
+          batch_size: product.batch_size ?? undefined,
+          batch_production_hours: product.batch_production_hours ?? undefined,
           machine_id: product.machine_id ?? undefined,
           production_hours_per_unit: product.production_hours_per_unit ?? undefined,
+          workers_required: product.workers_required ?? undefined,
           status: product.status,
         })
       })
@@ -180,6 +212,26 @@ function ProductEditForm({ id }: { id: number }) {
             </SelectField>
           </div>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <TextField
+              label="Batch size (units)"
+              type="number"
+              step="0.01"
+              error={errors.batch_size?.message}
+              {...register('batch_size')}
+            />
+            <TextField
+              label="Hours to produce one batch"
+              type="number"
+              step="0.01"
+              error={errors.batch_production_hours?.message}
+              {...register('batch_production_hours')}
+            />
+          </div>
+          <p className="text-xs text-white/40">
+            E.g. "500 units, 6 hours" -- the per-unit time the feasibility check actually uses is worked out from
+            these two automatically.
+          </p>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <SelectField label="Machine" error={errors.machine_id?.message} {...register('machine_id')}>
               <option value="">None</option>
               {machines.map((m) => (
@@ -194,6 +246,13 @@ function ProductEditForm({ id }: { id: number }) {
               {...register('production_hours_per_unit')}
             />
           </div>
+          <TextField
+            label="Workers required (concurrent)"
+            type="number"
+            step="1"
+            error={errors.workers_required?.message}
+            {...register('workers_required')}
+          />
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
             <Button type="submit" isLoading={isSubmitting}>Save changes</Button>
