@@ -170,7 +170,8 @@ def change_status(
         # production_service.py uses for the same reason.
         from app.services import order_service
 
-        order_service.change_status(db, note.order_id, "shipped", user_id=user_id)
+        shipped_lines = [(line.product_id, float(line.quantity_delivered)) for line in note.lines]
+        order_service.change_status(db, note.order_id, "shipped", user_id=user_id, shipped_lines=shipped_lines)
     elif new_status == "cancelled":
         assert_reason_given(reason, "A reason is required to cancel a delivery note.")
         note.cancel_reason = reason

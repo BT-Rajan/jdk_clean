@@ -79,17 +79,21 @@ export function PurchaseOrderDetailPage() {
   const [justDeleted, setJustDeleted] = useState(false)
   const [receiveQuantities, setReceiveQuantities] = useState<Record<number, string>>({})
 
+  function defaultReceiveQuantities(data: PurchaseOrder): Record<number, string> {
+    const defaults: Record<number, string> = {}
+    for (const line of data.lines) {
+      const remaining = line.quantity - line.received_quantity
+      defaults[line.id] = remaining > 0 ? String(remaining) : '0'
+    }
+    return defaults
+  }
+
   function load() {
     setLoading(true)
     getPurchaseOrder(poId)
       .then((data) => {
         setPo(data)
-        const defaults: Record<number, string> = {}
-        for (const line of data.lines) {
-          const remaining = line.quantity - line.received_quantity
-          defaults[line.id] = remaining > 0 ? String(remaining) : '0'
-        }
-        setReceiveQuantities(defaults)
+        setReceiveQuantities(defaultReceiveQuantities(data))
       })
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
@@ -139,6 +143,12 @@ export function PurchaseOrderDetailPage() {
       }
       const updated = await receivePurchaseOrder(poId, lines)
       setPo(updated)
+      // Re-derive from the just-returned PO, not the stale pre-receive
+      // quantities still sitting in the inputs -- otherwise a line that
+      // was just fully received would still show its old (now invalid)
+      // amount, and a second click on "Receive goods" would resubmit it,
+      // double-counting stock for the same delivery.
+      setReceiveQuantities(defaultReceiveQuantities(updated))
       setNotice('Goods received and added to raw material stock.')
     } catch (err) {
       setError(getApiErrorMessage(err))
@@ -207,6 +217,7 @@ export function PurchaseOrderDetailPage() {
 
   const nextStatuses = PURCHASE_ORDER_TRANSITIONS[po.status]
   const canReceive = allowWrite && !justDeleted && (po.status === 'confirmed' || po.status === 'partially_received')
+  const hasPendingReceipt = po.lines.some((l) => Number(receiveQuantities[l.id] ?? 0) > 0)
 
   return (
     <AppLayout>
@@ -357,7 +368,7 @@ export function PurchaseOrderDetailPage() {
         </div>
         {canReceive && (
           <div className="flex justify-end border-t border-white/10 px-6 py-4">
-            <Button isLoading={busy} onClick={handleReceive}>Receive goods</Button>
+            <Button isLoading={busy} disabled={!hasPendingReceipt} onClick={handleReceive}>Receive goods</Button>
           </div>
         )}
       </GlassCard>

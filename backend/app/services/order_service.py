@@ -219,6 +219,7 @@ def change_status(
     new_status: str,
     reason: str | None = None,
     user_id: int | None = None,
+    shipped_lines: list[tuple[int, float]] | None = None,
 ) -> Order:
     order = get_order(db, order_id)
     assert_transition_allowed(ALLOWED_TRANSITIONS, order.status, new_status, "order")
@@ -251,18 +252,39 @@ def change_status(
         for line in order.lines:
             inventory_service.reserve_stock(db, "product", line.product_id, float(line.quantity))
     elif new_status == "shipped":
-        for line in order.lines:
+        # Issue against what actually left the building, not what was
+        # originally ordered -- delivery_note_service passes its own
+        # (possibly hand-edited) lines here when shipping is driven by
+        # issuing a delivery note, since a delivery note's quantities can
+        # legitimately diverge from the order's (partial/short-ship,
+        # substitution) and it's the delivery note that represents the
+        # real physical movement. shipped_lines is only ever None when
+        # an order is force-shipped with no delivery note involved (e.g.
+        # a direct status override), in which case the order's own lines
+        # are the only source of truth available.
+        lines_to_issue = (
+            shipped_lines
+            if shipped_lines is not None
+            else [(line.product_id, float(line.quantity)) for line in order.lines]
+        )
+        for product_id, quantity in lines_to_issue:
             inventory_service.adjust_stock(
                 db,
                 item_type="product",
-                item_id=line.product_id,
-                quantity=-float(line.quantity),
+                item_id=product_id,
+                quantity=-quantity,
                 movement_type="issue",
                 reference_type="order",
                 reference_id=order.id,
                 notes=f"Shipped against {order.order_number}",
                 user_id=user_id,
             )
+        # The reservation, however, always tracks what was originally
+        # confirmed on the order -- that's the amount reserve_stock
+        # actually placed a hold on -- so it's released in full here
+        # regardless of what the delivery note ended up saying, or
+        # leftover reserved stock would linger uncleared forever.
+        for line in order.lines:
             inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity))
     elif new_status == "cancelled" and old_status in RESERVED_STATUSES:
         for line in order.lines:
