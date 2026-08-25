@@ -18,6 +18,8 @@ class ProductCreate(BaseModel):
     production_hours_per_unit: float | None = Field(default=None, ge=0)
     workers_required: int | None = Field(default=None, ge=0)
     status: str = Field(default="active", pattern="^(active|inactive)$")
+    tags: list[str] | None = None
+    properties: dict[str, str] | None = None
 
 
 class ProductUpdate(BaseModel):
@@ -31,6 +33,8 @@ class ProductUpdate(BaseModel):
     production_hours_per_unit: float | None = Field(default=None, ge=0)
     workers_required: int | None = Field(default=None, ge=0)
     status: str | None = Field(default=None, pattern="^(active|inactive)$")
+    tags: list[str] | None = None
+    properties: dict[str, str] | None = None
 
 
 class ProductOut(BaseModel):
@@ -46,5 +50,7 @@ class ProductOut(BaseModel):
     production_hours_per_unit: float | None
     workers_required: int | None
     status: str
+    tags: list[str] | None = None
+    properties: dict[str, str] | None = None
 
     model_config = {"from_attributes": True}

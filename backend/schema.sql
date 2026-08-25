@@ -204,6 +204,11 @@ CREATE TABLE IF NOT EXISTS products (
     production_hours_per_unit  DECIMAL(10,4) NULL,
     workers_required           SMALLINT UNSIGNED NULL,
     status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    -- Descriptive only, not read by any business logic: free-form labels
+    -- for filtering/grouping, and arbitrary spec key-value pairs (e.g.
+    -- color, shelf life). See app/models/product.py.
+    tags            JSON NULL,
+    properties      JSON NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,

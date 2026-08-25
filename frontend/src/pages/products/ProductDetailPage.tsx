@@ -3,16 +3,17 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Badge, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
-import { deleteProduct, getProduct, restoreProduct } from '@/api/products'
+import { activateProduct, deactivateProduct, deleteProduct, getProduct, restoreProduct } from '@/api/products'
 import { getStock } from '@/api/inventory'
 import type { Product } from '@/types/product'
 import type { StockLevel } from '@/types/inventory'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
-import { canWrite } from '@/lib/roles'
+import { canWrite, isAdmin } from '@/lib/roles'
 import { formatCurrency } from '@/lib/currency'
 import { BomEditor } from './BomEditor'
 import { PackagingEditor } from './PackagingEditor'
+import { SupplierDrilldown } from './SupplierDrilldown'
 
 export function ProductDetailPage() {
   const { id } = useParams()
@@ -67,6 +68,20 @@ export function ProductDetailPage() {
     }
   }
 
+  async function handleToggleStatus() {
+    if (!product) return
+    setBusy(true)
+    try {
+      const updated = product.status === 'active' ? await deactivateProduct(productId) : await activateProduct(productId)
+      setProduct(updated)
+      setNotice(updated.status === 'active' ? 'Product activated.' : 'Product deactivated.')
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -93,6 +108,9 @@ export function ProductDetailPage() {
         actions={
           canWrite(user?.role) && !justDeleted ? (
             <>
+              <Button variant="ghost" onClick={handleToggleStatus} isLoading={busy}>
+                {product.status === 'active' ? 'Deactivate' : 'Activate'}
+              </Button>
               <Button variant="ghost" onClick={() => navigate(`/products/${productId}/edit`)}>Edit</Button>
               <Button variant="danger" onClick={() => setConfirmOpen(true)}>Delete</Button>
             </>
@@ -138,9 +156,47 @@ export function ProductDetailPage() {
           />
           <Field label="Workers required" value={product.workers_required ?? '—'} />
         </dl>
+        {(product.tags?.length || product.properties) && (
+          <div className="mt-6 flex flex-col gap-4 border-t border-white/10 pt-6">
+            {product.tags && product.tags.length > 0 && (
+              <div>
+                <span className="mb-2 block text-xs tracking-wide text-white/40 uppercase">Tags</span>
+                <div className="flex flex-wrap gap-2">
+                  {product.tags.map((tag) => (
+                    <Badge key={tag} tone="info">{tag}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+            {product.properties && Object.keys(product.properties).length > 0 && (
+              <div>
+                <span className="mb-2 block text-xs tracking-wide text-white/40 uppercase">Properties</span>
+                <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                  {Object.entries(product.properties).map(([key, value]) => (
+                    <div key={key} className="flex justify-between text-sm">
+                      <dt className="text-white/50">{key}</dt>
+                      <dd className="text-white">{value}</dd>
+                    </div>
+                  ))}
+                </dl>
+              </div>
+            )}
+          </div>
+        )}
       </GlassCard>
 
-      <BomEditor productId={productId} canEdit={canWrite(user?.role)} />
+      {isAdmin(user?.role) ? (
+        <>
+          <BomEditor productId={productId} canEdit={canWrite(user?.role)} />
+          <div className="mt-6">
+            <SupplierDrilldown productId={productId} />
+          </div>
+        </>
+      ) : (
+        <GlassCard className="p-8 text-sm text-white/50">
+          Bill of materials and supplier information are visible to admins only.
+        </GlassCard>
+      )}
 
       <div className="mt-6">
         <PackagingEditor productId={productId} canEdit={canWrite(user?.role)} />

@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { Alert, Button, GlassCard, SelectField, Spinner, TextField } from '@/components/ui'
+import { Alert, Button, GlassCard, SelectField, Spinner, TextField, TextareaField } from '@/components/ui'
 import { createProduct, getProduct, updateProduct } from '@/api/products'
 import { listMachines } from '@/api/machines'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
@@ -13,6 +13,8 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import {
   productEditSchema,
   productSchema,
+  propertiesToInput,
+  tagsToInput,
   type ProductEditFormValues,
   type ProductEditSubmitValues,
   type ProductFormValues,
@@ -50,7 +52,7 @@ function ProductCreateForm() {
     formState: { errors, isSubmitting },
   } = useForm<ProductFormValues, unknown, ProductSubmitValues>({
     resolver: zodResolver(productSchema),
-    defaultValues: { code: '', name: '', unit: '', product_type: 'finished_good', selling_price: 0, batch_size: undefined, batch_production_hours: undefined, machine_id: undefined, production_hours_per_unit: undefined, workers_required: undefined, status: 'active' },
+    defaultValues: { code: '', name: '', unit: '', product_type: 'finished_good', selling_price: 0, batch_size: undefined, batch_production_hours: undefined, machine_id: undefined, production_hours_per_unit: undefined, workers_required: undefined, status: 'active', tags: '', properties: '' },
   })
 
   async function onSubmit(values: ProductSubmitValues) {
@@ -134,6 +136,25 @@ function ProductCreateForm() {
           to skip the machine-availability check for this product. Workers required draws on the shared factory
           labor pool (Settings → Factory setup).
         </p>
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <TextField
+            label="Tags"
+            placeholder="seasonal, export-grade…"
+            error={errors.tags?.message}
+            {...register('tags')}
+          />
+          <TextareaField
+            label="Properties"
+            placeholder={'color: amber\nshelf_life_days: 180'}
+            rows={3}
+            error={errors.properties?.message}
+            {...register('properties')}
+          />
+        </div>
+        <p className="text-xs text-white/40">
+          Tags and properties are descriptive only — not used by feasibility, BOM, or capacity calculations. Tags:
+          comma-separated. Properties: one "key: value" pair per line.
+        </p>
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
           <Button type="submit" isLoading={isSubmitting}>Create product</Button>
@@ -171,6 +192,8 @@ function ProductEditForm({ id }: { id: number }) {
           production_hours_per_unit: product.production_hours_per_unit ?? undefined,
           workers_required: product.workers_required ?? undefined,
           status: product.status,
+          tags: tagsToInput(product.tags),
+          properties: propertiesToInput(product.properties),
         })
       })
       .catch((err) => setFormError(getApiErrorMessage(err)))
@@ -253,6 +276,25 @@ function ProductEditForm({ id }: { id: number }) {
             error={errors.workers_required?.message}
             {...register('workers_required')}
           />
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <TextField
+              label="Tags"
+              placeholder="seasonal, export-grade…"
+              error={errors.tags?.message}
+              {...register('tags')}
+            />
+            <TextareaField
+              label="Properties"
+              placeholder={'color: amber\nshelf_life_days: 180'}
+              rows={3}
+              error={errors.properties?.message}
+              {...register('properties')}
+            />
+          </div>
+          <p className="text-xs text-white/40">
+            Tags and properties are descriptive only — not used by feasibility, BOM, or capacity calculations. Tags:
+            comma-separated. Properties: one "key: value" pair per line.
+          </p>
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
             <Button type="submit" isLoading={isSubmitting}>Save changes</Button>

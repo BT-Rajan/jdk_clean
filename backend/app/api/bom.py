@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_role
+from app.api.deps import require_role
 from app.core.database import get_db
 from app.models.raw_material import RawMaterial
 from app.models.user import User
@@ -15,14 +15,20 @@ from app.schemas.bom import (
 from app.services import audit_service, bom_service
 
 router = APIRouter(prefix="/api/products/{product_id}/bom", tags=["bom"])
-write_guard = require_role("admin", "manager")
+# A product's BOM is its "formula" -- the raw-material mix and quantities
+# that make it, which is exactly the kind of thing a competitor or a
+# departing employee would want. Admin-only for read AND write, not the
+# admin/manager split used elsewhere in this app -- deliberately stricter
+# than every other master-data module.
+read_guard = require_role("admin")
+write_guard = require_role("admin")
 
 
 @router.get("", response_model=list[BomLineOut])
 def get_bom(
     product_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return bom_service.get_bom(db, product_id)
 
@@ -63,7 +69,7 @@ def delete_bom_line(
 def get_bom_history(
     product_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return audit_service.get_history(db, "bom_lines", product_id)
 
@@ -73,7 +79,7 @@ def explode_bom(
     product_id: int,
     quantity: float = Query(gt=0),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     totals = bom_service.explode_requirements(db, product_id, quantity)
     materials = {

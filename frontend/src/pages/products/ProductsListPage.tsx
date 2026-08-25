@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
@@ -14,15 +14,18 @@ import {
   StatusBadge,
   TextField,
 } from '@/components/ui'
-import { listProducts } from '@/api/products'
+import { activateProduct, deactivateProduct, listProducts } from '@/api/products'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
 import { formatCurrency } from '@/lib/currency'
+import { getApiErrorMessage } from '@/lib/apiError'
 
 export function ProductsListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [busyId, setBusyId] = useState<number | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const fetcher = useCallback(
     (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) => listProducts(params),
     [],
@@ -41,7 +44,25 @@ export function ProductsListPage() {
     toggleSort,
     loading,
     error,
+    refetch,
   } = usePagedResource(fetcher)
+
+  async function handleToggleStatus(id: number, currentStatus: string) {
+    setBusyId(id)
+    setActionError(null)
+    try {
+      if (currentStatus === 'active') {
+        await deactivateProduct(id)
+      } else {
+        await activateProduct(id)
+      }
+      await refetch()
+    } catch (err) {
+      setActionError(getApiErrorMessage(err))
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   return (
     <AppLayout>
@@ -67,7 +88,7 @@ export function ProductsListPage() {
         </SelectField>
       </div>
 
-      <Alert variant="error">{error}</Alert>
+      <Alert variant="error">{error ?? actionError}</Alert>
 
       <GlassCard className="overflow-hidden">
         {loading ? (
@@ -86,6 +107,7 @@ export function ProductsListPage() {
                   <th className="px-6 py-4 font-medium">Type</th>
                   <th className="px-6 py-4 font-medium">Selling price</th>
                   <th className="px-6 py-4 font-medium">Status</th>
+                  {canWrite(user?.role) && <th className="px-6 py-4 font-medium text-right">Actions</th>}
                 </tr>
               </thead>
               <tbody>
@@ -104,6 +126,18 @@ export function ProductsListPage() {
                     <td className="px-6 py-4">
                       <StatusBadge status={p.status} />
                     </td>
+                    {canWrite(user?.role) && (
+                      <td className="px-6 py-4 text-right">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          isLoading={busyId === p.id}
+                          onClick={() => handleToggleStatus(p.id, p.status)}
+                        >
+                          {p.status === 'active' ? 'Deactivate' : 'Activate'}
+                        </Button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

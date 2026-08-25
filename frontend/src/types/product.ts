@@ -23,6 +23,33 @@ export interface Product {
   production_hours_per_unit: number | null
   workers_required: number | null
   status: ActiveStatus
+  // Descriptive only -- not read by feasibility/BOM/capacity logic.
+  // Free-form labels (filtering/grouping) and arbitrary spec key-value
+  // pairs (e.g. color, shelf life).
+  tags: string[] | null
+  properties: Record<string, string> | null
+}
+
+export interface ProductSupplierLine {
+  supplier_id: number
+  supplier_code: string
+  supplier_name: string
+  is_default: boolean
+  max_supply_quantity: number | null
+  lead_time_days: number | null
+}
+
+export interface ProductSupplierMaterial {
+  raw_material_id: number
+  raw_material_code: string
+  raw_material_name: string
+  unit: string
+  suppliers: ProductSupplierLine[]
+}
+
+export interface ProductSuppliersResult {
+  product_id: number
+  materials: ProductSupplierMaterial[]
 }
 
 export interface ProductPayload {
@@ -37,4 +64,6 @@ export interface ProductPayload {
   production_hours_per_unit?: number | null
   workers_required?: number | null
   status?: ActiveStatus
+  tags?: string[] | null
+  properties?: Record<string, string> | null
 }

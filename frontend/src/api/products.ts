@@ -1,5 +1,5 @@
 import type { PagedResponse, ListQueryParams, MessageResponse } from '@/types/common'
-import type { Product, ProductPayload } from '@/types/product'
+import type { Product, ProductPayload, ProductSuppliersResult } from '@/types/product'
 import { apiClient } from './client'
 
 export async function listProducts(params: ListQueryParams): Promise<PagedResponse<Product>> {
@@ -29,5 +29,21 @@ export async function deleteProduct(id: number): Promise<MessageResponse> {
 
 export async function restoreProduct(id: number): Promise<Product> {
   const { data } = await apiClient.post<Product>(`/api/products/${id}/restore`)
+  return data
+}
+
+export async function activateProduct(id: number): Promise<Product> {
+  const { data } = await apiClient.post<Product>(`/api/products/${id}/activate`)
+  return data
+}
+
+export async function deactivateProduct(id: number): Promise<Product> {
+  const { data } = await apiClient.post<Product>(`/api/products/${id}/deactivate`)
+  return data
+}
+
+/** Admin-only -- see api/products.py:get_product_suppliers. */
+export async function getProductSuppliers(id: number): Promise<ProductSuppliersResult> {
+  const { data } = await apiClient.get<ProductSuppliersResult>(`/api/products/${id}/suppliers`)
   return data
 }

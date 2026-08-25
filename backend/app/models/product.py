@@ -1,4 +1,4 @@
-from sqlalchemy import DECIMAL, Enum, ForeignKey, SmallInteger, String
+from sqlalchemy import DECIMAL, JSON, Enum, ForeignKey, SmallInteger, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -41,5 +41,14 @@ class Product(Base, TimestampMixin, SoftDeleteMixin):
     status: Mapped[str] = mapped_column(
         Enum("active", "inactive", name="product_status"), nullable=False, default="active"
     )
+    # Free-form labels for filtering/grouping in the UI (e.g. "seasonal",
+    # "export-grade") -- not used by any business logic, purely a search/
+    # organization aid. Stored as a native JSON list; NULL/empty means none.
+    tags: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    # Arbitrary spec/attribute key-value pairs (e.g. {"color": "amber",
+    # "shelf_life_days": "180"}) -- like tags, descriptive only and not
+    # read by feasibility/BOM/capacity logic. Stored as a native JSON
+    # object; NULL/empty means none set.
+    properties: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
 
     machine: Mapped[Machine | None] = relationship(lazy="joined")
