@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { Alert, Button, GlassCard, SelectField, Spinner, TextField } from '@/components/ui'
+import { Alert, Button, GlassCard, SelectField, Spinner, TabPanel, Tabs, TextField } from '@/components/ui'
 import { getSettings, updateSettings } from '@/api/settings'
 import type { Settings } from '@/types/settings'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -18,6 +18,7 @@ export function SettingsPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'general' | 'factory-setup' | 'access-control'>('general')
+  const [activeGeneralTab, setActiveGeneralTab] = useState<'company' | 'automation' | 'approvals' | 'ai'>('company')
 
   const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<Settings>()
 
@@ -56,41 +57,16 @@ export function SettingsPage() {
           Company details used on outbound documents, and the AI assistant's API key.
         </p>
 
-        <div className="mt-6 flex gap-2 border-b border-white/10">
-          <button
-            type="button"
-            onClick={() => setActiveTab('general')}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'general'
-                ? 'border-b-2 border-gold-400 text-white'
-                : 'text-white/50 hover:text-white/80'
-            }`}
-          >
-            General
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('factory-setup')}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'factory-setup'
-                ? 'border-b-2 border-gold-400 text-white'
-                : 'text-white/50 hover:text-white/80'
-            }`}
-          >
-            Factory setup
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('access-control')}
-            className={`px-4 py-2 text-sm font-medium transition-colors ${
-              activeTab === 'access-control'
-                ? 'border-b-2 border-gold-400 text-white'
-                : 'text-white/50 hover:text-white/80'
-            }`}
-          >
-            Access Control
-          </button>
-        </div>
+        <Tabs
+          className="mt-6"
+          activeId={activeTab}
+          onChange={(id) => setActiveTab(id as typeof activeTab)}
+          items={[
+            { id: 'general', label: 'General' },
+            { id: 'factory-setup', label: 'Factory setup' },
+            { id: 'access-control', label: 'Access Control' },
+          ]}
+        />
 
         {activeTab === 'access-control' ? (
           <div className="mt-8">
@@ -113,6 +89,19 @@ export function SettingsPage() {
               </div>
             )}
 
+            <Tabs
+              size="sm"
+              activeId={activeGeneralTab}
+              onChange={(id) => setActiveGeneralTab(id as typeof activeGeneralTab)}
+              items={[
+                { id: 'company', label: 'Company & tax' },
+                { id: 'automation', label: 'Workflow automation' },
+                { id: 'approvals', label: 'Approvals' },
+                { id: 'ai', label: 'AI assistant' },
+              ]}
+            />
+
+            <TabPanel id="company" activeId={activeGeneralTab} keepMounted className="flex flex-col gap-8">
             <GlassCard className="p-8">
               <h2 className="font-display text-lg font-medium text-white">Company details</h2>
               <p className="mt-1 text-sm text-white/50">Appears on the letterhead of every generated PDF.</p>
@@ -127,6 +116,27 @@ export function SettingsPage() {
               </div>
             </GlassCard>
 
+            <GlassCard className="p-8">
+              <h2 className="font-display text-lg font-medium text-white">Tax</h2>
+              <p className="mt-1 text-sm text-white/50">
+                Kuwait doesn't currently have GST/VAT. This rate is provisioned at 0% by default and applied to every
+                new quotation, order, and purchase order -- editable per document, and ready to switch on if that
+                ever changes, with no rework needed.
+              </p>
+              <div className="mt-6">
+                <TextField
+                  label="Default tax rate (%)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  max="100"
+                  {...register('default_tax_rate')}
+                />
+              </div>
+            </GlassCard>
+            </TabPanel>
+
+            <TabPanel id="automation" activeId={activeGeneralTab} keepMounted className="flex flex-col gap-8">
             <GlassCard className="p-8">
               <h2 className="font-display text-lg font-medium text-white">Sales workflow</h2>
               <p className="mt-1 text-sm text-white/50">
@@ -189,26 +199,9 @@ export function SettingsPage() {
                 </SelectField>
               </div>
             </GlassCard>
+            </TabPanel>
 
-            <GlassCard className="p-8">
-              <h2 className="font-display text-lg font-medium text-white">Tax</h2>
-              <p className="mt-1 text-sm text-white/50">
-                Kuwait doesn't currently have GST/VAT. This rate is provisioned at 0% by default and applied to every
-                new quotation, order, and purchase order -- editable per document, and ready to switch on if that
-                ever changes, with no rework needed.
-              </p>
-              <div className="mt-6">
-                <TextField
-                  label="Default tax rate (%)"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="100"
-                  {...register('default_tax_rate')}
-                />
-              </div>
-            </GlassCard>
-
+            <TabPanel id="approvals" activeId={activeGeneralTab} keepMounted className="flex flex-col gap-8">
             <GlassCard className="p-8">
               <h2 className="font-display text-lg font-medium text-white">Large purchase order approval</h2>
               <p className="mt-1 text-sm text-white/50">
@@ -246,7 +239,9 @@ export function SettingsPage() {
                 />
               </div>
             </GlassCard>
+            </TabPanel>
 
+            <TabPanel id="ai" activeId={activeGeneralTab} keepMounted className="flex flex-col gap-8">
             <GlassCard className="p-8">
               <h2 className="font-display text-lg font-medium text-white">AI assistant</h2>
               <p className="mt-1 text-sm text-white/50">
@@ -262,6 +257,7 @@ export function SettingsPage() {
                 />
               </div>
             </GlassCard>
+            </TabPanel>
 
             <div className="flex justify-end">
               <Button type="submit" isLoading={isSubmitting}>Save settings</Button>
