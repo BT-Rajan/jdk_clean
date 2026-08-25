@@ -1,5 +1,6 @@
 import type { PagedResponse } from '@/types/common'
 import type {
+  FinishedGoodStockItem,
   InventoryItemType,
   LowStockItem,
   StockAdjustPayload,
@@ -20,6 +21,23 @@ export async function adjustStock(payload: StockAdjustPayload): Promise<StockLev
 
 export async function getLowStock(): Promise<LowStockItem[]> {
   const { data } = await apiClient.get<LowStockItem[]>('/api/inventory/low-stock')
+  return data
+}
+
+export interface FinishedGoodsQueryParams {
+  page?: number
+  page_size?: number
+  search?: string
+  sort?: string
+  low_only?: boolean
+}
+
+export async function getFinishedGoodsStock(
+  params: FinishedGoodsQueryParams,
+): Promise<PagedResponse<FinishedGoodStockItem>> {
+  const { data } = await apiClient.get<PagedResponse<FinishedGoodStockItem>>('/api/inventory/finished-goods', {
+    params,
+  })
   return data
 }
 

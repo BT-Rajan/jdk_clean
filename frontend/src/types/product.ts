@@ -28,6 +28,9 @@ export interface Product {
   // pairs (e.g. color, shelf life).
   tags: string[] | null
   properties: Record<string, string> | null
+  // Finished-goods equivalent of RawMaterial.reorder_point -- flags this
+  // product as low stock once quantity_on_hand drops to/below it.
+  reorder_point: number
 }
 
 export interface ProductSupplierLine {
@@ -66,4 +69,5 @@ export interface ProductPayload {
   status?: ActiveStatus
   tags?: string[] | null
   properties?: Record<string, string> | null
+  reorder_point?: number
 }

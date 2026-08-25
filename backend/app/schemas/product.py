@@ -20,6 +20,7 @@ class ProductCreate(BaseModel):
     status: str = Field(default="active", pattern="^(active|inactive)$")
     tags: list[str] | None = None
     properties: dict[str, str] | None = None
+    reorder_point: float = Field(default=0, ge=0)
 
 
 class ProductUpdate(BaseModel):
@@ -35,6 +36,7 @@ class ProductUpdate(BaseModel):
     status: str | None = Field(default=None, pattern="^(active|inactive)$")
     tags: list[str] | None = None
     properties: dict[str, str] | None = None
+    reorder_point: float | None = Field(default=None, ge=0)
 
 
 class ProductOut(BaseModel):
@@ -52,5 +54,6 @@ class ProductOut(BaseModel):
     status: str
     tags: list[str] | None = None
     properties: dict[str, str] | None = None
+    reorder_point: float
 
     model_config = {"from_attributes": True}

@@ -27,6 +27,19 @@ export interface LowStockItem {
   reorder_point: number
 }
 
+export interface FinishedGoodStockItem {
+  product_id: number
+  code: string
+  name: string
+  unit: string
+  product_status: 'active' | 'inactive'
+  quantity_on_hand: number
+  quantity_reserved: number
+  quantity_available: number
+  reorder_point: number
+  is_low: boolean
+}
+
 export interface StockMovement {
   id: number
   item_type: InventoryItemType

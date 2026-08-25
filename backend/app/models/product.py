@@ -50,5 +50,10 @@ class Product(Base, TimestampMixin, SoftDeleteMixin):
     # read by feasibility/BOM/capacity logic. Stored as a native JSON
     # object; NULL/empty means none set.
     properties: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
+    # Finished-goods equivalent of RawMaterial.reorder_point -- read by
+    # inventory_service.get_finished_goods_stock to flag a product as low
+    # (quantity_on_hand <= reorder_point) the same way raw materials
+    # already are. Default 0 means "never flag" until explicitly set.
+    reorder_point: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
 
     machine: Mapped[Machine | None] = relationship(lazy="joined")

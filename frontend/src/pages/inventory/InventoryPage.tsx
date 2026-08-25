@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
   Alert,
@@ -11,22 +11,60 @@ import {
   PageHeader,
   SortableHeader,
   Spinner,
+  TextField,
 } from '@/components/ui'
-import { getLowStock, getMovements } from '@/api/inventory'
+import { getFinishedGoodsStock, getLowStock, getMovements } from '@/api/inventory'
 import { useAuth } from '@/hooks/useAuth'
 import { canAdjustInventory } from '@/lib/roles'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDateTime } from '@/lib/dateFormat'
 import { DEFAULT_PAGE_SIZE } from '@/lib/constants'
-import type { LowStockItem, StockMovement } from '@/types/inventory'
+import type { FinishedGoodStockItem, LowStockItem, StockMovement } from '@/types/inventory'
 
 const LOW_STOCK_PAGE_SIZE = DEFAULT_PAGE_SIZE
 const MOVEMENTS_PAGE_SIZE = DEFAULT_PAGE_SIZE
+const FINISHED_GOODS_PAGE_SIZE = DEFAULT_PAGE_SIZE
 
 export function InventoryPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const canAdjust = canAdjustInventory(user?.role)
+
+  // Finished goods: server-side page/search/sort like the rest of the
+  // app's list pages, plus a client-side "low only" filter toggle.
+  const [finishedGoods, setFinishedGoods] = useState<FinishedGoodStockItem[]>([])
+  const [fgTotal, setFgTotal] = useState(0)
+  const [fgTotalPages, setFgTotalPages] = useState(1)
+  const [fgPage, setFgPage] = useState(1)
+  const [fgSearchInput, setFgSearchInput] = useState('')
+  const [fgSort, setFgSort] = useState('')
+  const [fgLowOnly, setFgLowOnly] = useState(false)
+  const [fgLoading, setFgLoading] = useState(true)
+  const [fgError, setFgError] = useState<string | null>(null)
+
+  const loadFinishedGoods = useCallback(
+    async (page: number, search: string, sort: string, lowOnly: boolean) => {
+      setFgLoading(true)
+      setFgError(null)
+      try {
+        const result = await getFinishedGoodsStock({
+          page,
+          page_size: FINISHED_GOODS_PAGE_SIZE,
+          search: search || undefined,
+          sort: sort || undefined,
+          low_only: lowOnly || undefined,
+        })
+        setFinishedGoods(result.items)
+        setFgTotal(result.total)
+        setFgTotalPages(result.total_pages)
+      } catch (err) {
+        setFgError(getApiErrorMessage(err))
+      } finally {
+        setFgLoading(false)
+      }
+    },
+    [],
+  )
 
   // Low stock comes back from the backend as a single unpaginated list (it's
   // inherently bounded -- only materials currently below their reorder
@@ -85,6 +123,31 @@ export function InventoryPage() {
     loadMovements(movementsPage, movementsSort)
   }, [loadMovements, movementsPage, movementsSort])
 
+  // Debounce the finished-goods search box the same way every other list
+  // page in the app does (hooks/usePagedResource.ts), then reset to page 1
+  // once the effective query changes underneath the user.
+  const [fgDebouncedSearch, setFgDebouncedSearch] = useState('')
+  useEffect(() => {
+    const handle = window.setTimeout(() => {
+      setFgDebouncedSearch(fgSearchInput)
+      setFgPage(1)
+    }, 350)
+    return () => window.clearTimeout(handle)
+  }, [fgSearchInput])
+
+  useEffect(() => {
+    loadFinishedGoods(fgPage, fgDebouncedSearch, fgSort, fgLowOnly)
+  }, [loadFinishedGoods, fgPage, fgDebouncedSearch, fgSort, fgLowOnly])
+
+  function toggleFgSort(field: string) {
+    setFgSort((current) => {
+      if (current === field) return `-${field}`
+      if (current === `-${field}`) return ''
+      return field
+    })
+    setFgPage(1)
+  }
+
   function toggleMovementsSort(field: string) {
     setMovementsSort((current) => {
       if (current === field) return `-${field}`
@@ -131,8 +194,106 @@ export function InventoryPage() {
 
       <div className="flex flex-col gap-6">
         <GlassCard className="overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-6 py-4">
+            <div>
+              <h2 className="font-display text-lg font-medium text-white">Finished goods</h2>
+              <p className="mt-1 text-xs text-white/40">
+                On-hand, reserved, and available stock for every active product.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <TextField
+                label="Search"
+                placeholder="Search code or name…"
+                value={fgSearchInput}
+                onChange={(e) => setFgSearchInput(e.target.value)}
+                className="w-56"
+              />
+              <Button
+                variant={fgLowOnly ? 'primary' : 'ghost'}
+                size="sm"
+                onClick={() => {
+                  setFgLowOnly((v) => !v)
+                  setFgPage(1)
+                }}
+              >
+                Low only
+              </Button>
+            </div>
+          </div>
+          <Alert variant="error">{fgError}</Alert>
+          {fgLoading ? (
+            <div className="flex justify-center py-16">
+              <Spinner size={24} className="text-gold-300" />
+            </div>
+          ) : finishedGoods.length === 0 ? (
+            <EmptyState
+              title={fgLowOnly ? 'Nothing is low' : 'No finished goods'}
+              message={fgLowOnly ? 'Every product is above its reorder point.' : undefined}
+            />
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                      <SortableHeader label="Product" field="name" sort={fgSort} onSort={toggleFgSort} />
+                      <SortableHeader
+                        label="On hand"
+                        field="quantity_on_hand"
+                        sort={fgSort}
+                        onSort={toggleFgSort}
+                      />
+                      <th className="px-6 py-4 font-medium">Reserved</th>
+                      <th className="px-6 py-4 font-medium">Available</th>
+                      <SortableHeader
+                        label="Reorder point"
+                        field="reorder_point"
+                        sort={fgSort}
+                        onSort={toggleFgSort}
+                      />
+                      <th className="px-6 py-4 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {finishedGoods.map((item) => (
+                      <tr key={item.product_id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
+                        <td className="px-6 py-4">
+                          <Link
+                            to={`/products/${item.product_id}`}
+                            className="font-medium text-gold-300 hover:text-gold-200"
+                          >
+                            {item.code} — {item.name}
+                          </Link>
+                        </td>
+                        <td className="px-6 py-4">
+                          <Badge tone={item.is_low ? 'danger' : 'neutral'}>
+                            {`${item.quantity_on_hand} ${item.unit}`}
+                          </Badge>
+                        </td>
+                        <td className="px-6 py-4 text-white/60">{`${item.quantity_reserved} ${item.unit}`}</td>
+                        <td className="px-6 py-4 text-white/60">{`${item.quantity_available} ${item.unit}`}</td>
+                        <td className="px-6 py-4 text-white/60">{`${item.reorder_point} ${item.unit}`}</td>
+                        <td className="px-6 py-4">
+                          <Badge tone={item.product_status === 'active' ? 'success' : 'neutral'}>
+                            {item.product_status}
+                          </Badge>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="px-6 pb-2">
+                <Pagination page={fgPage} totalPages={fgTotalPages} total={fgTotal} onPageChange={setFgPage} />
+              </div>
+            </>
+          )}
+        </GlassCard>
+
+        <GlassCard className="overflow-hidden">
           <div className="border-b border-white/10 px-6 py-4">
-            <h2 className="font-display text-lg font-medium text-white">Low stock</h2>
+            <h2 className="font-display text-lg font-medium text-white">Low stock — raw materials</h2>
           </div>
           <Alert variant="error">{lowStockError}</Alert>
           {lowStockLoading ? (

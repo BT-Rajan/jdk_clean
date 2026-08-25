@@ -1,3 +1,4 @@
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import AppError, NotFoundError, ValidationAppError
@@ -134,8 +135,76 @@ def release_reservation(db: Session, item_type: str, item_id: int, quantity: flo
     return get_stock(db, item_type, item_id)
 
 
+_FG_SORTABLE_FIELDS = {
+    "code": Product.code,
+    "name": Product.name,
+    "quantity_on_hand": FinishedGoodsInventory.quantity_on_hand,
+    "reorder_point": Product.reorder_point,
+}
+
+
+def get_finished_goods_stock(
+    db: Session,
+    page: int = 1,
+    page_size: int = 25,
+    search: str | None = None,
+    sort: str | None = None,
+    low_only: bool = False,
+) -> dict:
+    """Paginated stock overview across every active finished good/sub-
+    assembly -- the list view get_stock() doesn't provide (that one only
+    answers "what's on hand for this one product"). A product with no
+    FinishedGoodsInventory row yet (nothing has moved for it) still shows
+    up, at zero, via the outer join rather than being silently absent.
+    """
+    query = (
+        db.query(Product, FinishedGoodsInventory)
+        .outerjoin(FinishedGoodsInventory, FinishedGoodsInventory.product_id == Product.id)
+        .filter(Product.deleted_at.is_(None), Product.status == "active")
+    )
+
+    if search:
+        like = f"%{search}%"
+        query = query.filter(or_(Product.code.ilike(like), Product.name.ilike(like)))
+
+    if low_only:
+        query = query.filter(func.coalesce(FinishedGoodsInventory.quantity_on_hand, 0) <= Product.reorder_point)
+
+    result = sort_and_paginate(query, Product, _FG_SORTABLE_FIELDS, sort, page, page_size, default_field="name")
+
+    items = []
+    for product, inv in result["items"]:
+        on_hand = float(inv.quantity_on_hand) if inv else 0.0
+        reserved = float(inv.quantity_reserved) if inv else 0.0
+        reorder_point = float(product.reorder_point)
+        items.append(
+            {
+                "product_id": product.id,
+                "code": product.code,
+                "name": product.name,
+                "unit": product.unit,
+                "product_status": product.status,
+                "quantity_on_hand": on_hand,
+                "quantity_reserved": reserved,
+                "quantity_available": on_hand - reserved,
+                "reorder_point": reorder_point,
+                "is_low": on_hand <= reorder_point,
+            }
+        )
+    result["items"] = items
+    return result
+
+
 def get_low_stock(db: Session) -> list[dict]:
-    """Raw materials whose on-hand quantity is at or below their reorder point."""
+    """Raw materials whose on-hand quantity is at or below their reorder point.
+
+    Finished goods have their own equivalent -- see
+    get_finished_goods_stock(low_only=True) below -- kept as a separate
+    function/endpoint rather than merged in here since the two item types
+    carry different fields (a raw material has no selling price/status
+    the way a product does, and vice versa a product has no supplier),
+    so a combined response would need to paper over that with nulls.
+    """
     rows = (
         db.query(RawMaterial, RawMaterialInventory)
         .join(

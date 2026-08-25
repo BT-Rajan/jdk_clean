@@ -209,6 +209,9 @@ CREATE TABLE IF NOT EXISTS products (
     -- color, shelf life). See app/models/product.py.
     tags            JSON NULL,
     properties      JSON NULL,
+    -- Finished-goods equivalent of raw_materials.reorder_point -- see
+    -- app/models/product.py and inventory_service.get_finished_goods_stock.
+    reorder_point   DECIMAL(14,4) NOT NULL DEFAULT 0,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,

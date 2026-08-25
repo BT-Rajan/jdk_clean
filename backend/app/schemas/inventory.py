@@ -27,6 +27,21 @@ class LowStockItem(BaseModel):
     reorder_point: float
 
 
+class FinishedGoodStockItem(BaseModel):
+    product_id: int
+    code: str
+    name: str
+    unit: str
+    product_status: str
+    quantity_on_hand: float
+    quantity_reserved: float
+    quantity_available: float
+    reorder_point: float
+    is_low: bool
+
+    model_config = {"from_attributes": True}
+
+
 class StockMovementOut(BaseModel):
     id: int
     item_type: str

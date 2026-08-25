@@ -52,7 +52,7 @@ function ProductCreateForm() {
     formState: { errors, isSubmitting },
   } = useForm<ProductFormValues, unknown, ProductSubmitValues>({
     resolver: zodResolver(productSchema),
-    defaultValues: { code: '', name: '', unit: '', product_type: 'finished_good', selling_price: 0, batch_size: undefined, batch_production_hours: undefined, machine_id: undefined, production_hours_per_unit: undefined, workers_required: undefined, status: 'active', tags: '', properties: '' },
+    defaultValues: { code: '', name: '', unit: '', product_type: 'finished_good', selling_price: 0, batch_size: undefined, batch_production_hours: undefined, machine_id: undefined, production_hours_per_unit: undefined, workers_required: undefined, status: 'active', tags: '', properties: '', reorder_point: 0 },
   })
 
   async function onSubmit(values: ProductSubmitValues) {
@@ -136,6 +136,17 @@ function ProductCreateForm() {
           to skip the machine-availability check for this product. Workers required draws on the shared factory
           labor pool (Settings → Factory setup).
         </p>
+        <TextField
+          label="Reorder point"
+          type="number"
+          step="0.01"
+          error={errors.reorder_point?.message}
+          {...register('reorder_point')}
+        />
+        <p className="text-xs text-white/40">
+          When on-hand finished-goods stock drops to or below this, the product shows up under Inventory → Finished
+          goods → Low stock.
+        </p>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <TextField
             label="Tags"
@@ -194,6 +205,7 @@ function ProductEditForm({ id }: { id: number }) {
           status: product.status,
           tags: tagsToInput(product.tags),
           properties: propertiesToInput(product.properties),
+          reorder_point: product.reorder_point,
         })
       })
       .catch((err) => setFormError(getApiErrorMessage(err)))
@@ -275,6 +287,13 @@ function ProductEditForm({ id }: { id: number }) {
             step="1"
             error={errors.workers_required?.message}
             {...register('workers_required')}
+          />
+          <TextField
+            label="Reorder point"
+            type="number"
+            step="0.01"
+            error={errors.reorder_point?.message}
+            {...register('reorder_point')}
           />
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <TextField

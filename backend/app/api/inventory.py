@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
+from app.api.common import PagedResponse
 from app.core.database import get_db
 from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.inventory import (
+    FinishedGoodStockItem,
     LowStockItem,
     StockAdjustRequest,
     StockLevelOut,
@@ -15,6 +17,27 @@ from app.services import inventory_service
 router = APIRouter(prefix="/api/inventory", tags=["inventory"])
 read_guard = require_page_access("inventory", "read")
 write_guard = require_page_access("inventory", "write")
+
+
+@router.get("/finished-goods", response_model=PagedResponse)
+def finished_goods_stock(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=200),
+    search: str | None = Query(None),
+    sort: str | None = Query(None),
+    low_only: bool = Query(False),
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    """Stock overview across every active finished good/sub-assembly --
+    on hand, reserved, available, and whether it's at/below its reorder
+    point. Complements /stock/{item_type}/{item_id}, which only answers
+    for one product at a time."""
+    result = inventory_service.get_finished_goods_stock(
+        db, page=page, page_size=page_size, search=search, sort=sort, low_only=low_only
+    )
+    result["items"] = [FinishedGoodStockItem.model_validate(i) for i in result["items"]]
+    return result
 
 
 @router.get("/stock/{item_type}/{item_id}", response_model=StockLevelOut)

@@ -49,6 +49,7 @@ export const productSchema = z.object({
   status: z.enum(['active', 'inactive']),
   tags: z.string().optional().transform(parseTags),
   properties: z.string().optional().transform(parseProperties),
+  reorder_point: z.coerce.number().min(0, 'Must be 0 or more').optional().or(z.literal('').transform(() => undefined)),
 })
 
 export type ProductFormValues = z.input<typeof productSchema>
