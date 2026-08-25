@@ -103,7 +103,8 @@ def approve_quotation(
 ):
     """Admin sign-off clearing the large-discount approval gate (Settings
     -> large_discount_approval_threshold) -- a draft quotation with a
-    large discount can't move to 'sent' until this has been called."""
+    large discount can't move to 'sent' until this has been called.
+    Approval also immediately sends the quotation (draft -> sent)."""
     quotation = quotation_service.approve_quotation(db, quotation_id, user_id=user.id)
     return QuotationOut.from_model(quotation)
 

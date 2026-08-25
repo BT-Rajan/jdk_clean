@@ -70,7 +70,7 @@ export function QuotationDetailPage() {
     try {
       const updated = await approveQuotation(quotationId)
       setQuotation(updated)
-      setNotice('Approved.')
+      setNotice('Approved and sent.')
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {

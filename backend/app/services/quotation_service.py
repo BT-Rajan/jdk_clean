@@ -265,7 +265,13 @@ def approve_quotation(db: Session, quotation_id: int, user_id: int | None = None
     """Admin sign-off clearing the large-discount gate above -- can be
     called any time a quotation is still draft, whether or not it's
     actually at/above the current threshold (the threshold can change
-    after the quotation was drafted; approving early never hurts)."""
+    after the quotation was drafted; approving early never hurts).
+
+    Approval also sends the quotation: once an admin has signed off,
+    there's nothing left blocking it from going to the customer, so this
+    immediately transitions draft -> sent via change_status (reusing its
+    transition check, audit log, and deal reconciliation) rather than
+    leaving it sitting in 'draft' for a separate manual send step."""
     quotation = get_quotation(db, quotation_id)
     if quotation.status != "draft":
         raise ConflictError("Only a draft quotation can be approved.")
@@ -276,7 +282,7 @@ def approve_quotation(db: Session, quotation_id: int, user_id: int | None = None
         db, TABLE_NAME, quotation_id, {"approved_at": (None, quotation.approved_at.isoformat())}, user_id
     )
     db.commit()
-    return get_quotation(db, quotation_id)
+    return change_status(db, quotation_id, "sent", user_id=user_id)
 
 
 def delete_quotation(db: Session, quotation_id: int, user_id: int | None = None) -> None:

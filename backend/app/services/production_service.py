@@ -81,6 +81,53 @@ def _validate_order(db: Session, order_id: int) -> Order:
     return order
 
 
+def _reserve_batch_materials(db: Session, batch: ProductionSchedule) -> None:
+    """Locks the raw materials this batch's planned run will need, the
+    moment the batch becomes a real commitment on the calendar --
+    machine time is already locked by the batch occupying a booked slot
+    (see capacity_service.BOOKED_PRODUCTION_STATUSES), and finished-goods
+    stock is locked by order_service.reserve_stock on order confirmation;
+    this is the raw-material half of the same "requirement locked once
+    committed" guarantee. Without it, a batch could sit scheduled for
+    days while its materials were freely consumed by something else, and
+    the shortfall would only surface as a hard failure at the moment of
+    completion (see _complete_batch) -- too late to do anything but block
+    a batch that was supposedly already ready to run.
+
+    A product with no BOM configured has nothing to reserve -- same
+    "not evaluable" stance as everywhere else this distinction matters
+    (feasibility_service's capacity check, _complete_batch's shortfall
+    check). Reservations are allowed to exceed on-hand quantity, same as
+    finished-goods reservation -- a shortfall here is exactly the
+    MRP/purchasing signal, not something to block batch creation over.
+    """
+    if not bom_service.has_bom(db, batch.product_id):
+        return
+    requirements = bom_service.explode_requirements(db, batch.product_id, float(batch.planned_quantity))
+    for raw_material_id, required_qty in requirements.items():
+        if required_qty > 0:
+            inventory_service.reserve_stock(db, "raw_material", raw_material_id, required_qty)
+
+
+def _release_batch_materials(db: Session, batch: ProductionSchedule) -> None:
+    """Symmetric release of _reserve_batch_materials -- called on every
+    path where a batch stops holding a claim on raw materials: cancelled,
+    deleted while still planned, edited to a different product/quantity
+    (releases the old figures before the new ones are reserved), or
+    completed (the reservation is superseded by the real consumption in
+    _complete_batch). Always recomputes from the batch's own current
+    product_id/planned_quantity rather than a stored snapshot, so it
+    exactly mirrors whatever _reserve_batch_materials most recently
+    reserved for this batch.
+    """
+    if not bom_service.has_bom(db, batch.product_id):
+        return
+    requirements = bom_service.explode_requirements(db, batch.product_id, float(batch.planned_quantity))
+    for raw_material_id, required_qty in requirements.items():
+        if required_qty > 0:
+            inventory_service.release_reservation(db, "raw_material", raw_material_id, required_qty)
+
+
 def create_batch(db: Session, data: dict, user_id: int | None = None) -> ProductionSchedule:
     product = _validate_product(db, data["product_id"])
     order = None
@@ -93,6 +140,7 @@ def create_batch(db: Session, data: dict, user_id: int | None = None) -> Product
     batch = ProductionSchedule(batch_number=batch_number, created_by=user_id, **data)
     db.add(batch)
     db.flush()
+    _reserve_batch_materials(db, batch)
     audit_service.log_create(db, TABLE_NAME, batch.id, user_id)
     if order is not None:
         deal_service.advance_stage(db, order.deal_id, "production", user_id=user_id)
@@ -108,6 +156,19 @@ def update_batch(db: Session, batch_id: int, data: dict, user_id: int | None = N
 
     if "order_id" in data and data["order_id"]:
         _validate_order(db, data["order_id"])
+    if "product_id" in data and data["product_id"] != batch.product_id:
+        _validate_product(db, data["product_id"])
+
+    # Whatever's currently reserved was reserved against the batch's
+    # *current* product/quantity -- if either is about to change, release
+    # that exact hold before touching the fields, then re-reserve against
+    # the new figures once they're set, so at every moment the reservation
+    # matches what the batch actually says it needs.
+    material_inputs_changed = ("product_id" in data and data["product_id"] != batch.product_id) or (
+        "planned_quantity" in data and float(data["planned_quantity"]) != float(batch.planned_quantity)
+    )
+    if material_inputs_changed:
+        _release_batch_materials(db, batch)
 
     changes: dict[str, tuple] = {}
     for field, new_value in data.items():
@@ -116,6 +177,9 @@ def update_batch(db: Session, batch_id: int, data: dict, user_id: int | None = N
             changes[field] = (old_value, new_value)
             setattr(batch, field, new_value)
     batch.updated_by = user_id
+
+    if material_inputs_changed:
+        _reserve_batch_materials(db, batch)
 
     audit_service.log_update(db, TABLE_NAME, batch_id, changes, user_id)
     db.commit()
@@ -127,6 +191,7 @@ def delete_batch(db: Session, batch_id: int, user_id: int | None = None) -> None
     batch = get_batch(db, batch_id)
     if batch.status != "planned":
         raise ConflictError("Only planned batches can be deleted; cancel started batches instead.")
+    _release_batch_materials(db, batch)
     batch.deleted_at = datetime.now(timezone.utc)
     audit_service.log_delete(db, TABLE_NAME, batch_id, user_id)
     db.commit()
@@ -137,6 +202,7 @@ def restore_batch(db: Session, batch_id: int, user_id: int | None = None) -> Pro
     batch.deleted_at = None
     audit_service.log_restore(db, TABLE_NAME, batch_id, user_id)
     db.commit()
+    _reserve_batch_materials(db, batch)
     return get_batch(db, batch_id)
 
 
@@ -210,6 +276,14 @@ def _complete_batch(
         user_id=user_id,
     )
 
+    # The hold placed when this batch was scheduled (_reserve_batch_materials,
+    # called from create_batch/update_batch) is no longer needed now that
+    # the materials have actually been consumed above -- release it based
+    # on planned_quantity (what was actually reserved), not produced_quantity
+    # (what was actually used), since a batch can legitimately produce more
+    # or less than planned.
+    _release_batch_materials(db, batch)
+
     batch.produced_quantity = produced_quantity
     batch.actual_end = datetime.now(timezone.utc)
 
@@ -234,6 +308,7 @@ def change_status(
     elif new_status == "cancelled":
         assert_reason_given(reason, "A reason is required to cancel a production batch.")
         batch.cancel_reason = reason
+        _release_batch_materials(db, batch)
 
     old_status = batch.status
     batch.status = new_status
