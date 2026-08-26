@@ -1,4 +1,4 @@
-import type { MyPermissions, PermissionEntry } from '@/types/permission'
+import type { MyPermissions, PermissionEntry, PermissionPage } from '@/types/permission'
 import { apiClient } from './client'
 
 /** Any authenticated user's own effective access per page. */
@@ -18,7 +18,9 @@ export async function updatePermissionMatrix(entries: PermissionEntry[]): Promis
   return data
 }
 
-export async function listPermissionPages(): Promise<string[]> {
-  const { data } = await apiClient.get<{ pages: string[] }>('/api/permissions/pages')
-  return data.pages
+/** The governable page list (key + display label) -- single source of
+ * truth is the backend's PAGE_KEY_LABELS; nothing here is hardcoded. */
+export async function listPermissionPages(): Promise<PermissionPage[]> {
+  const { data } = await apiClient.get<PermissionPage[]>('/api/permissions/pages')
+  return data
 }

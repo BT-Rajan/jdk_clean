@@ -1,23 +1,16 @@
 import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Tabs } from '@/components/ui'
-import { useAuth } from '@/hooks/useAuth'
-import { isAdmin } from '@/lib/roles'
 import { EmailTab } from './EmailTab'
 import { SmsTab } from './SmsTab'
 import { WhatsAppTab } from './WhatsAppTab'
 
 export function CommunicationPage() {
-  const { user } = useAuth()
   const [activeTab, setActiveTab] = useState<'email' | 'whatsapp' | 'sms'>('email')
 
-  // Same admin-only boundary as Settings (see api/communication.py) --
-  // redirect rather than show a permission error.
-  if (!isAdmin(user?.role)) {
-    return <Navigate to="/dashboard" replace />
-  }
+  // Admin-only-ness of this whole page is enforced once, by
+  // AdminOnlyGuard at the route level -- nothing to check here.
 
   return (
     <AppLayout>

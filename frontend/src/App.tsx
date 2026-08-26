@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthProvider'
 import { PagePermissionGuard } from '@/routes/PagePermissionGuard'
+import { AdminOnlyGuard } from '@/routes/AdminOnlyGuard'
 import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { PublicOnlyRoute } from '@/routes/PublicOnlyRoute'
 import { LoginPage } from '@/pages/LoginPage'
@@ -226,12 +227,14 @@ export function App() {
             <Route path="/production/:id" element={<ProductionDetailPage />} />
             <Route path="/production/:id/edit" element={<ProductionFormPage />} />
 
-            <Route path="/users" element={<UsersListPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/communication" element={<CommunicationPage />} />
-            <Route path="/users/new" element={<UserFormPage />} />
-            <Route path="/users/:id" element={<UserDetailPage />} />
-            <Route path="/users/:id/edit" element={<UserFormPage />} />
+            <Route element={<AdminOnlyGuard />}>
+              <Route path="/users" element={<UsersListPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/communication" element={<CommunicationPage />} />
+              <Route path="/users/new" element={<UserFormPage />} />
+              <Route path="/users/:id" element={<UserDetailPage />} />
+              <Route path="/users/:id/edit" element={<UserFormPage />} />
+            </Route>
            </Route>
           </Route>
 

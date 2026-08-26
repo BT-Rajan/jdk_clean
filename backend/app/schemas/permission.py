@@ -9,3 +9,8 @@ class PermissionEntry(BaseModel):
 
 class PermissionMatrixUpdate(BaseModel):
     entries: list[PermissionEntry]
+
+
+class PermissionPage(BaseModel):
+    key: str
+    label: str

@@ -9,3 +9,11 @@ export interface PermissionEntry {
 
 /** The calling user's own effective access per page -- page_key -> level. */
 export type MyPermissions = Record<string, AccessLevel>
+
+/** A governable page's key + display label, as returned by
+ * /api/permissions/pages -- the backend is the only source of this
+ * list, there is no hardcoded frontend copy. */
+export interface PermissionPage {
+  key: string
+  label: string
+}

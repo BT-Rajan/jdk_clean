@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_role
 from app.core.database import get_db
-from app.core.permissions import PAGE_KEYS
+from app.core.permissions import PAGE_KEY_LABELS, PAGE_KEYS
 from app.models.user import User
-from app.schemas.permission import PermissionEntry, PermissionMatrixUpdate
+from app.schemas.permission import PermissionEntry, PermissionMatrixUpdate, PermissionPage
 from app.services import permission_service
 
 router = APIRouter(prefix="/api/permissions", tags=["permissions"])
@@ -18,13 +18,15 @@ def get_matrix(db: Session = Depends(get_db), user: User = Depends(admin_guard))
     return permission_service.get_matrix(db)
 
 
-@router.get("/pages")
+@router.get("/pages", response_model=list[PermissionPage])
 def list_pages(user: User = Depends(get_current_user)):
-    """The fixed list of governable pages, for the frontend grid's
-    column headers -- any authenticated user can see the list of page
-    names (not a secret), only admin/manager can see or change the
-    actual matrix."""
-    return {"pages": list(PAGE_KEYS)}
+    """The fixed list of governable pages (key + display label), for
+    the Access Control grid's column headers -- the single source of
+    truth is PAGE_KEY_LABELS in app/core/permissions.py; the frontend
+    has no hardcoded copy of this list. Any authenticated user can see
+    the list of page names (not a secret), only admin/manager can see
+    or change the actual matrix."""
+    return [{"key": key, "label": PAGE_KEY_LABELS[key]} for key in PAGE_KEYS]
 
 
 @router.get("/me")

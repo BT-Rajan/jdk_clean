@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, GlassCard, Spinner } from '@/components/ui'
-import { getPermissionMatrix, updatePermissionMatrix } from '@/api/permissions'
-import type { AccessLevel, Department, PermissionEntry } from '@/types/permission'
-import { PAGE_LABELS } from '@/lib/pagePermissions'
+import { getPermissionMatrix, listPermissionPages, updatePermissionMatrix } from '@/api/permissions'
+import type { AccessLevel, Department, PermissionEntry, PermissionPage } from '@/types/permission'
 import { getApiErrorMessage } from '@/lib/apiError'
 
 const DEPARTMENTS: { key: Department; label: string }[] = [
@@ -33,14 +32,18 @@ function toEntries(grid: Grid): PermissionEntry[] {
 
 export function AccessControlTab() {
   const [grid, setGrid] = useState<Grid | null>(null)
+  const [pages, setPages] = useState<PermissionPage[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
-    getPermissionMatrix()
-      .then((entries) => setGrid(toGrid(entries)))
+    Promise.all([getPermissionMatrix(), listPermissionPages()])
+      .then(([entries, pageList]) => {
+        setGrid(toGrid(entries))
+        setPages(pageList)
+      })
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
   }, [])
@@ -123,7 +126,7 @@ export function AccessControlTab() {
               </tr>
             </thead>
             <tbody>
-              {PAGE_LABELS.map(([pageKey, label]) => (
+              {pages.map(({ key: pageKey, label }) => (
                 <tr key={pageKey} className="border-b border-white/5">
                   <td className="py-3 pr-4 text-white/80">{label}</td>
                   {DEPARTMENTS.map((dept) => {

@@ -1,20 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
-import { Navigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, Spinner, TabPanel, Tabs, TextField } from '@/components/ui'
 import { getSettings, updateSettings } from '@/api/settings'
 import type { Settings } from '@/types/settings'
 import { getApiErrorMessage } from '@/lib/apiError'
-import { useAuth } from '@/hooks/useAuth'
-import { isAdmin } from '@/lib/roles'
 import { AccessControlTab } from './AccessControlTab'
 import { BomTab } from './BomTab'
 import { FactorySetupTab } from './FactorySetupTab'
 
 export function SettingsPage() {
-  const { user } = useAuth()
   const [loading, setLoading] = useState(true)
   const [formError, setFormError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -24,19 +20,13 @@ export function SettingsPage() {
   const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<Settings>()
 
   useEffect(() => {
-    if (!isAdmin(user?.role)) return
+    // Admin-only-ness of this whole page is enforced once, by
+    // AdminOnlyGuard at the route level -- nothing to check here.
     getSettings()
       .then(reset)
       .catch((err) => setFormError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
-  }, [reset, user?.role])
-
-  // This page itself is admin-only, same boundary as the backend enforces
-  // (see api/settings.py) -- redirect rather than show a permission error,
-  // since nothing here is relevant to any other role.
-  if (!isAdmin(user?.role)) {
-    return <Navigate to="/dashboard" replace />
-  }
+  }, [reset])
 
   async function onSubmit(values: Settings) {
     setFormError(null)

@@ -48,7 +48,33 @@ PAGE_KEYS = (
     "production",
 )
 
+# Single canonical label for each page_key -- the Access Control grid's
+# column headers come from this (via /api/permissions/pages), not a
+# second hardcoded copy on the frontend. Add a page here and the grid
+# picks it up with no frontend change needed.
+PAGE_KEY_LABELS: dict[str, str] = {
+    "dashboard": "Dashboard",
+    "customers": "Customers",
+    "suppliers": "Suppliers",
+    "raw_materials": "Raw Materials",
+    "products": "Products",
+    "inventory": "Inventory",
+    "mrp": "MRP",
+    "purchase_orders": "Purchase Orders",
+    "delivery_notes": "Delivery Notes",
+    "deals": "Deals",
+    "feasibilities": "Feasibilities",
+    "machines": "Machines",
+    "quotations": "Quotations",
+    "orders": "Orders",
+    "production": "Production",
+}
+
 _LEVEL_RANK = {"none": 0, "read": 1, "write": 2}
+
+assert set(PAGE_KEY_LABELS) == set(PAGE_KEYS), (
+    "PAGE_KEY_LABELS and PAGE_KEYS have drifted apart -- every page_key needs exactly one label."
+)
 
 
 def require_page_access(page_key: str, level: str = "read"):
