@@ -64,6 +64,13 @@ def adjust_stock(
         movement_type=payload.movement_type,
         notes=payload.notes,
         user_id=user.id,
+        supplier_id=payload.supplier_id,
+        unit_cost=payload.unit_cost,
+        batch_number=payload.batch_number,
+        expiry_date=payload.expiry_date,
+        invoice_number=payload.invoice_number,
+        received_by=payload.received_by,
+        received_date=payload.received_date,
     )
 
 

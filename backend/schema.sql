@@ -343,11 +343,25 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     quantity        DECIMAL(14,4) NOT NULL,           -- positive = in, negative = out
     reference_type  VARCHAR(40) NULL,                 -- e.g. 'order', 'production_schedule'
     reference_id    BIGINT UNSIGNED NULL,
+    -- The following are required by inventory_service.adjust_stock for
+    -- every raw_material 'receipt' movement (batch_number/expiry_date
+    -- excepted) -- captured so every unit of raw material on hand can be
+    -- traced back to who supplied it, at what cost, and when, without
+    -- gaps that would otherwise silently break supplier/cost analytics.
+    supplier_id     BIGINT UNSIGNED NULL,
+    unit_cost       DECIMAL(14,4) NULL,
+    batch_number    VARCHAR(60) NULL,
+    expiry_date     DATE NULL,
+    invoice_number  VARCHAR(60) NULL,
+    received_by     VARCHAR(120) NULL,
+    received_date   DATE NULL,
     notes           VARCHAR(255) NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
     INDEX idx_stock_mov_item (item_type, item_id),
-    INDEX idx_stock_mov_reference (reference_type, reference_id)
+    INDEX idx_stock_mov_reference (reference_type, reference_id),
+    INDEX idx_stock_mov_supplier (supplier_id),
+    CONSTRAINT fk_stock_mov_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================

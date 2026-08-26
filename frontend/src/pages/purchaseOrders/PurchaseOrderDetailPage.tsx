@@ -78,6 +78,10 @@ export function PurchaseOrderDetailPage() {
   const [adminReviewOpen, setAdminReviewOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
   const [receiveQuantities, setReceiveQuantities] = useState<Record<number, string>>({})
+  const [receiveLineDetails, setReceiveLineDetails] = useState<
+    Record<number, { unit_cost: string; batch_number: string; expiry_date: string }>
+  >({})
+  const [receiptMeta, setReceiptMeta] = useState({ invoice_number: '', received_by: '', received_date: '' })
 
   function defaultReceiveQuantities(data: PurchaseOrder): Record<number, string> {
     const defaults: Record<number, string> = {}
@@ -86,6 +90,13 @@ export function PurchaseOrderDetailPage() {
       defaults[line.id] = remaining > 0 ? String(remaining) : '0'
     }
     return defaults
+  }
+
+  function updateLineDetail(lineId: number, field: 'unit_cost' | 'batch_number' | 'expiry_date', value: string) {
+    setReceiveLineDetails((prev) => {
+      const current = prev[lineId] ?? { unit_cost: '', batch_number: '', expiry_date: '' }
+      return { ...prev, [lineId]: { ...current, [field]: value } }
+    })
   }
 
   function load() {
@@ -135,13 +146,26 @@ export function PurchaseOrderDetailPage() {
     setError(null)
     try {
       const lines = po.lines
-        .map((l) => ({ line_id: l.id, quantity: Number(receiveQuantities[l.id] ?? 0) }))
+        .map((l) => {
+          const detail = receiveLineDetails[l.id]
+          return {
+            line_id: l.id,
+            quantity: Number(receiveQuantities[l.id] ?? 0),
+            unit_cost: detail?.unit_cost ? Number(detail.unit_cost) : null,
+            batch_number: detail?.batch_number || null,
+            expiry_date: detail?.expiry_date || null,
+          }
+        })
         .filter((l) => l.quantity > 0)
       if (lines.length === 0) {
         setError('Enter a quantity for at least one line to receive.')
         return
       }
-      const updated = await receivePurchaseOrder(poId, lines)
+      if (!receiptMeta.invoice_number || !receiptMeta.received_by || !receiptMeta.received_date) {
+        setError('Invoice/delivery note number, received by, and date received are all required.')
+        return
+      }
+      const updated = await receivePurchaseOrder(poId, lines, receiptMeta)
       setPo(updated)
       // Re-derive from the just-returned PO, not the stale pre-receive
       // quantities still sitting in the inputs -- otherwise a line that
@@ -149,6 +173,8 @@ export function PurchaseOrderDetailPage() {
       // amount, and a second click on "Receive goods" would resubmit it,
       // double-counting stock for the same delivery.
       setReceiveQuantities(defaultReceiveQuantities(updated))
+      setReceiveLineDetails({})
+      setReceiptMeta({ invoice_number: '', received_by: '', received_date: '' })
       setNotice('Goods received and added to raw material stock.')
     } catch (err) {
       setError(getApiErrorMessage(err))
@@ -217,7 +243,11 @@ export function PurchaseOrderDetailPage() {
 
   const nextStatuses = PURCHASE_ORDER_TRANSITIONS[po.status]
   const canReceive = allowWrite && !justDeleted && (po.status === 'confirmed' || po.status === 'partially_received')
-  const hasPendingReceipt = po.lines.some((l) => Number(receiveQuantities[l.id] ?? 0) > 0)
+  const hasPendingReceipt =
+    po.lines.some((l) => Number(receiveQuantities[l.id] ?? 0) > 0) &&
+    !!receiptMeta.invoice_number &&
+    !!receiptMeta.received_by &&
+    !!receiptMeta.received_date
 
   return (
     <AppLayout>
@@ -326,6 +356,9 @@ export function PurchaseOrderDetailPage() {
                 <th className="px-6 py-4 font-medium">Line total</th>
                 <th className="px-6 py-4 font-medium">Received</th>
                 {canReceive && <th className="px-6 py-4 font-medium">Receive now</th>}
+                {canReceive && <th className="px-6 py-4 font-medium">Actual unit cost</th>}
+                {canReceive && <th className="px-6 py-4 font-medium">Batch/Lot</th>}
+                {canReceive && <th className="px-6 py-4 font-medium">Expiry</th>}
               </tr>
             </thead>
             <tbody>
@@ -360,6 +393,43 @@ export function PurchaseOrderDetailPage() {
                         )}
                       </td>
                     )}
+                    {canReceive && (
+                      <td className="px-6 py-4">
+                        <div className="w-28">
+                          <TextField
+                            label=""
+                            type="number"
+                            step="0.0001"
+                            placeholder={String(line.unit_price)}
+                            value={receiveLineDetails[line.id]?.unit_cost ?? ''}
+                            onChange={(e) => updateLineDetail(line.id, 'unit_cost', e.target.value)}
+                          />
+                        </div>
+                      </td>
+                    )}
+                    {canReceive && (
+                      <td className="px-6 py-4">
+                        <div className="w-28">
+                          <TextField
+                            label=""
+                            value={receiveLineDetails[line.id]?.batch_number ?? ''}
+                            onChange={(e) => updateLineDetail(line.id, 'batch_number', e.target.value)}
+                          />
+                        </div>
+                      </td>
+                    )}
+                    {canReceive && (
+                      <td className="px-6 py-4">
+                        <div className="w-36">
+                          <TextField
+                            label=""
+                            type="date"
+                            value={receiveLineDetails[line.id]?.expiry_date ?? ''}
+                            onChange={(e) => updateLineDetail(line.id, 'expiry_date', e.target.value)}
+                          />
+                        </div>
+                      </td>
+                    )}
                   </tr>
                 )
               })}
@@ -367,8 +437,31 @@ export function PurchaseOrderDetailPage() {
           </table>
         </div>
         {canReceive && (
-          <div className="flex justify-end border-t border-white/10 px-6 py-4">
-            <Button isLoading={busy} disabled={!hasPendingReceipt} onClick={handleReceive}>Receive goods</Button>
+          <div className="border-t border-white/10 px-6 py-4">
+            <p className="mb-3 text-xs font-medium tracking-wide text-white/40 uppercase">
+              This delivery — applies to every line received above
+            </p>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <TextField
+                label="Invoice / delivery note number"
+                value={receiptMeta.invoice_number}
+                onChange={(e) => setReceiptMeta((prev) => ({ ...prev, invoice_number: e.target.value }))}
+              />
+              <TextField
+                label="Received by"
+                value={receiptMeta.received_by}
+                onChange={(e) => setReceiptMeta((prev) => ({ ...prev, received_by: e.target.value }))}
+              />
+              <TextField
+                label="Date received"
+                type="date"
+                value={receiptMeta.received_date}
+                onChange={(e) => setReceiptMeta((prev) => ({ ...prev, received_date: e.target.value }))}
+              />
+            </div>
+            <div className="mt-4 flex justify-end">
+              <Button isLoading={busy} disabled={!hasPendingReceipt} onClick={handleReceive}>Receive goods</Button>
+            </div>
           </div>
         )}
       </GlassCard>

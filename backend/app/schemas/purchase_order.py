@@ -76,10 +76,20 @@ class PurchaseOrderAdminReview(BaseModel):
 class ReceiveLine(BaseModel):
     line_id: int
     quantity: float = Field(gt=0)
+    # Defaults to the PO line's own unit_price if not given -- override
+    # when the actual invoiced cost differs from what was ordered.
+    unit_cost: float | None = Field(default=None, ge=0)
+    batch_number: str | None = None
+    expiry_date: date | None = None
 
 
 class ReceivePurchaseOrder(BaseModel):
     lines: list[ReceiveLine] = Field(min_length=1)
+    # Describe the delivery this call represents as a whole -- one
+    # invoice/DC, one receiver, one date, shared across every line above.
+    invoice_number: str
+    received_by: str
+    received_date: date | None = None
 
 
 class PurchaseOrderOut(BaseModel):

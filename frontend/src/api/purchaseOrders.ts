@@ -54,11 +54,23 @@ export async function adminReviewPurchaseOrder(id: number, notes: string): Promi
   return data
 }
 
+export interface ReceiveLineInput {
+  line_id: number
+  quantity: number
+  unit_cost?: number | null
+  batch_number?: string | null
+  expiry_date?: string | null
+}
+
 export async function receivePurchaseOrder(
   id: number,
-  lines: { line_id: number; quantity: number }[],
+  lines: ReceiveLineInput[],
+  receipt: { invoice_number: string; received_by: string; received_date?: string | null },
 ): Promise<PurchaseOrder> {
-  const { data } = await apiClient.post<PurchaseOrder>(`/api/purchase-orders/${id}/receive`, { lines })
+  const { data } = await apiClient.post<PurchaseOrder>(`/api/purchase-orders/${id}/receive`, {
+    lines,
+    ...receipt,
+  })
   return data
 }
 

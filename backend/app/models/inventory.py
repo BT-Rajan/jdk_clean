@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import date, datetime
 
-from sqlalchemy import DECIMAL, BigInteger, DateTime, Enum, ForeignKey, String
+from sqlalchemy import DATE, DECIMAL, BigInteger, DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -54,6 +54,17 @@ class StockMovement(Base):
     quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False)
     reference_type: Mapped[str | None] = mapped_column(String(40), nullable=True)
     reference_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # Required by inventory_service.adjust_stock for every raw_material
+    # 'receipt' movement (batch_number/expiry_date excepted) -- see that
+    # function's docstring. Nullable at the DB level since they're
+    # meaningless for issues/adjustments/production movements.
+    supplier_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("suppliers.id"), nullable=True)
+    unit_cost: Mapped[float | None] = mapped_column(DECIMAL(14, 4), nullable=True)
+    batch_number: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    expiry_date: Mapped[date | None] = mapped_column(DATE, nullable=True)
+    invoice_number: Mapped[str | None] = mapped_column(String(60), nullable=True)
+    received_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    received_date: Mapped[date | None] = mapped_column(DATE, nullable=True)
     notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)

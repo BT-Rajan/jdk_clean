@@ -163,7 +163,15 @@ def receive_purchase_order(
     user: User = Depends(write_guard),
 ):
     receipts = [line.model_dump() for line in payload.lines]
-    po = purchase_order_service.receive_lines(db, po_id, receipts, user_id=user.id)
+    po = purchase_order_service.receive_lines(
+        db,
+        po_id,
+        receipts,
+        user_id=user.id,
+        invoice_number=payload.invoice_number,
+        received_by=payload.received_by,
+        received_date=payload.received_date,
+    )
     return PurchaseOrderOut.from_model(po)
 
 

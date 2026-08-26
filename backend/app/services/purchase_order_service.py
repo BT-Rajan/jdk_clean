@@ -339,7 +339,13 @@ def approve_purchase_order(db: Session, po_id: int, user_id: int | None = None) 
 
 
 def receive_lines(
-    db: Session, po_id: int, receipts: list[dict], user_id: int | None = None
+    db: Session,
+    po_id: int,
+    receipts: list[dict],
+    user_id: int | None = None,
+    invoice_number: str | None = None,
+    received_by: str | None = None,
+    received_date=None,
 ) -> PurchaseOrder:
     """Records goods received against one or more lines -- possibly
     partial, possibly spread across several calls as deliveries arrive
@@ -347,6 +353,15 @@ def receive_lines(
     line's received_quantity; the PO's overall status is recomputed from
     the lines afterward rather than being something the caller sets
     directly.
+
+    inventory_service.adjust_stock requires supplier, cost, invoice
+    number, receiver, and date on every raw-material receipt -- supplier
+    and (unless overridden per line) unit cost come from the PO itself,
+    since that's already known; invoice_number/received_by/received_date
+    describe the physical delivery this call represents and are shared
+    across every line in it (one delivery, one invoice, one receiver, one
+    date), same as a paper goods-received note would record once per
+    delivery rather than once per line item.
     """
     po = get_purchase_order(db, po_id)
     if po.status not in ("confirmed", "partially_received"):
@@ -354,6 +369,9 @@ def receive_lines(
             f"Cannot receive goods against a purchase order in '{po.status}' status; "
             "it must be confirmed first."
         )
+    if not invoice_number or not received_by:
+        raise ValidationAppError("invoice_number and received_by are required to receive goods.")
+    received_date = received_date or date.today()
 
     lines_by_id = {line.id: line for line in po.lines}
 
@@ -385,6 +403,13 @@ def receive_lines(
             reference_id=po.id,
             notes=f"Received against {po.po_number}",
             user_id=user_id,
+            supplier_id=po.supplier_id,
+            unit_cost=receipt.get("unit_cost") if receipt.get("unit_cost") is not None else float(line.unit_price),
+            batch_number=receipt.get("batch_number"),
+            expiry_date=receipt.get("expiry_date"),
+            invoice_number=invoice_number,
+            received_by=received_by,
+            received_date=received_date,
         )
         line.received_quantity = float(line.received_quantity) + qty
 

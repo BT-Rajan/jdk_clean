@@ -17,6 +17,15 @@ export interface StockAdjustPayload {
   quantity: number
   movement_type: MovementType
   notes?: string | null
+  // Required by the backend whenever item_type is 'raw_material' and
+  // movement_type is 'receipt' -- see backend/app/schemas/inventory.py.
+  supplier_id?: number | null
+  unit_cost?: number | null
+  batch_number?: string | null
+  expiry_date?: string | null
+  invoice_number?: string | null
+  received_by?: string | null
+  received_date?: string | null
 }
 
 export interface LowStockItem {
@@ -48,6 +57,13 @@ export interface StockMovement {
   quantity: number
   reference_type: string | null
   reference_id: number | null
+  supplier_id: number | null
+  unit_cost: number | null
+  batch_number: string | null
+  expiry_date: string | null
+  invoice_number: string | null
+  received_by: string | null
+  received_date: string | null
   notes: string | null
   created_at: string
   created_by: number | null

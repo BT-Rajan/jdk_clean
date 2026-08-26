@@ -63,16 +63,53 @@ def adjust_stock(
     reference_id: int | None = None,
     notes: str | None = None,
     user_id: int | None = None,
+    supplier_id: int | None = None,
+    unit_cost: float | None = None,
+    batch_number: str | None = None,
+    expiry_date=None,
+    invoice_number: str | None = None,
+    received_by: str | None = None,
+    received_date=None,
 ) -> dict:
     """Apply a signed quantity delta to on-hand stock and record the movement.
 
     quantity > 0 means stock coming in, quantity < 0 means stock going out.
     Refuses to let on-hand stock go negative.
+
+    Every raw material physically arriving at the factory must be
+    traceable to a supplier, a cost, an invoice/delivery note, who
+    received it, and when -- so item_type == 'raw_material' and
+    movement_type == 'receipt' requires supplier_id, unit_cost,
+    invoice_number, received_by, and received_date. batch_number and
+    expiry_date stay optional, since not every raw material is batch or
+    expiry tracked. This applies uniformly whether the receipt is logged
+    against a purchase order (purchase_order_service.receive_lines fills
+    most of these in automatically from the PO) or ad hoc with no PO at
+    all (the /inventory/adjust form) -- there's no path for raw material
+    stock to increase without this detail attached.
     """
     if item_type not in _INVENTORY_MODEL:
         raise ValidationAppError("item_type must be 'product' or 'raw_material'.")
     if quantity == 0:
         raise ValidationAppError("Quantity must not be zero.")
+
+    if item_type == "raw_material" and movement_type == "receipt":
+        missing = [
+            name
+            for name, value in (
+                ("supplier_id", supplier_id),
+                ("unit_cost", unit_cost),
+                ("invoice_number", invoice_number),
+                ("received_by", received_by),
+                ("received_date", received_date),
+            )
+            if value is None
+        ]
+        if missing:
+            raise ValidationAppError(
+                "Receiving raw material requires " + ", ".join(missing) + " -- "
+                "missing detail here would leave supplier and cost analytics with gaps."
+            )
 
     row = _get_or_create_inventory_row(db, item_type, item_id, for_update=True)
 
@@ -91,6 +128,13 @@ def adjust_stock(
             quantity=quantity,
             reference_type=reference_type,
             reference_id=reference_id,
+            supplier_id=supplier_id,
+            unit_cost=unit_cost,
+            batch_number=batch_number,
+            expiry_date=expiry_date,
+            invoice_number=invoice_number,
+            received_by=received_by,
+            received_date=received_date,
             notes=notes,
             created_by=user_id,
         )
