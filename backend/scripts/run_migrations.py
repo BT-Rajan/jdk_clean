@@ -11,6 +11,11 @@ been run against a given database, or hunt through chat history for
 individual files to run one at a time; if you're not sure what state
 your database is in, just run this.
 
+The actual apply logic lives in app.core.migrations, shared with the
+app's own startup lifespan (see app/main.py) so a fresh deploy applies
+its own new migrations automatically -- this script remains for
+running them by hand (e.g. ahead of a deploy, or to inspect output).
+
 Usage:
     cd backend
     source venv/bin/activate      (or venv\\Scripts\\activate on Windows)
@@ -29,28 +34,8 @@ from pathlib import Path
 # dir without needing the package installed.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from sqlalchemy import text  # noqa: E402
-
 from app.core.database import engine  # noqa: E402
-
-MIGRATIONS_DIR = Path(__file__).resolve().parent.parent / "migrations"
-
-
-def split_statements(sql: str) -> list[str]:
-    """Splits a .sql file into individual statements on top-level
-    semicolons. Comments are stripped *before* splitting, not after --
-    splitting first would treat a semicolon used as ordinary English
-    punctuation inside a '--' comment (e.g. '-- is computed; every
-    document...') as a statement separator, corrupting the following
-    statement with leftover comment text. Good enough for this
-    project's migrations specifically -- every one is written in the
-    same plain style with no semicolons embedded inside actual SQL
-    string literals -- even though this wouldn't be safe for arbitrary
-    SQL in general.
-    """
-    lines = [ln for ln in sql.splitlines() if not ln.strip().startswith("--")]
-    without_comments = "\n".join(lines)
-    return [stmt.strip() for stmt in without_comments.split(";") if stmt.strip()]
+from app.core.migrations import MIGRATIONS_DIR, apply_all  # noqa: E402
 
 
 def main() -> None:
@@ -59,36 +44,24 @@ def main() -> None:
         print("[info] No migration files found in", MIGRATIONS_DIR)
         return
 
-    applied = 0
-    with engine.connect() as conn:
-        for path in files:
-            print(f"==> {path.name}")
-            statements = split_statements(path.read_text())
-            trans = conn.begin()
-            try:
-                for stmt in statements:
-                    result = conn.execute(text(stmt))
-                    # The guarded migrations emit a 'SELECT ... AS status'
-                    # informational row when a change is skipped because
-                    # it's already applied -- surface that instead of
-                    # silently discarding it.
-                    if stmt.strip().upper().startswith("SELECT"):
-                        try:
-                            row = result.fetchone()
-                            if row:
-                                print(f"    {row[0]}")
-                        except Exception:
-                            pass
-                trans.commit()
-                applied += 1
-            except Exception as exc:
-                trans.rollback()
-                print(f"[fail] {path.name}: {exc}")
-                print(
-                    "       Stopping here -- fix the issue above and re-run. "
-                    "Files applied before this one are unaffected and won't be reapplied."
-                )
-                sys.exit(1)
+    last_file = {"name": None}
+
+    def on_file(name: str) -> None:
+        last_file["name"] = name
+        print(f"==> {name}")
+
+    def on_notice(message: str) -> None:
+        print(f"    {message}")
+
+    try:
+        applied = apply_all(engine, on_file=on_file, on_notice=on_notice)
+    except Exception as exc:
+        print(f"[fail] {last_file['name']}: {exc}")
+        print(
+            "       Stopping here -- fix the issue above and re-run. "
+            "Files applied before this one are unaffected and won't be reapplied."
+        )
+        sys.exit(1)
 
     print(f"[ok]   Applied {applied}/{len(files)} migration file(s).")
 

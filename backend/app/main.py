@@ -39,7 +39,27 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import logging
+
     from app.core import scheduler
+    from app.core.database import engine
+    from app.core.migrations import apply_all
+
+    # Applies any not-yet-run backend/migrations/*.sql before serving a
+    # single request. Every migration here is idempotent, so this is a
+    # no-op once a database is up to date -- but it closes the gap where
+    # new code (referencing a new column/table) gets deployed ahead of
+    # someone remembering to run scripts/run_migrations.py by hand,
+    # which otherwise surfaces as a confusing 500 on whichever endpoint
+    # happens to touch the missing column first, instead of failing
+    # loudly at start-up where it's obvious what's wrong.
+    migration_logger = logging.getLogger("app.startup.migrations")
+    migration_logger.info("Checking for pending database migrations...")
+    apply_all(
+        engine,
+        on_file=lambda name: migration_logger.info("Applying migration: %s", name),
+        on_notice=lambda message: migration_logger.info("%s", message),
+    )
 
     task = scheduler.start()
     try:
