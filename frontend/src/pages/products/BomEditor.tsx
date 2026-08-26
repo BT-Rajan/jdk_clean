@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Alert, Button, GlassCard, SelectField, Spinner, TextField } from '@/components/ui'
 import { addBomLine, deleteBomLine, explodeBom, getBom, replaceBom } from '@/api/bom'
 import { listProducts } from '@/api/products'
@@ -83,6 +83,40 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
 
   function componentOptions(type: ComponentType) {
     return type === 'raw_material' ? rawMaterials : products
+  }
+
+  // Every raw material/product carries its own `unit` (the one it's
+  // stocked/produced in) -- keyed by code here so a BOM line's dropdown
+  // can be narrowed to units in the same category as whatever component
+  // is currently selected on that line, instead of the full list. This
+  // is what stops someone picking e.g. a piece-count unit for a
+  // weight-tracked material in the UI, on top of the same check the
+  // backend already enforces on save (see bom_service._validate_unit).
+  const unitsByCode = useMemo(() => Object.fromEntries(units.map((u) => [u.code, u])), [units])
+
+  function compatibleUnits(type: ComponentType, componentId: number) {
+    if (!componentId) return units
+    const component = componentOptions(type).find((opt) => opt.id === componentId)
+    const componentUnit = component ? unitsByCode[component.unit] : undefined
+    // Unrecognized/legacy component unit -- nothing to narrow against,
+    // same fallback the backend uses (bom_service._validate_unit).
+    return componentUnit ? units.filter((u) => u.category === componentUnit.category) : units
+  }
+
+  /** Component's own unit is the correct default for a new line -- the
+   * user can still change it (e.g. entering "ton" against a
+   * kg-tracked material), but starting from the material's own unit
+   * means zero conversion ambiguity unless they deliberately choose
+   * otherwise. Only defaults to it when that unit is itself a
+   * recognized code, though -- a legacy material whose `unit` predates
+   * units_of_measure would otherwise get defaulted to a value the
+   * backend rejects on save (bom_service._validate_unit requires a
+   * recognized code unconditionally); leaving it blank forces an
+   * explicit, valid pick instead. */
+  function defaultUnitFor(type: ComponentType, componentId: number): string {
+    const component = componentOptions(type).find((opt) => opt.id === componentId)
+    if (!component) return ''
+    return unitsByCode[component.unit] ? component.unit : ''
   }
 
   function updateLine(key: string, patch: Partial<EditableLine>) {
@@ -201,9 +235,11 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
           <h2 className="font-display text-lg font-medium text-white">Bill of materials</h2>
         </div>
         <p className="mb-4 text-xs text-white/40">
-          Quantities convert automatically between compatible units (e.g. a line in "bag" against a material
-          tracked in "kg") using the factors set under Settings → Bill of materials → Units of measure. Saving a
-          line in an incompatible unit for its material (e.g. weight against a piece-count material) is rejected.
+          Picking a component defaults its Unit to whatever that material/product is stocked in, and the Unit
+          dropdown only offers units compatible with it (e.g. only weight units for a kg-tracked material) — so a
+          category mismatch (weight vs. piece-count) can't be selected here in the first place. Quantities then
+          convert automatically between compatible units (e.g. "bag" against a material tracked in "kg") using the
+          factors set under Settings → Bill of materials → Units of measure.
         </p>
 
         {lines.length === 0 ? (
@@ -218,7 +254,11 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                     value={line.component_type}
                     disabled={!canEdit}
                     onChange={(e) =>
-                      updateLine(line.key, { component_type: e.target.value as ComponentType, component_id: 0 })
+                      updateLine(line.key, {
+                        component_type: e.target.value as ComponentType,
+                        component_id: 0,
+                        unit: '',
+                      })
                     }
                   >
                     <option value="raw_material">Raw material</option>
@@ -230,7 +270,13 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                     label="Component"
                     value={line.component_id || ''}
                     disabled={!canEdit}
-                    onChange={(e) => updateLine(line.key, { component_id: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const componentId = Number(e.target.value)
+                      updateLine(line.key, {
+                        component_id: componentId,
+                        unit: defaultUnitFor(line.component_type, componentId),
+                      })
+                    }}
                   >
                     <option value="">Choose…</option>
                     {componentOptions(line.component_type).map((opt) => (
@@ -258,7 +304,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                     onChange={(e) => updateLine(line.key, { unit: e.target.value })}
                   >
                     <option value="">Choose…</option>
-                    {units.map((u) => (
+                    {compatibleUnits(line.component_type, line.component_id).map((u) => (
                       <option key={u.id} value={u.code}>
                         {u.name} ({u.code})
                       </option>
@@ -301,7 +347,12 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                   label="Type"
                   value={newLine.component_type}
                   onChange={(e) =>
-                    setNewLine((prev) => ({ ...prev, component_type: e.target.value as ComponentType, component_id: 0 }))
+                    setNewLine((prev) => ({
+                      ...prev,
+                      component_type: e.target.value as ComponentType,
+                      component_id: 0,
+                      unit: '',
+                    }))
                   }
                 >
                   <option value="raw_material">Raw material</option>
@@ -312,7 +363,14 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                 <SelectField
                   label="Component"
                   value={newLine.component_id || ''}
-                  onChange={(e) => setNewLine((prev) => ({ ...prev, component_id: Number(e.target.value) }))}
+                  onChange={(e) => {
+                    const componentId = Number(e.target.value)
+                    setNewLine((prev) => ({
+                      ...prev,
+                      component_id: componentId,
+                      unit: defaultUnitFor(prev.component_type, componentId),
+                    }))
+                  }}
                 >
                   <option value="">Choose…</option>
                   {componentOptions(newLine.component_type).map((opt) => (
@@ -338,7 +396,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                   onChange={(e) => setNewLine((prev) => ({ ...prev, unit: e.target.value }))}
                 >
                   <option value="">Choose…</option>
-                  {units.map((u) => (
+                  {compatibleUnits(newLine.component_type, newLine.component_id).map((u) => (
                     <option key={u.id} value={u.code}>
                       {u.name} ({u.code})
                     </option>
