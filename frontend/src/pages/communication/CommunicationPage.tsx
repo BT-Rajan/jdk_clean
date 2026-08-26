@@ -7,6 +7,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
 import { ComingSoonTab } from './ComingSoonTab'
 import { EmailTab } from './EmailTab'
+import { SmsTab } from './SmsTab'
 
 export function CommunicationPage() {
   const { user } = useAuth()
@@ -39,7 +40,7 @@ export function CommunicationPage() {
 
         {activeTab === 'email' && <EmailTab />}
         {activeTab === 'whatsapp' && <ComingSoonTab channel="WhatsApp" />}
-        {activeTab === 'sms' && <ComingSoonTab channel="SMS" />}
+        {activeTab === 'sms' && <SmsTab />}
       </PageContainer>
     </AppLayout>
   )

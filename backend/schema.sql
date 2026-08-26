@@ -810,6 +810,32 @@ CREATE TABLE IF NOT EXISTS email_accounts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- COMMUNICATION MODULE: SMS channel
+-- One admin-configured bulk SMS account -- a Kuwait gateway operator
+-- (kwtSMS, Unifonic, SMSala) or a custom HTTP endpoint. API secret
+-- stored encrypted -- see app/core/crypto.py.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS sms_accounts (
+    id                      BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    provider                VARCHAR(20) NOT NULL DEFAULT 'kwtsms',
+    sender_id               VARCHAR(20) NOT NULL DEFAULT '',
+    api_url                 VARCHAR(255) NOT NULL DEFAULT 'https://www.kwtsms.com/API/send/',
+    api_username            VARCHAR(255) NOT NULL DEFAULT '',
+    api_password_encrypted  TEXT NULL,
+    test_mode               TINYINT(1) NOT NULL DEFAULT 1,
+    is_active               TINYINT(1) NOT NULL DEFAULT 0,
+    last_tested_at          DATETIME NULL,
+    last_test_ok            TINYINT(1) NULL,
+    last_test_error         VARCHAR(500) NULL,
+    created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by              BIGINT UNSIGNED NULL,
+    updated_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by              BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_sms_account_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT fk_sms_account_updated_by FOREIGN KEY (updated_by) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
 -- SEED
 -- ============================================================
 INSERT IGNORE INTO number_series (doc_type, prefix, next_number, padding) VALUES
