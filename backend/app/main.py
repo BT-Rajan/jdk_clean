@@ -7,6 +7,7 @@ from app.api.assistant import router as assistant_router
 from app.api.auth import router as auth_router
 from app.api.bom import router as bom_router
 from app.api.calendar import router as calendar_router
+from app.api.communication import router as communication_router
 from app.api.customers import router as customers_router
 from app.api.dashboard import router as dashboard_router
 from app.api.deals import router as deals_router
@@ -80,6 +81,7 @@ app.include_router(inventory_router)
 app.include_router(mrp_router)
 app.include_router(notifications_router)
 app.include_router(calendar_router)
+app.include_router(communication_router)
 app.include_router(feasibility_router)
 app.include_router(quotations_router)
 app.include_router(orders_router)

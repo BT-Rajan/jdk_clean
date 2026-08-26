@@ -142,6 +142,9 @@ const UsersListPage = lazy(() =>
 const SettingsPage = lazy(() =>
   import('@/pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
 )
+const CommunicationPage = lazy(() =>
+  import('@/pages/communication/CommunicationPage').then((m) => ({ default: m.CommunicationPage })),
+)
 const UserFormPage = lazy(() =>
   import('@/pages/users/UserFormPage').then((m) => ({ default: m.UserFormPage })),
 )
@@ -225,6 +228,7 @@ export function App() {
 
             <Route path="/users" element={<UsersListPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/communication" element={<CommunicationPage />} />
             <Route path="/users/new" element={<UserFormPage />} />
             <Route path="/users/:id" element={<UserDetailPage />} />
             <Route path="/users/:id/edit" element={<UserFormPage />} />

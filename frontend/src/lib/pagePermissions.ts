@@ -51,7 +51,7 @@ const PATH_PREFIX_TO_PAGE_KEY: [string, string][] = [
 /** Pages never governed by the department matrix -- always accessible
  * (profile) or always admin/manager-only regardless of it (users,
  * settings, including this matrix's own editor). */
-const UNGOVERNED_PATHS = ['/profile', '/change-password', '/users', '/settings']
+const UNGOVERNED_PATHS = ['/profile', '/change-password', '/users', '/settings', '/communication']
 
 export function getPageKeyForPath(pathname: string): string | null {
   if (UNGOVERNED_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {

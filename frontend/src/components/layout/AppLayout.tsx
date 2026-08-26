@@ -131,6 +131,7 @@ export function AppLayout({ children }: AppLayoutProps) {
             label: 'Admin',
             items: [
               { to: '/settings', label: 'Settings' },
+              { to: '/communication', label: 'Communication' },
             ],
           } satisfies NavGroup,
         ]
