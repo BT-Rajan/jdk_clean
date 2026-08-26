@@ -6,7 +6,14 @@ from app.core.database import get_db
 from app.models.user import User
 from app.schemas.email_account import EmailAccountOut, EmailAccountTestResult, EmailAccountUpdate
 from app.schemas.sms_account import SmsAccountOut, SmsAccountUpdate, SmsTestRequest, SmsTestResult
-from app.services import email_account_service, sms_account_service
+from app.schemas.whatsapp_account import (
+    WhatsAppAccountOut,
+    WhatsAppAccountUpdate,
+    WhatsAppSendTemplateRequest,
+    WhatsAppTemplate,
+    WhatsAppTestResult,
+)
+from app.services import email_account_service, sms_account_service, whatsapp_account_service
 
 router = APIRouter(prefix="/api/communication", tags=["communication"])
 admin_only = require_role("admin")
@@ -75,3 +82,51 @@ def test_sms_account(
     _: User = Depends(admin_only),
 ):
     return sms_account_service.test_connection(db, payload.phone_number)
+
+
+@router.get("/whatsapp", response_model=WhatsAppAccountOut)
+def get_whatsapp_account(
+    db: Session = Depends(get_db),
+    _: User = Depends(admin_only),
+):
+    return whatsapp_account_service.get(db)
+
+
+@router.put("/whatsapp", response_model=WhatsAppAccountOut)
+def update_whatsapp_account(
+    payload: WhatsAppAccountUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_only),
+):
+    return whatsapp_account_service.update(db, payload.model_dump(), user.id)
+
+
+@router.post("/whatsapp/test", response_model=WhatsAppTestResult)
+def test_whatsapp_account(
+    db: Session = Depends(get_db),
+    _: User = Depends(admin_only),
+):
+    """Read-only credential check against Meta -- no message is sent."""
+    return whatsapp_account_service.test_connection(db)
+
+
+@router.get("/whatsapp/templates", response_model=list[WhatsAppTemplate])
+def get_whatsapp_templates(
+    db: Session = Depends(get_db),
+    _: User = Depends(admin_only),
+):
+    """Live APPROVED templates from Meta -- this is the only source of
+    template names/languages the frontend ever offers; nothing is
+    hand-typed, so only what Meta has actually approved can be sent."""
+    return whatsapp_account_service.list_templates(db)
+
+
+@router.post("/whatsapp/send-test", response_model=WhatsAppTestResult)
+def send_whatsapp_test(
+    payload: WhatsAppSendTemplateRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(admin_only),
+):
+    return whatsapp_account_service.send_template(
+        db, payload.to, payload.template_name, payload.language, payload.body_params,
+    )

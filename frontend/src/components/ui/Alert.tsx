@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { cn } from '@/lib/cn'
 
-type AlertVariant = 'error' | 'success'
+type AlertVariant = 'error' | 'success' | 'info'
 
 interface AlertProps {
   variant?: AlertVariant
@@ -11,6 +11,7 @@ interface AlertProps {
 const variantStyles: Record<AlertVariant, string> = {
   error: 'border-red-400/30 bg-red-500/10 text-red-200',
   success: 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200',
+  info: 'border-sky-400/30 bg-sky-500/10 text-sky-200',
 }
 
 /** Renders nothing when `children` is falsy, so callers can pass

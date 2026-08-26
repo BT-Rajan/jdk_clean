@@ -892,6 +892,33 @@ CREATE TABLE IF NOT EXISTS sms_accounts (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- COMMUNICATION MODULE: WhatsApp channel
+-- One admin-configured Meta WhatsApp Business Cloud API sender.
+-- Template-only by design -- see migrations/2026-08-26_add_whatsapp_accounts.sql
+-- for the full rationale. Access token stored encrypted -- see
+-- app/core/crypto.py.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS whatsapp_accounts (
+    id                      BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    phone_number_id         VARCHAR(64) NOT NULL DEFAULT '',
+    waba_id                 VARCHAR(64) NOT NULL DEFAULT '',
+    display_phone_number    VARCHAR(32) NOT NULL DEFAULT '',
+    verified_name           VARCHAR(255) NOT NULL DEFAULT '',
+    access_token_encrypted  TEXT NULL,
+    api_version             VARCHAR(10) NOT NULL DEFAULT 'v21.0',
+    is_active               TINYINT(1) NOT NULL DEFAULT 0,
+    last_tested_at          DATETIME NULL,
+    last_test_ok            TINYINT(1) NULL,
+    last_test_error         VARCHAR(500) NULL,
+    created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by              BIGINT UNSIGNED NULL,
+    updated_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by              BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_whatsapp_account_created_by FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT fk_whatsapp_account_updated_by FOREIGN KEY (updated_by) REFERENCES users(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
 -- SEED
 -- ============================================================
 INSERT IGNORE INTO number_series (doc_type, prefix, next_number, padding) VALUES

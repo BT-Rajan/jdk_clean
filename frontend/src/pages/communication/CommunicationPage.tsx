@@ -5,9 +5,9 @@ import { PageContainer } from '@/components/layout/PageContainer'
 import { Tabs } from '@/components/ui'
 import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
-import { ComingSoonTab } from './ComingSoonTab'
 import { EmailTab } from './EmailTab'
 import { SmsTab } from './SmsTab'
+import { WhatsAppTab } from './WhatsAppTab'
 
 export function CommunicationPage() {
   const { user } = useAuth()
@@ -39,7 +39,7 @@ export function CommunicationPage() {
         />
 
         {activeTab === 'email' && <EmailTab />}
-        {activeTab === 'whatsapp' && <ComingSoonTab channel="WhatsApp" />}
+        {activeTab === 'whatsapp' && <WhatsAppTab />}
         {activeTab === 'sms' && <SmsTab />}
       </PageContainer>
     </AppLayout>

@@ -10,6 +10,12 @@ import type {
   SmsProviderPresets,
   SmsTestResult,
 } from '@/types/smsAccount'
+import type {
+  WhatsAppAccount,
+  WhatsAppAccountFormValues,
+  WhatsAppTemplate,
+  WhatsAppTestResult,
+} from '@/types/whatsappAccount'
 import { apiClient } from './client'
 
 export async function getEmailProviders(): Promise<EmailProviderPresets> {
@@ -51,5 +57,35 @@ export async function testSmsAccount(phoneNumber: string): Promise<SmsTestResult
   const { data } = await apiClient.post<SmsTestResult>('/api/communication/sms/test', {
     phone_number: phoneNumber,
   })
+  return data
+}
+
+export async function getWhatsAppAccount(): Promise<WhatsAppAccount> {
+  const { data } = await apiClient.get<WhatsAppAccount>('/api/communication/whatsapp')
+  return data
+}
+
+export async function updateWhatsAppAccount(payload: WhatsAppAccountFormValues): Promise<WhatsAppAccount> {
+  const { data } = await apiClient.put<WhatsAppAccount>('/api/communication/whatsapp', payload)
+  return data
+}
+
+export async function testWhatsAppAccount(): Promise<WhatsAppTestResult> {
+  const { data } = await apiClient.post<WhatsAppTestResult>('/api/communication/whatsapp/test')
+  return data
+}
+
+export async function getWhatsAppTemplates(): Promise<WhatsAppTemplate[]> {
+  const { data } = await apiClient.get<WhatsAppTemplate[]>('/api/communication/whatsapp/templates')
+  return data
+}
+
+export async function sendWhatsAppTestTemplate(payload: {
+  to: string
+  template_name: string
+  language: string
+  body_params: string[]
+}): Promise<WhatsAppTestResult> {
+  const { data } = await apiClient.post<WhatsAppTestResult>('/api/communication/whatsapp/send-test', payload)
   return data
 }
