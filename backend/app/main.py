@@ -28,6 +28,7 @@ from app.api.raw_materials import router as raw_materials_router
 from app.api.settings import router as settings_router
 from app.api.suppliers import router as suppliers_router
 from app.api.supplier_materials import router as supplier_materials_router
+from app.api.units import router as units_router
 from app.api.users import router as users_router
 from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
@@ -90,6 +91,7 @@ app.include_router(production_schedules_router)
 app.include_router(purchase_orders_router)
 app.include_router(bom_router)
 app.include_router(packaging_router)
+app.include_router(units_router)
 
 
 @app.get("/api/health")

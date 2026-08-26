@@ -10,6 +10,7 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
 import { AccessControlTab } from './AccessControlTab'
+import { BomTab } from './BomTab'
 import { FactorySetupTab } from './FactorySetupTab'
 
 export function SettingsPage() {
@@ -17,7 +18,7 @@ export function SettingsPage() {
   const [loading, setLoading] = useState(true)
   const [formError, setFormError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'general' | 'factory-setup' | 'access-control'>('general')
+  const [activeTab, setActiveTab] = useState<'general' | 'factory-setup' | 'access-control' | 'bom'>('general')
   const [activeGeneralTab, setActiveGeneralTab] = useState<'company' | 'automation' | 'approvals' | 'ai'>('company')
 
   const { register, handleSubmit, reset, formState: { isSubmitting } } = useForm<Settings>()
@@ -64,6 +65,7 @@ export function SettingsPage() {
           items={[
             { id: 'general', label: 'General' },
             { id: 'factory-setup', label: 'Factory setup' },
+            { id: 'bom', label: 'Bill of Materials' },
             { id: 'access-control', label: 'Access Control' },
           ]}
         />
@@ -75,6 +77,10 @@ export function SettingsPage() {
         ) : activeTab === 'factory-setup' ? (
           <div className="mt-8">
             <FactorySetupTab />
+          </div>
+        ) : activeTab === 'bom' ? (
+          <div className="mt-8">
+            <BomTab />
           </div>
         ) : loading ? (
           <div className="flex justify-center py-16">

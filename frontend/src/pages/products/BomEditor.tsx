@@ -3,6 +3,7 @@ import { Alert, Button, GlassCard, SelectField, Spinner, TextField } from '@/com
 import { addBomLine, deleteBomLine, explodeBom, getBom, replaceBom } from '@/api/bom'
 import { listProducts } from '@/api/products'
 import { listRawMaterials } from '@/api/rawMaterials'
+import { listUnits } from '@/api/units'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
@@ -48,8 +49,10 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
     [],
   )
   const productsFetcher = useCallback(() => listProducts({ page: 1, page_size: 200, status: 'active' }), [])
+  const unitsFetcher = useCallback(() => listUnits({ page: 1, page_size: 200, status: 'active' }), [])
   const { options: rawMaterials } = useSelectOptions(rawMaterialsFetcher)
   const { options: products } = useSelectOptions(productsFetcher)
+  const { options: units } = useSelectOptions(unitsFetcher)
 
   const [explodeQty, setExplodeQty] = useState('1')
   const [explosion, setExplosion] = useState<BomExplosionResult | null>(null)
@@ -197,6 +200,11 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-display text-lg font-medium text-white">Bill of materials</h2>
         </div>
+        <p className="mb-4 text-xs text-white/40">
+          Quantities convert automatically between compatible units (e.g. a line in "bag" against a material
+          tracked in "kg") using the factors set under Settings → Bill of materials → Units of measure. Saving a
+          line in an incompatible unit for its material (e.g. weight against a piece-count material) is rejected.
+        </p>
 
         {lines.length === 0 ? (
           <p className="py-6 text-center text-sm text-white/40">No components defined yet.</p>
@@ -243,12 +251,19 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <TextField
+                  <SelectField
                     label="Unit"
                     value={line.unit}
                     disabled={!canEdit}
                     onChange={(e) => updateLine(line.key, { unit: e.target.value })}
-                  />
+                  >
+                    <option value="">Choose…</option>
+                    {units.map((u) => (
+                      <option key={u.id} value={u.code}>
+                        {u.name} ({u.code})
+                      </option>
+                    ))}
+                  </SelectField>
                 </div>
                 <div className="sm:col-span-1">
                   <TextField
@@ -317,11 +332,18 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                 />
               </div>
               <div className="sm:col-span-2">
-                <TextField
+                <SelectField
                   label="Unit"
                   value={newLine.unit}
                   onChange={(e) => setNewLine((prev) => ({ ...prev, unit: e.target.value }))}
-                />
+                >
+                  <option value="">Choose…</option>
+                  {units.map((u) => (
+                    <option key={u.id} value={u.code}>
+                      {u.name} ({u.code})
+                    </option>
+                  ))}
+                </SelectField>
               </div>
               <div className="sm:col-span-1">
                 <TextField

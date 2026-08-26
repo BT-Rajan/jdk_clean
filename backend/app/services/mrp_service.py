@@ -72,8 +72,11 @@ def _quantity_to_produce(db: Session) -> dict[int, float]:
 
 def _raw_material_requirements(db: Session, product_qty: dict[int, float]) -> dict[int, float]:
     """Explodes every product's to-produce quantity through its BOM
-    (bom_service.explode_requirements, unchanged) and sums the results
-    across products into total raw-material demand."""
+    (bom_service.explode_requirements, which already returns each raw
+    material's quantity converted into that material's own unit) and
+    sums the results across products into total raw-material demand.
+    Safe to sum directly since every product's contribution is already
+    in the same unit per material by the time it comes back here."""
     totals: dict[int, float] = {}
     for product_id, qty in product_qty.items():
         if qty <= 0:

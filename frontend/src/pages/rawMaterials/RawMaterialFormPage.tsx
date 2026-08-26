@@ -8,6 +8,7 @@ import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, Spinner, TextField } from '@/components/ui'
 import { createRawMaterial, getRawMaterial, updateRawMaterial } from '@/api/rawMaterials'
 import { listSuppliers } from '@/api/suppliers'
+import { listUnits } from '@/api/units'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import {
@@ -40,10 +41,16 @@ function useSupplierOptions() {
   return useSelectOptions(fetcher)
 }
 
+function useUnitOptions() {
+  const fetcher = useCallback(() => listUnits({ page: 1, page_size: 200, status: 'active' }), [])
+  return useSelectOptions(fetcher)
+}
+
 function RawMaterialCreateForm() {
   const navigate = useNavigate()
   const [formError, setFormError] = useState<string | null>(null)
   const { options: suppliers } = useSupplierOptions()
+  const { options: units } = useUnitOptions()
   const {
     register,
     handleSubmit,
@@ -75,7 +82,14 @@ function RawMaterialCreateForm() {
           <TextField label="Name" error={errors.name?.message} {...register('name')} />
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <TextField label="Unit" placeholder="kg, m, pcs…" error={errors.unit?.message} {...register('unit')} />
+          <SelectField label="Unit" error={errors.unit?.message} {...register('unit')}>
+            <option value="">Choose…</option>
+            {units.map((u) => (
+              <option key={u.id} value={u.code}>
+                {u.name} ({u.code})
+              </option>
+            ))}
+          </SelectField>
           <SelectField label="Default supplier" {...register('default_supplier_id')}>
             <option value="">None</option>
             {suppliers.map((s) => (
@@ -105,6 +119,7 @@ function RawMaterialEditForm({ id }: { id: number }) {
   const [loading, setLoading] = useState(true)
   const [formError, setFormError] = useState<string | null>(null)
   const { options: suppliers } = useSupplierOptions()
+  const { options: units } = useUnitOptions()
   const {
     register,
     handleSubmit,
@@ -151,7 +166,14 @@ function RawMaterialEditForm({ id }: { id: number }) {
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
           <TextField label="Name" error={errors.name?.message} {...register('name')} />
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <TextField label="Unit" error={errors.unit?.message} {...register('unit')} />
+            <SelectField label="Unit" error={errors.unit?.message} {...register('unit')}>
+              <option value="">Choose…</option>
+              {units.map((u) => (
+                <option key={u.id} value={u.code}>
+                  {u.name} ({u.code})
+                </option>
+              ))}
+            </SelectField>
             <SelectField label="Default supplier" {...register('default_supplier_id')}>
               <option value="">None</option>
               {suppliers.map((s) => (
