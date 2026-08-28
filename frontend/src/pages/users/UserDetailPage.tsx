@@ -120,7 +120,7 @@ export function UserDetailPage() {
       )}
 
       <div className="mt-6">
-        <Link to="/users" className="text-sm text-white/50 hover:text-white">← Back to users</Link>
+        <Link to="/admin?section=users" className="text-sm text-white/50 hover:text-white">← Back to users</Link>
       </div>
 
       <ConfirmDialog

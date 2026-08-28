@@ -268,7 +268,7 @@ function UsersCard() {
         </div>
         <div className="flex gap-2">
           <Link to="/users/new"><Button variant="ghost" size="sm">Add user</Button></Link>
-          <Link to="/users"><Button variant="ghost" size="sm">View all</Button></Link>
+          <Link to="/admin?section=users"><Button variant="ghost" size="sm">View all</Button></Link>
         </div>
       </div>
       <Alert variant="error">{error}</Alert>

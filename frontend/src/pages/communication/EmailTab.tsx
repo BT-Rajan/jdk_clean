@@ -135,7 +135,7 @@ export function EmailTab() {
   }
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} className="mt-6 flex flex-col gap-8">
+    <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-8">
       <Alert variant="error">{formError}</Alert>
       <Alert variant="success">{notice}</Alert>
 

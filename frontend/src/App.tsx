@@ -137,14 +137,8 @@ const ProductionDetailPage = lazy(() =>
   import('@/pages/production/ProductionDetailPage').then((m) => ({ default: m.ProductionDetailPage })),
 )
 
-const UsersListPage = lazy(() =>
-  import('@/pages/users/UsersListPage').then((m) => ({ default: m.UsersListPage })),
-)
-const SettingsPage = lazy(() =>
-  import('@/pages/settings/SettingsPage').then((m) => ({ default: m.SettingsPage })),
-)
-const CommunicationPage = lazy(() =>
-  import('@/pages/communication/CommunicationPage').then((m) => ({ default: m.CommunicationPage })),
+const AdminShell = lazy(() =>
+  import('@/pages/admin/AdminShell').then((m) => ({ default: m.AdminShell })),
 )
 const UserFormPage = lazy(() =>
   import('@/pages/users/UserFormPage').then((m) => ({ default: m.UserFormPage })),
@@ -228,9 +222,10 @@ export function App() {
             <Route path="/production/:id/edit" element={<ProductionFormPage />} />
 
             <Route element={<AdminOnlyGuard />}>
-              <Route path="/users" element={<UsersListPage />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/communication" element={<CommunicationPage />} />
+              <Route path="/admin" element={<AdminShell />} />
+              <Route path="/users" element={<Navigate to="/admin?section=users" replace />} />
+              <Route path="/settings" element={<Navigate to="/admin" replace />} />
+              <Route path="/communication" element={<Navigate to="/admin?section=email" replace />} />
               <Route path="/users/new" element={<UserFormPage />} />
               <Route path="/users/:id" element={<UserDetailPage />} />
               <Route path="/users/:id/edit" element={<UserFormPage />} />

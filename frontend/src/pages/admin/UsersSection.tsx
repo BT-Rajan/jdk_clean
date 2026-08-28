@@ -1,11 +1,10 @@
 import { useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Badge, Button, EmptyState, GlassCard, Pagination, SortableHeader, Spinner, TextField } from '@/components/ui'
 import { listUsers } from '@/api/users'
 import { usePagedResource } from '@/hooks/usePagedResource'
 
-export function UsersListPage() {
+export function UsersSection() {
   const navigate = useNavigate()
   const fetcher = useCallback(
     (params: { page: number; page_size?: number; search?: string; sort?: string }) => listUsers(params),
@@ -15,11 +14,11 @@ export function UsersListPage() {
     usePagedResource(fetcher)
 
   return (
-    <AppLayout>
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
+    <div>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-medium text-white">Users</h1>
-          <p className="mt-2 text-sm text-white/50">{total} accounts</p>
+          <h2 className="font-display text-lg font-medium text-white">Users</h2>
+          <p className="mt-1 text-sm text-white/50">{total} accounts</p>
         </div>
         <Button onClick={() => navigate('/users/new')}>New user</Button>
       </div>
@@ -79,6 +78,6 @@ export function UsersListPage() {
       </GlassCard>
 
       <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
-    </AppLayout>
+    </div>
   )
 }

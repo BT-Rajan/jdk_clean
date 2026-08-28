@@ -131,8 +131,8 @@ const adminDashboard: DashboardConfig = {
       id: 'system-overview',
       title: 'System Overview',
       items: [
-        { label: 'Users', path: '/users', description: 'User management' },
-        { label: 'Settings', path: '/settings', description: 'System configuration' },
+        { label: 'Users', path: '/admin?section=users', description: 'User management' },
+        { label: 'Settings', path: '/admin', description: 'System configuration' },
       ],
     },
     {

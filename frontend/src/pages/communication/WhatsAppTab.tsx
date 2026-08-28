@@ -170,7 +170,7 @@ export function WhatsAppTab() {
   }
 
   return (
-    <div className="mt-6 flex flex-col gap-8">
+    <div className="flex flex-col gap-8">
       <Alert variant="info">
         This channel only ever sends Meta-approved templates -- there is no free-form message option here. Templates
         are fetched live from your WhatsApp Business Account below, never typed in by hand.

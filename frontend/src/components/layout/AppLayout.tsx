@@ -143,17 +143,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         { to: '/mrp', label: 'MRP' },
       ],
     },
-    ...(isAdmin(user?.role)
-      ? [
-          {
-            label: 'Admin',
-            items: [
-              { to: '/settings', label: 'Settings' },
-              { to: '/communication', label: 'Communication' },
-            ],
-          } satisfies NavGroup,
-        ]
-      : []),
+    ...(isAdmin(user?.role) ? [{ to: '/admin', label: 'Admin' } satisfies NavLeaf] : []),
   ]
 
   // Hides a nav link/group the user's department has no access to at
@@ -197,6 +187,21 @@ export function AppLayout({ children }: AppLayoutProps) {
     { id: 'action:assistant', label: 'Open AI Assistant', keywords: 'ai chat help', onSelect: () => setIsAssistantOpen(true) },
     { id: 'action:profile', label: 'My Profile', onSelect: () => navigate('/profile') },
     { id: 'action:logout', label: 'Sign out', keywords: 'logout', onSelect: handleLogout },
+    ...(isAdmin(user?.role)
+      ? [
+          { id: 'admin:company-tax', label: 'Company & Tax', hint: 'Admin', onSelect: () => navigate('/admin?section=company-tax') },
+          { id: 'admin:workflow-automation', label: 'Workflow Automation', hint: 'Admin', onSelect: () => navigate('/admin?section=workflow-automation') },
+          { id: 'admin:approvals', label: 'Approvals', hint: 'Admin', onSelect: () => navigate('/admin?section=approvals') },
+          { id: 'admin:ai-assistant', label: 'AI Assistant settings', hint: 'Admin', keywords: 'api key', onSelect: () => navigate('/admin?section=ai-assistant') },
+          { id: 'admin:factory-setup', label: 'Factory Setup', hint: 'Admin', onSelect: () => navigate('/admin?section=factory-setup') },
+          { id: 'admin:bom', label: 'Bill of Materials', hint: 'Admin', keywords: 'units', onSelect: () => navigate('/admin?section=bom') },
+          { id: 'admin:email', label: 'Email settings', hint: 'Admin', keywords: 'imap pop3 smtp', onSelect: () => navigate('/admin?section=email') },
+          { id: 'admin:whatsapp', label: 'WhatsApp settings', hint: 'Admin', keywords: 'meta templates', onSelect: () => navigate('/admin?section=whatsapp') },
+          { id: 'admin:sms', label: 'SMS settings', hint: 'Admin', keywords: 'kwtsms unifonic smsala', onSelect: () => navigate('/admin?section=sms') },
+          { id: 'admin:access-control', label: 'Access Control', hint: 'Admin', keywords: 'permissions department', onSelect: () => navigate('/admin?section=access-control') },
+          { id: 'admin:users', label: 'Users', hint: 'Admin', onSelect: () => navigate('/admin?section=users') },
+        ]
+      : []),
   ]
 
   async function handleLogout() {
