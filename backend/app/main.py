@@ -25,6 +25,7 @@ from app.api.production_schedules import router as production_schedules_router
 from app.api.purchase_orders import router as purchase_orders_router
 from app.api.quotations import router as quotations_router
 from app.api.raw_materials import router as raw_materials_router
+from app.api.search import router as search_router
 from app.api.settings import router as settings_router
 from app.api.suppliers import router as suppliers_router
 from app.api.supplier_materials import router as supplier_materials_router
@@ -112,6 +113,7 @@ app.include_router(purchase_orders_router)
 app.include_router(bom_router)
 app.include_router(packaging_router)
 app.include_router(units_router)
+app.include_router(search_router)
 
 
 @app.get("/api/health")

@@ -77,30 +77,37 @@ assert set(PAGE_KEY_LABELS) == set(PAGE_KEYS), (
 )
 
 
+def has_page_access(user: User, db: Session, page_key: str, level: str = "read") -> bool:
+    """The actual access rule, usable outside a FastAPI dependency chain
+    (e.g. the search aggregator deciding which entities to even query
+    for a given user). require_page_access below is a thin wrapper of
+    this for route guards -- keep the rule itself in exactly one place."""
+    assert page_key in PAGE_KEYS, f"Unknown page_key {page_key!r} -- add it to PAGE_KEYS first."
+    assert level in ("read", "write")
+    if user.role in ("admin", "manager"):
+        return True
+    if user.role == "viewer":
+        return level == "read"
+    # staff
+    perm = (
+        db.query(DepartmentPermission)
+        .filter(
+            DepartmentPermission.department == user.department,
+            DepartmentPermission.page_key == page_key,
+        )
+        .first()
+    )
+    granted = _LEVEL_RANK[perm.access_level if perm else "none"]
+    return granted >= _LEVEL_RANK[level]
+
+
 def require_page_access(page_key: str, level: str = "read"):
     """FastAPI dependency factory. level is 'read' or 'write'."""
     assert page_key in PAGE_KEYS, f"Unknown page_key {page_key!r} -- add it to PAGE_KEYS first."
     assert level in ("read", "write")
 
     def _check(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> User:
-        if user.role in ("admin", "manager"):
-            return user
-        if user.role == "viewer":
-            if level == "read":
-                return user
-            raise PermissionError_()
-        # staff
-        perm = (
-            db.query(DepartmentPermission)
-            .filter(
-                DepartmentPermission.department == user.department,
-                DepartmentPermission.page_key == page_key,
-            )
-            .first()
-        )
-        granted = _LEVEL_RANK[perm.access_level if perm else "none"]
-        needed = _LEVEL_RANK[level]
-        if granted >= needed:
+        if has_page_access(user, db, page_key, level):
             return user
         raise PermissionError_()
 

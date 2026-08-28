@@ -3,6 +3,8 @@ import { Link, NavLink, useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { Avatar, Logo, Button } from '@/components/ui'
 import { AssistantDrawer } from '@/components/assistant/AssistantDrawer'
+import { CommandPalette } from '@/components/command-palette/CommandPalette'
+import type { PaletteAction } from '@/components/command-palette/CommandPalette'
 import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
 import { getPageKeyForPath } from '@/lib/pagePermissions'
@@ -43,6 +45,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const [isAssistantOpen, setIsAssistantOpen] = useState(false)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false)
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [notifLoading, setNotifLoading] = useState(true)
   const [notifError, setNotifError] = useState<string | null>(null)
@@ -89,6 +92,21 @@ export function AppLayout({ children }: AppLayoutProps) {
     window.addEventListener('scroll', handleScroll, { passive: true })
     return () => window.removeEventListener('scroll', handleScroll)
   }, [])
+
+  // Global Cmd/Ctrl+K launcher for the command palette -- works from
+  // anywhere in the app, not just when a search box happens to be
+  // focused.
+  useEffect(() => {
+    if (!user) return
+    function onKeydown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setIsPaletteOpen(true)
+      }
+    }
+    window.addEventListener('keydown', onKeydown)
+    return () => window.removeEventListener('keydown', onKeydown)
+  }, [user])
 
   const navEntries: NavEntry[] = [
     { to: '/dashboard', label: 'Dashboard' },
@@ -159,6 +177,28 @@ export function AppLayout({ children }: AppLayoutProps) {
     return visibleItems.length > 0 ? [{ ...entry, items: visibleItems }] : []
   })
 
+  // Every visible nav destination, plus the header's quick actions --
+  // the single list the command palette searches/navigates. Built from
+  // the exact same visibleNavEntries the nav bar renders, so a page
+  // never shows up in one place but not the other.
+  const paletteActions: PaletteAction[] = [
+    ...visibleNavEntries.flatMap((entry) =>
+      isNavGroup(entry)
+        ? entry.items.map((item) => ({
+            id: `nav:${item.to}`,
+            label: item.label,
+            hint: entry.label,
+            onSelect: () => navigate(item.to),
+          }))
+        : [{ id: `nav:${entry.to}`, label: entry.label, onSelect: () => navigate(entry.to) }],
+    ),
+    { id: 'action:calendar', label: 'Open Calendar', keywords: 'schedule events', onSelect: () => setIsCalendarOpen(true) },
+    { id: 'action:notifications', label: 'Open Notifications', keywords: 'alerts bell', onSelect: () => setIsNotificationsOpen(true) },
+    { id: 'action:assistant', label: 'Open AI Assistant', keywords: 'ai chat help', onSelect: () => setIsAssistantOpen(true) },
+    { id: 'action:profile', label: 'My Profile', onSelect: () => navigate('/profile') },
+    { id: 'action:logout', label: 'Sign out', keywords: 'logout', onSelect: handleLogout },
+  ]
+
   async function handleLogout() {
     setIsLoggingOut(true)
     try {
@@ -182,6 +222,20 @@ export function AppLayout({ children }: AppLayoutProps) {
           <Logo />
 
           <div className="flex items-center gap-4">
+            {user && (
+              <button
+                type="button"
+                onClick={() => setIsPaletteOpen(true)}
+                aria-label="Search (Cmd+K)"
+                className="flex items-center gap-2 rounded-xl border border-white/10 px-2.5 py-2 text-white/40 transition-colors hover:border-white/20 hover:text-white/60"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                  <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.6" />
+                  <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+                </svg>
+                <kbd className="hidden text-[10px] text-white/30 sm:inline">⌘K</kbd>
+              </button>
+            )}
             {user && (
               <button
                 type="button"
@@ -289,6 +343,7 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       {user && (
         <>
+          <CommandPalette open={isPaletteOpen} onClose={() => setIsPaletteOpen(false)} actions={paletteActions} />
           <AssistantDrawer open={isAssistantOpen} onClose={() => setIsAssistantOpen(false)} />
           <CalendarModal open={isCalendarOpen} onClose={() => setIsCalendarOpen(false)} />
           <NotificationsModal
