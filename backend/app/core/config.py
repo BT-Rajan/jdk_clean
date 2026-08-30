@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     UPLOAD_DIR: str = "uploads"
     AVATAR_MAX_UPLOAD_MB: int = 5
     AVATAR_MAX_DIMENSION: int = 512
+    # Company logos aren't thumbnailed like avatars (see
+    # company_logo_service.py -- a logo can legitimately be any
+    # resolution), so there's no matching MAX_DIMENSION here, just a
+    # separate upload-size cap.
+    LOGO_MAX_UPLOAD_MB: int = 5
 
     # Email (Phase 6): deliberately .env-only, not part of the Settings
     # DB table/UI (see settings_service.py) -- SMTP credentials are

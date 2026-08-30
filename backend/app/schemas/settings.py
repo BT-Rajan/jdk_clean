@@ -7,6 +7,17 @@ class SettingsOut(BaseModel):
     company_phone: str
     company_email: str
     company_gstin: str
+    # Uploaded logo filenames, one per theme x language variant -- "" if
+    # that variant hasn't been uploaded yet. Set only via
+    # POST/DELETE /api/settings/logo/{variant}, never through this
+    # schema's Update counterpart. See settings_service.LOGO_VARIANTS.
+    company_logo_dark_english_filename: str
+    company_logo_dark_arabic_filename: str
+    company_logo_light_english_filename: str
+    company_logo_light_arabic_filename: str
+    # "" (none selected yet) or one of the four variant names above --
+    # which uploaded logo is actually the active one.
+    company_logo_active: str
     ai_api_key: str  # masked (e.g. "••••••••ab12"), never the real value
     # Factory-wide worker pool -- used alongside each machine's own
     # capacity by the feasibility check's capacity scan.
@@ -46,6 +57,9 @@ class SettingsUpdate(BaseModel):
     company_phone: str | None = None
     company_email: str | None = None
     company_gstin: str | None = None
+    company_logo_active: str | None = Field(
+        default=None, pattern="^(dark_english|dark_arabic|light_english|light_arabic|)$"
+    )
     ai_api_key: str | None = None
     factory_total_workers: str | None = None
     factory_workday_hours: str | None = None

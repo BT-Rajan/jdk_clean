@@ -2,9 +2,24 @@ from datetime import date, timedelta
 
 from sqlalchemy.orm import Session
 
+from app.core.exceptions import ValidationAppError
 from app.models.setting import Setting
 
 COMPANY_FIELDS = ["company_name", "company_address", "company_phone", "company_email", "company_gstin"]
+# Company logo: four fixed variants (dark/light theme x English/Arabic
+# layout), so the right logo can be picked for a dark header vs. a light
+# one, and for an English vs. Arabic document, without recoloring or
+# mirroring a single logo on the fly. The *_filename fields are written
+# only by company_logo_service's upload/delete endpoints (see
+# api/settings.py) and deliberately left out of SettingsUpdate below --
+# setting_value is read straight off disk as a filename (see
+# company_logo_service.get_logo_path), so accepting it from a plain
+# settings PUT would be a path-traversal opening. company_logo_active is
+# just a choice among the four fixed variant names, so it's safe to
+# accept from the regular settings form.
+LOGO_VARIANTS = ["dark_english", "dark_arabic", "light_english", "light_arabic"]
+COMPANY_LOGO_FILENAME_FIELDS = [f"company_logo_{variant}_filename" for variant in LOGO_VARIANTS]
+COMPANY_LOGO_ACTIVE_FIELD = ["company_logo_active"]
 # The AI API key (Claude or DeepSeek). Which provider it belongs to is
 # auto-detected server-side from the key's own format (see
 # assistant_service._detect_provider) -- there's no separate stored
@@ -67,6 +82,8 @@ APPROVAL_FIELDS = ["large_po_approval_threshold"]
 DISCOUNT_APPROVAL_FIELDS = ["large_discount_approval_threshold"]
 ALL_FIELDS = (
     COMPANY_FIELDS
+    + COMPANY_LOGO_FILENAME_FIELDS
+    + COMPANY_LOGO_ACTIVE_FIELD
     + AI_FIELDS
     + FACTORY_FIELDS
     + SALES_FIELDS
@@ -251,6 +268,15 @@ def update(db: Session, data: dict) -> dict:
             continue
         if key == "ai_api_key" and value.startswith("••••"):
             continue
+
+        if key == "company_logo_active" and value:
+            filename_row = db.query(Setting).filter(
+                Setting.setting_key == f"company_logo_{value}_filename"
+            ).first()
+            if filename_row is None or not filename_row.setting_value:
+                raise ValidationAppError(
+                    f"Upload the {value.replace('_', ' ')} logo before setting it as active."
+                )
 
         row = db.query(Setting).filter(Setting.setting_key == key).first()
         if row is None:
