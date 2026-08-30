@@ -107,12 +107,29 @@ fi
 # -----------------------------------------------------------------
 heading "Checking for a stale frontend build"
 
-if [[ -f frontend/.env && -d frontend/dist ]]; then
-  ENV_MTIME=$(stat -c %Y frontend/.env 2>/dev/null || stat -f %m frontend/.env)
+if [[ -d frontend/dist ]]; then
   DIST_MTIME=$(stat -c %Y frontend/dist 2>/dev/null || stat -f %m frontend/dist)
-  if [[ "$ENV_MTIME" -gt "$DIST_MTIME" ]]; then
-    warn "frontend/.env was modified more recently than frontend/dist/ was built."
-    warn "VITE_API_BASE_URL is baked into the build at build time -- .env changes alone do nothing until you rebuild."
+
+  STALE_REASON=""
+
+  if [[ -f frontend/.env ]]; then
+    ENV_MTIME=$(stat -c %Y frontend/.env 2>/dev/null || stat -f %m frontend/.env)
+    if [[ "$ENV_MTIME" -gt "$DIST_MTIME" ]]; then
+      STALE_REASON="frontend/.env was modified more recently than frontend/dist/ was built (VITE_API_BASE_URL is baked in at build time)."
+    fi
+  fi
+
+  # Also catch source changes that pulled in via git but never triggered a
+  # rebuild -- e.g. `git pull` updating frontend/src without touching .env.
+  if [[ -z "$STALE_REASON" ]]; then
+    NEWER_SRC_FILE=$(find frontend/src frontend/public frontend/index.html frontend/package.json frontend/vite.config.* -type f -newer frontend/dist 2>/dev/null | head -1)
+    if [[ -n "$NEWER_SRC_FILE" ]]; then
+      STALE_REASON="frontend source (e.g. ${NEWER_SRC_FILE}) is newer than frontend/dist/ -- looks like a git pull landed changes that were never built."
+    fi
+  fi
+
+  if [[ -n "$STALE_REASON" ]]; then
+    warn "$STALE_REASON"
     read -r -p "Rebuild the frontend now? [Y/n]: " REBUILD_NOW
     if [[ ! "$REBUILD_NOW" =~ ^[Nn]$ ]]; then
       info "Rebuilding frontend..."
@@ -122,9 +139,9 @@ if [[ -f frontend/.env && -d frontend/dist ]]; then
       PROBLEMS=$((PROBLEMS+1))
     fi
   else
-    ok "frontend/dist/ is newer than frontend/.env -- build is current."
+    ok "frontend/dist/ is newer than both frontend/.env and frontend/src -- build is current."
   fi
-elif [[ ! -d frontend/dist ]]; then
+else
   warn "frontend/dist/ doesn't exist yet -- run 'cd frontend && npm run build' before relaunching."
   PROBLEMS=$((PROBLEMS+1))
 fi
