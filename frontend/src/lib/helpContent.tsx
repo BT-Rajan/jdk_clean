@@ -134,7 +134,7 @@ export const HELP_CONTENT: Partial<Record<UserRole, HelpSection[]>> = {
       items: [
         {
           title: 'Company details (shown on PDFs)',
-          steps: ['Admin > Settings > General tab', 'Company details card -- name, address, phone, email, GSTIN'],
+          steps: ['Admin > Settings > General tab', 'Company details card -- name, address, phone, email'],
         },
         {
           title: 'Factory capacity',

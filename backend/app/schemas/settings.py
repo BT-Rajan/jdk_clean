@@ -6,7 +6,6 @@ class SettingsOut(BaseModel):
     company_address: str
     company_phone: str
     company_email: str
-    company_gstin: str
     # Uploaded logo filenames, one per theme x language variant -- "" if
     # that variant hasn't been uploaded yet. Set only via
     # POST/DELETE /api/settings/logo/{variant}, never through this
@@ -56,7 +55,6 @@ class SettingsUpdate(BaseModel):
     company_address: str | None = None
     company_phone: str | None = None
     company_email: str | None = None
-    company_gstin: str | None = None
     company_logo_active: str | None = Field(
         default=None, pattern="^(dark_english|dark_arabic|light_english|light_arabic|)$"
     )

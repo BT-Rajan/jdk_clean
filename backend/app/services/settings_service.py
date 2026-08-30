@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import ValidationAppError
 from app.models.setting import Setting
 
-COMPANY_FIELDS = ["company_name", "company_address", "company_phone", "company_email", "company_gstin"]
+COMPANY_FIELDS = ["company_name", "company_address", "company_phone", "company_email"]
 # Company logo: four fixed variants (dark/light theme x English/Arabic
 # layout), so the right logo can be picked for a dark header vs. a light
 # one, and for an English vs. Arabic document, without recoloring or

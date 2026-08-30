@@ -10,7 +10,6 @@ export interface Settings {
   company_address: string
   company_phone: string
   company_email: string
-  company_gstin: string
   /** Uploaded logo filenames, one per variant -- "" if not uploaded yet.
    * Set only via uploadCompanyLogo/deleteCompanyLogo, never through
    * updateSettings. */
