@@ -31,7 +31,7 @@ Access control (Admin > Settings > Access Control tab)
 - "Save access control"
 
 Company & workflow settings (Admin > Settings > General tab)
-- Company details card: name, address, phone, email, GSTIN (shown on PDFs)
+- Company details card: name, address, phone, email (shown on PDFs)
 - Factory card: total workers, workday hours
 - Automation toggles: auto-create quotation from feasibility, auto-schedule production on order confirm, auto-create delivery note, auto-draft purchase orders from MRP
 - Approval thresholds: KWD amount for large purchase orders, % for large discounts (blank = off)

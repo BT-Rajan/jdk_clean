@@ -251,7 +251,6 @@ export function GeneralSettingsForm({ activeSection }: GeneralSettingsFormProps)
               <TextField label="Phone" {...register('company_phone')} />
               <TextField label="Email" type="email" {...register('company_email')} />
             </div>
-            <TextField label="Tax / GSTIN" {...register('company_gstin')} />
           </div>
         </GlassCard>
 

@@ -55,6 +55,40 @@ export interface ProductSuppliersResult {
   materials: ProductSupplierMaterial[]
 }
 
+/** Mirrors backend/app/schemas/product.py's ProductImportRow -- one
+ * already-mapped row for POST /api/products/import (see
+ * ProductImportDialog, which does the CSV parsing and column mapping
+ * before rows ever reach the API). tags/properties are deliberately not
+ * importable via CSV -- see IMPORT_EXPORT_COLUMNS in api/products.py. */
+export interface ProductImportRow {
+  code: string
+  name: string
+  unit: string
+  product_type?: ProductType
+  selling_price?: number
+  batch_size?: number
+  batch_production_hours?: number
+  machine_id?: number
+  production_hours_per_unit?: number
+  workers_required?: number
+  status?: ActiveStatus
+  reorder_point?: number
+}
+
+export interface ProductImportRowResult {
+  row: number
+  code: string
+  action: 'created' | 'updated' | 'error'
+  message?: string | null
+}
+
+export interface ProductImportResult {
+  created: number
+  updated: number
+  errors: number
+  results: ProductImportRowResult[]
+}
+
 export interface ProductPayload {
   code: string
   name: string

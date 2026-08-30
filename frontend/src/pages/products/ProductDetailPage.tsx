@@ -12,6 +12,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { canWrite, isAdmin } from '@/lib/roles'
 import { formatCurrency } from '@/lib/currency'
 import { BomEditor } from './BomEditor'
+import { BomTree } from './BomTree'
 import { PackagingEditor } from './PackagingEditor'
 import { SupplierDrilldown } from './SupplierDrilldown'
 
@@ -188,6 +189,9 @@ export function ProductDetailPage() {
       {isAdmin(user?.role) ? (
         <>
           <BomEditor productId={productId} canEdit={canWrite(user?.role)} />
+          <div className="mt-6">
+            <BomTree productId={productId} productCode={product.code} productName={product.name} />
+          </div>
           <div className="mt-6">
             <SupplierDrilldown productId={productId} />
           </div>

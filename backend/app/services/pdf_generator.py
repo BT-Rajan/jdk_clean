@@ -39,7 +39,6 @@ DEFAULT_COMPANY_SETTINGS = {
     "company_address": "",
     "company_phone": "",
     "company_email": "",
-    "company_gstin": "",
 }
 
 
