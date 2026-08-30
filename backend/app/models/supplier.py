@@ -20,7 +20,6 @@ class Supplier(Base, TimestampMixin, SoftDeleteMixin):
     address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     city: Mapped[str | None] = mapped_column(String(80), nullable=True)
     country: Mapped[str | None] = mapped_column(String(80), nullable=True)
-    tax_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     payment_terms_days: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=30)
     mode_of_supply: Mapped[str | None] = mapped_column(
         Enum(*SUPPLIER_MODES_OF_SUPPLY, name="supplier_mode_of_supply"), nullable=True

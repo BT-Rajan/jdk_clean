@@ -15,9 +15,6 @@ export const quotationSchema = z.object({
   quotation_date: z.string().min(1, 'Date is required').refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
   valid_until: z.string().optional().or(z.literal('')).refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
   notes: z.string().trim().optional().or(z.literal('')),
-  // Percentage, e.g. 0 or 5. Left blank, the backend defaults to
-  // Settings -> default_tax_rate (0% -- Kuwait has no GST/VAT).
-  tax_rate: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),
   // Percentage, e.g. 0 or 10 -- a whole-document discount on top of the
   // already line-discounted subtotal.
   discount_percent: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),

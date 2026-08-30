@@ -108,11 +108,8 @@ def create_order(db: Session, data: dict, user_id: int | None = None) -> Order:
     deal_id = data.pop("deal_id", None)
     lines = _price_lines(db, [dict(line) for line in data.pop("lines")])
     subtotal_amount = round(sum(line["line_total"] for line in lines), 2)
-    tax_rate = data.pop("tax_rate", None)
-    if tax_rate is None:
-        tax_rate = settings_service.get_default_tax_rate(db)
     discount_percent = float(data.pop("discount_percent", None) or 0)
-    totals = compute_document_totals(subtotal_amount, discount_percent, tax_rate)
+    totals = compute_document_totals(subtotal_amount, discount_percent)
 
     # Everything above is validation/pricing with no row locks held. Only
     # from here do we touch number_series (SELECT ... FOR UPDATE) so the
@@ -133,10 +130,8 @@ def create_order(db: Session, data: dict, user_id: int | None = None) -> Order:
     order = Order(
         order_number=order_number,
         subtotal_amount=subtotal_amount,
-        tax_rate=tax_rate,
         discount_percent=discount_percent,
         discount_amount=totals["discount_amount"],
-        tax_amount=totals["tax_amount"],
         total_amount=totals["total_amount"],
         created_by=user_id,
         **data,
@@ -168,7 +163,6 @@ def update_order(db: Session, order_id: int, data: dict, user_id: int | None = N
             raise ValidationAppError(f"Customer {data['customer_id']} not found.")
 
     lines = data.pop("lines", None)
-    tax_rate_update = data.pop("tax_rate", None)
     discount_percent_update = data.pop("discount_percent", None)
     if data.get("customer_id") is None:
         data.pop("customer_id", None)
@@ -178,10 +172,6 @@ def update_order(db: Session, order_id: int, data: dict, user_id: int | None = N
         if old_value != new_value:
             changes[field] = (old_value, new_value)
             setattr(order, field, new_value)
-
-    if tax_rate_update is not None and float(tax_rate_update) != float(order.tax_rate):
-        changes["tax_rate"] = (order.tax_rate, tax_rate_update)
-        order.tax_rate = tax_rate_update
 
     if discount_percent_update is not None and float(discount_percent_update) != float(order.discount_percent):
         changes["discount_percent"] = (order.discount_percent, discount_percent_update)
@@ -199,12 +189,9 @@ def update_order(db: Session, order_id: int, data: dict, user_id: int | None = N
         order.approved_at = None
         order.approved_by = None
 
-    if lines is not None or tax_rate_update is not None or discount_percent_update is not None:
-        totals = compute_document_totals(
-            float(order.subtotal_amount), float(order.discount_percent), float(order.tax_rate)
-        )
+    if lines is not None or discount_percent_update is not None:
+        totals = compute_document_totals(float(order.subtotal_amount), float(order.discount_percent))
         order.discount_amount = totals["discount_amount"]
-        order.tax_amount = totals["tax_amount"]
         order.total_amount = totals["total_amount"]
 
     order.updated_by = user_id
@@ -683,8 +670,6 @@ def create_order_from_quotation(db: Session, quotation_id: int, user_id: int | N
         deal_id=deal.id,
         order_date=datetime.now(timezone.utc).date(),
         subtotal_amount=quotation.subtotal_amount,
-        tax_rate=quotation.tax_rate,
-        tax_amount=quotation.tax_amount,
         total_amount=quotation.total_amount,
         notes=f"Converted from quotation {quotation.quotation_number}.",
         created_by=user_id,

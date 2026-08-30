@@ -157,10 +157,9 @@ export const HELP_CONTENT: Partial<Record<UserRole, HelpSection[]>> = {
           ],
         },
         {
-          title: 'Tax rate & AI assistant key',
+          title: 'AI assistant key',
           steps: [
             'Admin > Settings > General tab',
-            'Tax card -- default tax rate %',
             'AI assistant card -- paste API key (provider is detected automatically)',
           ],
         },

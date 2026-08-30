@@ -4,8 +4,8 @@
 -- applied before the line_total is computed; every document table
 -- (quotations, orders, purchase_orders) gains a document-level
 -- discount_percent + discount_amount, applied on top of the
--- already-line-discounted subtotal_amount, before tax. See
--- app/core/pricing.py for the shared computation.
+-- already-line-discounted subtotal_amount. See app/core/pricing.py for
+-- the shared computation.
 --
 -- A fresh install via schema.sql already has all of this -- this file is
 -- only for upgrading an existing database. Safe to re-run: guarded via

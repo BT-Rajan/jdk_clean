@@ -14,7 +14,6 @@ export const purchaseOrderSchema = z.object({
   order_date: z.string().min(1, 'Date is required').refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
   expected_delivery_date: z.string().optional().or(z.literal('')).refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
   notes: z.string().trim().optional().or(z.literal('')),
-  tax_rate: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),
   discount_percent: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),
   lines: z.array(purchaseOrderLineSchema).min(1, 'At least one line item is required'),
 })

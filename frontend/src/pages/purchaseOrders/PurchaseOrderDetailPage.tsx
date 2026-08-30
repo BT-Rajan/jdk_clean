@@ -323,13 +323,10 @@ export function PurchaseOrderDetailPage() {
           <Field label="Expected delivery" value={formatDate(po.expected_delivery_date)} />
           <Field label="Total" value={formatCurrency(po.total_amount)} />
         </dl>
-        {(po.tax_rate > 0 || po.discount_percent > 0) && (
+        {po.discount_percent > 0 && (
           <p className="mt-3 text-xs text-white/40">
             Subtotal {formatCurrency(po.subtotal_amount)}
-            {po.discount_percent > 0 && (
-              <> − {po.discount_percent}% discount ({formatCurrency(po.discount_amount)})</>
-            )}
-            {po.tax_rate > 0 && <> + {po.tax_rate}% tax ({formatCurrency(po.tax_amount)})</>}
+            {' '}− {po.discount_percent}% discount ({formatCurrency(po.discount_amount)})
             {' '}= {formatCurrency(po.total_amount)}
           </p>
         )}

@@ -26,7 +26,7 @@ const GROUPS: SectionGroup[] = [
   {
     label: 'General',
     items: [
-      { key: 'company-tax', label: 'Company & Tax' },
+      { key: 'company', label: 'Company' },
       { key: 'workflow-automation', label: 'Workflow Automation' },
       { key: 'approvals', label: 'Approvals' },
       { key: 'ai-assistant', label: 'AI Assistant' },
@@ -63,7 +63,7 @@ function isGeneralSection(key: SectionKey): key is GeneralSectionKey {
 const ALL_SECTION_KEYS = GROUPS.flatMap((g) => g.items.map((i) => i.key))
 
 function parseSection(value: string | null): SectionKey {
-  return (ALL_SECTION_KEYS as string[]).includes(value ?? '') ? (value as SectionKey) : 'company-tax'
+  return (ALL_SECTION_KEYS as string[]).includes(value ?? '') ? (value as SectionKey) : 'company'
 }
 
 export function AdminShell() {
@@ -119,7 +119,7 @@ export function AdminShell() {
                own doc comment on why unsaved edits shouldn't drop when
                clicking over to another section and back. */}
             <div className={isGeneralSection(activeSection) ? undefined : 'hidden'}>
-              <GeneralSettingsForm activeSection={isGeneralSection(activeSection) ? activeSection : 'company-tax'} />
+              <GeneralSettingsForm activeSection={isGeneralSection(activeSection) ? activeSection : 'company'} />
             </div>
 
             <TabPanel id="factory-setup" activeId={activeSection}><FactorySetupTab /></TabPanel>

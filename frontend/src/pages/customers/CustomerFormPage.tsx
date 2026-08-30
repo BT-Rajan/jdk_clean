@@ -19,7 +19,7 @@ import {
 
 /** Dispatches to a create or edit form -- the two have different field
  * sets (see types/customer.ts on why edit omits code/billing_address/
- * shipping_address/tax_id/notes), so they're kept as separate, cleanly
+ * shipping_address/notes), so they're kept as separate, cleanly
  * typed components rather than one form with a union type. */
 export function CustomerFormPage() {
   const { id } = useParams()
@@ -56,7 +56,6 @@ function CustomerCreateForm() {
       shipping_address: '',
       city: '',
       country: '',
-      tax_id: '',
       credit_limit: 0,
       payment_terms_days: 30,
       status: 'active',
@@ -86,11 +85,8 @@ function CustomerCreateForm() {
           <TextField label="Contact person" {...register('contact_person')} />
           <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
         </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
           <TextField label="Phone" {...register('phone')} />
-          <TextField label="Tax ID" {...register('tax_id')} />
-        </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <TextField label="City" {...register('city')} />
           <TextField label="Country" {...register('country')} />
         </div>
@@ -176,7 +172,7 @@ function CustomerEditForm({ id }: { id: number }) {
           </div>
           <TextField label="Country" {...register('country')} />
           <p className="text-xs text-white/40">
-            Billing/shipping address, tax ID, and notes can only be set when the customer is created.
+            Billing/shipping address and notes can only be set when the customer is created.
           </p>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             <TextField label="Credit limit" type="number" step="0.01" error={errors.credit_limit?.message} {...register('credit_limit')} />

@@ -189,7 +189,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { id: 'action:logout', label: 'Sign out', keywords: 'logout', onSelect: handleLogout },
     ...(isAdmin(user?.role)
       ? [
-          { id: 'admin:company-tax', label: 'Company & Tax', hint: 'Admin', onSelect: () => navigate('/admin?section=company-tax') },
+          { id: 'admin:company', label: 'Company', hint: 'Admin', onSelect: () => navigate('/admin?section=company') },
           { id: 'admin:workflow-automation', label: 'Workflow Automation', hint: 'Admin', onSelect: () => navigate('/admin?section=workflow-automation') },
           { id: 'admin:approvals', label: 'Approvals', hint: 'Admin', onSelect: () => navigate('/admin?section=approvals') },
           { id: 'admin:ai-assistant', label: 'AI Assistant settings', hint: 'Admin', keywords: 'api key', onSelect: () => navigate('/admin?section=ai-assistant') },

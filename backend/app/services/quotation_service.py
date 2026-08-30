@@ -121,21 +121,16 @@ def create_quotation(db: Session, data: dict, user_id: int | None = None) -> Quo
 
     lines = _price_lines(db, [dict(line) for line in data.pop("lines")])
     subtotal_amount = round(sum(line["line_total"] for line in lines), 2)
-    tax_rate = data.pop("tax_rate", None)
-    if tax_rate is None:
-        tax_rate = settings_service.get_default_tax_rate(db)
     discount_percent = float(data.pop("discount_percent", None) or 0)
-    totals = compute_document_totals(subtotal_amount, discount_percent, tax_rate)
+    totals = compute_document_totals(subtotal_amount, discount_percent)
 
     quotation_number = number_series_service.next_number(db, "QUOTATION")
 
     quotation = Quotation(
         quotation_number=quotation_number,
         subtotal_amount=subtotal_amount,
-        tax_rate=tax_rate,
         discount_percent=discount_percent,
         discount_amount=totals["discount_amount"],
-        tax_amount=totals["tax_amount"],
         total_amount=totals["total_amount"],
         created_by=user_id,
         **data,
@@ -167,7 +162,6 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
             raise ValidationAppError(f"Customer {data['customer_id']} not found.")
 
     lines = data.pop("lines", None)
-    tax_rate_update = data.pop("tax_rate", None)
     discount_percent_update = data.pop("discount_percent", None)
     # customer_id is required on the model; a None here means "not supplied"
     # rather than "clear it", so drop it if absent/blank.
@@ -179,10 +173,6 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
         if old_value != new_value:
             changes[field] = (old_value, new_value)
             setattr(quotation, field, new_value)
-
-    if tax_rate_update is not None and float(tax_rate_update) != float(quotation.tax_rate):
-        changes["tax_rate"] = (quotation.tax_rate, tax_rate_update)
-        quotation.tax_rate = tax_rate_update
 
     if discount_percent_update is not None and float(discount_percent_update) != float(quotation.discount_percent):
         changes["discount_percent"] = (quotation.discount_percent, discount_percent_update)
@@ -200,12 +190,9 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
         quotation.approved_at = None
         quotation.approved_by = None
 
-    if lines is not None or tax_rate_update is not None or discount_percent_update is not None:
-        totals = compute_document_totals(
-            float(quotation.subtotal_amount), float(quotation.discount_percent), float(quotation.tax_rate)
-        )
+    if lines is not None or discount_percent_update is not None:
+        totals = compute_document_totals(float(quotation.subtotal_amount), float(quotation.discount_percent))
         quotation.discount_amount = totals["discount_amount"]
-        quotation.tax_amount = totals["tax_amount"]
         quotation.total_amount = totals["total_amount"]
 
     quotation.updated_by = user_id

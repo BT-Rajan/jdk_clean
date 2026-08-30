@@ -51,8 +51,6 @@ class PurchaseOrder(Base, TimestampMixin, SoftDeleteMixin):
     subtotal_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     discount_percent: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
     discount_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
-    tax_rate: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
-    tax_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     total_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # True when the system drafted this automatically from an MRP

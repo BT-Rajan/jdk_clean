@@ -73,7 +73,6 @@ CREATE TABLE IF NOT EXISTS customers (
     shipping_address VARCHAR(255) NULL,
     city            VARCHAR(80)  NULL,
     country         VARCHAR(80)  NULL,
-    tax_id          VARCHAR(50)  NULL,
     credit_limit    DECIMAL(14,2) NOT NULL DEFAULT 0,
     payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
     status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
@@ -100,7 +99,6 @@ CREATE TABLE IF NOT EXISTS suppliers (
     address         VARCHAR(255) NULL,
     city            VARCHAR(80)  NULL,
     country         VARCHAR(80)  NULL,
-    tax_id          VARCHAR(50)  NULL,
     payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
     mode_of_supply  ENUM('direct','distributor','broker','import') NULL,
     rating          TINYINT UNSIGNED NULL,          -- 1-5 stars
@@ -485,20 +483,13 @@ CREATE TABLE IF NOT EXISTS orders (
     requested_delivery_date DATE NULL,
     confirmed_delivery_date DATE NULL,
     status          ENUM('draft','confirmed','in_production','ready_to_ship','shipped','delivered','cancelled') NOT NULL DEFAULT 'draft',
-    -- Sum of line totals, before tax.
+    -- Sum of line totals.
     subtotal_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
     -- Percentage, e.g. 0 or 10 -- a whole-document discount applied on
-    -- top of the already line-discounted subtotal, before tax.
+    -- top of the already line-discounted subtotal.
     discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
     discount_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
-    -- Percentage (e.g. 0, 5) captured at creation from Settings ->
-    -- default_tax_rate, editable per document. Kuwait has no GST/VAT --
-    -- this is provisioned at 0% by default, not active.
-    tax_rate        DECIMAL(5,2) NOT NULL DEFAULT 0,
-    tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,
-    -- subtotal_amount + tax_amount. Every other part of the app that
-    -- reads total_amount (dashboard, deal detail, etc.) keeps working
-    -- unchanged, since it equals subtotal_amount whenever tax_rate is 0.
+    -- subtotal_amount - discount_amount.
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
     close_reason    TEXT NULL,                        -- Sales' reason for cancelling without a delivery note
@@ -553,11 +544,9 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
     status          ENUM('draft','sent','confirmed','partially_received','received','cancelled') NOT NULL DEFAULT 'draft',
     subtotal_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
     -- Percentage, e.g. 0 or 10 -- a whole-document discount applied on
-    -- top of the already line-discounted subtotal, before tax.
+    -- top of the already line-discounted subtotal.
     discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
     discount_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
-    tax_rate        DECIMAL(5,2) NOT NULL DEFAULT 0,
-    tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
     -- True when the system drafted this automatically from an MRP
@@ -666,11 +655,9 @@ CREATE TABLE IF NOT EXISTS quotations (
     status          ENUM('draft','sent','accepted','rejected','expired','converted') NOT NULL DEFAULT 'draft',
     subtotal_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
     -- Percentage, e.g. 0 or 10 -- a whole-document discount applied on
-    -- top of the already line-discounted subtotal, before tax.
+    -- top of the already line-discounted subtotal.
     discount_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
     discount_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
-    tax_rate        DECIMAL(5,2) NOT NULL DEFAULT 0,
-    tax_amount      DECIMAL(14,2) NOT NULL DEFAULT 0,
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
     converted_order_id BIGINT UNSIGNED NULL,

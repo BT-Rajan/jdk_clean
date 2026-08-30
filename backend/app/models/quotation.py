@@ -46,11 +46,9 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
     )
     subtotal_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     # Percentage, e.g. 0 or 10 -- a whole-document discount applied on
-    # top of the already line-discounted subtotal, before tax.
+    # top of the already line-discounted subtotal.
     discount_percent: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
     discount_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
-    tax_rate: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
-    tax_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     total_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     converted_order_id: Mapped[int | None] = mapped_column(BigPK, nullable=True)

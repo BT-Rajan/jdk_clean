@@ -64,12 +64,6 @@ PROCUREMENT_FIELDS = ["auto_draft_purchase_orders_from_mrp"]
 # running a different week (e.g. Mon-Fri, or Mon-Sat) changes this once
 # in Settings and every capacity estimate picks it up from then on.
 WORKING_DAYS_FIELDS = ["factory_working_days"]
-# Kuwait has no GST/VAT today -- this exists so tax can be switched on
-# later (a rate change, a law change) without any schema or workflow
-# rework, not because it's active now. Stored as a percentage string,
-# e.g. "0" or "5"; every quotation/order/purchase order defaults to this
-# rate at creation (still overridable per document).
-TAX_FIELDS = ["default_tax_rate"]
 # Large-PO admin approval: a PO at or above this amount (in KWD) can't be
 # sent to its supplier until an admin approves it (see purchase_order_
 # service.approve_purchase_order). Empty/unset means the gate is off --
@@ -91,7 +85,6 @@ ALL_FIELDS = (
     + DELIVERY_FIELDS
     + PROCUREMENT_FIELDS
     + WORKING_DAYS_FIELDS
-    + TAX_FIELDS
     + APPROVAL_FIELDS
     + DISCOUNT_APPROVAL_FIELDS
 )
@@ -108,8 +101,6 @@ DEFAULTS["auto_create_quotation_from_feasibility"] = "true"
 DEFAULTS["auto_schedule_production_on_order_confirm"] = "true"
 DEFAULTS["auto_create_delivery_note_on_ready_to_ship"] = "true"
 DEFAULTS["auto_draft_purchase_orders_from_mrp"] = "true"
-# 0% -- Kuwait has no GST/VAT. Provisioned, not active.
-DEFAULTS["default_tax_rate"] = "0"
 # Kuwait's standard work week: Sunday-Thursday, Friday/Saturday off.
 # Admin changes this in Settings for a different week; every capacity
 # estimate (feasibility check, order auto-scheduling) reads it fresh via
@@ -216,14 +207,6 @@ def is_auto_create_delivery_note_enabled(db: Session) -> bool:
 def is_auto_draft_purchase_orders_enabled(db: Session) -> bool:
     values = get_all(db)
     return values.get("auto_draft_purchase_orders_from_mrp", "true").strip().lower() in ("true", "1", "yes")
-
-
-def get_default_tax_rate(db: Session) -> float:
-    values = get_all(db)
-    try:
-        return max(float(values.get("default_tax_rate", "0")), 0.0)
-    except ValueError:
-        return 0.0
 
 
 def get_large_po_approval_threshold(db: Session) -> float | None:

@@ -240,7 +240,7 @@ export function GeneralSettingsForm({ activeSection }: GeneralSettingsFormProps)
       <Alert variant="error">{formError}</Alert>
       <Alert variant="success">{notice}</Alert>
 
-      <TabPanel id="company-tax" activeId={activeSection} keepMounted className="flex flex-col gap-8">
+      <TabPanel id="company" activeId={activeSection} keepMounted className="flex flex-col gap-8">
         <GlassCard className="p-8">
           <h2 className="font-display text-lg font-medium text-white">Company details</h2>
           <p className="mt-1 text-sm text-white/50">Appears on the letterhead of every generated PDF.</p>
@@ -275,25 +275,6 @@ export function GeneralSettingsForm({ activeSection }: GeneralSettingsFormProps)
                 </option>
               ))}
             </SelectField>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="p-8">
-          <h2 className="font-display text-lg font-medium text-white">Tax</h2>
-          <p className="mt-1 text-sm text-white/50">
-            Kuwait doesn't currently have GST/VAT. This rate is provisioned at 0% by default and applied to every
-            new quotation, order, and purchase order -- editable per document, and ready to switch on if that ever
-            changes, with no rework needed.
-          </p>
-          <div className="mt-6">
-            <TextField
-              label="Default tax rate (%)"
-              type="number"
-              step="0.01"
-              min="0"
-              max="100"
-              {...register('default_tax_rate')}
-            />
           </div>
         </GlassCard>
       </TabPanel>

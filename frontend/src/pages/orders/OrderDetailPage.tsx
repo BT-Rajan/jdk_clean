@@ -244,13 +244,10 @@ export function OrderDetailPage() {
           <Field label="Requested delivery" value={formatDate(order.requested_delivery_date)} />
           <Field label="Total" value={formatCurrency(order.total_amount)} />
         </dl>
-        {(order.tax_rate > 0 || order.discount_percent > 0) && (
+        {order.discount_percent > 0 && (
           <p className="mt-3 text-xs text-white/40">
             Subtotal {formatCurrency(order.subtotal_amount)}
-            {order.discount_percent > 0 && (
-              <> − {order.discount_percent}% discount ({formatCurrency(order.discount_amount)})</>
-            )}
-            {order.tax_rate > 0 && <> + {order.tax_rate}% tax ({formatCurrency(order.tax_amount)})</>}
+            {' '}− {order.discount_percent}% discount ({formatCurrency(order.discount_amount)})
             {' '}= {formatCurrency(order.total_amount)}
           </p>
         )}
