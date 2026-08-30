@@ -1,11 +1,26 @@
 /** Mirrors backend/app/schemas/settings.py. Admin-only. */
 
+/** Mirrors settings_service.LOGO_VARIANTS -- theme x language, fixed set
+ * of four. Upload/select/remove logic all keys off this list. */
+export const LOGO_VARIANTS = ['dark_english', 'dark_arabic', 'light_english', 'light_arabic'] as const
+export type LogoVariant = (typeof LOGO_VARIANTS)[number]
+
 export interface Settings {
   company_name: string
   company_address: string
   company_phone: string
   company_email: string
   company_gstin: string
+  /** Uploaded logo filenames, one per variant -- "" if not uploaded yet.
+   * Set only via uploadCompanyLogo/deleteCompanyLogo, never through
+   * updateSettings. */
+  company_logo_dark_english_filename: string
+  company_logo_dark_arabic_filename: string
+  company_logo_light_english_filename: string
+  company_logo_light_arabic_filename: string
+  /** "" (none selected yet) or one of the four LOGO_VARIANTS -- which
+   * uploaded logo is actually the active one. */
+  company_logo_active: '' | LogoVariant
   /** Masked (e.g. "••••••••ab12") once set -- never the real key. Which
    * provider (Claude or DeepSeek) it belongs to is auto-detected
    * server-side from the key's own format -- there's no separate
