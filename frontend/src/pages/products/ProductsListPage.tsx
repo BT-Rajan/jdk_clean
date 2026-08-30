@@ -14,18 +14,21 @@ import {
   StatusBadge,
   TextField,
 } from '@/components/ui'
-import { activateProduct, deactivateProduct, listProducts } from '@/api/products'
+import { activateProduct, deactivateProduct, downloadProductsCsv, listProducts } from '@/api/products'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
 import { formatCurrency } from '@/lib/currency'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { ProductImportDialog } from './ProductImportDialog'
 
 export function ProductsListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [busyId, setBusyId] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [exporting, setExporting] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const fetcher = useCallback(
     (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) => listProducts(params),
     [],
@@ -46,6 +49,18 @@ export function ProductsListPage() {
     error,
     refetch,
   } = usePagedResource(fetcher)
+
+  async function handleExport() {
+    setExporting(true)
+    setActionError(null)
+    try {
+      await downloadProductsCsv()
+    } catch (err) {
+      setActionError(getApiErrorMessage(err))
+    } finally {
+      setExporting(false)
+    }
+  }
 
   async function handleToggleStatus(id: number, currentStatus: string) {
     setBusyId(id)
@@ -71,7 +86,13 @@ export function ProductsListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Products</h1>
           <p className="mt-2 text-sm text-white/50">{total} on file</p>
         </div>
-        {canWrite(user?.role) && <Button onClick={() => navigate('/products/new')}>New product</Button>}
+        <div className="flex flex-wrap gap-3">
+          <Button variant="ghost" onClick={handleExport} isLoading={exporting}>Export CSV</Button>
+          {canWrite(user?.role) && (
+            <Button variant="ghost" onClick={() => setImportOpen(true)}>Import CSV</Button>
+          )}
+          {canWrite(user?.role) && <Button onClick={() => navigate('/products/new')}>New product</Button>}
+        </div>
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_200px]">
@@ -147,6 +168,12 @@ export function ProductsListPage() {
       </GlassCard>
 
       <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
+
+      <ProductImportDialog
+        open={importOpen}
+        onClose={() => setImportOpen(false)}
+        onImported={refetch}
+      />
     </AppLayout>
   )
 }
