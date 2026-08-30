@@ -13,7 +13,6 @@ class SupplierCreate(BaseModel):
     address: str | None = None
     city: str | None = None
     country: str | None = None
-    tax_id: str | None = None
     payment_terms_days: int = 30
     mode_of_supply: str | None = Field(default=None, pattern=MODE_OF_SUPPLY_PATTERN)
     rating: int | None = Field(default=None, ge=1, le=5)
@@ -28,7 +27,6 @@ class SupplierUpdate(BaseModel):
     address: str | None = None
     city: str | None = None
     country: str | None = None
-    tax_id: str | None = None
     payment_terms_days: int | None = None
     mode_of_supply: str | None = Field(default=None, pattern=MODE_OF_SUPPLY_PATTERN)
     rating: int | None = Field(default=None, ge=1, le=5)

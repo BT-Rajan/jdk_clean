@@ -34,8 +34,6 @@ export interface PurchaseOrder {
   subtotal_amount: number
   discount_percent: number
   discount_amount: number
-  tax_rate: number
-  tax_amount: number
   total_amount: number
   notes: string | null
   /** True when the system drafted this automatically from an MRP
@@ -66,7 +64,6 @@ export interface PurchaseOrderPayload {
   order_date: string
   expected_delivery_date?: string | null
   notes?: string | null
-  tax_rate?: number
   discount_percent?: number
   lines: PurchaseOrderLineInput[]
 }

@@ -48,9 +48,6 @@ export interface Settings {
   /** 'true' or 'false' -- whether an MRP shortage automatically drafts a
    * purchase order. Admin/manager-only to change. */
   auto_draft_purchase_orders_from_mrp: string
-  /** Percentage, e.g. "0" or "5". Kuwait has no GST/VAT -- defaults to
-   * "0", provisioned for later. */
-  default_tax_rate: string
   /** KWD amount, or "" to disable. A PO at/above this can't be sent
    * until an admin approves it. */
   large_po_approval_threshold: string

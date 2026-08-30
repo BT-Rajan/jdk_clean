@@ -159,7 +159,7 @@ function OrderCreateForm() {
           <TextField label="Requested delivery" type="date" min={todayDateInputMin} error={errors.requested_delivery_date?.message} {...register('requested_delivery_date')} />
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="max-w-xs">
           <TextField
             label="Discount (%)"
             type="number"
@@ -169,16 +169,6 @@ function OrderCreateForm() {
             placeholder="Whole-document discount, on top of any per-line discounts"
             error={errors.discount_percent?.message}
             {...register('discount_percent')}
-          />
-          <TextField
-            label="Tax rate (%)"
-            type="number"
-            step="0.01"
-            min="0"
-            max="100"
-            placeholder="Leave blank to use the default (0% -- Kuwait has no GST/VAT)"
-            error={errors.tax_rate?.message}
-            {...register('tax_rate')}
           />
         </div>
 

@@ -97,21 +97,16 @@ def create_purchase_order(db: Session, data: dict, user_id: int | None = None) -
 
     lines = _price_lines(db, [dict(line) for line in data.pop("lines")])
     subtotal_amount = round(sum(line["line_total"] for line in lines), 2)
-    tax_rate = data.pop("tax_rate", None)
-    if tax_rate is None:
-        tax_rate = settings_service.get_default_tax_rate(db)
     discount_percent = float(data.pop("discount_percent", None) or 0)
-    totals = compute_document_totals(subtotal_amount, discount_percent, tax_rate)
+    totals = compute_document_totals(subtotal_amount, discount_percent)
 
     po_number = number_series_service.next_number(db, "PURCHASE_ORDER")
 
     po = PurchaseOrder(
         po_number=po_number,
         subtotal_amount=subtotal_amount,
-        tax_rate=tax_rate,
         discount_percent=discount_percent,
         discount_amount=totals["discount_amount"],
-        tax_amount=totals["tax_amount"],
         total_amount=totals["total_amount"],
         created_by=user_id,
         **data,
@@ -237,7 +232,6 @@ def update_purchase_order(
         _validate_supplier(db, data["supplier_id"])
 
     lines = data.pop("lines", None)
-    tax_rate_update = data.pop("tax_rate", None)
     discount_percent_update = data.pop("discount_percent", None)
     if data.get("supplier_id") is None:
         data.pop("supplier_id", None)
@@ -247,10 +241,6 @@ def update_purchase_order(
         if old_value != new_value:
             changes[field] = (old_value, new_value)
             setattr(po, field, new_value)
-
-    if tax_rate_update is not None and float(tax_rate_update) != float(po.tax_rate):
-        changes["tax_rate"] = (po.tax_rate, tax_rate_update)
-        po.tax_rate = tax_rate_update
 
     if discount_percent_update is not None and float(discount_percent_update) != float(po.discount_percent):
         changes["discount_percent"] = (po.discount_percent, discount_percent_update)
@@ -268,10 +258,9 @@ def update_purchase_order(
         po.approved_at = None
         po.approved_by = None
 
-    if lines is not None or tax_rate_update is not None or discount_percent_update is not None:
-        totals = compute_document_totals(float(po.subtotal_amount), float(po.discount_percent), float(po.tax_rate))
+    if lines is not None or discount_percent_update is not None:
+        totals = compute_document_totals(float(po.subtotal_amount), float(po.discount_percent))
         po.discount_amount = totals["discount_amount"]
-        po.tax_amount = totals["tax_amount"]
         po.total_amount = totals["total_amount"]
 
     po.updated_by = user_id

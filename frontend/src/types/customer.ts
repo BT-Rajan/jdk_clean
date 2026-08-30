@@ -26,7 +26,6 @@ export interface CustomerPayload {
   shipping_address?: string | null
   city?: string | null
   country?: string | null
-  tax_id?: string | null
   credit_limit?: number
   payment_terms_days?: number
   status?: ActiveStatus

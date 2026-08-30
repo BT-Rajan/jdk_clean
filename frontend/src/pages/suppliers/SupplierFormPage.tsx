@@ -51,7 +51,6 @@ function SupplierCreateForm() {
       address: '',
       city: '',
       country: '',
-      tax_id: '',
       payment_terms_days: 30,
       mode_of_supply: '',
       rating: '',
@@ -85,11 +84,8 @@ function SupplierCreateForm() {
           <TextField label="Contact person" {...register('contact_person')} />
           <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
         </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
           <TextField label="Phone" {...register('phone')} />
-          <TextField label="Tax ID" {...register('tax_id')} />
-        </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <TextField label="City" {...register('city')} />
           <TextField label="Country" {...register('country')} />
         </div>
@@ -199,7 +195,7 @@ function SupplierEditForm({ id }: { id: number }) {
             <TextField label="City" {...register('city')} />
           </div>
           <TextField label="Country" {...register('country')} />
-          <p className="text-xs text-white/40">Address and tax ID can only be set when the supplier is created.</p>
+          <p className="text-xs text-white/40">Address can only be set when the supplier is created.</p>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <TextField
               label="Payment terms (days)"

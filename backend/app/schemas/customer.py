@@ -11,7 +11,6 @@ class CustomerCreate(BaseModel):
     shipping_address: str | None = None
     city: str | None = None
     country: str | None = None
-    tax_id: str | None = None
     credit_limit: float = 0
     payment_terms_days: int = 30
     status: str = Field(default="active", pattern="^(active|inactive)$")
@@ -27,7 +26,6 @@ class CustomerUpdate(BaseModel):
     shipping_address: str | None = None
     city: str | None = None
     country: str | None = None
-    tax_id: str | None = None
     credit_limit: float | None = None
     payment_terms_days: int | None = None
     status: str | None = Field(default=None, pattern="^(active|inactive)$")
