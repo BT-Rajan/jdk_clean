@@ -17,6 +17,16 @@ export interface ListQueryParams {
   search?: string
   sort?: string
   status?: string
+  // Mirrors the rest of backend/app/api/deps.py:ListParams' whitelist --
+  // harmless to send one a given endpoint's CRUD class doesn't declare
+  // in filterable_fields, it's just ignored server-side.
+  city?: string
+  country?: string
+  mode_of_supply?: string
+  role?: string
+  product_type?: string
+  category?: string
+  department_id?: number
 }
 
 /** Shape of the {"message": "..."} body returned by delete/restore endpoints. */

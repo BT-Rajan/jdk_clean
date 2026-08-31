@@ -4,7 +4,6 @@
  */
 
 export type UserRole = 'admin' | 'manager' | 'staff' | 'viewer'
-export type UserDepartment = 'sales' | 'procurement' | 'warehouse'
 
 export interface User {
   id: number
@@ -13,7 +12,15 @@ export interface User {
   full_name: string
   phone: string | null
   role: UserRole
-  department: UserDepartment | null
+  /** References the Department master (types/department.ts) -- id is the
+   * authoritative FK, code/name are denormalized for display and for the
+   * fixed document-type write gates in lib/roles.ts (canWriteDepartment),
+   * which compare against code since those gates are tied to fixed
+   * document types (sales/procurement/warehouse), not to a specific
+   * department row. */
+  department_id: number | null
+  department_code: string | null
+  department_name: string | null
   /** Org chart reporting line (Admin -> Access control -> Org chart) --
    * the id of the manager-role user this user reports to. Only ever set
    * for staff/viewer ("Member") rows; admin/manager rows leave it null. */

@@ -1,36 +1,33 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, GlassCard, Spinner } from '@/components/ui'
+import { listDepartments } from '@/api/departments'
 import { getPermissionMatrix, listPermissionPages, updatePermissionMatrix } from '@/api/permissions'
-import type { AccessLevel, Department, PermissionEntry, PermissionPage } from '@/types/permission'
+import type { Department } from '@/types/department'
+import type { AccessLevel, PermissionEntry, PermissionPage } from '@/types/permission'
 import { getApiErrorMessage } from '@/lib/apiError'
 
-const DEPARTMENTS: { key: Department; label: string }[] = [
-  { key: 'sales', label: 'Sales' },
-  { key: 'procurement', label: 'Procurement' },
-  { key: 'warehouse', label: 'Warehouse' },
-]
-
-type Grid = Record<Department, Record<string, AccessLevel>>
+type Grid = Record<number, Record<string, AccessLevel>>
 
 function toGrid(entries: PermissionEntry[]): Grid {
-  const grid = { sales: {}, procurement: {}, warehouse: {} } as Grid
+  const grid: Grid = {}
   for (const entry of entries) {
-    grid[entry.department][entry.page_key] = entry.access_level
+    grid[entry.department_id] = { ...grid[entry.department_id], [entry.page_key]: entry.access_level }
   }
   return grid
 }
 
 function toEntries(grid: Grid): PermissionEntry[] {
   const entries: PermissionEntry[] = []
-  for (const department of Object.keys(grid) as Department[]) {
-    for (const [pageKey, level] of Object.entries(grid[department])) {
-      entries.push({ department, page_key: pageKey, access_level: level })
+  for (const departmentId of Object.keys(grid).map(Number)) {
+    for (const [pageKey, level] of Object.entries(grid[departmentId])) {
+      entries.push({ department_id: departmentId, page_key: pageKey, access_level: level })
     }
   }
   return entries
 }
 
 export function AccessControlTab() {
+  const [departments, setDepartments] = useState<Department[]>([])
   const [grid, setGrid] = useState<Grid | null>(null)
   const [pages, setPages] = useState<PermissionPage[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,32 +36,37 @@ export function AccessControlTab() {
   const [notice, setNotice] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([getPermissionMatrix(), listPermissionPages()])
-      .then(([entries, pageList]) => {
+    Promise.all([
+      getPermissionMatrix(),
+      listPermissionPages(),
+      listDepartments({ page: 1, page_size: 200, status: 'active' }),
+    ])
+      .then(([entries, pageList, departmentPage]) => {
         setGrid(toGrid(entries))
         setPages(pageList)
+        setDepartments(departmentPage.items)
       })
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
   }, [])
 
-  function setLevel(department: Department, pageKey: string, level: AccessLevel) {
+  function setLevel(departmentId: number, pageKey: string, level: AccessLevel) {
     setGrid((prev) => {
       if (!prev) return prev
-      return { ...prev, [department]: { ...prev[department], [pageKey]: level } }
+      return { ...prev, [departmentId]: { ...prev[departmentId], [pageKey]: level } }
     })
   }
 
-  function toggleRead(department: Department, pageKey: string, checked: boolean) {
+  function toggleRead(departmentId: number, pageKey: string, checked: boolean) {
     // Unchecking Read also clears Write, since write implies read --
     // there's no valid state where a department can edit a page it
     // can't even view.
-    setLevel(department, pageKey, checked ? 'read' : 'none')
+    setLevel(departmentId, pageKey, checked ? 'read' : 'none')
   }
 
-  function toggleWrite(department: Department, pageKey: string, checked: boolean) {
+  function toggleWrite(departmentId: number, pageKey: string, checked: boolean) {
     // Checking Write implies Read is granted too.
-    setLevel(department, pageKey, checked ? 'write' : 'read')
+    setLevel(departmentId, pageKey, checked ? 'write' : 'read')
   }
 
   async function handleSave() {
@@ -110,7 +112,8 @@ export function AccessControlTab() {
           Governs what a <span className="text-white/70">staff</span> user can see and do, based on their
           department. Admins and managers always have full access to everything; viewers always have read-only
           access to everything -- neither is affected by this grid. A page with neither box checked is completely
-          hidden from that department until you grant it here.
+          hidden from that department until you grant it here. Departments themselves are managed under{' '}
+          <span className="text-white/70">Master Data -&gt; People &amp; Organization -&gt; Departments</span>.
         </p>
 
         <div className="mt-6 overflow-x-auto">
@@ -118,9 +121,9 @@ export function AccessControlTab() {
             <thead>
               <tr className="border-b border-white/10 text-left text-white/50">
                 <th className="py-2 pr-4 font-medium">Page</th>
-                {DEPARTMENTS.map((dept) => (
-                  <th key={dept.key} className="py-2 px-4 text-center font-medium">
-                    {dept.label}
+                {departments.map((dept) => (
+                  <th key={dept.id} className="py-2 px-4 text-center font-medium">
+                    {dept.name}
                   </th>
                 ))}
               </tr>
@@ -129,17 +132,17 @@ export function AccessControlTab() {
               {pages.map(({ key: pageKey, label }) => (
                 <tr key={pageKey} className="border-b border-white/5">
                   <td className="py-3 pr-4 text-white/80">{label}</td>
-                  {DEPARTMENTS.map((dept) => {
-                    const level = grid[dept.key][pageKey] ?? 'none'
+                  {departments.map((dept) => {
+                    const level = grid[dept.id]?.[pageKey] ?? 'none'
                     return (
-                      <td key={dept.key} className="py-3 px-4">
+                      <td key={dept.id} className="py-3 px-4">
                         <div className="flex items-center justify-center gap-4">
                           <label className="flex items-center gap-1.5 text-xs text-white/60">
                             <input
                               type="checkbox"
                               className="h-4 w-4 rounded border-white/20 bg-white/5 accent-gold-400"
                               checked={level === 'read' || level === 'write'}
-                              onChange={(e) => toggleRead(dept.key, pageKey, e.target.checked)}
+                              onChange={(e) => toggleRead(dept.id, pageKey, e.target.checked)}
                             />
                             Read
                           </label>
@@ -148,7 +151,7 @@ export function AccessControlTab() {
                               type="checkbox"
                               className="h-4 w-4 rounded border-white/20 bg-white/5 accent-gold-400"
                               checked={level === 'write'}
-                              onChange={(e) => toggleWrite(dept.key, pageKey, e.target.checked)}
+                              onChange={(e) => toggleWrite(dept.id, pageKey, e.target.checked)}
                             />
                             Write
                           </label>

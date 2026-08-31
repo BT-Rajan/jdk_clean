@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { ChangeEvent, ComponentProps, ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -6,9 +6,18 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, PasswordField, SelectField, Spinner, TextField } from '@/components/ui'
+import { listDepartments } from '@/api/departments'
 import { createUser, deleteUserSignature, fetchUserSignatureBlob, getUser, updateUser, uploadUserSignature } from '@/api/users'
+import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
-import { userCreateSchema, userEditSchema, type UserCreateFormValues, type UserEditFormValues } from '@/lib/validation'
+import {
+  userCreateSchema,
+  userEditSchema,
+  type UserCreateFormValues,
+  type UserCreateSubmitValues,
+  type UserEditFormValues,
+  type UserEditSubmitValues,
+} from '@/lib/validation'
 import type { User } from '@/types/auth'
 
 export function UserFormPage() {
@@ -38,7 +47,13 @@ function RoleSelect(props: Omit<ComponentProps<typeof SelectField>, 'label' | 'c
   )
 }
 
+function useDepartmentOptions() {
+  const fetcher = useCallback(() => listDepartments({ page: 1, page_size: 200, status: 'active' }), [])
+  return useSelectOptions(fetcher)
+}
+
 function DepartmentSelect(props: Omit<ComponentProps<typeof SelectField>, 'label' | 'children'>) {
+  const { options: departments } = useDepartmentOptions()
   return (
     <SelectField
       label="Department"
@@ -46,9 +61,11 @@ function DepartmentSelect(props: Omit<ComponentProps<typeof SelectField>, 'label
       {...props}
     >
       <option value="">None</option>
-      <option value="sales">Sales (Quotations, Orders)</option>
-      <option value="procurement">Procurement (Purchase Orders)</option>
-      <option value="warehouse">Warehouse (Delivery Notes)</option>
+      {departments.map((d) => (
+        <option key={d.id} value={d.id}>
+          {d.name}
+        </option>
+      ))}
     </SelectField>
   )
 }
@@ -144,15 +161,15 @@ function UserCreateForm() {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
-  } = useForm<UserCreateFormValues>({
+  } = useForm<UserCreateFormValues, unknown, UserCreateSubmitValues>({
     resolver: zodResolver(userCreateSchema),
-    defaultValues: { username: '', email: '', password: '', full_name: '', role: 'staff', department: '' },
+    defaultValues: { username: '', email: '', password: '', full_name: '', role: 'staff', department_id: '' },
   })
 
-  async function onSubmit(values: UserCreateFormValues) {
+  async function onSubmit(values: UserCreateSubmitValues) {
     setFormError(null)
     try {
-      const created = await createUser({ ...values, department: values.department || null })
+      const created = await createUser({ ...values, department_id: values.department_id || null })
       navigate(`/users/${created.id}`)
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -171,7 +188,7 @@ function UserCreateForm() {
           <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
           <RoleSelect {...register('role')} />
         </div>
-        <DepartmentSelect {...register('department')} />
+        <DepartmentSelect {...register('department_id')} />
         <PasswordField label="Password" error={errors.password?.message} {...register('password')} />
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
@@ -192,7 +209,7 @@ function UserEditForm({ id }: { id: number }) {
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
-  } = useForm<UserEditFormValues>({
+  } = useForm<UserEditFormValues, unknown, UserEditSubmitValues>({
     resolver: zodResolver(userEditSchema),
   })
 
@@ -200,16 +217,22 @@ function UserEditForm({ id }: { id: number }) {
     getUser(id)
       .then((u) => {
         setUser(u)
-        reset({ email: u.email, full_name: u.full_name, role: u.role, department: u.department ?? '', is_active: u.is_active })
+        reset({
+          email: u.email,
+          full_name: u.full_name,
+          role: u.role,
+          department_id: u.department_id ?? '',
+          is_active: u.is_active,
+        })
       })
       .catch((err) => setFormError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
   }, [id, reset])
 
-  async function onSubmit(values: UserEditFormValues) {
+  async function onSubmit(values: UserEditSubmitValues) {
     setFormError(null)
     try {
-      await updateUser(id, { ...values, department: values.department || null })
+      await updateUser(id, { ...values, department_id: values.department_id || null })
       navigate(`/users/${id}`)
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -236,7 +259,7 @@ function UserEditForm({ id }: { id: number }) {
               Active
             </label>
           </div>
-          <DepartmentSelect {...register('department')} />
+          <DepartmentSelect {...register('department_id')} />
           {user && <SignatureManager user={user} onChange={setUser} />}
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>

@@ -1,8 +1,10 @@
 export type AccessLevel = 'none' | 'read' | 'write'
-export type Department = 'sales' | 'procurement' | 'warehouse'
 
 export interface PermissionEntry {
-  department: Department
+  department_id: number
+  /** Display convenience, always populated on read -- see
+   * types/department.ts for the authoritative Department master shape. */
+  department_code?: string
   page_key: string
   access_level: AccessLevel
 }

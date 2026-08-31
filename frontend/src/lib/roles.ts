@@ -1,4 +1,4 @@
-import type { User, UserDepartment, UserRole } from '@/types/auth'
+import type { User, UserRole } from '@/types/auth'
 
 /**
  * Mirrors the write_roles guards used across the backend routers:
@@ -17,17 +17,21 @@ export function canAdjustInventory(role: UserRole | undefined): boolean {
 }
 
 /**
- * Mirrors api/deps.py:require_department_write exactly. Quotations/Orders
- * are department 'sales', Purchase Orders are 'procurement' (Delivery
- * Notes will be 'warehouse'). admin/manager always pass regardless of
- * their own department -- department-scoping is what unlocks limited
- * write access for staff, not a restriction on roles that already have
- * full access.
+ * UI-only convenience gate for a fixed document type's "New"/edit
+ * buttons: Quotations/Orders are department 'sales', Purchase Orders are
+ * 'procurement', Delivery Notes are 'warehouse'. admin/manager always
+ * pass regardless of their own department. The actual write access is
+ * enforced server-side by the department_permissions matrix (see
+ * backend/app/core/permissions.py require_page_access, gated by
+ * page_key, not by this fixed department mapping) -- this only decides
+ * whether to show the button before that check ever runs, so getting it
+ * slightly stale just means a staff member sees a button that 403s
+ * rather than one that's missing.
  */
-export function canWriteDepartment(user: User | null | undefined, department: UserDepartment): boolean {
+export function canWriteDepartment(user: User | null | undefined, department: string): boolean {
   if (!user) return false
   if (user.role === 'admin' || user.role === 'manager') return true
-  return user.role === 'staff' && user.department === department
+  return user.role === 'staff' && user.department_code === department
 }
 
 export function isAdmin(role: UserRole | undefined): boolean {

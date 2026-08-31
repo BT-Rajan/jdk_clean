@@ -3,7 +3,7 @@
  * already defined in types/auth.ts (UserOut === the /auth/me shape), so
  * this file only adds the admin-only create/update payloads.
  */
-import type { UserDepartment, UserRole } from './auth'
+import type { UserRole } from './auth'
 
 export interface UserCreatePayload {
   username: string
@@ -11,14 +11,14 @@ export interface UserCreatePayload {
   password: string
   full_name: string
   role: UserRole
-  department?: UserDepartment | null
+  department_id?: number | null
 }
 
 export interface UserUpdatePayload {
   email?: string
   full_name?: string
   role?: UserRole
-  department?: UserDepartment | null
+  department_id?: number | null
   is_active?: boolean
   /** Org chart reporting line -- see types/auth.ts User.manager_id. Pass
    * null explicitly to unassign (drag a Member to "Unassigned"). */

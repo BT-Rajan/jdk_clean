@@ -1,16 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert, Badge, GlassCard, Spinner } from '@/components/ui'
+import { listDepartments } from '@/api/departments'
 import { listUsers, updateUser } from '@/api/users'
-import type { User, UserDepartment } from '@/types/auth'
+import { useSelectOptions } from '@/hooks/useSelectOptions'
+import type { User } from '@/types/auth'
 import { getApiErrorMessage } from '@/lib/apiError'
-
-const DEPARTMENT_OPTIONS: { value: UserDepartment | ''; label: string }[] = [
-  { value: '', label: 'No department' },
-  { value: 'sales', label: 'Sales' },
-  { value: 'procurement', label: 'Procurement' },
-  { value: 'warehouse', label: 'Warehouse' },
-]
 
 /** The "Unassigned" drop target uses this in place of a real manager id --
  * dropping a Member here sends manager_id: null (see handleDrop). */
@@ -19,8 +14,8 @@ const UNASSIGNED = 'unassigned'
 /** Compact department picker used inside chart nodes -- deliberately not
  * the shared SelectField (that always renders a full label block, too
  * tall for a chart card). This is the "access bundle" dropdown from the
- * spec: it just writes the user's existing `department`, which is exactly
- * what Admin -> Access control's permission matrix already keys off of
+ * spec: it just writes the user's existing `department_id`, which is
+ * exactly what Access Control's permission matrix already keys off of
  * (see AccessControlTab) -- no new bundle concept, reusing what's there.
  */
 function DepartmentSelect({
@@ -28,21 +23,24 @@ function DepartmentSelect({
   disabled,
   onChange,
 }: {
-  value: UserDepartment | null
+  value: number | null
   disabled: boolean
-  onChange: (value: UserDepartment | null) => void
+  onChange: (value: number | null) => void
 }) {
+  const fetcher = useCallback(() => listDepartments({ page: 1, page_size: 200, status: 'active' }), [])
+  const { options: departments } = useSelectOptions(fetcher)
   return (
     <select
       value={value ?? ''}
       disabled={disabled}
-      onChange={(e) => onChange((e.target.value || null) as UserDepartment | null)}
+      onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
       className="h-8 w-full rounded-lg border border-white/10 bg-white/5 px-2 text-xs text-white/80 outline-none transition-colors focus:border-gold-400/60 disabled:opacity-50 [&>option]:bg-ink-800"
       onClick={(e) => e.stopPropagation()}
     >
-      {DEPARTMENT_OPTIONS.map((opt) => (
-        <option key={opt.value} value={opt.value}>
-          {opt.label}
+      <option value="">No department</option>
+      {departments.map((d) => (
+        <option key={d.id} value={d.id}>
+          {d.name}
         </option>
       ))}
     </select>
@@ -55,7 +53,7 @@ interface MemberCardProps {
   saving: boolean
   onDragStart: () => void
   onDragEnd: () => void
-  onDepartmentChange: (department: UserDepartment | null) => void
+  onDepartmentChange: (departmentId: number | null) => void
 }
 
 function MemberCard({ user, dragging, saving, onDragStart, onDragEnd, onDepartmentChange }: MemberCardProps) {
@@ -84,7 +82,7 @@ function MemberCard({ user, dragging, saving, onDragStart, onDragEnd, onDepartme
         </div>
       </div>
       <div className="mt-2">
-        <DepartmentSelect value={user.department} disabled={saving} onChange={onDepartmentChange} />
+        <DepartmentSelect value={user.department_id} disabled={saving} onChange={onDepartmentChange} />
       </div>
     </div>
   )
@@ -143,7 +141,7 @@ export function OrgChartTab() {
    * and the department dropdown -- updates local state immediately,
    * reverts it and surfaces the error if the backend rejects the write
    * (e.g. dropping a member onto a manager who's since gone inactive). */
-  async function patchUser(id: number, patch: { manager_id?: number | null; department?: UserDepartment | null }) {
+  async function patchUser(id: number, patch: { manager_id?: number | null; department_id?: number | null }) {
     const previous = users
     setUsers((prev) => (prev ? prev.map((u) => (u.id === id ? { ...u, ...patch } : u)) : prev))
     setPending(id, true)
@@ -266,9 +264,9 @@ export function OrgChartTab() {
                     </div>
                     <div className="mt-2">
                       <DepartmentSelect
-                        value={manager.department}
+                        value={manager.department_id}
                         disabled={pendingIds.has(manager.id)}
-                        onChange={(department) => patchUser(manager.id, { department })}
+                        onChange={(department_id) => patchUser(manager.id, { department_id })}
                       />
                     </div>
                   </div>
@@ -287,7 +285,7 @@ export function OrgChartTab() {
                           saving={pendingIds.has(member.id)}
                           onDragStart={() => setDraggingId(member.id)}
                           onDragEnd={() => setDraggingId(null)}
-                          onDepartmentChange={(department) => patchUser(member.id, { department })}
+                          onDepartmentChange={(department_id) => patchUser(member.id, { department_id })}
                         />
                       ))
                     )}
@@ -323,7 +321,7 @@ export function OrgChartTab() {
                 saving={pendingIds.has(member.id)}
                 onDragStart={() => setDraggingId(member.id)}
                 onDragEnd={() => setDraggingId(null)}
-                onDepartmentChange={(department) => patchUser(member.id, { department })}
+                onDepartmentChange={(department_id) => patchUser(member.id, { department_id })}
               />
             ))
           )}
