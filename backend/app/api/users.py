@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.api.common import PagedResponse
 from app.api.deps import ListParams, require_role
 from app.core.database import get_db
-from app.core.exceptions import NotFoundError
+from app.core.exceptions import NotFoundError, ValidationAppError
 from app.core.security import hash_password
 from app.crud.master_data import user_crud
 from app.models.user import User
@@ -59,6 +59,33 @@ def create_user(
     return UserOut.from_model(user_crud.create(db, data, user_id=current_user.id))
 
 
+def _validate_manager_id(db: Session, user_id: int, manager_id: int | None) -> None:
+    """Enforced only when manager_id is being set to something other than
+    None -- clearing it (drag to "Unassigned" in the org chart) always
+    passes. A Member's reporting line must point at an active, non-deleted
+    manager, and never at themselves; cross-department reporting is
+    intentionally allowed (see migrations/2026-08-31_add_user_manager_id.sql).
+    There's only one level of reporting here (Member -> Manager, Manager
+    is always directly under the Owner tier), so no cycle check is needed
+    beyond the self-reference guard.
+    """
+    if manager_id is None:
+        return
+    if manager_id == user_id:
+        raise ValidationAppError("A user cannot report to themselves.")
+    manager = (
+        db.query(User)
+        .filter(User.id == manager_id, User.deleted_at.is_(None))
+        .first()
+    )
+    if manager is None:
+        raise ValidationAppError(f"Manager {manager_id} not found.")
+    if manager.role != "manager" or not manager.is_active:
+        raise ValidationAppError(
+            f"{manager.full_name} is not an active manager and can't have reports assigned in the org chart."
+        )
+
+
 @router.put("/{user_id}", response_model=UserOut)
 def update_user(
     user_id: int,
@@ -67,6 +94,8 @@ def update_user(
     current_user: User = Depends(admin_only),
 ):
     data = payload.model_dump(exclude_unset=True)
+    if "manager_id" in data:
+        _validate_manager_id(db, user_id, data["manager_id"])
     return UserOut.from_model(user_crud.update(db, user_id, data, user_id=current_user.id))
 
 

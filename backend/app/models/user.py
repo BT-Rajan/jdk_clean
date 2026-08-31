@@ -1,4 +1,4 @@
-from sqlalchemy import BigInteger, Boolean, Enum, Integer, String
+from sqlalchemy import BigInteger, Boolean, Enum, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -28,6 +28,15 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     department: Mapped[str | None] = mapped_column(
         Enum("sales", "procurement", "warehouse", name="user_department"), nullable=True
     )
+    # Which Manager this user (a Member -- staff/viewer) reports to in the
+    # org chart (Admin -> Access control -> Org chart). Admin ("Owner") and
+    # manager rows leave this NULL: there's exactly one owner tier and one
+    # manager tier, both fixed by role, so only Members need a reporting
+    # line. No ORM relationship (just the raw id) since the org-chart
+    # endpoint builds the tree itself from a flat user list -- see
+    # app/api/users.py update_user for the "target must be an active
+    # manager" validation enforced on write.
+    manager_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
     # Admin-assigned signature image (mirrors avatar_filename exactly --
     # same upload/storage pattern, see profile_service.py and
     # signature_service.py). No self-upload, no approval state: admin

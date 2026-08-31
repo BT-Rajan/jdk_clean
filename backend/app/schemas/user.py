@@ -18,6 +18,11 @@ class UserUpdate(BaseModel):
     role: str | None = Field(default=None, pattern="^(admin|manager|staff|viewer)$")
     department: str | None = Field(default=None, pattern=DEPARTMENT_PATTERN)
     is_active: bool | None = None
+    # Org chart reporting line (Members only) -- see app/api/users.py
+    # update_user for the "must be an active manager" validation and
+    # models/user.py for why this is None for admin/manager rows. Pass
+    # null explicitly to unassign (drag a Member to the "Unassigned" tray).
+    manager_id: int | None = None
 
 
 class AdminResetPasswordRequest(BaseModel):
@@ -32,6 +37,7 @@ class UserOut(BaseModel):
     phone: str | None = None
     role: str
     department: str | None = None
+    manager_id: int | None = None
     is_active: bool
     has_signature: bool = False
 

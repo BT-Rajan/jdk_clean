@@ -48,6 +48,10 @@ CREATE TABLE IF NOT EXISTS users (
     phone           VARCHAR(30)  NULL,
     avatar_filename VARCHAR(255) NULL,
     department      ENUM('sales','procurement','warehouse') NULL,
+    -- Which Manager this user (a Member -- staff/viewer) reports to in the
+    -- org chart. Admin ("Owner") and manager rows leave this NULL -- see
+    -- migrations/2026-08-31_add_user_manager_id.sql for the full rationale.
+    manager_id      BIGINT UNSIGNED NULL,
     signature_filename VARCHAR(255) NULL,
     role            ENUM('admin','manager','staff','viewer') NOT NULL DEFAULT 'staff',
     is_active       TINYINT(1)   NOT NULL DEFAULT 1,
@@ -56,7 +60,9 @@ CREATE TABLE IF NOT EXISTS users (
     created_by      BIGINT UNSIGNED NULL,
     updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by      BIGINT UNSIGNED NULL,
-    INDEX idx_users_deleted_at (deleted_at)
+    INDEX idx_users_deleted_at (deleted_at),
+    INDEX idx_users_manager_id (manager_id),
+    CONSTRAINT fk_users_manager_id FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================

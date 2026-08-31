@@ -7,6 +7,7 @@ import { cn } from '@/lib/cn'
 import { AccessControlTab } from '@/pages/settings/AccessControlTab'
 import { BomTab } from '@/pages/settings/BomTab'
 import { FactorySetupTab } from '@/pages/settings/FactorySetupTab'
+import { OrgChartTab } from '@/pages/settings/OrgChartTab'
 import { EmailTab } from '@/pages/communication/EmailTab'
 import { SmsTab } from '@/pages/communication/SmsTab'
 import { WhatsAppTab } from '@/pages/communication/WhatsAppTab'
@@ -15,7 +16,16 @@ import { GENERAL_SECTION_KEYS } from './sections'
 import type { GeneralSectionKey } from './sections'
 import { UsersSection } from './UsersSection'
 
-type SectionKey = GeneralSectionKey | 'factory-setup' | 'bom' | 'access-control' | 'email' | 'whatsapp' | 'sms' | 'users'
+type SectionKey =
+  | GeneralSectionKey
+  | 'factory-setup'
+  | 'bom'
+  | 'access-control'
+  | 'org-chart'
+  | 'email'
+  | 'whatsapp'
+  | 'sms'
+  | 'users'
 
 interface SectionGroup {
   label: string
@@ -51,6 +61,7 @@ const GROUPS: SectionGroup[] = [
     label: 'Access',
     items: [
       { key: 'access-control', label: 'Access Control' },
+      { key: 'org-chart', label: 'Org Chart' },
       { key: 'users', label: 'Users' },
     ],
   },
@@ -125,6 +136,7 @@ export function AdminShell() {
             <TabPanel id="factory-setup" activeId={activeSection}><FactorySetupTab /></TabPanel>
             <TabPanel id="bom" activeId={activeSection}><BomTab /></TabPanel>
             <TabPanel id="access-control" activeId={activeSection}><AccessControlTab /></TabPanel>
+            <TabPanel id="org-chart" activeId={activeSection}><OrgChartTab /></TabPanel>
             <TabPanel id="email" activeId={activeSection}><EmailTab /></TabPanel>
             <TabPanel id="whatsapp" activeId={activeSection}><WhatsAppTab /></TabPanel>
             <TabPanel id="sms" activeId={activeSection}><SmsTab /></TabPanel>

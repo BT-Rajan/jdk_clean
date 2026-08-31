@@ -14,6 +14,10 @@ export interface User {
   phone: string | null
   role: UserRole
   department: UserDepartment | null
+  /** Org chart reporting line (Admin -> Access control -> Org chart) --
+   * the id of the manager-role user this user reports to. Only ever set
+   * for staff/viewer ("Member") rows; admin/manager rows leave it null. */
+  manager_id: number | null
   has_signature: boolean
   is_active: boolean
   avatar_url: string | null
