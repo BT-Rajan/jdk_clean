@@ -6,6 +6,7 @@ import { listRawMaterials } from '@/api/rawMaterials'
 import { listUnits } from '@/api/units'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { generateId } from '@/lib/id'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import type { BomExplosionResult, BomLineInput, ComponentType } from '@/types/bom'
 
@@ -19,7 +20,7 @@ interface EditableLine extends BomLineInput {
 
 function emptyLine(): EditableLine {
   return {
-    key: crypto.randomUUID(),
+    key: generateId(),
     component_type: 'raw_material',
     component_id: 0,
     quantity: 1,
@@ -65,7 +66,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
       .then((existing) => {
         setLines(
           existing.map((l) => ({
-            key: crypto.randomUUID(),
+            key: generateId(),
             id: l.id,
             component_type: l.component_type,
             component_id: l.component_id,
@@ -156,7 +157,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
       const saved = await replaceBom(productId, payload)
       setLines(
         saved.map((l) => ({
-          key: crypto.randomUUID(),
+          key: generateId(),
           id: l.id,
           component_type: l.component_type,
           component_id: l.component_id,
@@ -182,7 +183,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
       setLines((prev) => [
         ...prev,
         {
-          key: crypto.randomUUID(),
+          key: generateId(),
           id: created.id,
           component_type: created.component_type,
           component_id: created.component_id,

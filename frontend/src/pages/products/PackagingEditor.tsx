@@ -4,6 +4,7 @@ import { addPackagingLine, deletePackagingLine, getPackaging, replacePackaging }
 import { listRawMaterials } from '@/api/rawMaterials'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { generateId } from '@/lib/id'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import type { PackagingLineInput } from '@/types/packaging'
 
@@ -17,7 +18,7 @@ interface EditableLine extends PackagingLineInput {
 
 function emptyLine(): EditableLine {
   return {
-    key: crypto.randomUUID(),
+    key: generateId(),
     packaging_material_id: 0,
     quantity_per_unit: 1,
     unit: '',
@@ -52,7 +53,7 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
       .then((existing) => {
         setLines(
           existing.map((l) => ({
-            key: crypto.randomUUID(),
+            key: generateId(),
             id: l.id,
             packaging_material_id: l.packaging_material_id,
             quantity_per_unit: l.quantity_per_unit,
@@ -103,7 +104,7 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
       const saved = await replacePackaging(productId, payload)
       setLines(
         saved.map((l) => ({
-          key: crypto.randomUUID(),
+          key: generateId(),
           id: l.id,
           packaging_material_id: l.packaging_material_id,
           quantity_per_unit: l.quantity_per_unit,
@@ -127,7 +128,7 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
       setLines((prev) => [
         ...prev,
         {
-          key: crypto.randomUUID(),
+          key: generateId(),
           id: created.id,
           packaging_material_id: created.packaging_material_id,
           quantity_per_unit: created.quantity_per_unit,

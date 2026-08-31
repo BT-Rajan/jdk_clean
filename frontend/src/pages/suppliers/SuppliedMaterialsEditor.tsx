@@ -4,6 +4,7 @@ import { getSupplierMaterials, replaceSupplierMaterials } from '@/api/supplierMa
 import { listRawMaterials } from '@/api/rawMaterials'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { generateId } from '@/lib/id'
 import type { SupplierMaterialInput } from '@/types/supplierMaterial'
 
 interface EditableLine extends SupplierMaterialInput {
@@ -11,7 +12,7 @@ interface EditableLine extends SupplierMaterialInput {
 }
 
 function emptyLine(): EditableLine {
-  return { key: crypto.randomUUID(), raw_material_id: 0, max_supply_quantity: 1, lead_time_days: null }
+  return { key: generateId(), raw_material_id: 0, max_supply_quantity: 1, lead_time_days: null }
 }
 
 interface SuppliedMaterialsEditorProps {
@@ -37,7 +38,7 @@ export function SuppliedMaterialsEditor({ supplierId, canEdit }: SuppliedMateria
       .then((existing) => {
         setLines(
           existing.map((l) => ({
-            key: crypto.randomUUID(),
+            key: generateId(),
             raw_material_id: l.raw_material_id,
             max_supply_quantity: l.max_supply_quantity,
             lead_time_days: l.lead_time_days,
