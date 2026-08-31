@@ -1,17 +1,9 @@
 import { useEffect, useState } from 'react'
-import { Link } from 'react-router-dom'
 import { useForm } from 'react-hook-form'
-import { Alert, Badge, Button, GlassCard, Spinner, StatusBadge, TextField } from '@/components/ui'
+import { Alert, Button, GlassCard, Spinner, TextField } from '@/components/ui'
 import { getSettings, updateSettings } from '@/api/settings'
-import { listRawMaterials } from '@/api/rawMaterials'
-import { listProducts } from '@/api/products'
-import { listUsers } from '@/api/users'
 import type { Settings } from '@/types/settings'
-import type { RawMaterial } from '@/types/rawMaterial'
-import type { Product } from '@/types/product'
-import type { User } from '@/types/auth'
 import { getApiErrorMessage } from '@/lib/apiError'
-import { formatCurrency } from '@/lib/currency'
 
 const DAY_OPTIONS: { code: string; label: string }[] = [
   { code: 'Mon', label: 'Mon' },
@@ -128,193 +120,15 @@ function WorkingHoursCard() {
   )
 }
 
-function RawMaterialsCard() {
-  const [items, setItems] = useState<RawMaterial[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    listRawMaterials({ page: 1, page_size: 8, sort: 'name' })
-      .then((res) => setItems(res.items))
-      .catch((err) => setError(getApiErrorMessage(err)))
-  }, [])
-
-  return (
-    <GlassCard className="p-8">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-display text-lg font-medium text-white">Raw materials</h2>
-          <p className="mt-1 text-sm text-white/50">Any number of materials, each with its own measuring unit.</p>
-        </div>
-        <div className="flex gap-2">
-          <Link to="/raw-materials/new"><Button variant="ghost" size="sm">Add raw material</Button></Link>
-          <Link to="/raw-materials"><Button variant="ghost" size="sm">View all</Button></Link>
-        </div>
-      </div>
-      <Alert variant="error">{error}</Alert>
-      {items === null ? (
-        <div className="flex justify-center py-8"><Spinner size={20} className="text-gold-300" /></div>
-      ) : items.length === 0 ? (
-        <p className="py-6 text-center text-sm text-white/40">No raw materials defined yet.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
-                <th className="py-3 pr-4 font-medium">Code</th>
-                <th className="py-3 pr-4 font-medium">Name</th>
-                <th className="py-3 pr-4 font-medium">Unit</th>
-                <th className="py-3 pr-4 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((m) => (
-                <tr key={m.id} className="border-b border-white/5 last:border-0">
-                  <td className="py-3 pr-4">
-                    <Link to={`/raw-materials/${m.id}`} className="font-medium text-gold-300 hover:text-gold-200">{m.code}</Link>
-                  </td>
-                  <td className="py-3 pr-4 text-white">{m.name}</td>
-                  <td className="py-3 pr-4 text-white/60">{m.unit}</td>
-                  <td className="py-3 pr-4"><StatusBadge status={m.status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </GlassCard>
-  )
-}
-
-function ProductsCard() {
-  const [items, setItems] = useState<Product[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    listProducts({ page: 1, page_size: 8, sort: 'name' })
-      .then((res) => setItems(res.items))
-      .catch((err) => setError(getApiErrorMessage(err)))
-  }, [])
-
-  return (
-    <GlassCard className="p-8">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-display text-lg font-medium text-white">Products</h2>
-          <p className="mt-1 text-sm text-white/50">
-            Price and batch production time. Open a product to also set its machine/labor formula, bill of
-            materials, and packaging.
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Link to="/products/new"><Button variant="ghost" size="sm">Add product</Button></Link>
-          <Link to="/products"><Button variant="ghost" size="sm">View all</Button></Link>
-        </div>
-      </div>
-      <Alert variant="error">{error}</Alert>
-      {items === null ? (
-        <div className="flex justify-center py-8"><Spinner size={20} className="text-gold-300" /></div>
-      ) : items.length === 0 ? (
-        <p className="py-6 text-center text-sm text-white/40">No products defined yet.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
-                <th className="py-3 pr-4 font-medium">Code</th>
-                <th className="py-3 pr-4 font-medium">Name</th>
-                <th className="py-3 pr-4 font-medium">Price</th>
-                <th className="py-3 pr-4 font-medium">Batch</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((p) => (
-                <tr key={p.id} className="border-b border-white/5 last:border-0">
-                  <td className="py-3 pr-4">
-                    <Link to={`/products/${p.id}`} className="font-medium text-gold-300 hover:text-gold-200">{p.code}</Link>
-                  </td>
-                  <td className="py-3 pr-4 text-white">{p.name}</td>
-                  <td className="py-3 pr-4 text-white/60">{formatCurrency(p.selling_price)}</td>
-                  <td className="py-3 pr-4 text-white/60">
-                    {p.batch_size && p.batch_production_hours != null
-                      ? `${p.batch_size} ${p.unit} / ${p.batch_production_hours} hrs`
-                      : '—'}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </GlassCard>
-  )
-}
-
-function UsersCard() {
-  const [items, setItems] = useState<User[] | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    listUsers({ page: 1, page_size: 8, sort: 'full_name' })
-      .then((res) => setItems(res.items))
-      .catch((err) => setError(getApiErrorMessage(err)))
-  }, [])
-
-  return (
-    <GlassCard className="p-8">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="font-display text-lg font-medium text-white">Users</h2>
-          <p className="mt-1 text-sm text-white/50">Accounts and roles.</p>
-        </div>
-        <div className="flex gap-2">
-          <Link to="/users/new"><Button variant="ghost" size="sm">Add user</Button></Link>
-          <Link to="/admin?section=users"><Button variant="ghost" size="sm">View all</Button></Link>
-        </div>
-      </div>
-      <Alert variant="error">{error}</Alert>
-      {items === null ? (
-        <div className="flex justify-center py-8"><Spinner size={20} className="text-gold-300" /></div>
-      ) : items.length === 0 ? (
-        <p className="py-6 text-center text-sm text-white/40">No users found.</p>
-      ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
-                <th className="py-3 pr-4 font-medium">Name</th>
-                <th className="py-3 pr-4 font-medium">Username</th>
-                <th className="py-3 pr-4 font-medium">Role</th>
-                <th className="py-3 pr-4 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((u) => (
-                <tr key={u.id} className="border-b border-white/5 last:border-0">
-                  <td className="py-3 pr-4">
-                    <Link to={`/users/${u.id}`} className="font-medium text-gold-300 hover:text-gold-200">{u.full_name}</Link>
-                  </td>
-                  <td className="py-3 pr-4 text-white/60">{u.username}</td>
-                  <td className="py-3 pr-4"><Badge tone="info">{u.role}</Badge></td>
-                  <td className="py-3 pr-4">
-                    <Badge tone={u.is_active ? 'success' : 'neutral'}>{u.is_active ? 'Active' : 'Inactive'}</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-    </GlassCard>
-  )
-}
-
+// Raw materials, Products, and Users used to each get a second,
+// read-only preview table here (RawMaterialsCard/ProductsCard/UsersCard)
+// duplicating the real Master Data list pages -- removed; find them
+// under Master Data now (Materials -> Raw materials/Products,
+// People & Organization -> Users).
 export function FactorySetupTab() {
   return (
     <div className="flex flex-col gap-8">
       <WorkingHoursCard />
-      <RawMaterialsCard />
-      <ProductsCard />
-      <UsersCard />
     </div>
   )
 }

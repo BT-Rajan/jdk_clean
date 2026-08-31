@@ -90,7 +90,7 @@ class RawMaterialCRUD(BaseCRUD):
         )
         if exists is None:
             raise ValidationAppError(
-                f"'{unit}' is not a recognized unit. Add it under Settings -> Units of measure first, "
+                f"'{unit}' is not a recognized unit. Add it under Master Data -> Materials -> Units of measure first, "
                 "or pick an existing one."
             )
 

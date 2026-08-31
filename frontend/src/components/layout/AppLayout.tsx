@@ -8,6 +8,7 @@ import type { PaletteAction } from '@/components/command-palette/CommandPalette'
 import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
 import { getPageKeyForPath } from '@/lib/pagePermissions'
+import { MASTER_DATA_REGISTRY } from '@/lib/masterDataRegistry'
 import { cn } from '@/lib/cn'
 import { AmbientBackground } from './AmbientBackground'
 import { CalendarModal } from './CalendarModal'
@@ -110,10 +111,10 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navEntries: NavEntry[] = [
     { to: '/dashboard', label: 'Dashboard' },
+    { to: '/master-data', label: 'Master Data' },
     {
       label: 'Sales',
       items: [
-        { to: '/customers', label: 'Customers' },
         { to: '/feasibilities', label: 'Feasibility checks' },
         { to: '/quotations', label: 'Quotations' },
         { to: '/orders', label: 'Orders' },
@@ -122,24 +123,16 @@ export function AppLayout({ children }: AppLayoutProps) {
     },
     {
       label: 'Purchasing',
-      items: [
-        { to: '/suppliers', label: 'Suppliers' },
-        { to: '/purchase-orders', label: 'Purchase orders' },
-      ],
+      items: [{ to: '/purchase-orders', label: 'Purchase orders' }],
     },
     {
       label: 'Inventory',
-      items: [
-        { to: '/raw-materials', label: 'Raw materials' },
-        { to: '/products', label: 'Products' },
-        { to: '/inventory', label: 'Stock levels' },
-      ],
+      items: [{ to: '/inventory', label: 'Stock levels' }],
     },
     {
       label: 'Production',
       items: [
         { to: '/production', label: 'Schedule' },
-        { to: '/machines', label: 'Machines' },
         { to: '/mrp', label: 'MRP' },
       ],
     },
@@ -167,6 +160,18 @@ export function AppLayout({ children }: AppLayoutProps) {
     return visibleItems.length > 0 ? [{ ...entry, items: visibleItems }] : []
   })
 
+  // Master Data entries the user can actually reach -- mirrors
+  // MasterDataHomePage's own visibility rule so the palette never offers
+  // a page that 403s. Kept separate from visibleNavEntries since these
+  // aren't in the nav bar itself (they live behind the single "Master
+  // Data" link/hub page), but should still be one Cmd/Ctrl+K search away.
+  function isMasterEntryVisible(entry: (typeof MASTER_DATA_REGISTRY)[number]): boolean {
+    if (entry.adminOnly) return isAdmin(user?.role)
+    if (!entry.pageKey) return true
+    if (!permissions) return true
+    return permissions[entry.pageKey] !== undefined && permissions[entry.pageKey] !== 'none'
+  }
+
   // Every visible nav destination, plus the header's quick actions --
   // the single list the command palette searches/navigates. Built from
   // the exact same visibleNavEntries the nav bar renders, so a page
@@ -182,6 +187,12 @@ export function AppLayout({ children }: AppLayoutProps) {
           }))
         : [{ id: `nav:${entry.to}`, label: entry.label, onSelect: () => navigate(entry.to) }],
     ),
+    ...MASTER_DATA_REGISTRY.filter(isMasterEntryVisible).map((entry) => ({
+      id: `master-data:${entry.key}`,
+      label: entry.label,
+      hint: 'Master Data',
+      onSelect: () => navigate(entry.route),
+    })),
     { id: 'action:calendar', label: 'Open Calendar', keywords: 'schedule events', onSelect: () => setIsCalendarOpen(true) },
     { id: 'action:notifications', label: 'Open Notifications', keywords: 'alerts bell', onSelect: () => setIsNotificationsOpen(true) },
     { id: 'action:assistant', label: 'Open AI Assistant', keywords: 'ai chat help', onSelect: () => setIsAssistantOpen(true) },
@@ -194,12 +205,12 @@ export function AppLayout({ children }: AppLayoutProps) {
           { id: 'admin:approvals', label: 'Approvals', hint: 'Admin', onSelect: () => navigate('/admin?section=approvals') },
           { id: 'admin:ai-assistant', label: 'AI Assistant settings', hint: 'Admin', keywords: 'api key', onSelect: () => navigate('/admin?section=ai-assistant') },
           { id: 'admin:factory-setup', label: 'Factory Setup', hint: 'Admin', onSelect: () => navigate('/admin?section=factory-setup') },
-          { id: 'admin:bom', label: 'Bill of Materials', hint: 'Admin', keywords: 'units', onSelect: () => navigate('/admin?section=bom') },
+          { id: 'admin:bom', label: 'Bill of Materials', hint: 'Admin', keywords: 'bom', onSelect: () => navigate('/admin?section=bom') },
           { id: 'admin:email', label: 'Email settings', hint: 'Admin', keywords: 'imap pop3 smtp', onSelect: () => navigate('/admin?section=email') },
           { id: 'admin:whatsapp', label: 'WhatsApp settings', hint: 'Admin', keywords: 'meta templates', onSelect: () => navigate('/admin?section=whatsapp') },
           { id: 'admin:sms', label: 'SMS settings', hint: 'Admin', keywords: 'kwtsms unifonic smsala', onSelect: () => navigate('/admin?section=sms') },
-          { id: 'admin:access-control', label: 'Access Control', hint: 'Admin', keywords: 'permissions department', onSelect: () => navigate('/admin?section=access-control') },
-          { id: 'admin:users', label: 'Users', hint: 'Admin', onSelect: () => navigate('/admin?section=users') },
+          // Users, Departments, and Roles & Permissions are covered by
+          // the Master Data entries above now -- not duplicated here.
         ]
       : []),
   ]

@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate, useParams } from 'react-router-dom'
-import { AppLayout } from '@/components/layout/AppLayout'
-import { PageContainer } from '@/components/layout/PageContainer'
-import { Alert, Button, GlassCard, SelectField, Spinner, TextField } from '@/components/ui'
+import { Alert, Button, SelectField, Spinner, TextField } from '@/components/ui'
+import { MasterFormShell as FormShell } from '@/components/master/MasterFormShell'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { createMachine, getMachine, updateMachine } from '@/api/machines'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -21,26 +19,6 @@ import {
 export function MachineFormPage() {
   const { id } = useParams()
   return id ? <MachineEditForm id={Number(id)} /> : <MachineCreateForm />
-}
-
-function FormShell({
-  title,
-  children,
-  after,
-}: {
-  title: string
-  children: ReactNode
-  after?: ReactNode
-}) {
-  return (
-    <AppLayout>
-      <PageContainer>
-        <h1 className="font-display text-2xl font-medium text-white">{title}</h1>
-        <GlassCard className="mt-8 p-8">{children}</GlassCard>
-        {after}
-      </PageContainer>
-    </AppLayout>
-  )
 }
 
 function MachineCreateForm() {

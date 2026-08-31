@@ -31,7 +31,7 @@ def _validate_unit(db: Session, units_by_code: dict[str, UnitOfMeasure], compone
     """
     if unit not in units_by_code:
         raise ValidationAppError(
-            f"'{unit}' is not a recognized unit. Add it under Settings -> Units of measure first, "
+            f"'{unit}' is not a recognized unit. Add it under Master Data -> Materials -> Units of measure first, "
             "or pick an existing one."
         )
     if component_type != "raw_material":

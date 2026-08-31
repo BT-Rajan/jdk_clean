@@ -37,6 +37,7 @@ class UserOut(BaseModel):
     phone: str | None = None
     role: str
     department_id: int | None = None
+    department_code: str | None = None
     department_name: str | None = None
     manager_id: int | None = None
     is_active: bool
@@ -48,6 +49,7 @@ class UserOut(BaseModel):
     def from_model(cls, obj) -> "UserOut":
         data = cls.model_validate(obj)
         data.has_signature = bool(obj.signature_filename)
+        data.department_code = obj.department_code
         data.department_name = obj.department.name if obj.department else None
         return data
 

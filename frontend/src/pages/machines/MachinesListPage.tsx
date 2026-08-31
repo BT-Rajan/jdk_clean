@@ -1,22 +1,11 @@
 import { useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { AppLayout } from '@/components/layout/AppLayout'
-import {
-  Alert,
-  Button,
-  EmptyState,
-  GlassCard,
-  Pagination,
-  SelectField,
-  SortableHeader,
-  Spinner,
-  StatusBadge,
-  TextField,
-} from '@/components/ui'
+import { StatusBadge } from '@/components/ui'
+import { MasterListPage, type MasterListColumn } from '@/components/master/MasterListPage'
 import { listMachines } from '@/api/machines'
-import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
+import type { Machine } from '@/types/machine'
 
 export function MachinesListPage() {
   const { user } = useAuth()
@@ -25,88 +14,38 @@ export function MachinesListPage() {
     (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) => listMachines(params),
     [],
   )
-  const {
-    items,
-    total,
-    totalPages,
-    page,
-    setPage,
-    searchInput,
-    setSearchInput,
-    status,
-    setStatus,
-    sort,
-    toggleSort,
-    loading,
-    error,
-  } = usePagedResource(fetcher)
+
+  const columns: MasterListColumn<Machine>[] = [
+    {
+      key: 'code',
+      label: 'Code',
+      sortable: true,
+      render: (m) => (
+        <Link to={`/machines/${m.id}/edit`} className="font-medium text-gold-300 hover:text-gold-200">
+          {m.code}
+        </Link>
+      ),
+    },
+    { key: 'name', label: 'Name', sortable: true, render: (m) => <span className="text-white">{m.name}</span> },
+    {
+      key: 'capacity_hours_per_day',
+      label: 'Capacity (hrs/day)',
+      render: (m) => <span className="text-white/60">{m.capacity_hours_per_day}</span>,
+    },
+    { key: 'status', label: 'Status', render: (m) => <StatusBadge status={m.status} /> },
+  ]
 
   return (
-    <AppLayout>
-      <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="font-display text-3xl font-medium text-white">Machines</h1>
-          <p className="mt-2 text-sm text-white/50">{total} on file</p>
-        </div>
-        {canWrite(user?.role) && <Button onClick={() => navigate('/machines/new')}>New machine</Button>}
-      </div>
-
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_220px]">
-        <TextField
-          label="Search"
-          placeholder="Code or name…"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
-        <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </SelectField>
-      </div>
-
-      <Alert variant="error">{error}</Alert>
-
-      <GlassCard className="overflow-hidden">
-        {loading ? (
-          <div className="flex justify-center py-16">
-            <Spinner size={24} className="text-gold-300" />
-          </div>
-        ) : items.length === 0 ? (
-          <EmptyState title="No machines found" message="Try a different search or add a new machine." />
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
-                  <SortableHeader label="Code" field="code" sort={sort} onSort={toggleSort} />
-                  <SortableHeader label="Name" field="name" sort={sort} onSort={toggleSort} />
-                  <th className="px-6 py-4 font-medium">Capacity (hrs/day)</th>
-                  <th className="px-6 py-4 font-medium">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((m) => (
-                  <tr key={m.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
-                    <td className="px-6 py-4">
-                      <Link to={`/machines/${m.id}/edit`} className="font-medium text-gold-300 hover:text-gold-200">
-                        {m.code}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 text-white">{m.name}</td>
-                    <td className="px-6 py-4 text-white/60">{m.capacity_hours_per_day}</td>
-                    <td className="px-6 py-4">
-                      <StatusBadge status={m.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </GlassCard>
-
-      <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
-    </AppLayout>
+    <MasterListPage
+      title="Machines"
+      noun="machines"
+      fetcher={fetcher}
+      columns={columns}
+      rowKey={(m) => m.id}
+      searchPlaceholder="Code or name…"
+      canCreate={canWrite(user?.role)}
+      createLabel="New machine"
+      onCreate={() => navigate('/machines/new')}
+    />
   )
 }

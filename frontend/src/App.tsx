@@ -147,6 +147,22 @@ const UserDetailPage = lazy(() =>
   import('@/pages/users/UserDetailPage').then((m) => ({ default: m.UserDetailPage })),
 )
 
+const MasterDataHomePage = lazy(() =>
+  import('@/pages/masterData/MasterDataHomePage').then((m) => ({ default: m.MasterDataHomePage })),
+)
+const DepartmentsListPage = lazy(() =>
+  import('@/pages/departments/DepartmentsListPage').then((m) => ({ default: m.DepartmentsListPage })),
+)
+const DepartmentFormPage = lazy(() =>
+  import('@/pages/departments/DepartmentFormPage').then((m) => ({ default: m.DepartmentFormPage })),
+)
+const UnitsListPage = lazy(() =>
+  import('@/pages/units/UnitsListPage').then((m) => ({ default: m.UnitsListPage })),
+)
+const UnitFormPage = lazy(() =>
+  import('@/pages/units/UnitFormPage').then((m) => ({ default: m.UnitFormPage })),
+)
+
 export function App() {
   return (
     <AuthProvider>
@@ -163,6 +179,7 @@ export function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/dashboard/customize" element={<DashboardCustomizePage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/master-data" element={<MasterDataHomePage />} />
             {/* The password form moved into /profile; keep old links working. */}
             <Route path="/change-password" element={<Navigate to="/profile" replace />} />
 
@@ -229,6 +246,14 @@ export function App() {
               <Route path="/users/new" element={<UserFormPage />} />
               <Route path="/users/:id" element={<UserDetailPage />} />
               <Route path="/users/:id/edit" element={<UserFormPage />} />
+
+              <Route path="/departments" element={<DepartmentsListPage />} />
+              <Route path="/departments/new" element={<DepartmentFormPage />} />
+              <Route path="/departments/:id/edit" element={<DepartmentFormPage />} />
+
+              <Route path="/units" element={<UnitsListPage />} />
+              <Route path="/units/new" element={<UnitFormPage />} />
+              <Route path="/units/:id/edit" element={<UnitFormPage />} />
             </Route>
            </Route>
           </Route>

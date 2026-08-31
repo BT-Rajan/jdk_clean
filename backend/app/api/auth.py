@@ -27,6 +27,7 @@ def _to_me_out(user: User) -> MeOut:
         phone=user.phone,
         role=user.role,
         department_id=user.department_id,
+        department_code=user.department_code,
         department_name=user.department.name if user.department else None,
         has_signature=bool(user.signature_filename),
         is_active=user.is_active,

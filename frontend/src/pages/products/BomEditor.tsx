@@ -240,7 +240,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
           dropdown only offers units compatible with it (e.g. only weight units for a kg-tracked material) — so a
           category mismatch (weight vs. piece-count) can't be selected here in the first place. Quantities then
           convert automatically between compatible units (e.g. "bag" against a material tracked in "kg") using the
-          factors set under Settings → Bill of materials → Units of measure.
+          factors set under Master Data → Materials → Units of measure.
         </p>
 
         {lines.length === 0 ? (
