@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Badge, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
+import { WhereUsedPanel } from '@/components/master/WhereUsedPanel'
 import { activateProduct, deactivateProduct, deleteProduct, getProduct, restoreProduct } from '@/api/products'
 import { getStock } from '@/api/inventory'
 import type { Product } from '@/types/product'
@@ -204,6 +205,10 @@ export function ProductDetailPage() {
 
       <div className="mt-6">
         <PackagingEditor productId={productId} canEdit={canWrite(user?.role)} />
+      </div>
+
+      <div className="mt-6">
+        <WhereUsedPanel resourcePath="/api/products" id={productId} />
       </div>
 
       <div className="mt-6">

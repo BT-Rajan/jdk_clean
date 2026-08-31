@@ -11,6 +11,7 @@ from app.api.common import build_crud_router
 from app.api.deps import require_role
 from app.core.database import get_db
 from app.core.exceptions import AppError
+from app.core.permissions import require_page_access
 from app.crud.master_data import product_crud
 from app.models.product import Product
 from app.models.user import User
@@ -22,7 +23,9 @@ from app.schemas.product import (
     ProductOut,
     ProductUpdate,
 )
-from app.services import product_supplier_service
+from app.services import product_supplier_service, where_used_service
+
+read_guard = require_page_access("products", "read")
 
 # Hard role gate, not department-permission-based like the rest of this
 # router: supplier terms/pricing are commercially sensitive, so this
@@ -207,3 +210,16 @@ def get_product_suppliers(
     supplier terms/pricing are commercially sensitive, unlike the rest of
     the product record."""
     return product_supplier_service.get_suppliers_for_product(db, product_id)
+
+
+@router.get("/{product_id}/where-used")
+def get_product_where_used(
+    product_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    """Read-only, computed from live relationships (BOMs as a
+    sub-assembly, quotations, sales orders, feasibility checks) -- see
+    app/services/where_used_service.py."""
+    product_crud.read_one(db, product_id)  # 404s if it doesn't exist
+    return where_used_service.product_usage(db, product_id)
