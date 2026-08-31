@@ -24,7 +24,7 @@ def _visible(user: User, departments: tuple[str, ...] | None) -> bool:
         return True
     if departments is None:
         return False
-    return user.role == "staff" and user.department in departments
+    return user.role == "staff" and user.department_code in departments
 
 
 def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:

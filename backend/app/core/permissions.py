@@ -1,7 +1,6 @@
-"""Page-level access control, replacing the old hardcoded per-document-
-type department guards (require_department_write in api/deps.py) with
-a configurable matrix a super-admin governs from Settings -> Access
-Control.
+"""Page-level access control: a configurable department x page matrix a
+super-admin governs from Master Data -> People & Organization -> Roles &
+permissions.
 
 Only 'staff' users are governed by the department_permissions table --
 admin and manager always have full read/write access everywhere and
@@ -92,7 +91,7 @@ def has_page_access(user: User, db: Session, page_key: str, level: str = "read")
     perm = (
         db.query(DepartmentPermission)
         .filter(
-            DepartmentPermission.department == user.department,
+            DepartmentPermission.department_id == user.department_id,
             DepartmentPermission.page_key == page_key,
         )
         .first()

@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from typing import Any
 
 from fastapi import APIRouter, Depends
@@ -30,14 +31,44 @@ def build_crud_router(
     tags: list[str],
     write_roles: tuple[str, ...] = ("admin", "manager"),
     page_key: str | None = None,
+    extra_routes: Callable[[APIRouter, Any, Any], None] | None = None,
+    activatable: bool | None = None,
+    delete_guard: Callable[[Session, int], None] | None = None,
 ) -> APIRouter:
-    """page_key, when given, gates every endpoint here through the
+    """The one router factory every master (and only masters) should use --
+    see app/crud/base.py's BaseCRUD for the matching CRUD-engine half. Do
+    not hand-write list/create/read/update/delete endpoints for a new
+    master; add hooks here instead so every master keeps the same surface.
+
+    page_key, when given, gates every endpoint here through the
     department_permissions matrix (see app/core/permissions.py) instead
     of the old fixed write_roles check -- admin/manager still always
     pass regardless, this only changes what unlocks access for staff.
     Leave page_key unset for resources not yet migrated to the new
     system (falls back to the original get_current_user/write_roles
-    behavior)."""
+    behavior).
+
+    extra_routes, when given, is called with (router, read_guard,
+    write_guard) right after the list/create routes are registered and
+    *before* the generic "/{item_id}" catch-all -- register any
+    single-segment custom route here (e.g. "/export", "/import"), never
+    after build_crud_router returns, or FastAPI's route matching will
+    let "/{item_id}" swallow it first and 422 on the id conversion.
+    Two-segment routes like "/{id}/some-action" are safe to add either
+    way since they don't collide with "/{item_id}".
+
+    activatable defaults to True whenever the model has a `status`
+    column, giving every such master the same "/{id}/activate" and
+    "/{id}/deactivate" actions for free instead of each router
+    reimplementing them (see app/api/products.py's history -- it used to).
+
+    delete_guard, when given, is called with (db, item_id) before the
+    delete actually runs and should raise ConflictError (see
+    app/core/exceptions.py) if the record is referenced elsewhere and
+    deletion isn't safe -- soft delete already protects history, but
+    some masters (e.g. a Department still assigned to users) need a
+    harder stop.
+    """
     router = APIRouter(prefix=prefix, tags=tags)
     if page_key is not None:
         read_guard = require_page_access(page_key, "read")
@@ -45,6 +76,9 @@ def build_crud_router(
     else:
         read_guard = get_current_user
         write_guard = require_role(*write_roles)
+
+    if activatable is None:
+        activatable = hasattr(crud.model, "status")
 
     @router.get("", response_model=PagedResponse)
     def list_items(
@@ -63,6 +97,17 @@ def build_crud_router(
         result["items"] = [out_schema.model_validate(i) for i in result["items"]]
         return result
 
+    @router.post("", response_model=out_schema, status_code=201)
+    def create_item(
+        payload: create_schema,
+        db: Session = Depends(get_db),
+        user: User = Depends(write_guard),
+    ):
+        return crud.create(db, payload.model_dump(), user_id=user.id)
+
+    if extra_routes is not None:
+        extra_routes(router, read_guard, write_guard)
+
     @router.get("/{item_id}", response_model=out_schema)
     def get_item(
         item_id: int,
@@ -80,14 +125,6 @@ def build_crud_router(
         crud.read_one(db, item_id, include_deleted=True)  # 404s if it never existed
         return audit_service.get_history(db, crud.table_name, item_id)
 
-    @router.post("", response_model=out_schema, status_code=201)
-    def create_item(
-        payload: create_schema,
-        db: Session = Depends(get_db),
-        user: User = Depends(write_guard),
-    ):
-        return crud.create(db, payload.model_dump(), user_id=user.id)
-
     @router.put("/{item_id}", response_model=out_schema)
     def update_item(
         item_id: int,
@@ -104,6 +141,8 @@ def build_crud_router(
         db: Session = Depends(get_db),
         user: User = Depends(write_guard),
     ):
+        if delete_guard is not None:
+            delete_guard(db, item_id)
         crud.delete(db, item_id, user_id=user.id)
         return {"message": "Deleted."}
 
@@ -114,5 +153,23 @@ def build_crud_router(
         user: User = Depends(write_guard),
     ):
         return crud.restore(db, item_id, user_id=user.id)
+
+    if activatable:
+
+        @router.post("/{item_id}/activate", response_model=out_schema)
+        def activate_item(
+            item_id: int,
+            db: Session = Depends(get_db),
+            user: User = Depends(write_guard),
+        ):
+            return crud.update(db, item_id, {"status": "active"}, user_id=user.id)
+
+        @router.post("/{item_id}/deactivate", response_model=out_schema)
+        def deactivate_item(
+            item_id: int,
+            db: Session = Depends(get_db),
+            user: User = Depends(write_guard),
+        ):
+            return crud.update(db, item_id, {"status": "inactive"}, user_id=user.id)
 
     return router

@@ -1,8 +1,13 @@
+from typing import TYPE_CHECKING
+
 from sqlalchemy import BigInteger, Boolean, Enum, ForeignKey, Integer, String
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
+
+if TYPE_CHECKING:
+    from app.models.department import Department
 
 # BigInteger with an Integer variant for SQLite: MySQL (production) gets a real
 # BIGINT AUTO_INCREMENT; SQLite (used only for local/dev smoke tests) gets its
@@ -24,9 +29,14 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     # get write access to Quotations/Orders/Purchase Orders through this --
     # admin/manager keep full access regardless). NULL means no department,
     # i.e. a staff member with read-only access everywhere, same as before
-    # this column existed.
-    department: Mapped[str | None] = mapped_column(
-        Enum("sales", "procurement", "warehouse", name="user_department"), nullable=True
+    # this column existed. References the Department master (People &
+    # Organization) instead of a hardcoded ENUM -- see app/models/department.py.
+    department_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("departments.id"), nullable=True)
+    # foreign_keys is explicit because departments.created_by/updated_by
+    # (TimestampMixin) also point back at users.id, giving SQLAlchemy two
+    # possible join paths between the two tables otherwise.
+    department: Mapped["Department | None"] = relationship(
+        "Department", lazy="joined", foreign_keys=[department_id]
     )
     # Which Manager this user (a Member -- staff/viewer) reports to in the
     # org chart (Admin -> Access control -> Org chart). Admin ("Owner") and
@@ -48,3 +58,10 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
         default="staff",
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    @property
+    def department_code(self) -> str | None:
+        """Convenience for the handful of callers (notification_service,
+        etc.) that only ever branched on the department's code, not its
+        id -- keeps them from needing their own Department lookup."""
+        return self.department.code if self.department else None

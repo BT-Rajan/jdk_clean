@@ -2,7 +2,10 @@ from pydantic import BaseModel, Field
 
 
 class PermissionEntry(BaseModel):
-    department: str
+    department_id: int
+    # Display convenience only -- always ignored on write, always
+    # populated by permission_service.get_matrix on read.
+    department_code: str | None = None
     page_key: str
     access_level: str = Field(pattern="^(none|read|write)$")
 

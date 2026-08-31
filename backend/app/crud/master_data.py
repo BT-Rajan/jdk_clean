@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import ValidationAppError
 from app.crud.base import BaseCRUD
 from app.models.customer import Customer
+from app.models.department import Department
 from app.models.machine import Machine
 from app.models.product import Product
 from app.models.raw_material import RawMaterial
@@ -11,12 +12,40 @@ from app.models.unit_of_measure import UnitOfMeasure
 from app.models.user import User
 
 
+class DepartmentCRUD(BaseCRUD):
+    model = Department
+    table_name = "departments"
+    searchable_fields = ["code", "name"]
+    sortable_fields = ["code", "name", "created_at"]
+    filterable_fields = ["status"]
+
+
 class UserCRUD(BaseCRUD):
     model = User
     table_name = "users"
     searchable_fields = ["username", "email", "full_name"]
     sortable_fields = ["username", "full_name", "created_at"]
-    filterable_fields = ["role", "status", "is_active"]
+    filterable_fields = ["role", "status", "is_active", "department_id"]
+
+    def _validate_department(self, db: Session, department_id: int | None) -> None:
+        if department_id is None:
+            return
+        exists = (
+            db.query(Department)
+            .filter(Department.id == department_id, Department.status == "active", Department.deleted_at.is_(None))
+            .first()
+        )
+        if exists is None:
+            raise ValidationAppError(f"Department {department_id} is not a recognized, active department.")
+
+    def create(self, db: Session, data: dict, user_id: int | None = None) -> User:
+        self._validate_department(db, data.get("department_id"))
+        return super().create(db, data, user_id=user_id)
+
+    def update(self, db: Session, id: int, data: dict, user_id: int | None = None) -> User:
+        if "department_id" in data:
+            self._validate_department(db, data["department_id"])
+        return super().update(db, id, data, user_id=user_id)
 
 
 class CustomerCRUD(BaseCRUD):
@@ -150,6 +179,7 @@ class UnitOfMeasureCRUD(BaseCRUD):
         return super().update(db, id, data, user_id=user_id)
 
 
+department_crud = DepartmentCRUD()
 user_crud = UserCRUD()
 customer_crud = CustomerCRUD()
 supplier_crud = SupplierCRUD()

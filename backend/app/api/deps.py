@@ -11,6 +11,18 @@ bearer_scheme = HTTPBearer(auto_error=False)
 
 
 class ListParams:
+    """Shared list/search/sort/paginate query params for every master
+    router built with app.api.common.build_crud_router. `filters` only
+    ever contains keys a given master's CRUD class actually whitelists
+    in `filterable_fields` (see app/crud/base.py's BaseCRUD.read_all) --
+    passing an irrelevant one here is harmless, it's just ignored.
+
+    Each field below exists because some master already declares it in
+    `filterable_fields`; add a new query param here (not a per-router
+    override) when a new master needs a new filterable column, so every
+    master keeps the same query-string shape.
+    """
+
     def __init__(
         self,
         page: int = Query(1, ge=1),
@@ -18,12 +30,29 @@ class ListParams:
         search: str | None = Query(None),
         sort: str | None = Query(None),
         status: str | None = Query(None),
+        city: str | None = Query(None),
+        country: str | None = Query(None),
+        mode_of_supply: str | None = Query(None),
+        role: str | None = Query(None),
+        product_type: str | None = Query(None),
+        category: str | None = Query(None),
+        department_id: int | None = Query(None),
     ):
         self.page = page
         self.page_size = page_size
         self.search = search
         self.sort = sort
-        self.filters = {"status": status} if status else {}
+        raw = {
+            "status": status,
+            "city": city,
+            "country": country,
+            "mode_of_supply": mode_of_supply,
+            "role": role,
+            "product_type": product_type,
+            "category": category,
+            "department_id": department_id,
+        }
+        self.filters = {k: v for k, v in raw.items() if v is not None}
 
 
 def get_current_user(
@@ -55,22 +84,3 @@ def require_role(*allowed_roles: str):
     return _check
 
 
-def require_department_write(*allowed_departments: str):
-    """Gates write access to a department-scoped document type (Quotations/
-    Orders -> 'sales', Purchase Orders -> 'procurement', Delivery Notes ->
-    'warehouse'). admin and manager always pass, regardless of their own
-    department -- department-scoping is what *unlocks* limited write
-    access for staff who'd otherwise have none, not a restriction on the
-    roles that already had full access. A staff member only passes if
-    their own department is one of allowed_departments; viewer never
-    passes, same as it never could before this existed.
-    """
-
-    def _check(user: User = Depends(get_current_user)) -> User:
-        if user.role in ("admin", "manager"):
-            return user
-        if user.role == "staff" and user.department in allowed_departments:
-            return user
-        raise PermissionError_()
-
-    return _check

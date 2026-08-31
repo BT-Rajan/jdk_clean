@@ -35,6 +35,31 @@ CREATE TABLE IF NOT EXISTS audit_log (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- MASTER DATA: Departments -- the one authoritative list of
+-- organizational departments. Every other table that used to carry its
+-- own ENUM('sales','procurement','warehouse') (users, department_permissions)
+-- references this table's id instead -- see app/models/department.py.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS departments (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    code            VARCHAR(30)  NOT NULL UNIQUE,
+    name            VARCHAR(80)  NOT NULL,
+    status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    INDEX idx_departments_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO departments (code, name, status) VALUES
+    ('sales',       'Sales',       'active'),
+    ('procurement', 'Procurement', 'active'),
+    ('warehouse',   'Warehouse',   'active')
+ON DUPLICATE KEY UPDATE code = code;
+
+-- ============================================================
 -- USERS & AUTH
 -- ============================================================
 -- Note: phone and avatar_filename were added after this table's initial
@@ -47,7 +72,10 @@ CREATE TABLE IF NOT EXISTS users (
     full_name       VARCHAR(120) NOT NULL,
     phone           VARCHAR(30)  NULL,
     avatar_filename VARCHAR(255) NULL,
-    department      ENUM('sales','procurement','warehouse') NULL,
+    -- Which document-creating department this user belongs to (staff only
+    -- get write access to Quotations/Orders/Purchase Orders through this --
+    -- admin/manager keep full access regardless). NULL means no department.
+    department_id   BIGINT UNSIGNED NULL,
     -- Which Manager this user (a Member -- staff/viewer) reports to in the
     -- org chart. Admin ("Owner") and manager rows leave this NULL -- see
     -- migrations/2026-08-31_add_user_manager_id.sql for the full rationale.
@@ -62,7 +90,9 @@ CREATE TABLE IF NOT EXISTS users (
     updated_by      BIGINT UNSIGNED NULL,
     INDEX idx_users_deleted_at (deleted_at),
     INDEX idx_users_manager_id (manager_id),
-    CONSTRAINT fk_users_manager_id FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE SET NULL
+    INDEX idx_users_department_id (department_id),
+    CONSTRAINT fk_users_manager_id FOREIGN KEY (manager_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_users_department_id FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE SET NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
@@ -765,13 +795,14 @@ CREATE TABLE IF NOT EXISTS settings (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS department_permissions (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    department      ENUM('sales','procurement','warehouse') NOT NULL,
+    department_id   BIGINT UNSIGNED NOT NULL,
     page_key        VARCHAR(40) NOT NULL,
     access_level    ENUM('none','read','write') NOT NULL DEFAULT 'none',
     updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_dept_perm_updated_by FOREIGN KEY (updated_by) REFERENCES users(id),
-    UNIQUE KEY uq_dept_perm (department, page_key)
+    CONSTRAINT fk_dept_perm_department_id FOREIGN KEY (department_id) REFERENCES departments(id) ON DELETE CASCADE,
+    UNIQUE KEY uq_dept_perm (department_id, page_key)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
