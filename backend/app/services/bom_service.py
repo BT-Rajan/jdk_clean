@@ -1,13 +1,18 @@
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
+from app.crud.child_lines import ChildLineCRUD
 from app.models.bom import BomLine
 from app.models.product import Product
 from app.models.raw_material import RawMaterial
 from app.models.unit_of_measure import UnitOfMeasure
-from app.services import audit_service
+
+
+def _get_active_product(db: Session, product_id: int) -> Product:
+    product = db.query(Product).filter(Product.id == product_id, Product.deleted_at.is_(None)).first()
+    if product is None:
+        raise NotFoundError("Product")
+    return product
 
 TABLE_NAME = "bom_lines"
 MAX_BOM_DEPTH = 10  # guards against pathological/unintended deep nesting
@@ -26,8 +31,8 @@ def _validate_unit(db: Session, units_by_code: dict[str, UnitOfMeasure], compone
     category as that material's unit. Without this second check someone
     could save a line in 'ton' against a material tracked in 'pcs' and
     every downstream feasibility/MRP number for it would be silently
-    wrong; see bom_service.explode_requirements for where the resulting
-    (validated) units get converted.
+    wrong; see explode_requirements for where the resulting (validated)
+    units get converted.
     """
     if unit not in units_by_code:
         raise ValidationAppError(
@@ -63,15 +68,6 @@ def _convert_quantity(units_by_code: dict[str, UnitOfMeasure], quantity: float, 
     if from_uom is None or to_uom is None or from_uom.category != to_uom.category:
         return quantity
     return quantity * (float(from_uom.factor_to_base) / float(to_uom.factor_to_base))
-
-
-def _get_active_product(db: Session, product_id: int) -> Product:
-    product = (
-        db.query(Product).filter(Product.id == product_id, Product.deleted_at.is_(None)).first()
-    )
-    if product is None:
-        raise NotFoundError("Product")
-    return product
 
 
 def _validate_component_exists(db: Session, component_type: str, component_id: int) -> None:
@@ -139,117 +135,61 @@ def _assert_no_cycle(db: Session, parent_product_id: int, component_type: str, c
         )
 
 
-def _resolve_component_labels(db: Session, lines: list[BomLine]) -> None:
-    """Attaches component_code/component_name as dynamic attributes for the
-    response schema (BomLine has no ORM relationship to its component since
-    it's polymorphic -- see the model docstring)."""
-    product_ids = {l.component_id for l in lines if l.component_type == "product"}
-    material_ids = {l.component_id for l in lines if l.component_type == "raw_material"}
+class BomLineCRUD(ChildLineCRUD[BomLine]):
+    model = BomLine
+    table_name = TABLE_NAME
+    parent_field = "parent_product_id"
+    parent_model = Product
+    parent_label = "Product"
 
-    products = {
-        p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()
-    } if product_ids else {}
-    materials = {
-        m.id: m for m in db.query(RawMaterial).filter(RawMaterial.id.in_(material_ids)).all()
-    } if material_ids else {}
+    def _validate_line(self, db: Session, parent_id: int, line: dict) -> None:
+        _validate_component_exists(db, line["component_type"], line["component_id"])
+        _assert_no_cycle(db, parent_id, line["component_type"], line["component_id"])
+        _validate_unit(db, _active_units_by_code(db), line["component_type"], line["component_id"], line["unit"])
 
-    for line in lines:
-        source = products.get(line.component_id) if line.component_type == "product" else materials.get(line.component_id)
-        line.component_code = source.code if source else None
-        line.component_name = source.name if source else None
+    def _duplicate_filter(self, parent_id: int, line: dict) -> list:
+        return [
+            BomLine.component_type == line["component_type"],
+            BomLine.component_id == line["component_id"],
+        ]
+
+    def _resolve_labels(self, db: Session, lines: list[BomLine]) -> None:
+        """Attaches component_code/component_name as dynamic attributes for
+        the response schema (BomLine has no ORM relationship to its
+        component since it's polymorphic -- see the model docstring)."""
+        product_ids = {l.component_id for l in lines if l.component_type == "product"}
+        material_ids = {l.component_id for l in lines if l.component_type == "raw_material"}
+
+        products = {
+            p.id: p for p in db.query(Product).filter(Product.id.in_(product_ids)).all()
+        } if product_ids else {}
+        materials = {
+            m.id: m for m in db.query(RawMaterial).filter(RawMaterial.id.in_(material_ids)).all()
+        } if material_ids else {}
+
+        for line in lines:
+            source = products.get(line.component_id) if line.component_type == "product" else materials.get(line.component_id)
+            line.component_code = source.code if source else None
+            line.component_name = source.name if source else None
+
+
+bom_line_crud = BomLineCRUD()
 
 
 def get_bom(db: Session, parent_product_id: int) -> list[BomLine]:
-    _get_active_product(db, parent_product_id)
-    lines = (
-        db.query(BomLine)
-        .filter(BomLine.parent_product_id == parent_product_id, BomLine.deleted_at.is_(None))
-        .order_by(BomLine.id)
-        .all()
-    )
-    _resolve_component_labels(db, lines)
-    return lines
+    return bom_line_crud.get_lines(db, parent_product_id)
 
 
 def replace_bom(db: Session, parent_product_id: int, lines: list[dict], user_id: int | None = None) -> list[BomLine]:
-    """Replaces the entire active BOM for a product with the given lines."""
-    _get_active_product(db, parent_product_id)
-
-    units_by_code = _active_units_by_code(db)
-    for line in lines:
-        _validate_component_exists(db, line["component_type"], line["component_id"])
-        _assert_no_cycle(db, parent_product_id, line["component_type"], line["component_id"])
-        _validate_unit(db, units_by_code, line["component_type"], line["component_id"], line["unit"])
-
-    existing = (
-        db.query(BomLine)
-        .filter(BomLine.parent_product_id == parent_product_id, BomLine.deleted_at.is_(None))
-        .all()
-    )
-    now = datetime.now(timezone.utc)
-    for row in existing:
-        row.deleted_at = now
-
-    new_rows = [
-        BomLine(parent_product_id=parent_product_id, created_by=user_id, **line) for line in lines
-    ]
-    db.add_all(new_rows)
-    db.flush()
-    audit_service.log_update(
-        db,
-        TABLE_NAME,
-        parent_product_id,
-        {"lines": (f"{len(existing)} line(s)", f"{len(new_rows)} line(s)")},
-        user_id,
-    )
-    db.commit()
-    return get_bom(db, parent_product_id)
+    return bom_line_crud.replace_lines(db, parent_product_id, lines, user_id=user_id)
 
 
 def add_bom_line(db: Session, parent_product_id: int, line: dict, user_id: int | None = None) -> BomLine:
-    _get_active_product(db, parent_product_id)
-    _validate_component_exists(db, line["component_type"], line["component_id"])
-    _assert_no_cycle(db, parent_product_id, line["component_type"], line["component_id"])
-    _validate_unit(db, _active_units_by_code(db), line["component_type"], line["component_id"], line["unit"])
-
-    duplicate = (
-        db.query(BomLine)
-        .filter(
-            BomLine.parent_product_id == parent_product_id,
-            BomLine.component_type == line["component_type"],
-            BomLine.component_id == line["component_id"],
-            BomLine.deleted_at.is_(None),
-        )
-        .first()
-    )
-    if duplicate is not None:
-        raise ConflictError("This component is already on the BOM; edit that line instead.")
-
-    row = BomLine(parent_product_id=parent_product_id, created_by=user_id, **line)
-    db.add(row)
-    db.flush()
-    # Keyed by parent_product_id (not row.id) so this shows up in the
-    # product's BOM history alongside replace_bom's entries -- history is
-    # queried per-product, not per-line.
-    audit_service.log_create(db, TABLE_NAME, parent_product_id, user_id)
-    db.commit()
-    _resolve_component_labels(db, [row])
-    return row
+    return bom_line_crud.add_line(db, parent_product_id, line, user_id=user_id)
 
 
 def delete_bom_line(db: Session, parent_product_id: int, line_id: int, user_id: int | None = None) -> None:
-    row = (
-        db.query(BomLine)
-        .filter(BomLine.id == line_id, BomLine.parent_product_id == parent_product_id, BomLine.deleted_at.is_(None))
-        .first()
-    )
-    if row is None:
-        raise NotFoundError("BOM line")
-    row.deleted_at = datetime.now(timezone.utc)
-    # Keyed by parent_product_id, matching add_bom_line/replace_bom -- see
-    # note above.
-    audit_service.log_delete(db, TABLE_NAME, parent_product_id, user_id)
-    db.commit()
+    bom_line_crud.delete_line(db, parent_product_id, line_id, user_id=user_id)
 
 
 def has_bom(db: Session, product_id: int) -> bool:
