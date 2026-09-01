@@ -21,6 +21,7 @@ from app.api.notifications import router as notifications_router
 from app.api.permissions import router as permissions_router
 from app.api.orders import router as orders_router
 from app.api.packaging import router as packaging_router
+from app.api.payments import router as payments_router
 from app.api.products import router as products_router
 from app.api.production_schedules import router as production_schedules_router
 from app.api.purchase_orders import router as purchase_orders_router
@@ -108,6 +109,7 @@ app.include_router(communication_router)
 app.include_router(feasibility_router)
 app.include_router(quotations_router)
 app.include_router(orders_router)
+app.include_router(payments_router)
 app.include_router(delivery_notes_router)
 app.include_router(production_schedules_router)
 app.include_router(purchase_orders_router)

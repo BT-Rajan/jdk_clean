@@ -297,18 +297,42 @@ def change_status(
     order = get_order(db, order_id)
     assert_transition_allowed(ALLOWED_TRANSITIONS, order.status, new_status, "order")
 
-    if new_status == "confirmed":
+    if new_status == "confirmed" and order.approved_at is None:
+        block_reasons: list[str] = []
+
         threshold = settings_service.get_large_discount_approval_threshold(db)
-        if threshold is not None and order.approved_at is None:
+        if threshold is not None:
             largest = max(
                 [float(order.discount_percent)] + [float(line.discount_percent) for line in order.lines],
                 default=0.0,
             )
             if largest >= threshold:
-                raise ConflictError(
-                    f"This order has a discount of {largest}%, at or above the large-discount "
-                    f"approval threshold ({threshold}%), and needs admin approval before it can be confirmed."
+                block_reasons.append(
+                    f"a discount of {largest}%, at or above the large-discount approval threshold ({threshold}%)"
                 )
+
+        # Credit limit: 0 (the field's default) means nobody's set one
+        # for this customer yet, so it's treated as "not enforced" --
+        # see payment_service.get_customer_credit_status.
+        if float(order.customer.credit_limit) > 0:
+            from app.services import payment_service
+
+            outstanding = payment_service.get_customer_outstanding_balance(
+                db, order.customer_id, exclude_order_id=order.id
+            )
+            projected = outstanding + float(order.total_amount)
+            limit = float(order.customer.credit_limit)
+            if projected > limit:
+                block_reasons.append(
+                    f"would put {order.customer.name} at {projected:.2f} outstanding, over their "
+                    f"credit limit of {limit:.2f} (already owe {outstanding:.2f} on other orders) -- "
+                    f"record a payment to bring them under the limit, or get admin approval"
+                )
+
+        if block_reasons:
+            raise ConflictError(
+                "This order needs admin approval before it can be confirmed: " + "; ".join(block_reasons) + "."
+            )
 
     if new_status in STATUSES_REQUIRING_CLOSE_REASON:
         assert_reason_given(reason, "A reason is required to cancel an order without a delivery note.")
@@ -620,9 +644,11 @@ def _maybe_auto_create_delivery_note(db: Session, order_id: int, user_id: int | 
 
 
 def approve_order(db: Session, order_id: int, user_id: int | None = None) -> Order:
-    """Admin sign-off clearing the large-discount gate above -- can be
+    """Admin sign-off clearing whichever of the two confirm-time gates
+    above actually applied (large discount, over the customer's credit
+    limit, or both -- change_status's error names which) -- can be
     called any time an order is still draft, whether or not it's
-    actually at/above the current threshold."""
+    actually blocked by either right now."""
     order = get_order(db, order_id)
     if order.status != "draft":
         raise ConflictError("Only a draft order can be approved.")
@@ -631,6 +657,22 @@ def approve_order(db: Session, order_id: int, user_id: int | None = None) -> Ord
     order.updated_by = user_id
     audit_service.log_update(
         db, TABLE_NAME, order_id, {"approved_at": (None, order.approved_at.isoformat())}, user_id
+    )
+    db.commit()
+    return get_order(db, order_id)
+
+
+def mark_payment_requested(db: Session, order_id: int, user_id: int | None = None) -> Order:
+    """Records that a payment-request email just went out for this order
+    -- purely a timestamp for Sales to see "sent N days ago, still
+    nothing recorded" (see api/orders.py's request_payment and
+    payment_service.py). Doesn't touch order status or block anything;
+    can be called any number of times as a reminder."""
+    order = get_order(db, order_id)
+    order.payment_requested_at = datetime.now(timezone.utc)
+    order.updated_by = user_id
+    audit_service.log_update(
+        db, TABLE_NAME, order_id, {"payment_requested_at": (None, order.payment_requested_at.isoformat())}, user_id
     )
     db.commit()
     return get_order(db, order_id)

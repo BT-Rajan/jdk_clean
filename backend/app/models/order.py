@@ -86,6 +86,10 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     admin_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     admin_reviewed_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
     admin_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Set the last time a payment-request email went out for this order
+    # (see payment_service.py) -- purely informational, for Sales to see
+    # "sent N days ago, still nothing recorded" at a glance.
+    payment_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     deal: Mapped[Deal | None] = relationship(lazy="joined")

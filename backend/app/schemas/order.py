@@ -122,6 +122,7 @@ class OrderOut(BaseModel):
     admin_review_required: bool
     admin_reviewed_at: datetime | None
     admin_review_notes: str | None
+    payment_requested_at: datetime | None
     lines: list[OrderLineOut] = []
     created_at: datetime
     updated_at: datetime

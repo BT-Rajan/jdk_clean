@@ -4,7 +4,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
-import { deleteCustomer, getCustomer, restoreCustomer } from '@/api/customers'
+import { deleteCustomer, getCustomer, getCustomerCredit, restoreCustomer } from '@/api/customers'
 import { listFeasibilities } from '@/api/feasibilities'
 import { listQuotations } from '@/api/quotations'
 import { listOrders } from '@/api/orders'
@@ -12,6 +12,7 @@ import type { Customer } from '@/types/customer'
 import type { Feasibility } from '@/types/feasibility'
 import type { Quotation } from '@/types/quotation'
 import type { Order } from '@/types/order'
+import type { CustomerCreditStatus } from '@/types/payment'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatCurrency } from '@/lib/currency'
 import { formatDate } from '@/lib/dateFormat'
@@ -62,12 +63,16 @@ export function CustomerDetailPage() {
   const [feasibilityChecks, setFeasibilityChecks] = useState<Feasibility[]>([])
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [orders, setOrders] = useState<Order[]>([])
+  const [creditStatus, setCreditStatus] = useState<CustomerCreditStatus | null>(null)
 
   useEffect(() => {
     getCustomer(customerId)
       .then(setCustomer)
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
+    getCustomerCredit(customerId)
+      .then(setCreditStatus)
+      .catch(() => setCreditStatus(null))
   }, [customerId])
 
   useEffect(() => {
@@ -170,6 +175,28 @@ export function CustomerDetailPage() {
           <Field label="Credit limit" value={formatCurrency(customer.credit_limit)} />
           <Field label="Payment terms" value={`${customer.payment_terms_days} days`} />
         </dl>
+        {creditStatus && (
+          <div className="mt-6 border-t border-white/10 pt-6">
+            {creditStatus.limit_enforced ? (
+              <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                <Field label="Outstanding balance" value={formatCurrency(creditStatus.outstanding_balance)} />
+                <Field
+                  label="Available credit"
+                  value={
+                    <span className={creditStatus.available_credit! < 0 ? 'text-red-300' : undefined}>
+                      {formatCurrency(creditStatus.available_credit!)}
+                    </span>
+                  }
+                />
+              </dl>
+            ) : (
+              <p className="text-xs text-white/40">
+                No credit limit set -- orders for this customer aren't gated on outstanding balance. Set one above
+                to start enforcing it.
+              </p>
+            )}
+          </div>
+        )}
       </GlassCard>
 
       <div className="mt-6 flex flex-col gap-6">

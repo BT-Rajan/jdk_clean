@@ -93,7 +93,14 @@ function CustomerCreateForm() {
         <TextareaField label="Billing address" {...register('billing_address')} />
         <TextareaField label="Shipping address" {...register('shipping_address')} />
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-          <TextField label="Credit limit" type="number" step="0.01" error={errors.credit_limit?.message} {...register('credit_limit')} />
+          <TextField
+            label="Credit limit"
+            type="number"
+            step="0.01"
+            hint="0 = not enforced. Above 0, confirming a new order that would push this customer's outstanding balance over the limit needs admin approval."
+            error={errors.credit_limit?.message}
+            {...register('credit_limit')}
+          />
           <TextField label="Payment terms (days)" type="number" error={errors.payment_terms_days?.message} {...register('payment_terms_days')} />
           <SelectField label="Status" {...register('status')}>
             <option value="active">Active</option>
@@ -175,7 +182,14 @@ function CustomerEditForm({ id }: { id: number }) {
             Billing/shipping address and notes can only be set when the customer is created.
           </p>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <TextField label="Credit limit" type="number" step="0.01" error={errors.credit_limit?.message} {...register('credit_limit')} />
+            <TextField
+            label="Credit limit"
+            type="number"
+            step="0.01"
+            hint="0 = not enforced. Above 0, confirming a new order that would push this customer's outstanding balance over the limit needs admin approval."
+            error={errors.credit_limit?.message}
+            {...register('credit_limit')}
+          />
             <TextField label="Payment terms (days)" type="number" error={errors.payment_terms_days?.message} {...register('payment_terms_days')} />
             <SelectField label="Status" {...register('status')}>
               <option value="active">Active</option>

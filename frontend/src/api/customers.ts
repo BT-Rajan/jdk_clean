@@ -1,5 +1,6 @@
 import type { PagedResponse, ListQueryParams, MessageResponse } from '@/types/common'
 import type { Customer, CustomerPayload } from '@/types/customer'
+import type { CustomerCreditStatus } from '@/types/payment'
 import { apiClient } from './client'
 
 export async function listCustomers(params: ListQueryParams): Promise<PagedResponse<Customer>> {
@@ -29,5 +30,12 @@ export async function deleteCustomer(id: number): Promise<MessageResponse> {
 
 export async function restoreCustomer(id: number): Promise<Customer> {
   const { data } = await apiClient.post<Customer>(`/api/customers/${id}/restore`)
+  return data
+}
+
+/** Credit limit, current outstanding balance, and what's left before
+ * confirming a new order for this customer needs admin approval. */
+export async function getCustomerCredit(id: number): Promise<CustomerCreditStatus> {
+  const { data } = await apiClient.get<CustomerCreditStatus>(`/api/customers/${id}/credit`)
   return data
 }

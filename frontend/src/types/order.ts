@@ -50,6 +50,9 @@ export interface Order {
   admin_review_required: boolean
   admin_reviewed_at: string | null
   admin_review_notes: string | null
+  /** Last time a payment-request email went out for this order (see
+   * POST /{id}/request-payment). Purely informational. */
+  payment_requested_at: string | null
   lines: OrderLine[]
   created_at: string
   updated_at: string

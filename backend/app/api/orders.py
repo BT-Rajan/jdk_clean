@@ -17,7 +17,7 @@ from app.schemas.order import (
     OrderUpdate,
 )
 from app.schemas.order_journey import OrderJourneyOut
-from app.services import audit_service, email_service, order_journey_service, order_service, pdf_generator
+from app.services import audit_service, email_service, order_journey_service, order_service, payment_service, pdf_generator
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 read_guard = require_page_access("orders", "read")
@@ -254,3 +254,42 @@ def email_order_pdf(
     audit_service.log_update(db, "orders", order_id, {"emailed_to": (None, payload.to_email)}, user.id)
     db.commit()
     return {"message": f"Emailed to {payload.to_email}."}
+
+
+@router.post("/{order_id}/request-payment", response_model=OrderOut)
+def request_payment(
+    order_id: int,
+    payload: SendDocumentEmailRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """Emails the order (same PDF as /email) framed as a payment
+    request -- amount due, what's already been paid -- rather than a
+    plain order confirmation. There's no online payment link yet (see
+    payment_service.py): the customer pays outside the app and someone
+    records it via POST /{order_id}/payments once it's confirmed to have
+    arrived. Records payment_requested_at either way, purely so Sales
+    can see "sent N days ago" on the order."""
+    order = order_service.get_order(db, order_id)
+    company_settings = pdf_generator.get_company_settings(db)
+    signer = pdf_generator.resolve_signer(db, order.created_by)
+    pdf_bytes = pdf_generator.generate_order_pdf(order, company_settings, signer=signer)
+    filename = f"{order.order_number}.pdf"
+
+    amount_paid = payment_service.get_order_amount_paid(db, order_id)
+    amount_due = float(order.total_amount) - amount_paid
+
+    body = payload.message or (
+        f"Payment is due for order {order.order_number}, total {order.total_amount:.2f}"
+        + (f" ({amount_paid:.2f} already received, {amount_due:.2f} outstanding)" if amount_paid > 0 else "")
+        + f". Please arrange payment and quote order number {order.order_number} as the reference. "
+        "The order PDF is attached for your records."
+    )
+    email_service.send_document_email(
+        to_email=payload.to_email,
+        subject=f"Payment request -- Order {order.order_number}",
+        body=body,
+        attachment_bytes=pdf_bytes,
+        attachment_filename=filename,
+    )
+    return order_service.mark_payment_requested(db, order_id, user_id=user.id)

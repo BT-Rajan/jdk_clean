@@ -5,7 +5,18 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
-import { adminReviewOrder, approveOrder, deleteOrder, downloadOrderPdf, emailOrder, getOrder, restoreOrder, updateOrderStatus } from '@/api/orders'
+import {
+  adminReviewOrder,
+  approveOrder,
+  deleteOrder,
+  downloadOrderPdf,
+  emailOrder,
+  getOrder,
+  requestPayment,
+  restoreOrder,
+  updateOrderStatus,
+} from '@/api/orders'
+import { PaymentsPanel } from './PaymentsPanel'
 import type { Order } from '@/types/order'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
@@ -66,6 +77,7 @@ export function OrderDetailPage() {
   const [busy, setBusy] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
+  const [paymentEmailOpen, setPaymentEmailOpen] = useState(false)
   const [adminReviewOpen, setAdminReviewOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
 
@@ -177,6 +189,7 @@ export function OrderDetailPage() {
             <>
               <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
               <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
+              {allowWrite && <Button variant="ghost" onClick={() => setPaymentEmailOpen(true)}>Send payment request</Button>}
               {allowWrite && order.status === 'draft' && (
                 <Button variant="ghost" onClick={() => navigate(`/orders/${orderId}/edit`)}>Edit</Button>
               )}
@@ -219,6 +232,11 @@ export function OrderDetailPage() {
           {order.approved_at && (
             <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200">
               Approved {formatDate(order.approved_at)}
+            </span>
+          )}
+          {order.payment_requested_at && (
+            <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/50">
+              Payment requested {formatDate(order.payment_requested_at)}
             </span>
           )}
           {allowAdmin && order.status === 'draft' && !order.approved_at && (
@@ -290,6 +308,10 @@ export function OrderDetailPage() {
       </GlassCard>
 
       <div className="mt-6">
+        <PaymentsPanel orderId={orderId} orderTotal={order.total_amount} allowWrite={allowWrite} allowAdmin={allowAdmin} />
+      </div>
+
+      <div className="mt-6">
         <OrderJourney orderId={orderId} />
       </div>
 
@@ -320,6 +342,18 @@ export function OrderDetailPage() {
         onSend={async (toEmail, message) => {
           await emailOrder(order.id, toEmail, message)
           setNotice(`Emailed to ${toEmail}.`)
+        }}
+      />
+
+      <SendEmailDialog
+        open={paymentEmailOpen}
+        title={`Send payment request — ${order.order_number}`}
+        defaultEmail={order.customer_email}
+        onClose={() => setPaymentEmailOpen(false)}
+        onSend={async (toEmail, message) => {
+          const updated = await requestPayment(order.id, toEmail, message)
+          setOrder(updated)
+          setNotice(`Payment request sent to ${toEmail}.`)
         }}
       />
 

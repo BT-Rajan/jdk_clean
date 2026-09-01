@@ -507,6 +507,10 @@ CREATE TABLE IF NOT EXISTS orders (
     admin_reviewed_at      DATETIME NULL,
     admin_reviewed_by      BIGINT UNSIGNED NULL,
     admin_review_notes     TEXT NULL,
+    -- Set the last time a payment-request email went out for this order
+    -- (see payment_service.py) -- purely informational, for Sales to see
+    -- "sent N days ago, still nothing recorded" at a glance.
+    payment_requested_at   DATETIME NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -534,6 +538,32 @@ CREATE TABLE IF NOT EXISTS order_details (
     CONSTRAINT fk_od_order FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE,
     CONSTRAINT fk_od_product FOREIGN KEY (product_id) REFERENCES products(id),
     INDEX idx_od_order (order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- A payment recorded against one order, entered by hand once someone's
+-- confirmed the money actually arrived (bank transfer, cheque, cash --
+-- there's no online payment collection yet, see payment_service.py).
+-- Used to compute a customer's outstanding balance against their
+-- credit_limit (see customers table) at order-confirm time.
+CREATE TABLE IF NOT EXISTS payments (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    order_id        BIGINT UNSIGNED NOT NULL,
+    customer_id     BIGINT UNSIGNED NOT NULL, -- denormalized from orders.customer_id, for a one-query balance lookup
+    amount          DECIMAL(14,2) NOT NULL,
+    payment_date    DATE NOT NULL,
+    method          VARCHAR(60) NULL,   -- free text, e.g. "Bank transfer", "Cheque", "Cash"
+    reference       VARCHAR(120) NULL,  -- bank ref / cheque number / transaction id
+    notes           TEXT NULL,
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_payments_order FOREIGN KEY (order_id) REFERENCES orders(id),
+    CONSTRAINT fk_payments_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    INDEX idx_payments_order (order_id),
+    INDEX idx_payments_customer (customer_id),
+    INDEX idx_payments_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================

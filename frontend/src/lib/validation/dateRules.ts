@@ -23,3 +23,13 @@ export function isNotPastDate(value: string | undefined): boolean {
 }
 
 export const NOT_PAST_DATE_MESSAGE = 'Date cannot be in the past'
+
+/** The opposite case: for a field recording something that already
+ * happened (e.g. a payment's date) -- backdating is fine, but it can't
+ * be in the future. Mirrors backend/app/core/validators.py:not_in_future. */
+export function isNotFutureDate(value: string | undefined): boolean {
+  if (!value) return true
+  return value <= todayISODate()
+}
+
+export const NOT_FUTURE_DATE_MESSAGE = 'Date cannot be in the future'

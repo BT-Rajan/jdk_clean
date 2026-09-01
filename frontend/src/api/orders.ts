@@ -100,3 +100,17 @@ export async function emailOrder(id: number, toEmail: string, message?: string):
   })
   return data
 }
+
+/** Same order PDF, framed as a payment request (amount due, what's
+ * already been paid) instead of a plain confirmation -- see
+ * backend/app/api/orders.py's request_payment. Records
+ * payment_requested_at either way; there's no online payment link yet,
+ * the customer pays outside the app and someone records it via
+ * createPayment once it's confirmed to have arrived. */
+export async function requestPayment(id: number, toEmail: string, message?: string): Promise<Order> {
+  const { data } = await apiClient.post<Order>(`/api/orders/${id}/request-payment`, {
+    to_email: toEmail,
+    message: message || undefined,
+  })
+  return data
+}
