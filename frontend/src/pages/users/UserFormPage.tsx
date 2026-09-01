@@ -163,13 +163,13 @@ function UserCreateForm() {
     formState: { errors, isSubmitting },
   } = useForm<UserCreateFormValues, unknown, UserCreateSubmitValues>({
     resolver: zodResolver(userCreateSchema),
-    defaultValues: { username: '', email: '', password: '', full_name: '', role: 'staff', department_id: '' },
+    defaultValues: { username: '', email: '', password: '', full_name: '', phone: '', role: 'staff', department_id: '' },
   })
 
   async function onSubmit(values: UserCreateSubmitValues) {
     setFormError(null)
     try {
-      const created = await createUser({ ...values, department_id: values.department_id || null })
+      const created = await createUser({ ...values, phone: values.phone || null, department_id: values.department_id || null })
       navigate(`/users/${created.id}`)
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -186,9 +186,12 @@ function UserCreateForm() {
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
-          <RoleSelect {...register('role')} />
+          <TextField label="Phone" type="tel" placeholder="Not set" error={errors.phone?.message} {...register('phone')} />
         </div>
-        <DepartmentSelect {...register('department_id')} />
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <RoleSelect {...register('role')} />
+          <DepartmentSelect {...register('department_id')} />
+        </div>
         <PasswordField label="Password" error={errors.password?.message} {...register('password')} />
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
@@ -220,6 +223,7 @@ function UserEditForm({ id }: { id: number }) {
         reset({
           email: u.email,
           full_name: u.full_name,
+          phone: u.phone ?? '',
           role: u.role,
           department_id: u.department_id ?? '',
           is_active: u.is_active,
@@ -232,7 +236,7 @@ function UserEditForm({ id }: { id: number }) {
   async function onSubmit(values: UserEditSubmitValues) {
     setFormError(null)
     try {
-      await updateUser(id, { ...values, department_id: values.department_id || null })
+      await updateUser(id, { ...values, phone: values.phone || null, department_id: values.department_id || null })
       navigate(`/users/${id}`)
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -252,14 +256,17 @@ function UserEditForm({ id }: { id: number }) {
             <TextField label="Full name" error={errors.full_name?.message} {...register('full_name')} />
             <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
           </div>
-          <div className="grid grid-cols-1 items-center gap-5 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <TextField label="Phone" type="tel" placeholder="Not set" error={errors.phone?.message} {...register('phone')} />
             <RoleSelect {...register('role')} />
+          </div>
+          <div className="grid grid-cols-1 items-center gap-5 sm:grid-cols-2">
+            <DepartmentSelect {...register('department_id')} />
             <label className="flex items-center gap-3 text-sm text-white/70">
               <input type="checkbox" className="h-4 w-4 rounded border-white/20 bg-transparent" {...register('is_active')} />
               Active
             </label>
           </div>
-          <DepartmentSelect {...register('department_id')} />
           {user && <SignatureManager user={user} onChange={setUser} />}
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>

@@ -6,6 +6,7 @@ class UserCreate(BaseModel):
     email: EmailStr
     password: str = Field(min_length=8)
     full_name: str = Field(min_length=1, max_length=120)
+    phone: str | None = Field(default=None, max_length=30)
     role: str = Field(default="staff", pattern="^(admin|manager|staff|viewer)$")
     # Validated against the Department master (app/crud/master_data.py's
     # UserCRUD), not a hardcoded pattern -- see app/models/department.py.
@@ -15,6 +16,10 @@ class UserCreate(BaseModel):
 class UserUpdate(BaseModel):
     email: EmailStr | None = None
     full_name: str | None = Field(default=None, min_length=1, max_length=120)
+    # Admin-side counterpart to MeUpdate.phone below -- lets an admin/manager
+    # fix a wrong or missing contact number for someone else's account
+    # instead of that only ever being self-service.
+    phone: str | None = Field(default=None, max_length=30)
     role: str | None = Field(default=None, pattern="^(admin|manager|staff|viewer)$")
     department_id: int | None = None
     is_active: bool | None = None

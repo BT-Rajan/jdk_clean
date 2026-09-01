@@ -33,6 +33,18 @@ export async function restoreUser(id: number): Promise<User> {
   return data
 }
 
+/** Admin-only account-recovery path (POST /api/users/{id}/reset-password)
+ * -- sets a new password directly, no current password required. The
+ * only way to reset a password other than the user's own self-service
+ * change (see api/auth.ts changePassword). Restricted server-side to
+ * role=admin specifically, not manager (app/api/users.py admin_strict). */
+export async function resetUserPassword(id: number, newPassword: string): Promise<MessageResponse> {
+  const { data } = await apiClient.post<MessageResponse>(`/api/users/${id}/reset-password`, {
+    new_password: newPassword,
+  })
+  return data
+}
+
 /** Admin-only: uploads and assigns a signature image directly to a user
  * (no self-upload, no approval step -- see api/users.py). */
 export async function uploadUserSignature(id: number, file: File): Promise<User> {

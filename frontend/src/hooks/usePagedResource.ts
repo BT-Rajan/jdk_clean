@@ -74,8 +74,14 @@ export function usePagedResource<T>(
 
   useEffect(() => {
     load(page, debouncedSearch, status, sort)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, debouncedSearch, status, sort])
+    // `load` is included (not just page/search/status/sort) so that a
+    // caller whose `fetcher` identity changes -- e.g. a list page with
+    // its own extra filters (role, department, ...) closed over in a
+    // useCallback -- actually triggers a refetch when those filters
+    // change. `load` itself is memoized on [fetcher], so this is a
+    // no-op for every other list page, which passes a fetcher with a
+    // stable ([]) dependency array.
+  }, [page, debouncedSearch, status, sort, load])
 
   const refetch = useCallback(
     () => load(page, debouncedSearch, status, sort),
