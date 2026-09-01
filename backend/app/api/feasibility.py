@@ -7,6 +7,7 @@ from app.core.database import get_db
 from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.feasibility import (
+    FeasibilityAdminDecision,
     FeasibilityAdminReview,
     FeasibilityClose,
     FeasibilityCreate,
@@ -101,8 +102,28 @@ def decide_feasibility_exception(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
+    """Sales' call on an infeasible check: reject it outright, or
+    request an override. A request does not itself approve anything --
+    see admin_decide_feasibility_override below for the actual decision,
+    which only admin can make."""
     feasibility = feasibility_service.decide_exception(
         db, feasibility_id, payload.approve, payload.reason, user_id=user.id
+    )
+    return FeasibilityOut.from_model(feasibility)
+
+
+@router.post("/{feasibility_id}/admin-decision", response_model=FeasibilityOut)
+def admin_decide_feasibility_override(
+    feasibility_id: int,
+    payload: FeasibilityAdminDecision,
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    """Admin approves or rejects a Sales-requested override (see
+    decide_exception) -- the only way an infeasible check can actually
+    become quotable."""
+    feasibility = feasibility_service.admin_decide_override(
+        db, feasibility_id, payload.approve, payload.notes, user_id=user.id
     )
     return FeasibilityOut.from_model(feasibility)
 

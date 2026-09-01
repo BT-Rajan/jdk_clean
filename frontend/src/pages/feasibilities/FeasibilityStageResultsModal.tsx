@@ -50,7 +50,7 @@ interface FeasibilityStageResultsModalProps {
  * stage passed, red + a danger icon (with the specifics) where it
  * failed or came up short. Contacting the factory manager (the decision
  * after this readout) isn't part of this dialog -- that's still handled
- * by the Reject / Override & approve actions on the page itself. */
+ * by the Reject / Send to admin for approval actions on the page itself. */
 export function FeasibilityStageResultsModal({ open, feasibility, onClose }: FeasibilityStageResultsModalProps) {
   if (!feasibility) return null
   const stages = computeFeasibilityStages(feasibility)

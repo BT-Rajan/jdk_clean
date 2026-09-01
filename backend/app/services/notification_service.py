@@ -46,9 +46,10 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
             .all()
         )
         for c in checks:
+            is_override = c.admin_review_reason == "override"
             reason = (
-                "Sales overrode an infeasible result"
-                if c.admin_review_reason == "override"
+                "Sales requested an override — your approval is required before it can be quoted"
+                if is_override
                 else "Open more than 5 days with no resolution"
             )
             items.append(
@@ -56,7 +57,7 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
                     "id": f"feasibility-review-{c.id}",
                     "type": "feasibility_admin_review",
                     "severity": "high",
-                    "title": f"{c.feasibility_number} needs admin review",
+                    "title": f"{c.feasibility_number} needs {'your approval' if is_override else 'admin review'}",
                     "message": f"{reason} — {c.customer.name if c.customer else 'unknown customer'}.",
                     "link": f"/feasibilities/{c.id}",
                     "created_at": c.updated_at,

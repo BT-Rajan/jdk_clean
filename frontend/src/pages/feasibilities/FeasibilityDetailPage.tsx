@@ -16,6 +16,7 @@ import {
   TextareaField,
 } from '@/components/ui'
 import {
+  adminDecideFeasibilityOverride,
   adminReviewFeasibility,
   closeFeasibility,
   decideFeasibilityException,
@@ -83,11 +84,15 @@ function ReasonModal({
 function NotesModal({
   open,
   title,
+  label = 'Notes',
+  confirmLabel = 'Acknowledge',
   onClose,
   onSubmit,
 }: {
   open: boolean
   title: string
+  label?: string
+  confirmLabel?: string
   onClose: () => void
   onSubmit: (notes: string) => Promise<void>
 }) {
@@ -105,10 +110,10 @@ function NotesModal({
   return (
     <Modal open={open} title={title} onClose={onClose}>
       <form onSubmit={handleSubmit((v) => onSubmit(v.notes))} noValidate className="flex flex-col gap-4">
-        <TextareaField label="Notes" error={errors.notes?.message} {...register('notes')} />
+        <TextareaField label={label} error={errors.notes?.message} {...register('notes')} />
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
-          <Button type="submit" isLoading={isSubmitting}>Acknowledge</Button>
+          <Button type="submit" isLoading={isSubmitting}>{confirmLabel}</Button>
         </div>
       </form>
     </Modal>
@@ -132,6 +137,8 @@ export function FeasibilityDetailPage() {
   const [rejectOpen, setRejectOpen] = useState(false)
   const [closeOpen, setCloseOpen] = useState(false)
   const [adminReviewOpen, setAdminReviewOpen] = useState(false)
+  const [adminApproveOverrideOpen, setAdminApproveOverrideOpen] = useState(false)
+  const [adminRejectOverrideOpen, setAdminRejectOverrideOpen] = useState(false)
   const [stageResultsOpen, setStageResultsOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
 
@@ -211,10 +218,10 @@ export function FeasibilityDetailPage() {
               {f.checked_at && (
                 <Button variant="ghost" onClick={() => setStageResultsOpen(true)}>View check results</Button>
               )}
-              {allowWrite && f.status === 'exception_pending' && (
+              {allowWrite && f.status === 'exception_pending' && !f.admin_review_required && (
                 <>
                   <Button variant="ghost" onClick={() => setRejectOpen(true)}>Reject</Button>
-                  <Button onClick={() => setApproveOpen(true)}>Override &amp; approve</Button>
+                  <Button onClick={() => setApproveOpen(true)}>Send to admin for approval</Button>
                 </>
               )}
               {allowWrite && (f.status === 'feasible' || f.status === 'exception_approved' || f.status === 'exception_rejected') && (
@@ -238,13 +245,25 @@ export function FeasibilityDetailPage() {
         </div>
       )}
 
-      {f.admin_review_required && allowAdmin && (
+      {f.admin_review_required && f.admin_review_reason === 'override' && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           <span>
-            {f.admin_review_reason === 'override'
-              ? 'Sales overrode an infeasible result on this check — needs admin review.'
-              : 'This check has been open more than 5 days with no resolution — needs admin review.'}
+            {allowAdmin
+              ? 'Sales requested an override on this infeasible check — your approval is required before it can be quoted.'
+              : 'Sent to admin for approval — awaiting their decision before this can be quoted.'}
           </span>
+          {allowAdmin && (
+            <div className="flex gap-2">
+              <Button variant="ghost" size="sm" onClick={() => setAdminRejectOverrideOpen(true)}>Reject</Button>
+              <Button size="sm" onClick={() => setAdminApproveOverrideOpen(true)}>Approve override</Button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {f.admin_review_required && f.admin_review_reason !== 'override' && allowAdmin && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <span>This check has been open more than 5 days with no resolution — needs admin review.</span>
           <Button variant="ghost" size="sm" onClick={() => setAdminReviewOpen(true)}>Acknowledge</Button>
         </div>
       )}
@@ -277,9 +296,19 @@ export function FeasibilityDetailPage() {
         {f.exception_reason && (
           <div className="mt-6">
             <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">
-              {f.status === 'exception_approved' ? 'Override comment' : 'Exception decision comment'}
+              {f.status === 'exception_approved' || f.status === 'exception_pending'
+                ? "Sales' override request"
+                : 'Exception decision comment'}
             </dt>
             <dd className="mt-1 text-[15px] text-white/80">{f.exception_reason}</dd>
+          </div>
+        )}
+        {f.admin_review_notes && f.admin_review_reason === 'override' && (
+          <div className="mt-6">
+            <dt className="text-xs font-medium tracking-wide text-white/40 uppercase">
+              {f.status === 'exception_approved' ? "Admin's approval notes" : "Admin's rejection notes"}
+            </dt>
+            <dd className="mt-1 text-[15px] text-white/80">{f.admin_review_notes}</dd>
           </div>
         )}
         {f.close_reason && (
@@ -440,16 +469,16 @@ export function FeasibilityDetailPage() {
 
       <ReasonModal
         open={approveOpen}
-        title="Override & approve"
-        label="Why proceed despite the shortfall? (required — this notifies the admin)"
-        confirmLabel="Approve override"
+        title="Send to admin for approval"
+        label="Why proceed despite the shortfall? (required — this is what admin will decide on)"
+        confirmLabel="Send for approval"
         onClose={() => setApproveOpen(false)}
         onSubmit={(reason) =>
           withBusy(async () => {
             const updated = await decideFeasibilityException(feasibilityId, true, reason)
             setFeasibility(updated)
             setApproveOpen(false)
-            setNotice('Override approved — admin has been notified.')
+            setNotice('Sent to admin for approval.')
           })
         }
       />
@@ -466,6 +495,38 @@ export function FeasibilityDetailPage() {
             setFeasibility(updated)
             setRejectOpen(false)
             setNotice('Exception rejected.')
+          })
+        }
+      />
+
+      <NotesModal
+        open={adminApproveOverrideOpen}
+        title="Approve override"
+        label="Approval notes (required)"
+        confirmLabel="Approve override"
+        onClose={() => setAdminApproveOverrideOpen(false)}
+        onSubmit={(notes) =>
+          withBusy(async () => {
+            const updated = await adminDecideFeasibilityOverride(feasibilityId, true, notes)
+            setFeasibility(updated)
+            setAdminApproveOverrideOpen(false)
+            setNotice('Override approved — this check is now quotable.')
+          })
+        }
+      />
+
+      <NotesModal
+        open={adminRejectOverrideOpen}
+        title="Reject override"
+        label="Rejection notes (required)"
+        confirmLabel="Reject override"
+        onClose={() => setAdminRejectOverrideOpen(false)}
+        onSubmit={(notes) =>
+          withBusy(async () => {
+            const updated = await adminDecideFeasibilityOverride(feasibilityId, false, notes)
+            setFeasibility(updated)
+            setAdminRejectOverrideOpen(false)
+            setNotice('Override rejected.')
           })
         }
       />

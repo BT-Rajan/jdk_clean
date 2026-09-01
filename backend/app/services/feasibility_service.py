@@ -430,16 +430,21 @@ def decide_exception(
     db: Session, feasibility_id: int, approve: bool, reason: str, user_id: int | None = None
 ) -> FeasibilityCheck:
     """Sales' call on a feasibility check that came back short on raw
-    materials: approve the exception to let it proceed to quotation
-    despite the shortfall (this is the "override" -- proceeding with an
-    infeasible result on Sales' own judgement, with `reason` as the
-    mandatory comment explaining why), or reject it (which still requires
-    a separate close_reason via close_feasibility to actually terminate
-    it, keeping 'why we didn't proceed' explicit at both steps).
+    materials: reject it outright (still requires a separate close_reason
+    via close_feasibility to actually terminate it, keeping 'why we
+    didn't proceed' explicit at both steps), or request an override --
+    Sales' own judgement that this should proceed to quotation despite
+    the shortfall, with `reason` as the mandatory comment explaining why.
 
-    Approving flags the check for admin review -- every override needs an
-    admin to see it, the same way an overdue order does (see
-    order_service.escalate_overdue_orders / admin_review_required).
+    A request does NOT itself approve anything -- Sales can't self-approve
+    an infeasible result. It only flags the check for admin review (same
+    admin_review_required mechanism an overdue order uses -- see
+    order_service.escalate_overdue_orders); admin_decide_override is what
+    actually moves the check to exception_approved or exception_rejected,
+    and only admin can call it (see api/feasibility.py's admin_guard).
+    Without a feasibility report in a quotable status, no quotation can be
+    raised against this check at all (see QUOTABLE_STATUSES /
+    list_available_for_quotation), so this is the actual gate on that.
     """
     feasibility = get_feasibility(db, feasibility_id)
     if feasibility.status != "exception_pending":
@@ -448,18 +453,60 @@ def decide_exception(
             f"'{feasibility.status}')."
         )
 
-    new_status = "exception_approved" if approve else "exception_rejected"
-    old_status = feasibility.status
-    feasibility.status = new_status
     feasibility.exception_reason = reason
     feasibility.exception_by = user_id
     feasibility.updated_by = user_id
-    if approve:
-        feasibility.admin_review_required = True
-        feasibility.admin_review_reason = "override"
-        feasibility.admin_reviewed_at = None
-        feasibility.admin_reviewed_by = None
-        feasibility.admin_review_notes = None
+
+    if not approve:
+        old_status = feasibility.status
+        feasibility.status = "exception_rejected"
+        audit_service.log_update(
+            db, TABLE_NAME, feasibility_id, {"status": (old_status, "exception_rejected")}, user_id
+        )
+        db.commit()
+        deal_service.reconcile_deal_status(db, feasibility.deal_id, user_id)
+        return get_feasibility(db, feasibility_id)
+
+    feasibility.admin_review_required = True
+    feasibility.admin_review_reason = "override"
+    feasibility.admin_reviewed_at = None
+    feasibility.admin_reviewed_by = None
+    feasibility.admin_review_notes = None
+    audit_service.log_update(
+        db, TABLE_NAME, feasibility_id, {"admin_review_required": (False, True)}, user_id
+    )
+    db.commit()
+    return get_feasibility(db, feasibility_id)
+
+
+def admin_decide_override(
+    db: Session, feasibility_id: int, approve: bool, notes: str, user_id: int | None = None
+) -> FeasibilityCheck:
+    """Admin's actual decision on a Sales-requested override (see
+    decide_exception) -- this, not Sales' own request, is what moves the
+    check to exception_approved (quotable -- may auto-create a quotation,
+    same as a first-pass feasible result does) or exception_rejected.
+    Only reachable while a request is genuinely pending (admin_guard in
+    api/feasibility.py restricts who can call this at all); clears the
+    pending-review flag as part of the same decision rather than a
+    separate acknowledgment step.
+    """
+    feasibility = get_feasibility(db, feasibility_id)
+    if (
+        feasibility.status != "exception_pending"
+        or not feasibility.admin_review_required
+        or feasibility.admin_review_reason != "override"
+    ):
+        raise ConflictError("This feasibility check has no pending override request.")
+
+    new_status = "exception_approved" if approve else "exception_rejected"
+    old_status = feasibility.status
+    feasibility.status = new_status
+    feasibility.admin_review_required = False
+    feasibility.admin_reviewed_at = datetime.now(timezone.utc)
+    feasibility.admin_reviewed_by = user_id
+    feasibility.admin_review_notes = notes
+    feasibility.updated_by = user_id
     audit_service.log_update(
         db, TABLE_NAME, feasibility_id, {"status": (old_status, new_status)}, user_id
     )
@@ -467,15 +514,15 @@ def decide_exception(
 
     if new_status == "exception_approved":
         _maybe_auto_create_quotation(db, feasibility_id, user_id)
-    elif new_status == "exception_rejected":
+    else:
         deal_service.reconcile_deal_status(db, feasibility.deal_id, user_id)
 
     return get_feasibility(db, feasibility_id)
 
 
 def _maybe_auto_create_quotation(db: Session, feasibility_id: int, user_id: int | None = None) -> None:
-    """Fires the moment a check turns feasible (run_check) or Sales
-    overrides an infeasible result (decide_exception, approved) -- the
+    """Fires the moment a check turns feasible (run_check) or admin
+    approves a Sales-requested override (admin_decide_override) -- the
     "auto create, with role-based flexibility" behavior: if enabled (see
     Settings -> Sales, admin/manager-only to change), drafts a quotation
     right then, pre-filled from the check's own lines, on the same deal.
@@ -701,11 +748,21 @@ def escalate_expired_feasibility_checks(db: Session, as_of: datetime | None = No
 
 
 def admin_review(db: Session, feasibility_id: int, notes: str, user_id: int | None = None) -> FeasibilityCheck:
-    """Admin clears a pending override/stale-open escalation, recording
-    their decision. Mirrors order_service.admin_review exactly."""
+    """Admin clears a pending stale-open escalation (a check that's sat
+    open 5+ days), recording their decision. This is a plain FYI
+    acknowledgment, not a gate -- unlike an override request, nothing was
+    waiting on it. A pending override must go through admin_decide_override
+    instead, which is what actually decides it (see that function's
+    docstring); this deliberately refuses that case rather than letting it
+    clear admin_review_required without a real approve/reject. Mirrors
+    order_service.admin_review exactly."""
     feasibility = get_feasibility(db, feasibility_id)
     if not feasibility.admin_review_required:
         raise ConflictError("This feasibility check has no pending admin review.")
+    if feasibility.admin_review_reason == "override":
+        raise ConflictError(
+            "This check has a pending override request -- approve or reject it instead of acknowledging."
+        )
 
     feasibility.admin_review_required = False
     feasibility.admin_reviewed_at = datetime.now(timezone.utc)

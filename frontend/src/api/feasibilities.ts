@@ -51,6 +51,11 @@ export async function adminReviewFeasibility(id: number, notes: string): Promise
   return data
 }
 
+export async function adminDecideFeasibilityOverride(id: number, approve: boolean, notes: string): Promise<Feasibility> {
+  const { data } = await apiClient.post<Feasibility>(`/api/feasibility/${id}/admin-decision`, { approve, notes })
+  return data
+}
+
 export async function deleteFeasibility(id: number): Promise<MessageResponse> {
   const { data } = await apiClient.delete<MessageResponse>(`/api/feasibility/${id}`)
   return data

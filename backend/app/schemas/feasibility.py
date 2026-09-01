@@ -82,6 +82,11 @@ class FeasibilityExceptionDecision(BaseModel):
     reason: str = Field(min_length=1)
 
 
+class FeasibilityAdminDecision(BaseModel):
+    approve: bool
+    notes: str = Field(min_length=1)
+
+
 class FeasibilityClose(BaseModel):
     reason: str = Field(min_length=1)
 
