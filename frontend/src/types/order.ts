@@ -53,6 +53,10 @@ export interface Order {
   /** Last time a payment-request email went out for this order (see
    * POST /{id}/request-payment). Purely informational. */
   payment_requested_at: string | null
+  /** Set the moment the automatic order-confirmation email successfully
+   * sent (fires once, the first time the order reaches 'confirmed').
+   * Null if the customer has no email on file or the send failed. */
+  confirmation_emailed_at: string | null
   /** Set when this order is itself a child born out of splitting a
    * 'ready_to_ship' order that stock couldn't fully cover (see
    * POST /{id}/split). */

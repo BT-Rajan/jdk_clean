@@ -511,6 +511,11 @@ CREATE TABLE IF NOT EXISTS orders (
     -- (see payment_service.py) -- purely informational, for Sales to see
     -- "sent N days ago, still nothing recorded" at a glance.
     payment_requested_at   DATETIME NULL,
+    -- Set the moment the automatic order-confirmation email successfully
+    -- sends (see order_service._maybe_send_confirmation_email, and the
+    -- email_templates table below). NULL if the customer has no email
+    -- on file or the send failed.
+    confirmation_emailed_at DATETIME NULL,
     -- Set when this order was born out of splitting a 'ready_to_ship'
     -- order that stock couldn't fully cover yet (see order_service.
     -- split_order) -- the deliverable-now remainder becomes this order's
@@ -895,6 +900,26 @@ CREATE TABLE IF NOT EXISTS refresh_tokens (
     CONSTRAINT fk_refresh_user FOREIGN KEY (user_id) REFERENCES users(id),
     INDEX idx_refresh_user (user_id),
     INDEX idx_refresh_expires (expires_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- DOCUMENTS: Email templates (Admin -> Documents). The subject/body an
+-- automated or one-click document email goes out with -- a fixed set
+-- of keys defined in code (see email_template_service.py), each row
+-- auto-created from that key's default the first time it's read, so a
+-- fresh install works out of the box before any admin ever visits this
+-- page.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS email_templates (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    template_key    VARCHAR(40) NOT NULL UNIQUE,
+    name            VARCHAR(120) NOT NULL,
+    subject         VARCHAR(255) NOT NULL,
+    body            TEXT NOT NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================

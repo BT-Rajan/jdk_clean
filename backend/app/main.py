@@ -13,6 +13,7 @@ from app.api.dashboard import router as dashboard_router
 from app.api.deals import router as deals_router
 from app.api.departments import router as departments_router
 from app.api.delivery_notes import router as delivery_notes_router
+from app.api.email_templates import router as email_templates_router
 from app.api.feasibility import router as feasibility_router
 from app.api.inventory import router as inventory_router
 from app.api.machines import router as machines_router
@@ -115,6 +116,7 @@ app.include_router(delivery_notes_router)
 app.include_router(production_schedules_router)
 app.include_router(purchase_orders_router)
 app.include_router(supplier_returns_router)
+app.include_router(email_templates_router)
 app.include_router(bom_router)
 app.include_router(packaging_router)
 app.include_router(search_router)

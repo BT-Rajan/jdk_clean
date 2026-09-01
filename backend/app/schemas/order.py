@@ -141,6 +141,7 @@ class OrderOut(BaseModel):
     admin_reviewed_at: datetime | None
     admin_review_notes: str | None
     payment_requested_at: datetime | None
+    confirmation_emailed_at: datetime | None
     # Set when this order is itself a child born out of split_order --
     # a lighter reference back to the order it was carved from, since a
     # deliverable-now remainder came from a supply shortfall on that

@@ -9,11 +9,12 @@ import { OrgChartTab } from '@/pages/settings/OrgChartTab'
 import { EmailTab } from '@/pages/communication/EmailTab'
 import { SmsTab } from '@/pages/communication/SmsTab'
 import { WhatsAppTab } from '@/pages/communication/WhatsAppTab'
+import { EmailTemplatesTab } from './EmailTemplatesTab'
 import { GeneralSettingsForm } from './GeneralSettingsForm'
 import { GENERAL_SECTION_KEYS } from './sections'
 import type { GeneralSectionKey } from './sections'
 
-type SectionKey = GeneralSectionKey | 'communication' | 'org-chart'
+type SectionKey = GeneralSectionKey | 'communication' | 'org-chart' | 'email-templates'
 
 type SectionItem = { key: SectionKey; label: string }
 type LinkItem = { href: string; label: string }
@@ -46,6 +47,10 @@ const GROUPS: SectionGroup[] = [
     // separate sidebar entries); they're now one page with its own
     // inner tab strip -- see the `communication` TabPanel below.
     items: [{ key: 'communication', label: 'Communication' }],
+  },
+  {
+    label: 'Documents',
+    items: [{ key: 'email-templates', label: 'Email Templates' }],
   },
   {
     label: 'Access',
@@ -180,6 +185,10 @@ export function AdminShell() {
               <TabPanel id="email" activeId={communicationTab} keepMounted><EmailTab /></TabPanel>
               <TabPanel id="whatsapp" activeId={communicationTab} keepMounted><WhatsAppTab /></TabPanel>
               <TabPanel id="sms" activeId={communicationTab} keepMounted><SmsTab /></TabPanel>
+            </TabPanel>
+
+            <TabPanel id="email-templates" activeId={activeSection}>
+              <EmailTemplatesTab />
             </TabPanel>
           </div>
         </div>

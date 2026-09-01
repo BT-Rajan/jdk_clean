@@ -1,3 +1,5 @@
+from datetime import timezone
+
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -6,6 +8,7 @@ from app.api.common import PagedResponse
 from app.api.deps import require_role
 from app.core.database import get_db
 from app.core.permissions import require_page_access
+from app.core.timezone import KUWAIT_TZ, today_kuwait
 from app.models.user import User
 from app.schemas.email import SendDocumentEmailRequest
 from app.schemas.order import (
@@ -18,7 +21,15 @@ from app.schemas.order import (
     SplitOrderRequest,
 )
 from app.schemas.order_journey import OrderJourneyOut
-from app.services import audit_service, email_service, order_journey_service, order_service, payment_service, pdf_generator
+from app.services import (
+    audit_service,
+    email_service,
+    email_template_service,
+    order_journey_service,
+    order_service,
+    payment_service,
+    pdf_generator,
+)
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 read_guard = require_page_access("orders", "read")
@@ -258,12 +269,21 @@ def email_order_pdf(
     pdf_bytes = pdf_generator.generate_order_pdf(order, company_settings, signer=signer)
     filename = f"{order.order_number}.pdf"
 
-    body = payload.message or (
-        f"Please find attached order confirmation {order.order_number}."
+    subject, template_body = email_template_service.render(
+        db,
+        "order_confirmation",
+        {
+            "customer_name": order.customer.name if order.customer else "",
+            "order_number": order.order_number,
+            "order_date": order.order_date.isoformat(),
+            "total_amount": f"{float(order.total_amount):,.2f}",
+            "company_name": company_settings.get("company_name", ""),
+        },
     )
+    body = payload.message or template_body
     email_service.send_document_email(
         to_email=payload.to_email,
-        subject=f"Order {order.order_number}",
+        subject=subject,
         body=body,
         attachment_bytes=pdf_bytes,
         attachment_filename=filename,
@@ -295,16 +315,35 @@ def request_payment(
 
     amount_paid = payment_service.get_order_amount_paid(db, order_id)
     amount_due = float(order.total_amount) - amount_paid
-
-    body = payload.message or (
-        f"Payment is due for order {order.order_number}, total {order.total_amount:.2f}"
-        + (f" ({amount_paid:.2f} already received, {amount_due:.2f} outstanding)" if amount_paid > 0 else "")
-        + f". Please arrange payment and quote order number {order.order_number} as the reference. "
-        "The order PDF is attached for your records."
+    today = today_kuwait()
+    days_since_order = (today - order.order_date).days
+    days_since_last_request = (
+        (today - order.payment_requested_at.replace(tzinfo=timezone.utc).astimezone(KUWAIT_TZ).date()).days
+        if order.payment_requested_at
+        else None
     )
+
+    subject, template_body = email_template_service.render(
+        db,
+        "payment_reminder",
+        {
+            "customer_name": order.customer.name if order.customer else "",
+            "order_number": order.order_number,
+            "total_amount": f"{float(order.total_amount):,.2f}",
+            "amount_paid": f"{amount_paid:,.2f}",
+            "amount_due": f"{amount_due:,.2f}",
+            "amount_paid_note": (
+                f" ({amount_paid:,.2f} already received, {amount_due:,.2f} outstanding)" if amount_paid > 0 else ""
+            ),
+            "days_since_order": str(days_since_order),
+            "days_since_last_request": str(days_since_last_request) if days_since_last_request is not None else "-",
+            "company_name": company_settings.get("company_name", ""),
+        },
+    )
+    body = payload.message or template_body
     email_service.send_document_email(
         to_email=payload.to_email,
-        subject=f"Payment request -- Order {order.order_number}",
+        subject=subject,
         body=body,
         attachment_bytes=pdf_bytes,
         attachment_filename=filename,

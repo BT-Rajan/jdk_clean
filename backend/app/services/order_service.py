@@ -434,6 +434,7 @@ def change_status(
 
     if new_status == "confirmed":
         _maybe_auto_schedule_production(db, order_id, user_id)
+        _maybe_send_confirmation_email(db, order_id, user_id)
     elif new_status == "ready_to_ship":
         _maybe_auto_create_delivery_note(db, order_id, user_id)
     elif new_status == "cancelled":
@@ -441,6 +442,54 @@ def change_status(
         deal_service.reconcile_deal_status(db, order.deal_id, user_id)
 
     return get_order(db, order_id)
+
+
+def _maybe_send_confirmation_email(db: Session, order_id: int, user_id: int | None = None) -> None:
+    """Fires the moment an order is confirmed -- draft only ever moves
+    forward to 'confirmed' once (see ALLOWED_TRANSITIONS), so this is
+    the order's genuine "first email": Admin -> Documents -> Email
+    Templates -> "Order confirmation" rendered with this order's own
+    details and sent straight to the customer on file, PDF attached,
+    same as the manual "Send email" button generates. Never raises --
+    a person can always send it by hand afterward from the order's own
+    page -- and is silently skipped (no confirmation_emailed_at set)
+    if the customer has no email on file, same as the rest of this
+    file's auto-* hooks never blocking the transition that triggered
+    them.
+    """
+    from app.services import email_service, email_template_service, pdf_generator
+
+    order = get_order(db, order_id)
+    if not order.customer or not order.customer.email:
+        return
+
+    try:
+        company_settings = pdf_generator.get_company_settings(db)
+        signer = pdf_generator.resolve_signer(db, order.created_by)
+        pdf_bytes = pdf_generator.generate_order_pdf(order, company_settings, signer=signer)
+        subject, body = email_template_service.render(
+            db,
+            "order_confirmation",
+            {
+                "customer_name": order.customer.name,
+                "order_number": order.order_number,
+                "order_date": order.order_date.isoformat(),
+                "total_amount": f"{float(order.total_amount):,.2f}",
+                "company_name": company_settings.get("company_name", ""),
+            },
+        )
+        email_service.send_document_email(
+            to_email=order.customer.email,
+            subject=subject,
+            body=body,
+            attachment_bytes=pdf_bytes,
+            attachment_filename=f"{order.order_number}.pdf",
+        )
+    except AppError:
+        return
+
+    order.confirmation_emailed_at = datetime.now(timezone.utc)
+    db.commit()
 
 
 def split_order(db: Session, order_id: int, lines: list[dict], user_id: int | None = None) -> Order:

@@ -96,6 +96,14 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     # (see payment_service.py) -- purely informational, for Sales to see
     # "sent N days ago, still nothing recorded" at a glance.
     payment_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Set the moment the automatic order-confirmation email (Admin ->
+    # Documents -> Email Templates -> "Order confirmation") successfully
+    # sends -- see order_service._maybe_send_confirmation_email, fired
+    # once when the order reaches 'confirmed'. Stays NULL if the
+    # customer has no email on file or the send failed; purely
+    # informational, so Sales can see it never actually went out and
+    # resend by hand via the ordinary "Send email" button.
+    confirmation_emailed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Set when this order was itself born out of order_service.split_order
     # -- carving a deliverable-now quantity off a 'ready_to_ship' order
     # that stock can't fully cover yet (see that function's docstring).
