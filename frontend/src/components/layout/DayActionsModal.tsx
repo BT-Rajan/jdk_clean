@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Modal, Spinner } from '@/components/ui'
+import { Link } from 'react-router-dom'
+import { Alert, Button, Modal, Spinner, StatusBadge } from '@/components/ui'
 import { getDaySnapshot } from '@/api/calendar'
 import type { DaySnapshot } from '@/types/calendar'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -15,6 +16,12 @@ interface DayActionsModalProps {
   onClose: () => void
   onPickProduction: () => void
   onPickSale: () => void
+  /** Called when a snapshot row is clicked to go to its own detail page
+   * -- production/completed batches and shipped orders can't be edited
+   * or undone from here (both are deliberately terminal states once
+   * they've happened, everywhere else in the app too); fixing a mistake
+   * means going to that record's own page, same as everywhere else. */
+  onNavigate: () => void
 }
 
 /** Opens the moment a day is clicked in the calendar: a snapshot of
@@ -23,8 +30,9 @@ interface DayActionsModalProps {
  * outside the allowed backdate window (see backend's
  * core/workflow.MAX_BACKDATE_DAYS). Choosing an action here hands off to
  * the same LogProductionModal/LogSaleModal the Production/Orders list
- * pages use, just pre-dated to this day. */
-export function DayActionsModal({ open, date, onClose, onPickProduction, onPickSale }: DayActionsModalProps) {
+ * pages use, just pre-dated to this day. Each snapshot row links to its
+ * own detail page for anything beyond viewing (see onNavigate above). */
+export function DayActionsModal({ open, date, onClose, onPickProduction, onPickSale, onNavigate }: DayActionsModalProps) {
   const [snapshot, setSnapshot] = useState<DaySnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -69,26 +77,34 @@ export function DayActionsModal({ open, date, onClose, onPickProduction, onPickS
             {hasActivity ? (
               <div className="flex flex-col gap-2">
                 {snapshot!.production.map((b) => (
-                  <div
+                  <Link
                     key={`production-${b.id}`}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
+                    to={`/production/${b.id}`}
+                    onClick={onNavigate}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm transition-colors hover:border-gold-400/30 hover:bg-white/[0.08]"
                   >
                     <span className="truncate text-white/80">
                       {b.product_code ? `${b.product_code} — ${b.product_name}` : `#${b.id}`}
                     </span>
-                    <span className="shrink-0 text-xs text-white/50">
+                    <span className="flex shrink-0 items-center gap-2 text-xs text-white/50">
                       {b.status === 'completed' ? `${b.produced_quantity} produced` : `${b.planned_quantity} planned`}
+                      <StatusBadge status={b.status} />
                     </span>
-                  </div>
+                  </Link>
                 ))}
                 {snapshot!.sales.map((o) => (
-                  <div
+                  <Link
                     key={`sale-${o.id}`}
-                    className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm"
+                    to={`/orders/${o.id}`}
+                    onClick={onNavigate}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm transition-colors hover:border-gold-400/30 hover:bg-white/[0.08]"
                   >
                     <span className="truncate text-white/80">{o.order_number} — {o.customer_name ?? 'Unknown customer'}</span>
-                    <span className="shrink-0 text-xs text-white/50">{formatCurrency(o.total_amount)}</span>
-                  </div>
+                    <span className="flex shrink-0 items-center gap-2 text-xs text-white/50">
+                      {formatCurrency(o.total_amount)}
+                      <StatusBadge status={o.status} />
+                    </span>
+                  </Link>
                 ))}
               </div>
             ) : (

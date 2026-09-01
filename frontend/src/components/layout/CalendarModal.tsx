@@ -432,6 +432,10 @@ export function CalendarModal({ open, onClose }: CalendarModalProps) {
           setDayActionsOpen(false)
           setLogSaleOpen(true)
         }}
+        onNavigate={() => {
+          setDayActionsOpen(false)
+          onClose()
+        }}
       />
 
       <LogProductionModal
