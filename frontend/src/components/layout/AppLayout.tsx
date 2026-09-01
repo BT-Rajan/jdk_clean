@@ -111,7 +111,6 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navEntries: NavEntry[] = [
     { to: '/dashboard', label: 'Dashboard' },
-    { to: '/master-data', label: 'Master Data' },
     {
       label: 'Sales',
       items: [
@@ -163,8 +162,9 @@ export function AppLayout({ children }: AppLayoutProps) {
   // Master Data entries the user can actually reach -- mirrors
   // MasterDataHomePage's own visibility rule so the palette never offers
   // a page that 403s. Kept separate from visibleNavEntries since these
-  // aren't in the nav bar itself (they live behind the single "Master
-  // Data" link/hub page), but should still be one Cmd/Ctrl+K search away.
+  // aren't in the nav bar itself (Master Data lives under Admin, see
+  // AdminShell's "Master Data" group), but should still be one Cmd/Ctrl+K
+  // search away.
   function isMasterEntryVisible(entry: (typeof MASTER_DATA_REGISTRY)[number]): boolean {
     if (entry.adminOnly) return isAdmin(user?.role)
     if (!entry.pageKey) return true
@@ -200,15 +200,25 @@ export function AppLayout({ children }: AppLayoutProps) {
     { id: 'action:logout', label: 'Sign out', keywords: 'logout', onSelect: handleLogout },
     ...(isAdmin(user?.role)
       ? [
-          { id: 'admin:company', label: 'Company', hint: 'Admin', onSelect: () => navigate('/admin?section=company') },
+          {
+            id: 'admin:company',
+            label: 'Company',
+            hint: 'Admin',
+            keywords: 'factory setup working hours weekdays',
+            onSelect: () => navigate('/admin?section=company'),
+          },
           { id: 'admin:workflow-automation', label: 'Workflow Automation', hint: 'Admin', onSelect: () => navigate('/admin?section=workflow-automation') },
           { id: 'admin:approvals', label: 'Approvals', hint: 'Admin', onSelect: () => navigate('/admin?section=approvals') },
           { id: 'admin:ai-assistant', label: 'AI Assistant settings', hint: 'Admin', keywords: 'api key', onSelect: () => navigate('/admin?section=ai-assistant') },
-          { id: 'admin:factory-setup', label: 'Factory Setup', hint: 'Admin', onSelect: () => navigate('/admin?section=factory-setup') },
-          { id: 'admin:bom', label: 'Bill of Materials', hint: 'Admin', keywords: 'bom', onSelect: () => navigate('/admin?section=bom') },
-          { id: 'admin:email', label: 'Email settings', hint: 'Admin', keywords: 'imap pop3 smtp', onSelect: () => navigate('/admin?section=email') },
-          { id: 'admin:whatsapp', label: 'WhatsApp settings', hint: 'Admin', keywords: 'meta templates', onSelect: () => navigate('/admin?section=whatsapp') },
-          { id: 'admin:sms', label: 'SMS settings', hint: 'Admin', keywords: 'kwtsms unifonic smsala', onSelect: () => navigate('/admin?section=sms') },
+          {
+            id: 'admin:communication',
+            label: 'Communication',
+            hint: 'Admin',
+            keywords: 'email whatsapp sms imap pop3 smtp meta templates kwtsms unifonic smsala',
+            onSelect: () => navigate('/admin?section=communication'),
+          },
+          { id: 'admin:org-chart', label: 'Org Chart', hint: 'Admin', onSelect: () => navigate('/admin?section=org-chart') },
+          { id: 'admin:master-data', label: 'Master Data', hint: 'Admin', onSelect: () => navigate('/master-data') },
           // Users, Departments, and Roles & Permissions are covered by
           // the Master Data entries above now -- not duplicated here.
         ]

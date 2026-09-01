@@ -248,7 +248,7 @@ export function App() {
               <Route path="/admin" element={<AdminShell />} />
               <Route path="/roles-permissions" element={<AccessControlPage />} />
               <Route path="/settings" element={<Navigate to="/admin" replace />} />
-              <Route path="/communication" element={<Navigate to="/admin?section=email" replace />} />
+              <Route path="/communication" element={<Navigate to="/admin?section=communication" replace />} />
               <Route path="/users" element={<UsersListPage />} />
               <Route path="/users/new" element={<UserFormPage />} />
               <Route path="/users/:id" element={<UserDetailPage />} />
