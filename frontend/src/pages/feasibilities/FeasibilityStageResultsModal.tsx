@@ -42,19 +42,49 @@ interface FeasibilityStageResultsModalProps {
   open: boolean
   feasibility: Feasibility | null
   onClose: () => void
+  /** Whether the current user can act on this check at all (Sales
+   * department, or admin/manager who bypass the department check --
+   * see lib/roles.canWriteDepartment). Gates the Reject/Send-for-approval
+   * actions below. */
+  allowWrite: boolean
+  /** Whether the current user is admin -- gates the Approve/Reject
+   * override-decision actions below. */
+  allowAdmin: boolean
+  onReject: () => void
+  onSendForApproval: () => void
+  onAdminApproveOverride: () => void
+  onAdminRejectOverride: () => void
 }
 
-/** Pops up right after "Run check" -- walks Sales through the same
- * stock -> materials -> production-line sequence run_check just
- * evaluated, stage by stage, in the one dialog: green + tick where a
- * stage passed, red + a danger icon (with the specifics) where it
- * failed or came up short. Contacting the factory manager (the decision
- * after this readout) isn't part of this dialog -- that's still handled
- * by the Reject / Send to admin for approval actions on the page itself. */
-export function FeasibilityStageResultsModal({ open, feasibility, onClose }: FeasibilityStageResultsModalProps) {
+/** Pops up right after "Run check" (and via "View check results") --
+ * walks through the same stock -> materials -> production-line sequence
+ * run_check just evaluated, stage by stage: green + tick where a stage
+ * passed, red + a danger icon (with the specifics) where it failed or
+ * came up short. Whatever decision this result calls for -- Sales
+ * rejecting/sending an infeasible result to admin, or admin
+ * approving/rejecting a pending override -- is offered right here
+ * instead of just telling the person to go find the buttons on the
+ * page; the same handlers as the page's own buttons, just reachable
+ * without closing this dialog first. */
+export function FeasibilityStageResultsModal({
+  open,
+  feasibility,
+  onClose,
+  allowWrite,
+  allowAdmin,
+  onReject,
+  onSendForApproval,
+  onAdminApproveOverride,
+  onAdminRejectOverride,
+}: FeasibilityStageResultsModalProps) {
   if (!feasibility) return null
   const stages = computeFeasibilityStages(feasibility)
   const overallFeasible = feasibility.status === 'feasible'
+
+  const canDecideException =
+    !overallFeasible && feasibility.status === 'exception_pending' && !feasibility.admin_review_required && allowWrite
+  const canDecideOverride =
+    feasibility.admin_review_required && feasibility.admin_review_reason === 'override' && allowAdmin
 
   return (
     <Modal open={open} title="Feasibility check results" onClose={onClose} wide>
@@ -85,14 +115,34 @@ export function FeasibilityStageResultsModal({ open, feasibility, onClose }: Fea
         ))}
       </div>
 
-      {!overallFeasible && (
+      {canDecideException && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <span>This check came up short. Reject it, or send it to admin for approval to proceed anyway.</span>
+          <div className="flex shrink-0 gap-2">
+            <Button variant="ghost" size="sm" onClick={onReject}>Reject</Button>
+            <Button size="sm" onClick={onSendForApproval}>Send to admin for approval</Button>
+          </div>
+        </div>
+      )}
+
+      {canDecideOverride && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <span>Sales requested an override on this check — your approval is required before it can be quoted.</span>
+          <div className="flex shrink-0 gap-2">
+            <Button variant="ghost" size="sm" onClick={onAdminRejectOverride}>Reject</Button>
+            <Button size="sm" onClick={onAdminApproveOverride}>Approve override</Button>
+          </div>
+        </div>
+      )}
+
+      {!overallFeasible && !canDecideException && !canDecideOverride && feasibility.admin_review_required && (
         <p className="mt-6 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-          Reject this check, or override &amp; approve to proceed anyway -- use the buttons on the page.
+          Sent to admin for approval — awaiting their decision before this can be quoted.
         </p>
       )}
 
       <div className="mt-8 flex justify-end">
-        <Button onClick={onClose}>Close</Button>
+        <Button variant="ghost" onClick={onClose}>Close</Button>
       </div>
     </Modal>
   )

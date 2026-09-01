@@ -551,6 +551,24 @@ export function FeasibilityDetailPage() {
         open={stageResultsOpen}
         feasibility={feasibility}
         onClose={() => setStageResultsOpen(false)}
+        allowWrite={allowWrite}
+        allowAdmin={allowAdmin}
+        onReject={() => {
+          setStageResultsOpen(false)
+          setRejectOpen(true)
+        }}
+        onSendForApproval={() => {
+          setStageResultsOpen(false)
+          setApproveOpen(true)
+        }}
+        onAdminApproveOverride={() => {
+          setStageResultsOpen(false)
+          setAdminApproveOverrideOpen(true)
+        }}
+        onAdminRejectOverride={() => {
+          setStageResultsOpen(false)
+          setAdminRejectOverrideOpen(true)
+        }}
       />
 
       <NotesModal
