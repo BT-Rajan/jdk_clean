@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import type { ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { cn } from '@/lib/cn'
 
@@ -76,7 +77,17 @@ export function Modal({ open, title, onClose, children, footer, wide = false, fu
     }
   }, [open])
 
-  return (
+  // Rendered into document.body via a portal rather than in place: every
+  // page mounts this from inside AppLayout's <main className="relative
+  // z-10">, which -- being `position: relative` with an explicit z-index --
+  // establishes its own stacking context. Without the portal, the modal's
+  // "fixed inset-0 z-50" only wins stacking battles *within* that z-10
+  // context, so it painted underneath AppLayout's "sticky ... z-50" header
+  // (the header sits in a separate, higher-stacked context) -- the header
+  // visibly covered the top of any modal tall enough to reach it. Portaling
+  // out of <main> entirely removes the modal from that nested context, so
+  // its own z-50 is compared directly against the header's, as intended.
+  return createPortal(
     <AnimatePresence>
       {open && (
         <motion.div
@@ -124,6 +135,7 @@ export function Modal({ open, title, onClose, children, footer, wide = false, fu
           </motion.div>
         </motion.div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   )
 }
