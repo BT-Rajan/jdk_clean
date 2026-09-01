@@ -5,7 +5,6 @@ import { listRawMaterials } from '@/api/rawMaterials'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { generateId } from '@/lib/id'
-import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import type { PackagingLineInput } from '@/types/packaging'
 
 interface EditableLine extends PackagingLineInput {
@@ -283,8 +282,6 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
           </>
         )}
       </GlassCard>
-
-      <HistoryTimeline url={`/api/products/${productId}/packaging/history`} title="Packaging history" />
     </div>
   )
 }

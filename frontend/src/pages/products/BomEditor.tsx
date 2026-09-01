@@ -6,7 +6,6 @@ import { listRawMaterials } from '@/api/rawMaterials'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { generateId } from '@/lib/id'
-import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import type { BomExplosionResult, BomLineInput, ComponentType } from '@/types/bom'
 
 interface EditableLine extends BomLineInput {
@@ -384,8 +383,6 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
           </>
         )}
       </GlassCard>
-
-      <HistoryTimeline url={`/api/products/${productId}/bom/history`} title="Formula (BOM) history" />
 
       <GlassCard className="p-6">
         <h2 className="font-display text-lg font-medium text-white">Requirements calculator</h2>

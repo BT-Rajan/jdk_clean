@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Badge, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
-import { HistoryTimeline } from '@/components/history/HistoryTimeline'
+import { MultiHistoryTimeline } from '@/components/history/MultiHistoryTimeline'
 import { WhereUsedPanel } from '@/components/master/WhereUsedPanel'
 import { activateProduct, deactivateProduct, deleteProduct, getProduct, restoreProduct } from '@/api/products'
 import { getStock } from '@/api/inventory'
@@ -13,7 +13,6 @@ import { useAuth } from '@/hooks/useAuth'
 import { canWrite, isAdmin } from '@/lib/roles'
 import { formatCurrency } from '@/lib/currency'
 import { BomEditor } from './BomEditor'
-import { BomTree } from './BomTree'
 import { PackagingEditor } from './PackagingEditor'
 import { SupplierDrilldown } from './SupplierDrilldown'
 
@@ -191,9 +190,6 @@ export function ProductDetailPage() {
         <>
           <BomEditor productId={productId} canEdit={canWrite(user?.role)} />
           <div className="mt-6">
-            <BomTree productId={productId} productCode={product.code} productName={product.name} />
-          </div>
-          <div className="mt-6">
             <SupplierDrilldown productId={productId} />
           </div>
         </>
@@ -212,7 +208,15 @@ export function ProductDetailPage() {
       </div>
 
       <div className="mt-6">
-        <HistoryTimeline resourcePath="/api/products" id={productId} title="Product history" />
+        <MultiHistoryTimeline
+          sources={[
+            { id: 'product', label: 'Product', resourcePath: '/api/products', entityId: productId },
+            ...(isAdmin(user?.role)
+              ? [{ id: 'bom', label: 'Formula (BOM)', url: `/api/products/${productId}/bom/history` }]
+              : []),
+            { id: 'packaging', label: 'Packaging', url: `/api/products/${productId}/packaging/history` },
+          ]}
+        />
       </div>
 
       <div className="mt-6">
