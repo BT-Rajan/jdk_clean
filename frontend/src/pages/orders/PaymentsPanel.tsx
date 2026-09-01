@@ -39,7 +39,7 @@ function RecordPaymentModal({
   }, [open, reset])
 
   return (
-    <Modal open={open} title="Record payment" onClose={onClose}>
+    <Modal open={open} title="Record payment" onClose={onClose} wide>
       <form
         onSubmit={handleSubmit(async (values) => {
           setFormError(null)

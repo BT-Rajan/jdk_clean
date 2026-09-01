@@ -77,10 +77,22 @@ def register_exception_handlers(app) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(request: Request, exc: RequestValidationError):
-        # Collapse pydantic's verbose error list into one plain-language message.
+        # Collapse pydantic's verbose error list into one plain-language
+        # message. A 'value_error' is our own @field_validator raising
+        # ValueError with an already-specific, user-facing message (e.g.
+        # not_in_future's "Date cannot be in the future (today is
+        # 2026-09-01).") -- surface that verbatim rather than burying it
+        # behind the generic fallback, which used to swallow every
+        # custom validator's actual reason. Every other error type (a
+        # malformed value pydantic couldn't even parse) stays generic,
+        # since its raw message is internal-jargon fragments, not a full
+        # sentence meant for the person filling in the form.
         first = exc.errors()[0] if exc.errors() else None
-        field = ".".join(str(p) for p in first["loc"] if p != "body") if first else ""
-        message = f"Please check the '{field}' field." if field else "Please check your input."
+        if first is not None and first["type"] == "value_error":
+            message = str(first.get("ctx", {}).get("error") or first["msg"].removeprefix("Value error, "))
+        else:
+            field = ".".join(str(p) for p in first["loc"] if p != "body") if first else ""
+            message = f"Please check the '{field}' field." if field else "Please check your input."
         return _error_response(request, status.HTTP_422_UNPROCESSABLE_ENTITY, message)
 
     @app.exception_handler(IntegrityError)

@@ -140,7 +140,7 @@ function QuotationCreateForm() {
     defaultValues: {
       customer_id: 0,
       feasibility_id: undefined,
-      quotation_date: new Date().toISOString().slice(0, 10),
+      quotation_date: todayDateInputMin,
       valid_until: '',
       notes: '',
       lines: [{ product_id: 0, quantity: 1, unit_price: 0 }],

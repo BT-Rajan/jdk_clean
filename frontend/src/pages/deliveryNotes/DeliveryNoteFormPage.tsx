@@ -38,7 +38,7 @@ export function DeliveryNoteFormPage() {
     resolver: zodResolver(deliveryNoteCreateSchema),
     defaultValues: {
       order_id: 0,
-      delivery_date: new Date().toISOString().slice(0, 10),
+      delivery_date: todayDateInputMin,
       notes: '',
     },
   })

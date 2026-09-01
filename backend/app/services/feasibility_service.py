@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.timezone import KUWAIT_TZ
 from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.customer import Customer
 from app.models.feasibility import (
@@ -21,11 +22,6 @@ from app.models.raw_material import RawMaterial
 from app.services import audit_service, bom_service, capacity_service, deal_service, inventory_service, number_series_service, settings_service
 
 TABLE_NAME = "feasibility_checks"
-
-# Kuwait is UTC+3 year-round (no DST) -- a fixed offset rather than a
-# zoneinfo/tzdata lookup, so this doesn't depend on the OS/container
-# having a timezone database installed.
-KUWAIT_TZ = timezone(timedelta(hours=3))
 
 # A feasibility check open (not closed/converted) longer than this many days
 # gets flagged for admin review by escalate_stale_feasibility_checks.

@@ -10,6 +10,13 @@ interface ModalProps {
   onClose: () => void
   children: ReactNode
   footer?: ReactNode
+  /** Widens the dialog from max-w-md to max-w-2xl. Default (unset) is
+   * for a single-column form or a short message -- one field per row,
+   * nothing that needs to sit side by side. Pass `wide` as soon as the
+   * content has its own multi-column layout: a 2+-column field grid, a
+   * repeating line-item row, a table -- anything that would otherwise
+   * get squeezed into ~28rem and wrap awkwardly. Keep every modal on
+   * one of these two sizes rather than reaching for an ad hoc width. */
   wide?: boolean
   /** Expands the dialog to fill nearly the whole viewport instead of the
    * usual centered card. For content that needs real room to breathe --

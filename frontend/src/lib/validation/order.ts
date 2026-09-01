@@ -9,14 +9,19 @@ export const orderLineSchema = z.object({
   discount_percent: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),
 })
 
-export const orderSchema = z.object({
-  customer_id: z.coerce.number().int().positive('Choose a customer'),
-  order_date: z.string().min(1, 'Date is required').refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
-  requested_delivery_date: z.string().optional().or(z.literal('')).refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
-  notes: z.string().trim().optional().or(z.literal('')),
-  discount_percent: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),
-  lines: z.array(orderLineSchema).min(1, 'At least one line item is required'),
-})
+export const orderSchema = z
+  .object({
+    customer_id: z.coerce.number().int().positive('Choose a customer'),
+    order_date: z.string().min(1, 'Date is required').refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
+    requested_delivery_date: z.string().optional().or(z.literal('')).refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
+    notes: z.string().trim().optional().or(z.literal('')),
+    discount_percent: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),
+    lines: z.array(orderLineSchema).min(1, 'At least one line item is required'),
+  })
+  .refine((data) => !data.requested_delivery_date || data.requested_delivery_date >= data.order_date, {
+    message: "Can't be before the order date.",
+    path: ['requested_delivery_date'],
+  })
 
 export type OrderFormValues = z.input<typeof orderSchema>
 export type OrderSubmitValues = z.output<typeof orderSchema>

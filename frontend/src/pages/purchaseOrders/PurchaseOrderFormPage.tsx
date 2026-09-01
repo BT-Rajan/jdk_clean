@@ -140,7 +140,7 @@ function PurchaseOrderCreateForm() {
     resolver: zodResolver(purchaseOrderSchema),
     defaultValues: {
       supplier_id: prefillSupplierId ? Number(prefillSupplierId) : 0,
-      order_date: new Date().toISOString().slice(0, 10),
+      order_date: todayDateInputMin,
       expected_delivery_date: '',
       notes: '',
       lines: [

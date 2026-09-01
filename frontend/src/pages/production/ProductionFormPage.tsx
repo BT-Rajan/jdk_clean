@@ -60,8 +60,8 @@ function ProductionCreateForm() {
       product_id: 0,
       order_id: '',
       planned_quantity: 1,
-      scheduled_start: new Date().toISOString().slice(0, 10),
-      scheduled_end: new Date().toISOString().slice(0, 10),
+      scheduled_start: todayDateInputMin,
+      scheduled_end: todayDateInputMin,
       notes: '',
     },
   })

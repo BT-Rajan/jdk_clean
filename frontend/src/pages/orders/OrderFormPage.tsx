@@ -40,21 +40,41 @@ function FormShell({ title, children }: { title: string; children: ReactNode }) 
   )
 }
 
+interface ProductOption {
+  id: number
+  code: string
+  name: string
+  selling_price?: number
+}
+
 function LineItemsEditor({
   control,
   register,
   watch,
+  setValue,
   errors,
   products,
 }: {
   control: ReturnType<typeof useForm<OrderFormValues, unknown, OrderSubmitValues>>['control']
   register: ReturnType<typeof useForm<OrderFormValues, unknown, OrderSubmitValues>>['register']
   watch: ReturnType<typeof useForm<OrderFormValues, unknown, OrderSubmitValues>>['watch']
+  setValue: ReturnType<typeof useForm<OrderFormValues, unknown, OrderSubmitValues>>['setValue']
   errors: ReturnType<typeof useForm<OrderFormValues, unknown, OrderSubmitValues>>['formState']['errors']
-  products: { id: number; code: string; name: string }[]
+  products: ProductOption[]
 }) {
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' })
   const lines = watch('lines')
+  const documentDiscountPercent = Number(watch('discount_percent') || 0)
+
+  const lineTotals = (lines ?? []).map((line) => {
+    const quantity = Number(line?.quantity ?? 0)
+    const unitPrice = Number(line?.unit_price ?? 0)
+    const discountPercent = Number(line?.discount_percent ?? 0)
+    return quantity * unitPrice * (1 - discountPercent / 100)
+  })
+  const subtotal = lineTotals.reduce((sum, t) => sum + t, 0)
+  const discountAmount = subtotal * (documentDiscountPercent / 100)
+  const total = subtotal - discountAmount
 
   return (
     <div>
@@ -73,39 +93,86 @@ function LineItemsEditor({
       {errors.lines?.message && <p className="mb-3 text-xs text-red-400">{errors.lines.message}</p>}
 
       <div className="flex flex-col gap-3">
-        {fields.map((field, index) => {
-          const quantity = Number(lines?.[index]?.quantity ?? 0)
-          const unitPrice = Number(lines?.[index]?.unit_price ?? 0)
-          const discountPercent = Number(lines?.[index]?.discount_percent ?? 0)
-          const lineTotal = quantity * unitPrice * (1 - discountPercent / 100)
-          return (
-            <div key={field.id} className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-end">
-              <div className="sm:col-span-4">
-                <SelectField label="Product" {...register(`lines.${index}.product_id` as const)}>
-                  <option value="">Choose…</option>
-                  {products.map((p) => (
-                    <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
-                  ))}
-                </SelectField>
-              </div>
-              <div className="sm:col-span-2">
-                <TextField label="Quantity" type="number" step="0.0001" {...register(`lines.${index}.quantity` as const)} />
-              </div>
-              <div className="sm:col-span-2">
-                <TextField label="Unit price" type="number" step="0.01" {...register(`lines.${index}.unit_price` as const)} />
-              </div>
-              <div className="sm:col-span-1">
-                <TextField label="Disc. %" type="number" step="0.01" min="0" max="100" {...register(`lines.${index}.discount_percent` as const)} />
-              </div>
-              <div className="sm:col-span-2 text-sm text-white/60">
-                Line total: {formatCurrency(lineTotal)}
-              </div>
-              <div className="sm:col-span-1">
-                <Button variant="ghost" size="sm" type="button" onClick={() => remove(index)}>Remove</Button>
-              </div>
+        {fields.map((field, index) => (
+          <div key={field.id} className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-end">
+            <div className="sm:col-span-4">
+              <SelectField
+                label="Product"
+                error={errors.lines?.[index]?.product_id?.message}
+                {...register(`lines.${index}.product_id` as const, {
+                  onChange: (e) => {
+                    // A fresh pick always sets the line to that product's
+                    // current list price -- same as the "Log a sale"
+                    // quick-entry modal -- so Sales starts from a real
+                    // number instead of typing every price from memory,
+                    // and can still override it by hand afterward.
+                    const product = products.find((p) => p.id === Number(e.target.value))
+                    if (product) setValue(`lines.${index}.unit_price`, product.selling_price ?? 0)
+                  },
+                })}
+              >
+                <option value="">Choose…</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
+                ))}
+              </SelectField>
             </div>
-          )
-        })}
+            <div className="sm:col-span-2">
+              <TextField
+                label="Quantity"
+                type="number"
+                step="0.0001"
+                error={errors.lines?.[index]?.quantity?.message}
+                {...register(`lines.${index}.quantity` as const)}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <TextField
+                label="Unit price"
+                type="number"
+                step="0.01"
+                error={errors.lines?.[index]?.unit_price?.message}
+                {...register(`lines.${index}.unit_price` as const)}
+              />
+            </div>
+            <div className="sm:col-span-1">
+              <TextField
+                label="Disc. %"
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                error={errors.lines?.[index]?.discount_percent?.message}
+                {...register(`lines.${index}.discount_percent` as const)}
+              />
+            </div>
+            <div className="sm:col-span-2 text-sm text-white/60">
+              Line total: {formatCurrency(lineTotals[index] ?? 0)}
+            </div>
+            <div className="sm:col-span-1">
+              <Button variant="ghost" size="sm" type="button" onClick={() => remove(index)} disabled={fields.length === 1}>
+                Remove
+              </Button>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="mt-4 flex flex-col items-end gap-1 border-t border-white/10 pt-4 text-sm">
+        <div className="flex w-full max-w-xs justify-between text-white/50">
+          <span>Subtotal</span>
+          <span>{formatCurrency(subtotal)}</span>
+        </div>
+        {documentDiscountPercent > 0 && (
+          <div className="flex w-full max-w-xs justify-between text-white/50">
+            <span>Discount ({documentDiscountPercent}%)</span>
+            <span>−{formatCurrency(discountAmount)}</span>
+          </div>
+        )}
+        <div className="flex w-full max-w-xs justify-between text-base font-medium text-white">
+          <span>Total</span>
+          <span>{formatCurrency(total)}</span>
+        </div>
       </div>
     </div>
   )
@@ -121,13 +188,14 @@ function OrderCreateForm() {
     register,
     control,
     watch,
+    setValue,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<OrderFormValues, unknown, OrderSubmitValues>({
     resolver: zodResolver(orderSchema),
     defaultValues: {
       customer_id: 0,
-      order_date: new Date().toISOString().slice(0, 10),
+      order_date: todayDateInputMin,
       requested_delivery_date: '',
       notes: '',
       lines: [{ product_id: 0, quantity: 1, unit_price: 0 }],
@@ -172,7 +240,7 @@ function OrderCreateForm() {
           />
         </div>
 
-        <LineItemsEditor control={control} register={register} watch={watch} errors={errors} products={products} />
+        <LineItemsEditor control={control} register={register} watch={watch} setValue={setValue} errors={errors} products={products} />
 
         <TextareaField label="Notes" {...register('notes')} />
 
@@ -196,6 +264,7 @@ function OrderEditForm({ id }: { id: number }) {
     register,
     control,
     watch,
+    setValue,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
@@ -211,10 +280,19 @@ function OrderEditForm({ id }: { id: number }) {
           order_date: order.order_date,
           requested_delivery_date: order.requested_delivery_date ?? '',
           notes: order.notes ?? '',
+          // discount_percent -- both the document-level one and each
+          // line's own -- has to be carried over explicitly here: saving
+          // this form replaces every line wholesale (see order_service.
+          // update_order), and a line submitted without discount_percent
+          // defaults to 0 server-side, which would silently zero out an
+          // existing discount the moment anything else on the order is
+          // edited if this field were left unpopulated.
+          discount_percent: order.discount_percent,
           lines: order.lines.map((l) => ({
             product_id: l.product_id,
             quantity: l.quantity,
             unit_price: l.unit_price,
+            discount_percent: l.discount_percent,
           })),
         })
       })
@@ -252,7 +330,20 @@ function OrderEditForm({ id }: { id: number }) {
             <TextField label="Requested delivery" type="date" min={todayDateInputMin} error={errors.requested_delivery_date?.message} {...register('requested_delivery_date')} />
           </div>
 
-          <LineItemsEditor control={control} register={register} watch={watch} errors={errors} products={products} />
+          <div className="max-w-xs">
+            <TextField
+              label="Discount (%)"
+              type="number"
+              step="0.01"
+              min="0"
+              max="100"
+              placeholder="Whole-document discount, on top of any per-line discounts"
+              error={errors.discount_percent?.message}
+              {...register('discount_percent')}
+            />
+          </div>
+
+          <LineItemsEditor control={control} register={register} watch={watch} setValue={setValue} errors={errors} products={products} />
 
           <TextareaField label="Notes" {...register('notes')} />
 

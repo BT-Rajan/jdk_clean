@@ -113,7 +113,7 @@ function SplitOrderModal({
   }
 
   return (
-    <Modal open={open} title={`Split ${order.order_number}`} onClose={onClose}>
+    <Modal open={open} title={`Split ${order.order_number}`} onClose={onClose} wide>
       <div className="flex flex-col gap-4">
         <p className="text-xs text-white/40">
           Stock only covers part of this order right now? Enter how much of each line can actually go out today --
