@@ -37,6 +37,13 @@ class ListParams:
         product_type: str | None = Query(None),
         category: str | None = Query(None),
         department_id: int | None = Query(None),
+        # Users' active/inactive state is a real boolean column
+        # (users.is_active), not the string status ENUM the generic
+        # `status` param above assumes -- see app/crud/master_data.py's
+        # UserCRUD.filterable_fields. Kept as its own param rather than
+        # overloading `status` so it round-trips as an actual bool
+        # through Query() instead of a string that would need parsing.
+        is_active: bool | None = Query(None),
     ):
         self.page = page
         self.page_size = page_size
@@ -48,6 +55,7 @@ class ListParams:
             "country": country,
             "mode_of_supply": mode_of_supply,
             "role": role,
+            "is_active": is_active,
             "product_type": product_type,
             "category": category,
             "department_id": department_id,

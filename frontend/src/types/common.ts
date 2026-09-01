@@ -27,6 +27,9 @@ export interface ListQueryParams {
   product_type?: string
   category?: string
   department_id?: number
+  // Users-only: real boolean column (users.is_active), separate from the
+  // generic string `status` above -- see backend/app/api/deps.py.
+  is_active?: boolean
 }
 
 /** Shape of the {"message": "..."} body returned by delete/restore endpoints. */

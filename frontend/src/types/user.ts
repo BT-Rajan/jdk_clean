@@ -10,6 +10,7 @@ export interface UserCreatePayload {
   email: string
   password: string
   full_name: string
+  phone?: string | null
   role: UserRole
   department_id?: number | null
 }
@@ -17,6 +18,7 @@ export interface UserCreatePayload {
 export interface UserUpdatePayload {
   email?: string
   full_name?: string
+  phone?: string | null
   role?: UserRole
   department_id?: number | null
   is_active?: boolean
