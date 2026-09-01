@@ -342,7 +342,7 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     item_type       ENUM('raw_material','product') NOT NULL,
     item_id         BIGINT UNSIGNED NOT NULL,
-    movement_type   ENUM('receipt','issue','adjustment','production_in','production_out','return') NOT NULL,
+    movement_type   ENUM('receipt','issue','adjustment','production_in','production_out','return','return_to_supplier') NOT NULL,
     quantity        DECIMAL(14,4) NOT NULL,           -- positive = in, negative = out
     reference_type  VARCHAR(40) NULL,                 -- e.g. 'order', 'production_schedule'
     reference_id    BIGINT UNSIGNED NULL,
@@ -633,6 +633,43 @@ CREATE TABLE IF NOT EXISTS purchase_order_lines (
     CONSTRAINT fk_pol_po FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
     CONSTRAINT fk_pol_material FOREIGN KEY (raw_material_id) REFERENCES raw_materials(id),
     INDEX idx_pol_po (purchase_order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- SUPPLIER RETURNS (raw material sent back -- almost always a quality
+-- rejection. Recording one immediately deducts the returned quantity
+-- from raw-material stock on hand, movement_type='return_to_supplier' on
+-- stock_movements. No status workflow: created once, done -- soft-delete
+-- reverses it, same "never silently rewrite" stance as payments.)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS supplier_returns (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    return_number   VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. SRN-00001)
+    supplier_id     BIGINT UNSIGNED NOT NULL,
+    -- Optional: often traceable to a specific delivery, not always.
+    purchase_order_id BIGINT UNSIGNED NULL,
+    return_date     DATE NOT NULL,
+    reason          TEXT NOT NULL,
+    notes           TEXT NULL,
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_sret_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    CONSTRAINT fk_sret_po FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id),
+    INDEX idx_sret_supplier (supplier_id),
+    INDEX idx_sret_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS supplier_return_lines (
+    id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    supplier_return_id  BIGINT UNSIGNED NOT NULL,
+    raw_material_id     BIGINT UNSIGNED NOT NULL,
+    quantity             DECIMAL(14,4) NOT NULL,
+    CONSTRAINT fk_srl_return FOREIGN KEY (supplier_return_id) REFERENCES supplier_returns(id) ON DELETE CASCADE,
+    CONSTRAINT fk_srl_material FOREIGN KEY (raw_material_id) REFERENCES raw_materials(id),
+    INDEX idx_srl_return (supplier_return_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
@@ -951,6 +988,7 @@ INSERT IGNORE INTO number_series (doc_type, prefix, next_number, padding) VALUES
     ('PURCHASE_ORDER', 'PO', 1, 5),
     ('DELIVERY_NOTE', 'DN', 1, 5),
     ('FEASIBILITY', 'FSB', 1, 5),
-    ('DEAL', 'DEAL', 1, 5);
+    ('DEAL', 'DEAL', 1, 5),
+    ('SUPPLIER_RETURN', 'SRN', 1, 5);
 
 SET FOREIGN_KEY_CHECKS = 1;

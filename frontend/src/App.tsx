@@ -77,6 +77,15 @@ const PurchaseOrderDetailPage = lazy(() =>
 const DeliveryNotesListPage = lazy(() =>
   import('@/pages/deliveryNotes/DeliveryNotesListPage').then((m) => ({ default: m.DeliveryNotesListPage })),
 )
+const SupplierReturnsListPage = lazy(() =>
+  import('@/pages/supplierReturns/SupplierReturnsListPage').then((m) => ({ default: m.SupplierReturnsListPage })),
+)
+const SupplierReturnFormPage = lazy(() =>
+  import('@/pages/supplierReturns/SupplierReturnFormPage').then((m) => ({ default: m.SupplierReturnFormPage })),
+)
+const SupplierReturnDetailPage = lazy(() =>
+  import('@/pages/supplierReturns/SupplierReturnDetailPage').then((m) => ({ default: m.SupplierReturnDetailPage })),
+)
 const DeliveryNoteFormPage = lazy(() =>
   import('@/pages/deliveryNotes/DeliveryNoteFormPage').then((m) => ({ default: m.DeliveryNoteFormPage })),
 )
@@ -209,6 +218,9 @@ export function App() {
             <Route path="/purchase-orders/new" element={<PurchaseOrderFormPage />} />
             <Route path="/purchase-orders/:id" element={<PurchaseOrderDetailPage />} />
             <Route path="/purchase-orders/:id/edit" element={<PurchaseOrderFormPage />} />
+            <Route path="/supplier-returns" element={<SupplierReturnsListPage />} />
+            <Route path="/supplier-returns/new" element={<SupplierReturnFormPage />} />
+            <Route path="/supplier-returns/:id" element={<SupplierReturnDetailPage />} />
             <Route path="/delivery-notes" element={<DeliveryNotesListPage />} />
             <Route path="/delivery-notes/new" element={<DeliveryNoteFormPage />} />
             <Route path="/delivery-notes/:id" element={<DeliveryNoteDetailPage />} />

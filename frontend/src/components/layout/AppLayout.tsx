@@ -122,7 +122,10 @@ export function AppLayout({ children }: AppLayoutProps) {
     },
     {
       label: 'Purchasing',
-      items: [{ to: '/purchase-orders', label: 'Purchase orders' }],
+      items: [
+        { to: '/purchase-orders', label: 'Purchase orders' },
+        { to: '/supplier-returns', label: 'Supplier returns' },
+      ],
     },
     {
       label: 'Inventory',

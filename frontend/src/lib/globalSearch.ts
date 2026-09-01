@@ -3,6 +3,7 @@ import { listSuppliers } from '@/api/suppliers'
 import { listQuotations } from '@/api/quotations'
 import { listOrders } from '@/api/orders'
 import { listPurchaseOrders } from '@/api/purchaseOrders'
+import { listSupplierReturns } from '@/api/supplierReturns'
 import { listDeliveryNotes } from '@/api/deliveryNotes'
 import { listProducts } from '@/api/products'
 import { listRawMaterials } from '@/api/rawMaterials'
@@ -32,13 +33,14 @@ export async function runGlobalSearch(query: string): Promise<GlobalSearchResult
 
   const params = { search: q, page: 1, page_size: PAGE_SIZE }
 
-  const [customers, suppliers, quotations, orders, purchaseOrders, deliveryNotes, products, rawMaterials] =
+  const [customers, suppliers, quotations, orders, purchaseOrders, supplierReturns, deliveryNotes, products, rawMaterials] =
     await Promise.allSettled([
       listCustomers(params),
       listSuppliers(params),
       listQuotations(params),
       listOrders(params),
       listPurchaseOrders(params),
+      listSupplierReturns(params),
       listDeliveryNotes(params),
       listProducts(params),
       listRawMaterials(params),
@@ -86,6 +88,17 @@ export async function runGlobalSearch(query: string): Promise<GlobalSearchResult
         label: po.po_number,
         sublabel: po.supplier_name ?? undefined,
         path: `/purchase-orders/${po.id}`,
+      })
+    }
+  }
+  if (supplierReturns.status === 'fulfilled') {
+    for (const sr of supplierReturns.value.items) {
+      results.push({
+        id: `sr-${sr.id}`,
+        group: 'Supplier returns',
+        label: sr.return_number,
+        sublabel: sr.supplier_name ?? undefined,
+        path: `/supplier-returns/${sr.id}`,
       })
     }
   }

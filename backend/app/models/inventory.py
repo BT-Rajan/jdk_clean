@@ -47,6 +47,7 @@ class StockMovement(Base):
     movement_type: Mapped[str] = mapped_column(
         Enum(
             "receipt", "issue", "adjustment", "production_in", "production_out", "return",
+            "return_to_supplier",
             name="stock_movement_type",
         ),
         nullable=False,
