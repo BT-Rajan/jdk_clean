@@ -30,6 +30,12 @@ class CapacityShortfall(BaseModel):
     shortfall_days: int | None
     workers_required: int | None = None
     required_worker_hours: float | None = None
+    # Which axis actually missed the deadline -- lets callers say "machine
+    # slot" or "manpower" specifically instead of a generic shortfall.
+    # Defaults keep this optional for any capacity_shortfall_json written
+    # before these fields existed.
+    machine_available: bool = True
+    workers_available: bool | None = None
 
 
 class FeasibilityLineOut(BaseModel):

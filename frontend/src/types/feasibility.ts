@@ -37,6 +37,12 @@ export interface CapacityShortfall {
   shortfall_days: number | null
   workers_required: number | null
   required_worker_hours: number | null
+  /** Which axis actually missed the deadline -- the machine slot, the
+   * worker pool, or both -- so a shortfall can say "manpower" or "machine
+   * slot" specifically. workers_available is null when this product
+   * doesn't need workers at all (nothing to evaluate on that axis). */
+  machine_available: boolean
+  workers_available: boolean | null
 }
 
 export interface FeasibilityLine extends FeasibilityLineInput {

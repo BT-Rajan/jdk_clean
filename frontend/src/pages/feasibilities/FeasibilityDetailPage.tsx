@@ -28,6 +28,7 @@ import type { Feasibility } from '@/types/feasibility'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
+import { FeasibilityStageResultsModal } from './FeasibilityStageResultsModal'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment, isAdmin } from '@/lib/roles'
 import {
@@ -131,6 +132,7 @@ export function FeasibilityDetailPage() {
   const [rejectOpen, setRejectOpen] = useState(false)
   const [closeOpen, setCloseOpen] = useState(false)
   const [adminReviewOpen, setAdminReviewOpen] = useState(false)
+  const [stageResultsOpen, setStageResultsOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
 
   function load() {
@@ -159,7 +161,11 @@ export function FeasibilityDetailPage() {
     await withBusy(async () => {
       const updated = await runFeasibilityCheck(feasibilityId)
       setFeasibility(updated)
-      setNotice(updated.status === 'feasible' ? 'Feasible — every line cleared.' : 'Some lines came up short — see below.')
+      // The stage-by-stage dialog is the primary readout for a run -- it
+      // walks through stock, then materials, then production line, each
+      // marked pass/fail -- so there's no separate text banner to keep
+      // in sync with it here.
+      setStageResultsOpen(true)
     })
   }
 
@@ -201,6 +207,9 @@ export function FeasibilityDetailPage() {
             <>
               {allowWrite && f.status === 'draft' && (
                 <Button onClick={handleRun} isLoading={busy}>Run check</Button>
+              )}
+              {f.checked_at && (
+                <Button variant="ghost" onClick={() => setStageResultsOpen(true)}>View check results</Button>
               )}
               {allowWrite && f.status === 'exception_pending' && (
                 <>
@@ -368,10 +377,17 @@ export function FeasibilityDetailPage() {
                         <StatusBadge status="rejected" />
                         {line.capacity_shortfall && (
                           <p className="mt-2 text-xs text-white/60">
-                            {line.capacity_shortfall.machine} — needs {line.capacity_shortfall.required_hours} hrs
-                            {line.capacity_shortfall.workers_required
-                              ? ` and ${line.capacity_shortfall.workers_required} workers`
-                              : ''}
+                            Not available:{' '}
+                            {[
+                              line.capacity_shortfall.machine_available
+                                ? null
+                                : `machine slot (${line.capacity_shortfall.machine}, needs ${line.capacity_shortfall.required_hours} hrs)`,
+                              line.capacity_shortfall.workers_available === false
+                                ? `manpower (needs ${line.capacity_shortfall.workers_required} workers)`
+                                : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' and ') || line.capacity_shortfall.machine}
                             .{' '}
                             {line.capacity_shortfall.projected_completion_date ? (
                               <>
@@ -468,6 +484,12 @@ export function FeasibilityDetailPage() {
             setNotice('Closed.')
           })
         }
+      />
+
+      <FeasibilityStageResultsModal
+        open={stageResultsOpen}
+        feasibility={feasibility}
+        onClose={() => setStageResultsOpen(false)}
       />
 
       <NotesModal

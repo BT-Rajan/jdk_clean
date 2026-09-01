@@ -273,6 +273,16 @@ def _check_capacity(
         capacity_ok = projected_completion is not None and projected_completion <= required_by_date
 
     if capacity_ok is False:
+        # Which axis actually missed the deadline -- the machine slot, the
+        # worker pool, or both -- rather than just the combined hours, so
+        # the shortfall can say "manpower" or "machine slot" specifically
+        # instead of a generic "not enough capacity".
+        machine_available = machine_completion is not None and machine_completion <= required_by_date
+        workers_available = (
+            None
+            if not workers_required
+            else (worker_completion is not None and worker_completion <= required_by_date)
+        )
         return False, {
             "machine": f"{machine.code} — {machine.name}",
             "required_hours": required_hours,
@@ -282,6 +292,8 @@ def _check_capacity(
             ),
             "workers_required": workers_required,
             "required_worker_hours": required_worker_hours,
+            "machine_available": machine_available,
+            "workers_available": workers_available,
         }, projected_completion
 
     return capacity_ok, None, projected_completion
