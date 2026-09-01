@@ -198,7 +198,7 @@ export function OrgChartTab() {
           department dropdown feeds the same access-control matrix as{' '}
           <span className="text-white/70">Admin -&gt; Access control -&gt; Access control</span> above -- change it
           here or there, it's the same setting. Roles themselves (Owner/Manager/Member) are set from{' '}
-          <Link to="/admin?section=users" className="text-gold-300 hover:text-gold-200">
+          <Link to="/users" className="text-gold-300 hover:text-gold-200">
             Users
           </Link>
           , not by dragging.
@@ -233,7 +233,7 @@ export function OrgChartTab() {
         {managers.length === 0 ? (
           <p className="mt-3 py-6 text-center text-sm text-white/40">
             No managers yet -- add one from{' '}
-            <Link to="/admin?section=users" className="text-gold-300 hover:text-gold-200">
+            <Link to="/users" className="text-gold-300 hover:text-gold-200">
               Users
             </Link>
             .

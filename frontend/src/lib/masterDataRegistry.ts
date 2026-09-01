@@ -38,6 +38,9 @@ export interface MasterDataEntry {
 }
 
 export const MASTER_DATA_REGISTRY: MasterDataEntry[] = [
+  // Was routed to /admin?section=users -- Users now has its own list
+  // page (pages/users/UsersListPage.tsx) like every other master here,
+  // instead of only being reachable as a tab inside Admin.
   { key: 'users', label: 'Users', group: 'people_org', route: '/users', adminOnly: true },
   { key: 'departments', label: 'Departments', group: 'people_org', route: '/departments', adminOnly: true },
   {
