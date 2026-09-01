@@ -32,8 +32,14 @@ ALLOWED_TRANSITIONS = {
     "confirmed": {"in_production", "ready_to_ship", "cancelled"},
     "in_production": {"ready_to_ship", "cancelled"},
     "ready_to_ship": {"shipped", "cancelled"},
-    "shipped": {"delivered"},
-    "delivered": set(),
+    # Cancelling from 'shipped'/'delivered' is a genuine after-the-fact
+    # cancellation (customer refused/returned the goods after they left the
+    # building) -- unlike DeliveryNote's 'issued', which stays terminal.
+    # order_service.change_status reverses the actual delivered quantities
+    # back into stock (movement_type='return') rather than just flipping
+    # the status, so physical reality and the ledger stay in sync.
+    "shipped": {"delivered", "cancelled"},
+    "delivered": {"cancelled"},
     "cancelled": set(),
 }
 

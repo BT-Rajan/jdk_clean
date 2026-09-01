@@ -28,8 +28,11 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, SettableOrderStatus[]> = {
   confirmed: ['in_production', 'ready_to_ship', 'cancelled'],
   in_production: ['ready_to_ship', 'cancelled'],
   ready_to_ship: ['shipped', 'cancelled'],
-  shipped: ['delivered'],
-  delivered: [],
+  // Cancelling after shipment/delivery is a real after-the-fact
+  // cancellation (goods refused/returned) -- the backend reverses the
+  // delivered stock back onto the shelf rather than just flipping status.
+  shipped: ['delivered', 'cancelled'],
+  delivered: ['cancelled'],
   cancelled: [],
 }
 /** Mirrors backend/app/models/order.py STATUSES_REQUIRING_CLOSE_REASON. */

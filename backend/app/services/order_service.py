@@ -335,7 +335,7 @@ def change_status(
             )
 
     if new_status in STATUSES_REQUIRING_CLOSE_REASON:
-        assert_reason_given(reason, "A reason is required to cancel an order without a delivery note.")
+        assert_reason_given(reason, "A reason is required to cancel an order.")
 
     old_status = order.status
 
@@ -386,6 +386,42 @@ def change_status(
     elif new_status == "cancelled" and old_status in RESERVED_STATUSES:
         for line in order.lines:
             inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity))
+    elif new_status == "cancelled" and old_status in ("shipped", "delivered"):
+        # The goods already left the building -- cancelling here means the
+        # customer is refusing or returning them, not that the order never
+        # happened. Reverse the actual delivered quantities (from the
+        # issued delivery note, since that's what really moved -- see the
+        # shipped_lines comment above) back onto the shelf as a genuine,
+        # audited 'return' movement rather than silently flipping a status
+        # flag, matching the terminal-state philosophy used everywhere else
+        # (DeliveryNote.ALLOWED_TRANSITIONS): reversing a completed physical
+        # event must itself be a real, traceable action.
+        delivery_note = (
+            db.query(DeliveryNote)
+            .filter(
+                DeliveryNote.order_id == order.id,
+                DeliveryNote.status == "issued",
+                DeliveryNote.deleted_at.is_(None),
+            )
+            .first()
+        )
+        lines_to_return = (
+            [(line.product_id, float(line.quantity_delivered)) for line in delivery_note.lines]
+            if delivery_note is not None
+            else [(line.product_id, float(line.quantity)) for line in order.lines]
+        )
+        for product_id, quantity in lines_to_return:
+            inventory_service.adjust_stock(
+                db,
+                item_type="product",
+                item_id=product_id,
+                quantity=quantity,
+                movement_type="return",
+                reference_type="order",
+                reference_id=order.id,
+                notes=f"Cancelled after shipment -- {order.order_number} ({reason})",
+                user_id=user_id,
+            )
 
     order.status = new_status
     if new_status in STATUSES_REQUIRING_CLOSE_REASON:
