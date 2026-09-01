@@ -8,16 +8,24 @@ product's bill of materials, so they show up under Admin -> Factory
 Setup and Admin -> Bill of Materials and immediately feed into
 feasibility's raw-material check (bom_service.explode_requirements).
 
-Batch size is 1,000 kg (1 ton) for every product per the source sheet.
-BOM quantities are stored as the LITERAL kg amounts implied by each
-percentage against that 1,000 kg batch -- NOT normalized to sum to
-100%, per the sheet's own note that some formulas run slightly over
-100% (polymer/HPMC are small additions on top of the sand/cement base):
+Batch size is 1,000 kg (1 ton) for every product per the source sheet,
+recorded on Product.batch_size for reference. BOM quantities themselves
+are stored per 1kg of finished product (i.e. the sheet's percentage as
+a fraction: 70% -> 0.700), NOT the whole-batch kg amount -- BomLine.
+quantity is "how much raw material per one unit of the parent product"
+(see bom_service.explode_requirements, which multiplies each line by
+the requested product quantity), and Product.unit is 'kg' here, so "one
+unit" is 1kg, not one 1,000kg batch. Storing the batch-scale number
+(e.g. 700 for K91's sand) would ask for 700kg of sand per 1kg of K91
+requested -- 1,000x too much every time explode_requirements runs.
+Not normalized to sum to exactly 100%, per the sheet's own note that
+some formulas run slightly over 100% (polymer/HPMC are small additions
+on top of the sand/cement base):
 
-    K91:        Sand 700kg, Cement 300kg, RDP  2kg, HPMC 6kg
-    Mega:       Sand 600kg, Cement 400kg, RDP 10kg, HPMC 2kg
-    ECO:        Sand 700kg, Cement 300kg, RDP  4kg, HPMC 2kg
-    Block Bond: Sand 750kg, Cement 250kg, RDP  2kg, HPMC 1kg
+    K91:        Sand 0.700, Cement 0.300, RDP 0.002, HPMC 0.006
+    Mega:       Sand 0.600, Cement 0.400, RDP 0.010, HPMC 0.002
+    ECO:        Sand 0.700, Cement 0.300, RDP 0.004, HPMC 0.002
+    Block Bond: Sand 0.750, Cement 0.250, RDP 0.002, HPMC 0.001
 
 Grout / K16 is deliberately NOT seeded here -- the source sheet marks
 its sand/silica ratio "Not specified". Add it (and its BOM) once the
@@ -76,13 +84,15 @@ PRODUCTS = [
     ("PRD-BLOCKBOND", "Block Bond"),
 ]
 
-# product_code -> {raw_material_code: quantity_kg}, literal (unnormalized)
-# kg amounts derived from each formula's percentage x 1,000kg batch.
+# product_code -> {raw_material_code: quantity_per_1kg_of_product},
+# literal (unnormalized) fractions derived directly from each formula's
+# percentage -- see the module docstring for why this is per-kg, not
+# per-1,000kg-batch.
 FORMULAS: dict[str, dict[str, float]] = {
-    "PRD-K91": {"RM-SAND": 700, "RM-CEMENT": 300, "RM-RDP": 2, "RM-HPMC": 6},
-    "PRD-MEGA": {"RM-SAND": 600, "RM-CEMENT": 400, "RM-RDP": 10, "RM-HPMC": 2},
-    "PRD-ECO": {"RM-SAND": 700, "RM-CEMENT": 300, "RM-RDP": 4, "RM-HPMC": 2},
-    "PRD-BLOCKBOND": {"RM-SAND": 750, "RM-CEMENT": 250, "RM-RDP": 2, "RM-HPMC": 1},
+    "PRD-K91": {"RM-SAND": 0.700, "RM-CEMENT": 0.300, "RM-RDP": 0.002, "RM-HPMC": 0.006},
+    "PRD-MEGA": {"RM-SAND": 0.600, "RM-CEMENT": 0.400, "RM-RDP": 0.010, "RM-HPMC": 0.002},
+    "PRD-ECO": {"RM-SAND": 0.700, "RM-CEMENT": 0.300, "RM-RDP": 0.004, "RM-HPMC": 0.002},
+    "PRD-BLOCKBOND": {"RM-SAND": 0.750, "RM-CEMENT": 0.250, "RM-RDP": 0.002, "RM-HPMC": 0.001},
 }
 
 
@@ -137,14 +147,14 @@ def seed_bom(db, products: dict[str, Product], raw_materials: dict[str, RawMater
         if existing_lines:
             print(f"[skip] '{product_code}' already has {existing_lines} BOM line(s) -- leaving it untouched.")
             continue
-        for rm_code, qty_kg in formula.items():
+        for rm_code, qty_per_kg in formula.items():
             rm = raw_materials[rm_code]
             db.add(
                 BomLine(
                     parent_product_id=product.id,
                     component_type="raw_material",
                     component_id=rm.id,
-                    quantity=qty_kg,
+                    quantity=qty_per_kg,
                     unit="kg",
                     scrap_percent=0,
                 )
