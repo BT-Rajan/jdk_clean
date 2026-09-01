@@ -56,7 +56,8 @@ CREATE TABLE IF NOT EXISTS departments (
 INSERT INTO departments (code, name, status) VALUES
     ('sales',       'Sales',       'active'),
     ('procurement', 'Procurement', 'active'),
-    ('warehouse',   'Warehouse',   'active')
+    ('warehouse',   'Warehouse',   'active'),
+    ('production',  'Production',  'active')
 ON DUPLICATE KEY UPDATE code = code;
 
 -- ============================================================
