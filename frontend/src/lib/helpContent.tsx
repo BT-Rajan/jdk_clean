@@ -93,7 +93,7 @@ export const HELP_CONTENT: Partial<Record<UserRole, HelpSection[]>> = {
         {
           title: 'Create a user',
           steps: [
-            'Admin > Users',
+            'Master Data > Users',
             '"New user" button (top right)',
             'Fill Username, Full name, Email, Role, Department, Password',
             'Save with "Create user"',
@@ -102,7 +102,7 @@ export const HELP_CONTENT: Partial<Record<UserRole, HelpSection[]>> = {
         {
           title: 'Edit a user / reset access',
           steps: [
-            'Admin > Users -- click the username',
+            'Master Data > Users -- click the username',
             '"Edit" -- change Role, Department, Active toggle',
             'Same screen -- Upload/Replace/Remove Signature',
             'Save with "Save changes"',
@@ -110,7 +110,7 @@ export const HELP_CONTENT: Partial<Record<UserRole, HelpSection[]>> = {
         },
         {
           title: 'Deactivate or restore a user',
-          steps: ['Admin > Users -- open the user', '"Delete" to deactivate, "Restore" to bring them back'],
+          steps: ['Master Data > Users -- open the user', '"Delete" to deactivate, "Restore" to bring them back'],
         },
       ],
     },
@@ -120,7 +120,7 @@ export const HELP_CONTENT: Partial<Record<UserRole, HelpSection[]>> = {
         {
           title: 'Set what a department can see/edit',
           steps: [
-            'Admin > Settings > Access Control tab',
+            'Master Data > Roles & Permissions',
             'Grid rows = pages, columns = Sales / Procurement / Warehouse',
             'Tick Read to view, Write to edit (Write auto-grants Read)',
             'Only affects Staff -- Admin/Manager always see everything, Viewer is read-only everywhere',

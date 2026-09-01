@@ -140,6 +140,9 @@ const ProductionDetailPage = lazy(() =>
 const AdminShell = lazy(() =>
   import('@/pages/admin/AdminShell').then((m) => ({ default: m.AdminShell })),
 )
+const AccessControlPage = lazy(() =>
+  import('@/pages/settings/AccessControlPage').then((m) => ({ default: m.AccessControlPage })),
+)
 const UsersListPage = lazy(() =>
   import('@/pages/users/UsersListPage').then((m) => ({ default: m.UsersListPage })),
 )
@@ -243,6 +246,7 @@ export function App() {
 
             <Route element={<AdminOnlyGuard />}>
               <Route path="/admin" element={<AdminShell />} />
+              <Route path="/roles-permissions" element={<AccessControlPage />} />
               <Route path="/settings" element={<Navigate to="/admin" replace />} />
               <Route path="/communication" element={<Navigate to="/admin?section=email" replace />} />
               <Route path="/users" element={<UsersListPage />} />

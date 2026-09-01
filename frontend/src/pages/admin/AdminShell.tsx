@@ -4,7 +4,6 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { TabPanel } from '@/components/ui'
 import { cn } from '@/lib/cn'
-import { AccessControlTab } from '@/pages/settings/AccessControlTab'
 import { FactorySetupTab } from '@/pages/settings/FactorySetupTab'
 import { OrgChartTab } from '@/pages/settings/OrgChartTab'
 import { EmailTab } from '@/pages/communication/EmailTab'
@@ -17,7 +16,6 @@ import type { GeneralSectionKey } from './sections'
 type SectionKey =
   | GeneralSectionKey
   | 'factory-setup'
-  | 'access-control'
   | 'org-chart'
   | 'email'
   | 'whatsapp'
@@ -52,10 +50,7 @@ const GROUPS: SectionGroup[] = [
   },
   {
     label: 'Access',
-    items: [
-      { key: 'access-control', label: 'Access Control' },
-      { key: 'org-chart', label: 'Org Chart' },
-    ],
+    items: [{ key: 'org-chart', label: 'Org Chart' }],
   },
 ]
 
@@ -88,7 +83,8 @@ export function AdminShell() {
       <PageContainer>
         <h1 className="font-display text-2xl font-medium text-white">Admin</h1>
         <p className="mt-2 text-sm text-white/50">
-          Company configuration, factory setup, communication channels, and access control -- all in one place.
+          Company configuration, factory setup, communication channels, and the org chart -- all in one place. Roles
+          &amp; Permissions now lives under Master Data.
         </p>
 
         <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
@@ -126,7 +122,6 @@ export function AdminShell() {
             </div>
 
             <TabPanel id="factory-setup" activeId={activeSection}><FactorySetupTab /></TabPanel>
-            <TabPanel id="access-control" activeId={activeSection}><AccessControlTab /></TabPanel>
             <TabPanel id="org-chart" activeId={activeSection}><OrgChartTab /></TabPanel>
             <TabPanel id="email" activeId={activeSection}><EmailTab /></TabPanel>
             <TabPanel id="whatsapp" activeId={activeSection}><WhatsAppTab /></TabPanel>

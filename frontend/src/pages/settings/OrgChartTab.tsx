@@ -196,8 +196,10 @@ export function OrgChartTab() {
         <p className="mt-1 text-sm text-white/50">
           Drag a member onto a different manager (or into "Unassigned") to change who they report to. Each person's
           department dropdown feeds the same access-control matrix as{' '}
-          <span className="text-white/70">Admin -&gt; Access control -&gt; Access control</span> above -- change it
-          here or there, it's the same setting. Roles themselves (Owner/Manager/Member) are set from{' '}
+          <Link to="/roles-permissions" className="text-gold-300 hover:text-gold-200">
+            Roles &amp; Permissions
+          </Link>{' '}
+          -- change it here or there, it's the same setting. Roles themselves (Owner/Manager/Member) are set from{' '}
           <Link to="/users" className="text-gold-300 hover:text-gold-200">
             Users
           </Link>

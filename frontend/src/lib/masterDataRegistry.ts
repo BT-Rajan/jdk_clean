@@ -43,11 +43,13 @@ export const MASTER_DATA_REGISTRY: MasterDataEntry[] = [
   // instead of only being reachable as a tab inside Admin.
   { key: 'users', label: 'Users', group: 'people_org', route: '/users', adminOnly: true },
   { key: 'departments', label: 'Departments', group: 'people_org', route: '/departments', adminOnly: true },
+  // Roles & Permissions now has its own page (AccessControlPage) instead
+  // of linking out to a tab inside Admin -- same fix as Users above.
   {
     key: 'roles-permissions',
     label: 'Roles & Permissions',
     group: 'people_org',
-    route: '/admin?section=access-control',
+    route: '/roles-permissions',
     adminOnly: true,
   },
   { key: 'org-chart', label: 'Org Chart', group: 'people_org', route: '/admin?section=org-chart', adminOnly: true },

@@ -6,8 +6,8 @@ export function NoPageAccessPage() {
       <GlassCard className="max-w-md p-8 text-center">
         <h1 className="font-display text-xl font-medium text-white">No access to this page</h1>
         <p className="mt-3 text-sm text-white/60">
-          Your department hasn't been granted access to this page yet. Ask an admin to grant it from Settings →
-          Access Control.
+          Your department hasn't been granted access to this page yet. Ask an admin to grant it from Master Data →
+          Roles &amp; Permissions.
         </p>
       </GlassCard>
     </div>
