@@ -137,7 +137,7 @@ export function CommandPalette({ open, onClose, actions }: CommandPaletteProps) 
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 6, scale: 0.98 }}
             transition={{ duration: 0.16, ease: 'easeOut' }}
-            className="glass-panel-strong m-4 max-h-[70vh] w-full max-w-xl overflow-hidden rounded-2xl"
+            className="glass-panel-strong m-4 max-h-[70vh] w-full max-w-2xl overflow-hidden rounded-2xl"
           >
             <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0 text-white/40">
