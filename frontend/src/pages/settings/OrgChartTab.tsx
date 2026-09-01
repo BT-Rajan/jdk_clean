@@ -99,7 +99,10 @@ export function OrgChartTab() {
     setError(null)
     // Every user fits comfortably in one page for a chart like this --
     // a large page_size avoids needing pagination inside chart columns.
-    listUsers({ page: 1, page_size: 500, sort: 'full_name' })
+    // Capped at 200 to match the backend's ListParams page_size limit
+    // (see app/api/deps.py) -- if the org ever exceeds 200 users, this
+    // will need real pagination or a dedicated uncapped endpoint.
+    listUsers({ page: 1, page_size: 200, sort: 'full_name' })
       .then((res) => setUsers(res.items))
       .catch((err) => setError(getApiErrorMessage(err)))
   }
