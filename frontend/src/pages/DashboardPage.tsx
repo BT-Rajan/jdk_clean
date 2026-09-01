@@ -28,6 +28,8 @@ const STAT_ROUTES: Record<string, string> = {
   production_active: '/production',
   production_completion: '/production',
   production_delayed: '/production',
+  production_this_month: '/production',
+  production_capacity_utilization: '/production',
   bom_missing_count: '/feasibilities',
 }
 
