@@ -26,6 +26,20 @@ export async function createProductionBatch(payload: ProductionBatchPayload): Pr
   return data
 }
 
+export interface ProductionQuickLogPayload {
+  product_id: number
+  quantity: number
+  notes?: string
+}
+
+/** Creates and completes a batch in one call, for production that's
+ * already happened -- see backend/app/services/production_service.py's
+ * log_production. */
+export async function logProduction(payload: ProductionQuickLogPayload): Promise<ProductionBatch> {
+  const { data } = await apiClient.post<ProductionBatch>('/api/production-schedules/log', payload)
+  return data
+}
+
 export async function updateProductionBatch(
   id: number,
   payload: Partial<ProductionBatchPayload>,

@@ -32,6 +32,26 @@ export async function createOrder(payload: OrderPayload): Promise<Order> {
   return data
 }
 
+export interface OrderQuickLogLinePayload {
+  product_id: number
+  quantity: number
+  unit_price: number
+}
+
+export interface OrderQuickLogPayload {
+  customer_id: number
+  lines: OrderQuickLogLinePayload[]
+  notes?: string
+}
+
+/** Creates an order, confirms it, and issues a delivery note for it in
+ * one call, for a sale that's already happened -- see
+ * backend/app/services/order_service.py's log_sale. */
+export async function logSale(payload: OrderQuickLogPayload): Promise<Order> {
+  const { data } = await apiClient.post<Order>('/api/orders/log', payload)
+  return data
+}
+
 export async function updateOrder(id: number, payload: Partial<OrderPayload>): Promise<Order> {
   const { data } = await apiClient.put<Order>(`/api/orders/${id}`, payload)
   return data

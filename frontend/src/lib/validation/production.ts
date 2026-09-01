@@ -24,3 +24,13 @@ export const productionCompleteSchema = z.object({
 })
 
 export type ProductionCompleteFormValues = z.infer<typeof productionCompleteSchema>
+
+// Mirrors backend/app/schemas/production_schedule.py's ProductionQuickLog.
+export const productionQuickLogSchema = z.object({
+  product_id: z.coerce.number().int().positive('Choose a product'),
+  quantity: z.coerce.number().positive('Must be greater than 0'),
+  notes: z.string().trim().optional().or(z.literal('')),
+})
+
+export type ProductionQuickLogFormValues = z.input<typeof productionQuickLogSchema>
+export type ProductionQuickLogSubmitValues = z.output<typeof productionQuickLogSchema>

@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.production_schedule import (
+    ProductionQuickLog,
     ProductionScheduleCreate,
     ProductionScheduleOut,
     ProductionScheduleStatusUpdate,
@@ -70,6 +71,21 @@ def create_batch(
     user: User = Depends(write_guard),
 ):
     batch = production_service.create_batch(db, payload.model_dump(), user_id=user.id)
+    return ProductionScheduleOut.from_model(batch)
+
+
+@router.post("/log", response_model=ProductionScheduleOut, status_code=201)
+def log_production(
+    payload: ProductionQuickLog,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """One-click entry for production that's already happened -- creates
+    and completes a batch in a single call instead of planning, starting,
+    then completing it by hand. See production_service.log_production."""
+    batch = production_service.log_production(
+        db, payload.product_id, payload.quantity, notes=payload.notes, user_id=user.id
+    )
     return ProductionScheduleOut.from_model(batch)
 
 

@@ -31,3 +31,19 @@ export const orderAdminReviewSchema = z.object({
   notes: z.string().trim().min(1, 'Notes are required.'),
 })
 export type OrderAdminReviewFormValues = z.infer<typeof orderAdminReviewSchema>
+
+// Mirrors backend/app/schemas/order.py's OrderQuickLog.
+export const orderQuickLogLineSchema = z.object({
+  product_id: z.coerce.number().int().positive('Choose a product'),
+  quantity: z.coerce.number().positive('Must be greater than 0'),
+  unit_price: z.coerce.number().min(0, 'Must be 0 or more'),
+})
+
+export const orderQuickLogSchema = z.object({
+  customer_id: z.coerce.number().int().positive('Choose a customer'),
+  notes: z.string().trim().optional().or(z.literal('')),
+  lines: z.array(orderQuickLogLineSchema).min(1, 'At least one line item is required'),
+})
+
+export type OrderQuickLogFormValues = z.input<typeof orderQuickLogSchema>
+export type OrderQuickLogSubmitValues = z.output<typeof orderQuickLogSchema>

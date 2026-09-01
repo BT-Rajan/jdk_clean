@@ -325,6 +325,55 @@ def change_status(
     return get_batch(db, batch_id)
 
 
+def log_production(
+    db: Session, product_id: int, quantity: float, notes: str | None = None, user_id: int | None = None
+) -> ProductionSchedule:
+    """One-step logging for production that's already happened -- e.g.
+    entering today's output at day's end, rather than planning a batch
+    ahead of time and clicking through in_progress/completed by hand.
+    Walks the exact same planned -> in_progress -> completed pipeline as
+    a normal batch (create_batch, then change_status twice) so it's
+    validated and audited identically -- the same BOM-driven material
+    consumption, the same stock-shortfall pre-check, the same order
+    auto-progression hooks if it happened to be tied to one -- there's no
+    separate, duplicated "quick" code path.
+
+    Not tied to any order (make-to-stock, the normal case for a
+    same-day log) and always runs on the product's own default machine
+    (create_batch already falls back to product.machine_id when none is
+    given). If completion fails -- most commonly, not enough raw
+    material on hand -- the batch this created is cancelled rather than
+    left stuck in_progress, so a failed quick-log doesn't leave a
+    dangling half-done batch behind; the caller just sees the original
+    error and nothing else changed.
+    """
+    today = datetime.now(timezone.utc).date()
+    batch = create_batch(
+        db,
+        {
+            "product_id": product_id,
+            "machine_id": None,
+            "order_id": None,
+            "planned_quantity": quantity,
+            "scheduled_start": today,
+            "scheduled_end": today,
+            "notes": notes,
+        },
+        user_id=user_id,
+    )
+    try:
+        change_status(db, batch.id, "in_progress", user_id=user_id)
+        return change_status(db, batch.id, "completed", produced_quantity=quantity, user_id=user_id)
+    except AppError:
+        try:
+            change_status(
+                db, batch.id, "cancelled", reason="Quick-log failed -- see prior error.", user_id=user_id
+            )
+        except AppError:
+            pass
+        raise
+
+
 def _maybe_advance_order_to_ready_to_ship(db: Session, order_id: int | None, user_id: int | None) -> None:
     """The symmetric close of _start_batch's order -> 'in_production' hook
     above: once every (non-cancelled) production batch tied to an order

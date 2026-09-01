@@ -44,6 +44,18 @@ class ProductionScheduleUpdate(BaseModel):
         return not_in_past(v)
 
 
+class ProductionQuickLog(BaseModel):
+    """Log a batch that's already happened -- e.g. entering today's
+    output at day's end -- in one call instead of planning a batch and
+    clicking through in_progress/completed by hand. Always runs on the
+    product's own default machine and isn't tied to an order (see
+    production_service.log_production)."""
+
+    product_id: int
+    quantity: float = Field(gt=0)
+    notes: str | None = None
+
+
 class ProductionScheduleStatusUpdate(BaseModel):
     status: str = Field(pattern="^(in_progress|completed|cancelled)$")
     # Only required (and only used) when status == 'completed': the real

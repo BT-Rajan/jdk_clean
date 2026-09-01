@@ -3,7 +3,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
+from app.core.exceptions import AppError, ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
 from app.core.pricing import compute_document_totals, price_line
 from app.core.workflow import assert_reason_given, assert_transition_allowed
@@ -198,6 +198,78 @@ def update_order(db: Session, order_id: int, data: dict, user_id: int | None = N
     audit_service.log_update(db, TABLE_NAME, order_id, changes, user_id)
     db.commit()
     return get_order(db, order_id)
+
+
+def log_sale(
+    db: Session, customer_id: int, lines: list[dict], notes: str | None = None, user_id: int | None = None
+) -> Order:
+    """One-step logging for a sale that's already happened -- e.g. a
+    walk-in/cash sale entered after the fact -- instead of working
+    through draft -> confirm -> deliver by hand. Walks that exact same
+    pipeline in one call (create_order, then change_status twice, then a
+    delivery note created and issued) so it leaves the same paperwork
+    trail (an order plus a delivery note) and moves stock through the
+    same reserve-then-issue path as always -- there's no separate,
+    duplicated "quick" code path.
+
+    Every line is checked against available finished-goods stock before
+    anything is created; the order is then taken straight from
+    'confirmed' to 'ready_to_ship' rather than relying on
+    _maybe_auto_schedule_production's judgement call, the same direct
+    transition a person could always choose by hand (see
+    ALLOWED_TRANSITIONS's comment on 'ready_to_ship') -- a quick-logged
+    sale is definitionally already fulfilled from stock on hand, not
+    something still waiting on a production run.
+
+    If anything after order creation fails, the order is cancelled
+    rather than left sitting half-finished in 'confirmed' or
+    'ready_to_ship' with no delivery note -- so a failed quick-log
+    doesn't leave a dangling order behind; the caller just sees the
+    original error.
+    """
+    shortfalls = []
+    for line in lines:
+        product = (
+            db.query(Product)
+            .filter(Product.id == line["product_id"], Product.deleted_at.is_(None))
+            .first()
+        )
+        if product is None:
+            raise ValidationAppError(f"Product {line['product_id']} not found.")
+        if not inventory_service.check_availability(db, "product", line["product_id"], float(line["quantity"])):
+            stock = inventory_service.get_stock(db, "product", line["product_id"])
+            shortfalls.append(
+                f"{product.code} (have {stock['quantity_available']:.4f}, need {line['quantity']})"
+            )
+    if shortfalls:
+        raise ValidationAppError("Not enough stock on hand to log this sale: " + "; ".join(shortfalls))
+
+    today = datetime.now(timezone.utc).date()
+    order = create_order(
+        db,
+        {"customer_id": customer_id, "order_date": today, "notes": notes, "lines": lines},
+        user_id=user_id,
+    )
+    try:
+        change_status(db, order.id, "confirmed", user_id=user_id)
+        change_status(db, order.id, "ready_to_ship", user_id=user_id)
+
+        from app.services import delivery_note_service
+
+        note = delivery_note_service.create_delivery_note(
+            db, {"order_id": order.id, "delivery_date": today}, user_id=user_id
+        )
+        delivery_note_service.change_status(db, note.id, "issued", user_id=user_id)
+    except AppError:
+        try:
+            change_status(
+                db, order.id, "cancelled", reason="Quick-log failed -- see prior error.", user_id=user_id
+            )
+        except AppError:
+            pass
+        raise
+
+    return get_order(db, order.id)
 
 
 def change_status(

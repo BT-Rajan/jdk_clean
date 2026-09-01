@@ -64,6 +64,24 @@ class OrderUpdate(BaseModel):
         return not_in_past(v)
 
 
+class OrderQuickLogLine(BaseModel):
+    product_id: int
+    quantity: float = Field(gt=0)
+    unit_price: float = Field(ge=0)
+
+
+class OrderQuickLog(BaseModel):
+    """Log a sale that's already happened -- e.g. a walk-in/cash sale --
+    in one call instead of working through draft -> confirm -> deliver
+    by hand. Always fulfilled from stock on hand right now (see
+    order_service.log_sale); order_date/delivery_date are today, not
+    user-supplied."""
+
+    customer_id: int
+    lines: list[OrderQuickLogLine] = Field(min_length=1)
+    notes: str | None = None
+
+
 class OrderStatusUpdate(BaseModel):
     status: str = Field(
         pattern="^(confirmed|in_production|ready_to_ship|shipped|delivered|cancelled)$"

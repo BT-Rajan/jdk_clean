@@ -12,6 +12,7 @@ from app.schemas.order import (
     OrderAdminReview,
     OrderCreate,
     OrderOut,
+    OrderQuickLog,
     OrderStatusUpdate,
     OrderUpdate,
 )
@@ -91,6 +92,22 @@ def create_order(
 ):
     data = payload.model_dump()
     order = order_service.create_order(db, data, user_id=user.id)
+    return OrderOut.from_model(order)
+
+
+@router.post("/log", response_model=OrderOut, status_code=201)
+def log_sale(
+    payload: OrderQuickLog,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """One-click entry for a sale that's already happened -- creates an
+    order, confirms it, and issues a delivery note for it in a single
+    call instead of working through 3 separate screens. See
+    order_service.log_sale."""
+    order = order_service.log_sale(
+        db, payload.customer_id, [line.model_dump() for line in payload.lines], notes=payload.notes, user_id=user.id
+    )
     return OrderOut.from_model(order)
 
 
