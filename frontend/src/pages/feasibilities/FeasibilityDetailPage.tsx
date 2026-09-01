@@ -302,7 +302,7 @@ export function FeasibilityDetailPage() {
                 <th className="px-6 py-4 font-medium">Quantity</th>
                 <th className="px-6 py-4 font-medium">Supply plan</th>
                 <th className="px-6 py-4 font-medium">Materials</th>
-                <th className="px-6 py-4 font-medium">Machine time</th>
+                <th className="px-6 py-4 font-medium">Production line time</th>
               </tr>
             </thead>
             <tbody>
@@ -368,7 +368,7 @@ export function FeasibilityDetailPage() {
                   <td className="px-6 py-4">
                     {line.capacity_ok === null ? (
                       <span className="text-white/40">
-                        {line.is_feasible === null ? 'Not yet run' : 'Not evaluated (no machine/formula set)'}
+                        {line.is_feasible === null ? 'Not yet run' : 'Not evaluated (no production line/formula set)'}
                       </span>
                     ) : line.capacity_ok ? (
                       <StatusBadge status="feasible" />
@@ -381,7 +381,7 @@ export function FeasibilityDetailPage() {
                             {[
                               line.capacity_shortfall.machine_available
                                 ? null
-                                : `machine slot (${line.capacity_shortfall.machine}, needs ${line.capacity_shortfall.required_hours} hrs)`,
+                                : `production line slot (${line.capacity_shortfall.machine}, needs ${line.capacity_shortfall.required_hours} hrs)`,
                               line.capacity_shortfall.workers_available === false
                                 ? `manpower (needs ${line.capacity_shortfall.workers_required} workers)`
                                 : null,

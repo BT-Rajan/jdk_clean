@@ -12,7 +12,7 @@ import type { User } from '@/types/auth'
  * hand-rolled fetch/paginate/search table), while every other master
  * already had its own page under Master Data. That duplicate is gone;
  * Users now follows the same MasterListPage pattern as Departments,
- * Units, Machines, etc. -- served from Master Data only, same as the
+ * Departments, Production Line, etc. -- served from Master Data only, same as the
  * spec requires. Still admin-only to view (see App.tsx's AdminOnlyGuard
  * wrapping /users), same restriction the Admin tab had. */
 export function UsersListPage() {

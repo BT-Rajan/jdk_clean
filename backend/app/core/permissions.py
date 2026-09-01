@@ -63,7 +63,7 @@ PAGE_KEY_LABELS: dict[str, str] = {
     "delivery_notes": "Delivery Notes",
     "deals": "Deals",
     "feasibilities": "Feasibilities",
-    "machines": "Machines",
+    "machines": "Production Line",
     "quotations": "Quotations",
     "orders": "Orders",
     "production": "Production",

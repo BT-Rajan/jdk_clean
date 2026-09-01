@@ -63,7 +63,7 @@ function WorkingHoursCard() {
       <h2 className="font-display text-lg font-medium text-white">Weekdays &amp; working hours</h2>
       <p className="mt-1 text-sm text-white/50">
         The shared worker pool feasibility checks weigh against each product's "workers required" formula field,
-        alongside each machine's own capacity. Every feasibility check's capacity estimate starts counting from the
+        alongside the production line's own capacity. Every feasibility check's capacity estimate starts counting from the
         next working day after today (today itself is always left out) and skips whatever's off here.
       </p>
       <Alert variant="error">{formError}</Alert>

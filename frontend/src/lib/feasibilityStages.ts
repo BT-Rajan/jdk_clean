@@ -31,7 +31,7 @@ function lineLabel(line: FeasibilityLine): string {
  *      separate check: they're just BOM components like any other raw
  *      material, so a shortage of boxes/labels/etc surfaces here exactly
  *      like a shortage of any other ingredient.
- *   3. Production line -- manpower and machine slot
+ *   3. Production line -- manpower and production line slot
  *
  * Each stage after the first only evaluates whatever quantity the
  * previous stage didn't already clear, mirroring run_check's own
@@ -118,7 +118,7 @@ export function computeFeasibilityStages(f: Feasibility): FeasibilityStage[] {
     ]
   }
 
-  // Stage 3 -- production line: manpower + machine slot
+  // Stage 3 -- production line: manpower + production line slot
   const capacityFailLines = linesNeedingProduction.filter((l) => l.capacity_ok === false)
   let capacityStage: FeasibilityStage
   if (capacityFailLines.length > 0) {
@@ -126,15 +126,15 @@ export function computeFeasibilityStages(f: Feasibility): FeasibilityStage[] {
       key: 'capacity',
       label: 'Production line (manpower & slot)',
       status: 'fail',
-      summary: 'Not enough machine time or manpower to meet the required date.',
+      summary: 'Not enough production line time or manpower to meet the required date.',
       details: capacityFailLines.map((l) => {
         const s = l.capacity_shortfall
         if (!s) return `${lineLabel(l)}: not achievable in time`
 
-        // Name the specific resource that's actually missing -- machine
-        // slot, manpower, or both -- rather than a generic shortfall.
+        // Name the specific resource that's actually missing -- production
+        // line slot, manpower, or both -- rather than a generic shortfall.
         const missing: string[] = []
-        if (!s.machine_available) missing.push(`machine slot (${s.machine}, needs ${s.required_hours} hrs)`)
+        if (!s.machine_available) missing.push(`production line slot (${s.machine}, needs ${s.required_hours} hrs)`)
         if (s.workers_available === false) missing.push(`manpower (needs ${s.workers_required} workers)`)
         const what = missing.length > 0 ? missing.join(' and ') : s.machine
 
@@ -156,8 +156,8 @@ export function computeFeasibilityStages(f: Feasibility): FeasibilityStage[] {
       label: 'Production line (manpower & slot)',
       status: 'pass',
       summary: latestReadyDate
-        ? `Manpower and machine slot available -- ready by ${formatDate(latestReadyDate)}.`
-        : 'Manpower and machine slot available.',
+        ? `Manpower and production line slot available -- ready by ${formatDate(latestReadyDate)}.`
+        : 'Manpower and production line slot available.',
       details: [],
     }
   }

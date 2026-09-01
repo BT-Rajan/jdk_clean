@@ -24,7 +24,7 @@ const IMPORT_FIELDS: ImportField[] = [
   { key: 'selling_price', label: 'Selling price', required: false, numeric: true },
   { key: 'batch_size', label: 'Batch size', required: false, numeric: true },
   { key: 'batch_production_hours', label: 'Hours per batch', required: false, numeric: true },
-  { key: 'machine_id', label: 'Machine ID', required: false, numeric: true },
+  { key: 'machine_id', label: 'Production Line ID', required: false, numeric: true },
   { key: 'production_hours_per_unit', label: 'Production hours per unit', required: false, numeric: true },
   { key: 'workers_required', label: 'Workers required', required: false, numeric: true },
   { key: 'status', label: 'Status', required: false, numeric: false },

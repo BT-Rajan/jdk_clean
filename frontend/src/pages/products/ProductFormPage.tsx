@@ -109,7 +109,7 @@ function ProductCreateForm() {
           this product doesn't naturally come in batches.
         </p>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <SelectField label="Machine" error={errors.machine_id?.message} {...register('machine_id')}>
+          <SelectField label="Production Line" error={errors.machine_id?.message} {...register('machine_id')}>
             <option value="">None</option>
             {machines.map((m) => (
               <option key={m.id} value={m.id}>{m.code} — {m.name}</option>
@@ -131,9 +131,9 @@ function ProductCreateForm() {
           {...register('workers_required')}
         />
         <p className="text-xs text-white/40">
-          The machine and hours-per-unit are this product's "formula" for feasibility checks: they're used to work
-          out whether there's enough machine time to produce a requested quantity by the required date. Leave blank
-          to skip the machine-availability check for this product. Workers required draws on the shared factory
+          The production line and hours-per-unit are this product's "formula" for feasibility checks: they're used to
+          work out whether there's enough production line time to produce a requested quantity by the required date.
+          Leave blank to skip the availability check for this product. Workers required draws on the shared factory
           labor pool (Settings → Factory setup).
         </p>
         <TextField
@@ -267,7 +267,7 @@ function ProductEditForm({ id }: { id: number }) {
             these two automatically.
           </p>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-            <SelectField label="Machine" error={errors.machine_id?.message} {...register('machine_id')}>
+            <SelectField label="Production Line" error={errors.machine_id?.message} {...register('machine_id')}>
               <option value="">None</option>
               {machines.map((m) => (
                 <option key={m.id} value={m.id}>{m.code} — {m.name}</option>

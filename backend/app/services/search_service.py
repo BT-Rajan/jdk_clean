@@ -48,7 +48,7 @@ SEARCHABLE: tuple[SearchableEntity, ...] = (
                       (Product.name, Product.code), "name", "code", "/products"),
     SearchableEntity("raw_materials", "Raw Materials", "raw_materials", RawMaterial,
                       (RawMaterial.name, RawMaterial.code), "name", "code", "/raw-materials"),
-    SearchableEntity("machines", "Machines", "machines", Machine,
+    SearchableEntity("machines", "Production Line", "machines", Machine,
                       (Machine.name, Machine.code), "name", "code", "/machines"),
     SearchableEntity("quotations", "Quotations", "quotations", Quotation,
                       (Quotation.quotation_number,), "quotation_number", "status", "/quotations"),

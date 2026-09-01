@@ -225,8 +225,8 @@ export const HELP_CONTENT: Partial<Record<UserRole, HelpSection[]>> = {
           steps: ['Inventory menu -- pick the page', 'Open a record to edit; Stock levels has an "Adjust" action'],
         },
         {
-          title: 'Production schedule, machines, MRP',
-          steps: ['Production menu -- Schedule, Machines, Factory setup, or MRP', '"New" button to schedule a batch or add a machine'],
+          title: 'Production schedule, production line, MRP',
+          steps: ['Production menu -- Schedule, Production Line, Factory setup, or MRP', '"New" button to schedule a batch or set up the production line'],
         },
       ],
     },

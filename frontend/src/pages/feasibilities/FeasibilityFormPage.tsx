@@ -90,7 +90,7 @@ export function FeasibilityFormPage() {
           />
         </div>
         <p className="-mt-3 text-xs text-white/40">
-          The date the customer needs this by. Used to check whether there's enough machine time free before then,
+          The date the customer needs this by. Used to check whether there's enough production line time free before then,
           alongside the raw-material check.
         </p>
 

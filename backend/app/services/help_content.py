@@ -55,7 +55,7 @@ Purchasing (Purchasing menu)
 
 Inventory & Production
 - Inventory menu: Raw materials, Products, Stock levels (Stock levels has an "Adjust" action)
-- Production menu: Schedule, Machines, Factory setup, MRP -- "New" to schedule a batch or add a machine
+- Production menu: Schedule, Production Line, Factory setup, MRP -- "New" to schedule a batch or set up the production line
 
 Your profile (Avatar > Profile)
 - Photo / Contact details / Password cards -- edit and save each

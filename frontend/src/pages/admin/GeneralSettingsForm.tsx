@@ -300,8 +300,8 @@ export function GeneralSettingsForm({ activeSection }: GeneralSettingsFormProps)
           <h2 className="font-display text-lg font-medium text-white">Production workflow</h2>
           <p className="mt-1 text-sm text-white/50">
             When an order is confirmed, the system can schedule a production batch automatically for each line
-            whose product has a machine and hours-per-unit set (its "formula") -- picking the earliest date that
-            machine actually has free capacity, the same way the feasibility check does. Lines without a formula
+            whose product has a production line and hours-per-unit set (its "formula") -- picking the earliest date
+            that production line actually has free capacity, the same way the feasibility check does. Lines without a formula
             are left for Sales/Production to schedule by hand, same as today.
           </p>
           <div className="mt-6">

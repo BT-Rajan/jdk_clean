@@ -44,7 +44,7 @@ function MachineCreateForm() {
   }
 
   return (
-    <FormShell title="New machine">
+    <FormShell title="New production line">
       <Alert variant="error">{formError}</Alert>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -65,12 +65,12 @@ function MachineCreateForm() {
           </SelectField>
         </div>
         <p className="text-xs text-white/40">
-          Capacity is how many hours a day this machine can run — used by feasibility checks to work out whether it
-          has enough free time to produce a requested quantity by the required date.
+          Capacity is how many hours a day this production line can run — used by feasibility checks to work out
+          whether it has enough free time to produce a requested quantity by the required date.
         </p>
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
-          <Button type="submit" isLoading={isSubmitting}>Create machine</Button>
+          <Button type="submit" isLoading={isSubmitting}>Create production line</Button>
         </div>
       </form>
     </FormShell>
@@ -115,7 +115,7 @@ function MachineEditForm({ id }: { id: number }) {
 
   return (
     <FormShell
-      title="Edit machine"
+      title="Edit production line"
       after={
         <div className="mt-6">
           <HistoryTimeline resourcePath="/api/machines" id={id} />

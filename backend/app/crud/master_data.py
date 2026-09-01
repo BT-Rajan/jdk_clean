@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ValidationAppError
+from app.core.exceptions import ConflictError, ValidationAppError
 from app.crud.base import BaseCRUD
 from app.models.customer import Customer
 from app.models.department import Department
@@ -107,11 +107,24 @@ class ProductCRUD(BaseCRUD):
 
 
 class MachineCRUD(BaseCRUD):
+    """Machine == "Production Line" everywhere the UI shows it -- the
+    business only ever runs one, so create() below rejects a 2nd record
+    outright rather than letting the count silently drift.
+    """
+
     model = Machine
     table_name = "machines"
     searchable_fields = ["name", "code"]
     sortable_fields = ["name", "code", "created_at"]
     filterable_fields = ["status"]
+
+    def create(self, db: Session, data: dict, user_id: int | None = None) -> Machine:
+        existing = db.query(Machine).filter(Machine.deleted_at.is_(None)).first()
+        if existing is not None:
+            raise ConflictError(
+                "Only one Production Line is supported. Edit the existing Production Line instead of creating a new one."
+            )
+        return super().create(db, data, user_id=user_id)
 
 
 department_crud = DepartmentCRUD()

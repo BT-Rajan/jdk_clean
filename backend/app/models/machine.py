@@ -7,11 +7,14 @@ from app.models.user import BigPK
 
 
 class Machine(Base, TimestampMixin, SoftDeleteMixin):
-    """A piece of production equipment. Used by the feasibility check's
-    machine-availability + time-required calculation: a product names the
-    machine that makes it (products.machine_id) and how many hours of that
-    machine's time one unit takes (products.production_hours_per_unit);
-    booked machine time is read from production_schedules.machine_id.
+    """A production line -- shown everywhere in the UI as "Production
+    Line" even though the model/table/columns keep the shorter internal
+    name "machine". The business runs exactly one, so MachineCRUD.create
+    rejects a 2nd record. Used by the feasibility check's
+    availability + time-required calculation: a product names the
+    production line that makes it (products.machine_id) and how many
+    hours of its time one unit takes (products.production_hours_per_unit);
+    booked time is read from production_schedules.machine_id.
     """
 
     __tablename__ = "machines"
