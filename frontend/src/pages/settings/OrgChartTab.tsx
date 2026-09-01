@@ -204,13 +204,6 @@ export function OrgChartTab() {
   // team visible, while a matched report pulls in just their manager as
   // context (not the manager's whole team).
   const visibleOwners = useMemo(() => (q ? owners.filter(matches) : owners), [owners, matches, q])
-  const visibleManagers = useMemo(
-    () =>
-      q
-        ? managers.filter((m) => matches(m) || (membersByManager.get(m.id) ?? []).some(matches))
-        : managers,
-    [managers, membersByManager, matches, q],
-  )
   const reportsFor = useCallback(
     (manager: User) => {
       const reports = membersByManager.get(manager.id) ?? []
@@ -227,6 +220,49 @@ export function OrgChartTab() {
     }
     return counts
   }, [users])
+
+  // The chart's second axis: managers grouped by the department they
+  // head, so every department renders as its own parallel column with
+  // its head(s) at the top and that head's reporting chain underneath --
+  // rather than one undifferentiated row of managers with department
+  // only visible as a badge inside each card.
+  const managersByDepartment = useMemo(() => {
+    const map = new Map<number | null, User[]>()
+    for (const m of managers) {
+      const bucket = map.get(m.department_id) ?? []
+      bucket.push(m)
+      map.set(m.department_id, bucket)
+    }
+    return map
+  }, [managers])
+
+  const departmentColumns = useMemo(() => {
+    const sortedDepts = [...departments].sort((a, b) => a.id - b.id)
+    const cols = sortedDepts.map((dept) => ({
+      key: `dept-${dept.id}`,
+      deptId: dept.id as number | null,
+      label: dept.name,
+      style: deptStyles.get(dept.id) ?? NO_DEPARTMENT_STYLE,
+      heads: managersByDepartment.get(dept.id) ?? [],
+    }))
+    const headless = managersByDepartment.get(null) ?? []
+    if (headless.length > 0) {
+      cols.push({ key: 'dept-none', deptId: null, label: 'No department', style: NO_DEPARTMENT_STYLE, heads: headless })
+    }
+    return cols
+  }, [departments, deptStyles, managersByDepartment])
+
+  const visibleDepartmentColumns = useMemo(
+    () =>
+      departmentColumns
+        .map((col) => {
+          const deptNameMatches = q && col.label.toLowerCase().includes(q)
+          const heads = deptNameMatches || !q ? col.heads : col.heads.filter((m) => matches(m) || (membersByManager.get(m.id) ?? []).some(matches))
+          return { ...col, heads }
+        })
+        .filter((col) => !q || col.heads.length > 0),
+    [departmentColumns, q, matches, membersByManager],
+  )
 
   function setPending(id: number, isPending: boolean) {
     setPendingIds((prev) => {
@@ -288,7 +324,7 @@ export function OrgChartTab() {
   }
 
   const noSearchResults =
-    q && visibleOwners.length === 0 && visibleManagers.length === 0 && visibleUnassigned.length === 0
+    q && visibleOwners.length === 0 && visibleDepartmentColumns.length === 0 && visibleUnassigned.length === 0
 
   return (
     <div className="flex flex-col gap-6">
@@ -366,19 +402,22 @@ export function OrgChartTab() {
               </div>
             </div>
 
-            {/* Manager tier, connected to Owner by a trunk stem and to
-                each other by a shared horizontal branch line -- laid out
-                as a non-wrapping row (scrolling sideways past a handful
-                of managers) so the connector geometry stays exact
-                instead of breaking apart at responsive breakpoints. */}
-            {visibleManagers.length === 0 ? (
-              managers.length === 0 && (
+            {/* Department tier: one parallel column per department --
+                every department shows up here, in the same row, even
+                with no head assigned yet, so the chart always reads as
+                "N departments side by side" rather than only surfacing
+                whichever managers happen to exist. Each column's head(s)
+                connect down to Owner by a shared trunk line, and down to
+                their own reports by their own chain -- a department with
+                two managers just stacks two chains in one column. */}
+            {visibleDepartmentColumns.length === 0 ? (
+              departments.length === 0 && (
                 <>
                   <Stem className="mt-3 h-6" />
                   <p className="py-6 text-center text-sm text-white/40">
-                    No managers yet -- add one from{' '}
-                    <Link to="/users" className="text-gold-300 hover:text-gold-200">
-                      Users
+                    No departments yet -- add one from{' '}
+                    <Link to="/departments" className="text-gold-300 hover:text-gold-200">
+                      Departments
                     </Link>
                     .
                   </p>
@@ -389,78 +428,107 @@ export function OrgChartTab() {
                 <Stem className="h-6" />
                 <div className="w-full overflow-x-auto pb-2">
                   <div className="relative mx-auto flex w-max justify-center gap-8 border-t border-white/15 pt-6">
-                    {visibleManagers.map((manager) => {
-                      const key = `manager-${manager.id}`
-                      const reports = reportsFor(manager)
-                      return (
-                        <div key={manager.id} className="flex w-64 flex-col items-center">
-                          <Stem className="h-6" />
-                          <div
-                            onDragOver={(e) => {
-                              e.preventDefault()
-                              setDragOverKey(key)
-                            }}
-                            onDragLeave={() => setDragOverKey((prev) => (prev === key ? null : prev))}
-                            onDrop={handleDrop(manager.id)}
-                            className={cn(
-                              'flex w-full flex-col gap-3 rounded-2xl border p-4 transition-colors',
-                              dropZoneClasses(key),
-                            )}
-                          >
-                            <div
-                              className={cn(
-                                'rounded-xl border border-l-2 border-violet-500/30 bg-violet-500/10 p-3',
-                                styleFor(manager.department_id).border,
-                              )}
-                            >
-                              <div className="flex items-center gap-2.5">
-                                <Avatar avatarUrl={manager.avatar_url} name={manager.full_name} size="sm" />
-                                <div className="min-w-0 flex-1">
-                                  <p className="truncate text-sm font-medium text-violet-200">{manager.full_name}</p>
-                                  <p className="truncate text-xs text-violet-200/50">{manager.username}</p>
-                                </div>
-                                {pendingIds.has(manager.id) && <Spinner size={12} className="shrink-0 text-violet-200" />}
-                              </div>
-                              <div className="mt-1.5 flex items-center gap-1.5 pl-[42px] text-[10px] text-violet-200/40">
-                                <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', styleFor(manager.department_id).dot)} />
-                                <span className="truncate">{manager.department_name ?? 'No department'}</span>
-                              </div>
-                              <div className="mt-2">
-                                <DepartmentSelect
-                                  departments={departments}
-                                  value={manager.department_id}
-                                  disabled={pendingIds.has(manager.id)}
-                                  onChange={(department_id) => patchUser(manager.id, { department_id })}
-                                />
-                              </div>
-                            </div>
-
-                            {reports.length > 0 && <Stem className="h-4" />}
-                            <div className="flex min-h-[64px] flex-col gap-2">
-                              {reports.length === 0 ? (
-                                <p className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-center text-xs text-white/30">
-                                  Drop a member here
-                                </p>
-                              ) : (
-                                reports.map((member) => (
-                                  <MemberCard
-                                    key={member.id}
-                                    user={member}
-                                    deptStyle={styleFor(member.department_id)}
-                                    departments={departments}
-                                    dragging={draggingId === member.id}
-                                    saving={pendingIds.has(member.id)}
-                                    onDragStart={() => setDraggingId(member.id)}
-                                    onDragEnd={() => setDraggingId(null)}
-                                    onDepartmentChange={(department_id) => patchUser(member.id, { department_id })}
-                                  />
-                                ))
-                              )}
-                            </div>
-                          </div>
+                    {visibleDepartmentColumns.map((col) => (
+                      <div key={col.key} className="flex w-64 flex-col items-center gap-4">
+                        <Stem className="h-6" />
+                        {/* Department header -- the "swimlane" label that
+                            makes this column read as a department rather
+                            than just a manager's card. */}
+                        <div className="flex items-center gap-2 self-stretch rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5">
+                          <span className={cn('h-2 w-2 shrink-0 rounded-full', col.style.dot)} />
+                          <span className="truncate text-xs font-medium text-white/70">{col.label}</span>
+                          {col.deptId != null && (
+                            <span className="ml-auto shrink-0 text-[10px] text-white/30">
+                              {departmentCounts.get(col.deptId) ?? 0}
+                            </span>
+                          )}
                         </div>
-                      )
-                    })}
+
+                        {col.heads.length === 0 ? (
+                          <p className="w-full rounded-xl border border-dashed border-white/10 px-3 py-6 text-center text-xs text-white/30">
+                            No head assigned -- promote someone to manager from{' '}
+                            <Link to="/users" className="text-gold-300 hover:text-gold-200">
+                              Users
+                            </Link>
+                            .
+                          </p>
+                        ) : (
+                          col.heads.map((manager) => {
+                            const key = `manager-${manager.id}`
+                            const reports = reportsFor(manager)
+                            return (
+                              <div key={manager.id} className="flex w-full flex-col items-center">
+                                <div
+                                  onDragOver={(e) => {
+                                    e.preventDefault()
+                                    setDragOverKey(key)
+                                  }}
+                                  onDragLeave={() => setDragOverKey((prev) => (prev === key ? null : prev))}
+                                  onDrop={handleDrop(manager.id)}
+                                  className={cn(
+                                    'flex w-full flex-col gap-3 rounded-2xl border p-4 transition-colors',
+                                    dropZoneClasses(key),
+                                  )}
+                                >
+                                  <div
+                                    className={cn(
+                                      'rounded-xl border border-l-2 border-violet-500/30 bg-violet-500/10 p-3',
+                                      col.style.border,
+                                    )}
+                                  >
+                                    <div className="flex items-center gap-2.5">
+                                      <Avatar avatarUrl={manager.avatar_url} name={manager.full_name} size="sm" />
+                                      <div className="min-w-0 flex-1">
+                                        <p className="truncate text-sm font-medium text-violet-200">{manager.full_name}</p>
+                                        <p className="truncate text-xs text-violet-200/50">{manager.username}</p>
+                                      </div>
+                                      {pendingIds.has(manager.id) && (
+                                        <Spinner size={12} className="shrink-0 text-violet-200" />
+                                      )}
+                                    </div>
+                                    <div className="mt-1.5 flex items-center gap-1.5 pl-[42px] text-[10px] text-violet-200/40">
+                                      <span className={cn('h-1.5 w-1.5 shrink-0 rounded-full', col.style.dot)} />
+                                      <span className="truncate">{manager.department_name ?? 'No department'}</span>
+                                    </div>
+                                    <div className="mt-2">
+                                      <DepartmentSelect
+                                        departments={departments}
+                                        value={manager.department_id}
+                                        disabled={pendingIds.has(manager.id)}
+                                        onChange={(department_id) => patchUser(manager.id, { department_id })}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  {reports.length > 0 && <Stem className="h-4" />}
+                                  <div className="flex min-h-[64px] flex-col gap-2">
+                                    {reports.length === 0 ? (
+                                      <p className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-center text-xs text-white/30">
+                                        Drop a member here
+                                      </p>
+                                    ) : (
+                                      reports.map((member) => (
+                                        <MemberCard
+                                          key={member.id}
+                                          user={member}
+                                          deptStyle={styleFor(member.department_id)}
+                                          departments={departments}
+                                          dragging={draggingId === member.id}
+                                          saving={pendingIds.has(member.id)}
+                                          onDragStart={() => setDraggingId(member.id)}
+                                          onDragEnd={() => setDraggingId(null)}
+                                          onDepartmentChange={(department_id) => patchUser(member.id, { department_id })}
+                                        />
+                                      ))
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          })
+                        )}
+                      </div>
+                    ))}
                   </div>
                 </div>
               </>
