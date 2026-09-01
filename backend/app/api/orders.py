@@ -15,6 +15,7 @@ from app.schemas.order import (
     OrderQuickLog,
     OrderStatusUpdate,
     OrderUpdate,
+    SplitOrderRequest,
 )
 from app.schemas.order_journey import OrderJourneyOut
 from app.services import audit_service, email_service, order_journey_service, order_service, payment_service, pdf_generator
@@ -149,6 +150,22 @@ def update_status(
         db, order_id, payload.status, reason=payload.reason, user_id=user.id
     )
     return OrderOut.from_model(order)
+
+
+@router.post("/{order_id}/split", response_model=OrderOut, status_code=201)
+def split_order(
+    order_id: int,
+    payload: SplitOrderRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """Carves a deliverable-now quantity off a 'ready_to_ship' order into
+    a new child order -- for when stock at dispatch only covers part of
+    it. Returns the new child order; GET the original order_id to see
+    the parent's own remaining lines."""
+    lines = [line.model_dump() for line in payload.lines]
+    child = order_service.split_order(db, order_id, lines, user_id=user.id)
+    return OrderOut.from_model(child)
 
 
 @router.post("/{order_id}/approve", response_model=OrderOut)

@@ -443,6 +443,154 @@ def change_status(
     return get_order(db, order_id)
 
 
+def split_order(db: Session, order_id: int, lines: list[dict], user_id: int | None = None) -> Order:
+    """Carves a deliverable-now quantity off a 'ready_to_ship' order into
+    a brand new child order, for the classic scarce-stock scenario: three
+    orders total 300 bags, only 200 are actually on the shelf, so a
+    smaller amount goes out to each now and the rest follows once more
+    stock is in. Splitting only makes sense at 'ready_to_ship' -- by then
+    production is done (or was never needed) and the only thing actually
+    short is what's physically on hand, which is exactly what a delivery
+    note captures. Splitting earlier (still 'confirmed'/'in_production')
+    would also have to reason about a production batch already tied to
+    the parent's original quantity, and duplicating or resizing that is
+    a person's judgement call, not something to guess at here.
+
+    Stock reservation needs zero bookkeeping of its own: quantity_reserved
+    (FinishedGoodsInventory) is a running total per product, not scoped
+    to one order, so leaving it untouched while simply repartitioning the
+    same total quantity across parent-remainder + child keeps the
+    aggregate correct automatically. Only the lines and totals move.
+
+    The child inherits the parent's customer/deal/dates/discount/
+    approval (a smaller quantity than what was already approved carries
+    strictly less risk, so re-gating it would be pure friction) and is
+    born directly at 'ready_to_ship' -- the same auto-create-delivery-
+    note hook a normal order reaching that status would trigger fires
+    for it too, so it's immediately actionable exactly like any other
+    order at that stage.
+
+    If the parent has an existing draft delivery note, it's deleted --
+    it mirrored the parent's original (now stale) quantities (see
+    delivery_note_service.create_delivery_note), so it no longer
+    reflects what's actually being shipped; a fresh one gets created for
+    whatever remains, same as for the child. If every line was split
+    away, the parent has nothing left to fulfil and closes itself
+    (status='cancelled') without releasing any reservation -- the child
+    now carries it forward, not fewer physical units suddenly appearing
+    on the shelf.
+    """
+    order = get_order(db, order_id)
+    if order.status != "ready_to_ship":
+        raise ConflictError(
+            "Orders can only be split while 'ready_to_ship' -- once it's clear at the point of "
+            f"dispatch that stock can't cover it in full (current status: '{order.status}')."
+        )
+    if not lines:
+        raise ValidationAppError("At least one line item is required to split an order.")
+
+    lines_by_id = {line.id: line for line in order.lines}
+    child_lines: list[dict] = []
+    for split in lines:
+        source = lines_by_id.get(split["order_detail_id"])
+        if source is None:
+            raise ValidationAppError(f"Line {split['order_detail_id']} does not belong to this order.")
+        quantity = float(split["quantity"])
+        if quantity > float(source.quantity):
+            raise ValidationAppError(
+                f"Cannot split {quantity} of {source.product.name}: only {float(source.quantity):.4f} "
+                "is on this line."
+            )
+        child_lines.append(
+            {
+                "product_id": source.product_id,
+                "quantity": quantity,
+                "unit_price": float(source.unit_price),
+                "discount_percent": float(source.discount_percent),
+                "line_total": price_line(quantity, float(source.unit_price), float(source.discount_percent)),
+            }
+        )
+        remaining = round(float(source.quantity) - quantity, 4)
+        if remaining <= 0:
+            db.delete(source)
+        else:
+            source.quantity = remaining
+            source.line_total = price_line(remaining, float(source.unit_price), float(source.discount_percent))
+    db.flush()
+
+    from app.services import delivery_note_service
+
+    existing_note = (
+        db.query(DeliveryNote)
+        .filter(
+            DeliveryNote.order_id == order.id,
+            DeliveryNote.deleted_at.is_(None),
+            DeliveryNote.status == "draft",
+        )
+        .first()
+    )
+    if existing_note is not None:
+        delivery_note_service.delete_delivery_note(db, existing_note.id, user_id=user_id)
+
+    # Recompute the parent's totals from whatever lines are still on it
+    # (some may have just been deleted above).
+    db.refresh(order)
+    parent_subtotal = round(sum(float(ln.line_total) for ln in order.lines), 2)
+    order.subtotal_amount = parent_subtotal
+    parent_totals = compute_document_totals(parent_subtotal, float(order.discount_percent))
+    order.discount_amount = parent_totals["discount_amount"]
+    order.total_amount = parent_totals["total_amount"]
+    order.updated_by = user_id
+
+    child_subtotal = round(sum(line["line_total"] for line in child_lines), 2)
+    child_totals = compute_document_totals(child_subtotal, float(order.discount_percent))
+    child = Order(
+        order_number=number_series_service.next_number(db, "ORDER"),
+        customer_id=order.customer_id,
+        deal_id=order.deal_id,
+        order_date=datetime.now(timezone.utc).date(),
+        requested_delivery_date=order.requested_delivery_date,
+        confirmed_delivery_date=order.confirmed_delivery_date,
+        status="ready_to_ship",
+        subtotal_amount=child_subtotal,
+        discount_percent=order.discount_percent,
+        discount_amount=child_totals["discount_amount"],
+        total_amount=child_totals["total_amount"],
+        notes=f"Split from {order.order_number} -- stock only covered part of it at dispatch.",
+        approved_at=order.approved_at,
+        approved_by=order.approved_by,
+        parent_order_id=order.id,
+        created_by=user_id,
+    )
+    child.lines = [OrderDetail(**line) for line in child_lines]
+    db.add(child)
+    db.flush()
+
+    parent_fully_split = not order.lines
+    if parent_fully_split:
+        order.status = "cancelled"
+        order.close_reason = f"Fully split into child order {child.order_number}."
+        order.admin_review_required = False
+
+    audit_service.log_create(db, TABLE_NAME, child.id, user_id)
+    audit_service.log_update(
+        db, TABLE_NAME, order.id, {"lines": ("(previous lines)", f"(split into {child.order_number})")}, user_id
+    )
+    db.commit()
+
+    # Both orders are now sitting at 'ready_to_ship' with correct, final
+    # quantities but no delivery note (the parent's stale one was deleted
+    # above; the child never had one) -- the same auto-create hook a
+    # normal order reaching 'ready_to_ship' would trigger fires for each,
+    # so both are immediately actionable rather than needing a person to
+    # notice and create one by hand.
+    _maybe_auto_create_delivery_note(db, child.id, user_id)
+    if not parent_fully_split:
+        _maybe_auto_create_delivery_note(db, order.id, user_id)
+
+    return get_order(db, child.id)
+
+
 def _cancel_active_production_batches(db: Session, order_id: int, user_id: int | None = None) -> None:
     """Fires when an order is cancelled: any production batch still tied
     to it that hasn't finished -- 'planned' (auto-scheduled or not, not

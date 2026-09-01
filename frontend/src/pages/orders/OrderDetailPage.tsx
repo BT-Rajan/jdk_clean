@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField, TextField } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewOrder,
@@ -14,6 +14,7 @@ import {
   getOrder,
   requestPayment,
   restoreOrder,
+  splitOrder,
   updateOrderStatus,
 } from '@/api/orders'
 import { PaymentsPanel } from './PaymentsPanel'
@@ -62,6 +63,92 @@ function AdminReviewModal({
   )
 }
 
+function SplitOrderModal({
+  open,
+  order,
+  onClose,
+  onSplit,
+}: {
+  open: boolean
+  order: Order
+  onClose: () => void
+  onSplit: (child: Order) => void
+}) {
+  const [quantities, setQuantities] = useState<Record<number, string>>({})
+  const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (open) {
+      setQuantities({})
+      setFormError(null)
+    }
+  }, [open])
+
+  async function handleSubmit() {
+    setFormError(null)
+    const lines = order.lines
+      .map((line) => ({ order_detail_id: line.id, quantity: Number(quantities[line.id] || 0) }))
+      .filter((line) => line.quantity > 0)
+    if (lines.length === 0) {
+      setFormError('Enter a quantity to split for at least one line.')
+      return
+    }
+    for (const line of lines) {
+      const source = order.lines.find((l) => l.id === line.order_detail_id)
+      if (source && line.quantity > source.quantity) {
+        setFormError(`Can't split more than what's on the line (${source.quantity} ${source.unit ?? ''}).`)
+        return
+      }
+    }
+    setSubmitting(true)
+    try {
+      const child = await splitOrder(order.id, lines)
+      onSplit(child)
+    } catch (err) {
+      setFormError(getApiErrorMessage(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal open={open} title={`Split ${order.order_number}`} onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <p className="text-xs text-white/40">
+          Stock only covers part of this order right now? Enter how much of each line can actually go out today --
+          that becomes a new order, delivered on its own, while the rest stays on {order.order_number} for when more
+          stock is in.
+        </p>
+        <Alert variant="error">{formError}</Alert>
+        <div className="flex flex-col gap-3">
+          {order.lines.map((line) => (
+            <div key={line.id} className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-3 sm:items-end">
+              <div className="sm:col-span-2 text-sm text-white">
+                {line.product_code ? `${line.product_code} — ${line.product_name}` : `#${line.product_id}`}
+                <p className="mt-1 text-xs text-white/40">{line.quantity} {line.unit} on this order</p>
+              </div>
+              <TextField
+                label="Split quantity"
+                type="number"
+                step="0.0001"
+                min="0"
+                max={line.quantity}
+                value={quantities[line.id] ?? ''}
+                onChange={(e) => setQuantities((prev) => ({ ...prev, [line.id]: e.target.value }))}
+              />
+            </div>
+          ))}
+        </div>
+        <div className="mt-2 flex justify-end gap-3">
+          <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
+          <Button type="button" isLoading={submitting} onClick={handleSubmit}>Split order</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 export function OrderDetailPage() {
   const { id } = useParams()
   const orderId = Number(id)
@@ -79,6 +166,7 @@ export function OrderDetailPage() {
   const [emailOpen, setEmailOpen] = useState(false)
   const [paymentEmailOpen, setPaymentEmailOpen] = useState(false)
   const [adminReviewOpen, setAdminReviewOpen] = useState(false)
+  const [splitOpen, setSplitOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
 
   function load() {
@@ -190,6 +278,9 @@ export function OrderDetailPage() {
               <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
               <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
               {allowWrite && <Button variant="ghost" onClick={() => setPaymentEmailOpen(true)}>Send payment request</Button>}
+              {allowWrite && order.status === 'ready_to_ship' && (
+                <Button variant="ghost" onClick={() => setSplitOpen(true)}>Split order</Button>
+              )}
               {allowWrite && order.status === 'draft' && (
                 <Button variant="ghost" onClick={() => navigate(`/orders/${orderId}/edit`)}>Edit</Button>
               )}
@@ -238,6 +329,14 @@ export function OrderDetailPage() {
             <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/50">
               Payment requested {formatDate(order.payment_requested_at)}
             </span>
+          )}
+          {order.parent_order_id && (
+            <Link
+              to={`/orders/${order.parent_order_id}`}
+              className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/50 hover:border-white/20 hover:text-white/70"
+            >
+              Split from {order.parent_order_number}
+            </Link>
           )}
           {allowAdmin && order.status === 'draft' && !order.approved_at && (
             <Button variant="ghost" size="sm" isLoading={busy} onClick={handleApprove}>
@@ -307,6 +406,29 @@ export function OrderDetailPage() {
         </div>
       </GlassCard>
 
+      {order.child_orders.length > 0 && (
+        <GlassCard className="mt-6 p-6">
+          <h2 className="mb-4 font-display text-base font-medium text-white">
+            Split into <span className="text-sm text-white/40">({order.child_orders.length})</span>
+          </h2>
+          <div className="flex flex-col gap-2">
+            {order.child_orders.map((child) => (
+              <Link
+                key={child.id}
+                to={`/orders/${child.id}`}
+                className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
+              >
+                <span className="font-medium text-white">{child.order_number}</span>
+                <span className="flex items-center gap-3">
+                  <span className="text-sm text-white/40">{formatCurrency(child.total_amount)}</span>
+                  <StatusBadge status={child.status} />
+                </span>
+              </Link>
+            ))}
+          </div>
+        </GlassCard>
+      )}
+
       <div className="mt-6">
         <PaymentsPanel orderId={orderId} orderTotal={order.total_amount} allowWrite={allowWrite} allowAdmin={allowAdmin} />
       </div>
@@ -354,6 +476,19 @@ export function OrderDetailPage() {
           const updated = await requestPayment(order.id, toEmail, message)
           setOrder(updated)
           setNotice(`Payment request sent to ${toEmail}.`)
+        }}
+      />
+
+      <SplitOrderModal
+        open={splitOpen}
+        order={order}
+        onClose={() => setSplitOpen(false)}
+        onSplit={(child) => {
+          setSplitOpen(false)
+          setNotice(
+            `Split into new order ${child.order_number} (${formatCurrency(child.total_amount)}) -- delivered separately.`,
+          )
+          load()
         }}
       />
 

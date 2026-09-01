@@ -100,6 +100,24 @@ class OrderAdminReview(BaseModel):
     notes: str = Field(min_length=1)
 
 
+class SplitOrderLine(BaseModel):
+    order_detail_id: int
+    quantity: float = Field(gt=0)
+
+
+class SplitOrderRequest(BaseModel):
+    lines: list[SplitOrderLine] = Field(min_length=1)
+
+
+class OrderChildSummary(BaseModel):
+    id: int
+    order_number: str
+    status: str
+    total_amount: float
+
+    model_config = {"from_attributes": True}
+
+
 class OrderOut(BaseModel):
     id: int
     order_number: str
@@ -123,6 +141,16 @@ class OrderOut(BaseModel):
     admin_reviewed_at: datetime | None
     admin_review_notes: str | None
     payment_requested_at: datetime | None
+    # Set when this order is itself a child born out of split_order --
+    # a lighter reference back to the order it was carved from, since a
+    # deliverable-now remainder came from a supply shortfall on that
+    # order, not an independent request.
+    parent_order_id: int | None = None
+    parent_order_number: str | None = None
+    # Populated the other direction on the parent: every order split off
+    # of this one, so its detail page can show where its own quantity
+    # actually went.
+    child_orders: list[OrderChildSummary] = []
     lines: list[OrderLineOut] = []
     created_at: datetime
     updated_at: datetime
@@ -135,6 +163,10 @@ class OrderOut(BaseModel):
         data.customer_name = obj.customer.name if obj.customer else None
         data.customer_email = obj.customer.email if obj.customer else None
         data.deal_number = obj.deal.deal_number if obj.deal else None
+        data.parent_order_number = obj.parent_order.order_number if obj.parent_order else None
+        data.child_orders = [
+            OrderChildSummary.model_validate(child) for child in obj.child_orders if child.deleted_at is None
+        ]
         for line, src in zip(data.lines, obj.lines):
             line.product_code = src.product.code if src.product else None
             line.product_name = src.product.name if src.product else None

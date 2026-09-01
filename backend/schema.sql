@@ -511,6 +511,12 @@ CREATE TABLE IF NOT EXISTS orders (
     -- (see payment_service.py) -- purely informational, for Sales to see
     -- "sent N days ago, still nothing recorded" at a glance.
     payment_requested_at   DATETIME NULL,
+    -- Set when this order was born out of splitting a 'ready_to_ship'
+    -- order that stock couldn't fully cover yet (see order_service.
+    -- split_order) -- the deliverable-now remainder becomes this order's
+    -- own child, a completely normal order from here on. NULL for every
+    -- order created the ordinary way.
+    parent_order_id BIGINT UNSIGNED NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -520,9 +526,11 @@ CREATE TABLE IF NOT EXISTS orders (
     CONSTRAINT fk_orders_admin_reviewed_by FOREIGN KEY (admin_reviewed_by) REFERENCES users(id),
     CONSTRAINT fk_orders_approved_by FOREIGN KEY (approved_by) REFERENCES users(id),
     CONSTRAINT fk_orders_deal FOREIGN KEY (deal_id) REFERENCES deals(id),
+    CONSTRAINT fk_orders_parent_order FOREIGN KEY (parent_order_id) REFERENCES orders(id),
     INDEX idx_orders_status (status),
     INDEX idx_orders_deal (deal_id),
-    INDEX idx_orders_deleted_at (deleted_at)
+    INDEX idx_orders_deleted_at (deleted_at),
+    INDEX idx_orders_parent (parent_order_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS order_details (

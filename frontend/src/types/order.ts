@@ -53,9 +53,29 @@ export interface Order {
   /** Last time a payment-request email went out for this order (see
    * POST /{id}/request-payment). Purely informational. */
   payment_requested_at: string | null
+  /** Set when this order is itself a child born out of splitting a
+   * 'ready_to_ship' order that stock couldn't fully cover (see
+   * POST /{id}/split). */
+  parent_order_id: number | null
+  parent_order_number: string | null
+  /** Populated the other direction on the parent: every order split off
+   * of this one. */
+  child_orders: OrderChildSummary[]
   lines: OrderLine[]
   created_at: string
   updated_at: string
+}
+
+export interface OrderChildSummary {
+  id: number
+  order_number: string
+  status: OrderStatus
+  total_amount: number
+}
+
+export interface SplitOrderLineInput {
+  order_detail_id: number
+  quantity: number
 }
 
 export interface OrderPayload {

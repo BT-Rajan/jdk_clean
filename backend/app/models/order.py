@@ -96,9 +96,21 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     # (see payment_service.py) -- purely informational, for Sales to see
     # "sent N days ago, still nothing recorded" at a glance.
     payment_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Set when this order was itself born out of order_service.split_order
+    # -- carving a deliverable-now quantity off a 'ready_to_ship' order
+    # that stock can't fully cover yet (see that function's docstring).
+    # The child is a completely normal order from here on: its own
+    # number, its own delivery note, its own status progression. Self-FK
+    # rather than a separate table since a child is in every other
+    # respect just an order.
+    parent_order_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("orders.id"), nullable=True)
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     deal: Mapped[Deal | None] = relationship(lazy="joined")
+    parent_order: Mapped["Order | None"] = relationship(
+        "Order", remote_side=[id], back_populates="child_orders", lazy="joined"
+    )
+    child_orders: Mapped[list["Order"]] = relationship("Order", back_populates="parent_order")
     lines: Mapped[list["OrderDetail"]] = relationship(
         back_populates="order",
         cascade="all, delete-orphan",

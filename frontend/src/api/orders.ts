@@ -1,5 +1,5 @@
 import type { PagedResponse, ListQueryParams, MessageResponse } from '@/types/common'
-import type { Order, OrderPayload, SettableOrderStatus } from '@/types/order'
+import type { Order, OrderPayload, SettableOrderStatus, SplitOrderLineInput } from '@/types/order'
 import type { OrderJourney } from '@/types/orderJourney'
 import { apiClient } from './client'
 
@@ -19,6 +19,11 @@ export async function getOrder(id: number): Promise<Order> {
 
 export async function approveOrder(id: number): Promise<Order> {
   const { data } = await apiClient.post<Order>(`/api/orders/${id}/approve`)
+  return data
+}
+
+export async function splitOrder(id: number, lines: SplitOrderLineInput[]): Promise<Order> {
+  const { data } = await apiClient.post<Order>(`/api/orders/${id}/split`, { lines })
   return data
 }
 
