@@ -10,12 +10,19 @@ interface ModalProps {
   children: ReactNode
   footer?: ReactNode
   wide?: boolean
+  /** Expands the dialog to fill nearly the whole viewport instead of the
+   * usual centered card. For content that needs real room to breathe --
+   * wide tables, multi-column layouts, anything that would otherwise be
+   * squeezed by max-w-2xl and 85vh (see OrgChartTab, which uses this to
+   * escape the settings sidebar's narrow content column). Takes
+   * precedence over `wide`. */
+  fullPage?: boolean
 }
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-export function Modal({ open, title, onClose, children, footer, wide = false }: ModalProps) {
+export function Modal({ open, title, onClose, children, footer, wide = false, fullPage = false }: ModalProps) {
   const dialogRef = useRef<HTMLDivElement>(null)
   const previouslyFocused = useRef<HTMLElement | null>(null)
 
@@ -93,8 +100,10 @@ export function Modal({ open, title, onClose, children, footer, wide = false }: 
             exit={{ opacity: 0, y: 8, scale: 0.98 }}
             transition={{ duration: 0.18, ease: 'easeOut' }}
             className={cn(
-              'glass-panel-strong m-4 max-h-[85vh] w-full overflow-y-auto rounded-3xl p-6 sm:p-8 focus:outline-none',
-              wide ? 'max-w-2xl' : 'max-w-md',
+              'glass-panel-strong w-full overflow-y-auto rounded-3xl p-6 focus:outline-none sm:p-8',
+              fullPage
+                ? 'm-3 h-[calc(100%-1.5rem)] max-w-none sm:m-6 sm:h-[calc(100%-3rem)]'
+                : cn('m-4 max-h-[85vh]', wide ? 'max-w-2xl' : 'max-w-md'),
             )}
           >
             <div className="mb-6 flex items-center justify-between">

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { TabPanel } from '@/components/ui'
+import { Modal, TabPanel } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import { FactorySetupTab } from '@/pages/settings/FactorySetupTab'
 import { OrgChartTab } from '@/pages/settings/OrgChartTab'
@@ -122,13 +122,27 @@ export function AdminShell() {
             </div>
 
             <TabPanel id="factory-setup" activeId={activeSection}><FactorySetupTab /></TabPanel>
-            <TabPanel id="org-chart" activeId={activeSection}><OrgChartTab /></TabPanel>
             <TabPanel id="email" activeId={activeSection}><EmailTab /></TabPanel>
             <TabPanel id="whatsapp" activeId={activeSection}><WhatsAppTab /></TabPanel>
             <TabPanel id="sms" activeId={activeSection}><SmsTab /></TabPanel>
           </div>
         </div>
       </PageContainer>
+
+      {/* Org chart doesn't render inline like the other sections -- next to
+          the section nav, this column is only a few hundred px wide, nowhere
+          near enough for its department swimlanes. A full-page modal gives
+          it the whole viewport instead. Closing it falls back to the default
+          section rather than leaving activeSection on 'org-chart' with
+          nothing visible behind the modal. */}
+      <Modal
+        open={activeSection === 'org-chart'}
+        onClose={() => setActiveSection('company')}
+        title="Org chart"
+        fullPage
+      >
+        <OrgChartTab />
+      </Modal>
     </AppLayout>
   )
 }
