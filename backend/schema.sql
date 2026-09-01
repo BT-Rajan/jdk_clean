@@ -152,44 +152,12 @@ CREATE TABLE IF NOT EXISTS suppliers (
 -- ============================================================
 -- UNITS OF MEASURE
 -- ============================================================
--- Admin-managed unit list (kg/ton/bag/...) that raw_materials.unit and
--- bom_lines.unit are both validated against and looked up in for
--- quantity conversion -- see app/services/bom_service.py. Kept as
--- separate lookup rows rather than FK columns on those two tables to
--- avoid a wider migration; `unit` there stays a plain string that's
--- expected to match a code here.
-CREATE TABLE IF NOT EXISTS units_of_measure (
-    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    code            VARCHAR(20)  NOT NULL UNIQUE,
-    name            VARCHAR(60)  NOT NULL,
-    category        ENUM('weight','count','volume') NOT NULL,
-    -- How many of this category's base unit (the row with is_base=1 in
-    -- the same category) one unit of THIS row equals; the base unit's
-    -- own factor is always 1.
-    factor_to_base  DECIMAL(14,6) NOT NULL DEFAULT 1,
-    is_base         TINYINT(1) NOT NULL DEFAULT 0,
-    status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
-    deleted_at      DATETIME NULL,
-    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_by      BIGINT UNSIGNED NULL,
-    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    updated_by      BIGINT UNSIGNED NULL,
-    INDEX idx_uom_deleted_at (deleted_at),
-    INDEX idx_uom_category (category)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- Seed set: weight units the feature was requested for, plus a count
--- base unit so materials tracked by piece aren't forced into a weight
--- unit. `bag` = 50kg is a configurable assumption (a generic "bag" has
--- no fixed weight in reality) -- edit this row's factor_to_base under
--- Settings -> Units of measure if that's wrong for what's actually
--- being bagged, or add more specific bag-size units alongside it.
-INSERT INTO units_of_measure (code, name, category, factor_to_base, is_base, status) VALUES
-    ('kg',  'Kilogram',    'weight', 1,    1, 'active'),
-    ('ton', 'Metric Ton',  'weight', 1000, 0, 'active'),
-    ('bag', 'Bag (50kg)',  'weight', 50,   0, 'active'),
-    ('pcs', 'Pieces',      'count',  1,    1, 'active')
-ON DUPLICATE KEY UPDATE code = code;
+-- Units of Measure has been removed entirely (see
+-- migrations/2026-09-02_drop_units_of_measure.sql) -- raw_materials.unit
+-- and bom_lines.unit are plain, unvalidated strings again, same as
+-- products.unit always was. A BOM line's unit is expected to always
+-- match its component's own unit (the frontend auto-derives and locks
+-- it -- see BomEditor.tsx); there is no unit conversion.
 
 -- ============================================================
 -- RAW MATERIALS
@@ -311,7 +279,7 @@ CREATE TABLE IF NOT EXISTS bom_lines (
     component_type       ENUM('raw_material','product') NOT NULL,
     component_id          BIGINT UNSIGNED NOT NULL,        -- raw_materials.id or products.id depending on component_type
     quantity              DECIMAL(14,4) NOT NULL,
-    unit                   VARCHAR(20) NOT NULL,          -- validated against units_of_measure.code; see bom_service
+    unit                   VARCHAR(20) NOT NULL,          -- expected to match the component's own `unit`; see bom_service
     scrap_percent          DECIMAL(5,2) NOT NULL DEFAULT 0,
     deleted_at             DATETIME NULL,
     created_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

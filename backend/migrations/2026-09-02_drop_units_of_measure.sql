@@ -1,0 +1,23 @@
+-- Removes Units of Measure entirely: the master, its validation
+-- (raw_materials.unit, bom_lines.unit), and the automatic conversion
+-- between compatible units (e.g. "bag" -> "kg") in
+-- bom_service.explode_requirements. raw_materials.unit and
+-- bom_lines.unit go back to being plain, unvalidated strings -- exactly
+-- how products.unit has always worked. A BOM line's unit is now
+-- expected to always match its component's own unit (the frontend
+-- auto-derives and locks it, see BomEditor.tsx); there is no more unit
+-- conversion of any kind.
+--
+-- Safe to re-run: raw_materials.unit/bom_lines.unit/
+-- product_packaging_lines.unit were never real foreign keys to
+-- units_of_measure (app-level validation only), so dropping this table
+-- doesn't cascade or orphan anything in those tables -- existing data
+-- is untouched either way.
+--
+-- A fresh install via schema.sql no longer has this table at all --
+-- this file is only for upgrading an existing database.
+--
+-- Usage:
+--   mysql -u <user> -p <database> < backend/migrations/2026-09-02_drop_units_of_measure.sql
+
+DROP TABLE IF EXISTS units_of_measure;

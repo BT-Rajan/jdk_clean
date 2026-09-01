@@ -162,13 +162,6 @@ const DepartmentsListPage = lazy(() =>
 const DepartmentFormPage = lazy(() =>
   import('@/pages/departments/DepartmentFormPage').then((m) => ({ default: m.DepartmentFormPage })),
 )
-const UnitsListPage = lazy(() =>
-  import('@/pages/units/UnitsListPage').then((m) => ({ default: m.UnitsListPage })),
-)
-const UnitFormPage = lazy(() =>
-  import('@/pages/units/UnitFormPage').then((m) => ({ default: m.UnitFormPage })),
-)
-
 export function App() {
   return (
     <AuthProvider>
@@ -257,10 +250,6 @@ export function App() {
               <Route path="/departments" element={<DepartmentsListPage />} />
               <Route path="/departments/new" element={<DepartmentFormPage />} />
               <Route path="/departments/:id/edit" element={<DepartmentFormPage />} />
-
-              <Route path="/units" element={<UnitsListPage />} />
-              <Route path="/units/new" element={<UnitFormPage />} />
-              <Route path="/units/:id/edit" element={<UnitFormPage />} />
             </Route>
            </Route>
           </Route>

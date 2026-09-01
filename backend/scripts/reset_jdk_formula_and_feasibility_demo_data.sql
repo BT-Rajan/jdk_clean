@@ -23,7 +23,7 @@
 -- checks, deals) plus customers and suppliers, since existing rows
 -- referencing the old products/materials would otherwise block
 -- deleting them. Users, login credentials, RBAC, audit log,
--- departments, and units of measure are left untouched -- only the 3
+-- and departments are left untouched -- only the 3
 -- factory capacity settings below are touched, every other setting
 -- (company info, workflow automation, approval thresholds, ...) is
 -- left as-is. Run this only against a dev/test database whose existing

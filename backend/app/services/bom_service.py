@@ -5,7 +5,6 @@ from app.crud.child_lines import ChildLineCRUD
 from app.models.bom import BomLine
 from app.models.product import Product
 from app.models.raw_material import RawMaterial
-from app.models.unit_of_measure import UnitOfMeasure
 
 
 def _get_active_product(db: Session, product_id: int) -> Product:
@@ -16,58 +15,6 @@ def _get_active_product(db: Session, product_id: int) -> Product:
 
 TABLE_NAME = "bom_lines"
 MAX_BOM_DEPTH = 10  # guards against pathological/unintended deep nesting
-
-
-def _active_units_by_code(db: Session) -> dict[str, UnitOfMeasure]:
-    rows = db.query(UnitOfMeasure).filter(UnitOfMeasure.status == "active", UnitOfMeasure.deleted_at.is_(None)).all()
-    return {u.code: u for u in rows}
-
-
-def _validate_unit(db: Session, units_by_code: dict[str, UnitOfMeasure], component_type: str, component_id: int, unit: str) -> None:
-    """A BOM line's unit must be a recognized code from units_of_measure
-    (this is what makes the frontend's unit field an actual dropdown
-    rather than free text), and -- when the component is a raw material
-    whose own `unit` is also a recognized code -- must be in the same
-    category as that material's unit. Without this second check someone
-    could save a line in 'ton' against a material tracked in 'pcs' and
-    every downstream feasibility/MRP number for it would be silently
-    wrong; see explode_requirements for where the resulting (validated)
-    units get converted.
-    """
-    if unit not in units_by_code:
-        raise ValidationAppError(
-            f"'{unit}' is not a recognized unit. Add it under Master Data -> Materials -> Units of measure first, "
-            "or pick an existing one."
-        )
-    if component_type != "raw_material":
-        return
-    material = db.query(RawMaterial).filter(RawMaterial.id == component_id, RawMaterial.deleted_at.is_(None)).first()
-    if material is None or material.unit not in units_by_code:
-        return  # material's own unit predates this table -- nothing to check against
-    line_category = units_by_code[unit].category
-    material_category = units_by_code[material.unit].category
-    if line_category != material_category:
-        raise ValidationAppError(
-            f"Unit mismatch: this line is in '{unit}' ({line_category}) but {material.name} is tracked "
-            f"in '{material.unit}' ({material_category}). Pick a compatible unit so quantities convert correctly."
-        )
-
-
-def _convert_quantity(units_by_code: dict[str, UnitOfMeasure], quantity: float, from_unit: str, to_unit: str) -> float:
-    """Converts `quantity` expressed in from_unit into to_unit via each
-    unit's factor_to_base (same category only). Falls back to returning
-    quantity unchanged -- today's pre-conversion behavior -- when either
-    unit is unrecognized or they're in different categories; that
-    fallback only covers legacy data written before _validate_unit
-    existed, since a fresh save can no longer produce a mismatch.
-    """
-    if from_unit == to_unit:
-        return quantity
-    from_uom = units_by_code.get(from_unit)
-    to_uom = units_by_code.get(to_unit)
-    if from_uom is None or to_uom is None or from_uom.category != to_uom.category:
-        return quantity
-    return quantity * (float(from_uom.factor_to_base) / float(to_uom.factor_to_base))
 
 
 def _validate_component_exists(db: Session, component_type: str, component_id: int) -> None:
@@ -145,7 +92,6 @@ class BomLineCRUD(ChildLineCRUD[BomLine]):
     def _validate_line(self, db: Session, parent_id: int, line: dict) -> None:
         _validate_component_exists(db, line["component_type"], line["component_id"])
         _assert_no_cycle(db, parent_id, line["component_type"], line["component_id"])
-        _validate_unit(db, _active_units_by_code(db), line["component_type"], line["component_id"], line["unit"])
 
     def _duplicate_filter(self, parent_id: int, line: dict) -> list:
         return [
@@ -217,26 +163,17 @@ def explode_requirements(db: Session, product_id: int, quantity: float) -> dict[
     Sub-assemblies (component_type == 'product') are expanded rather than
     treated as leaves; only raw materials accumulate in the result.
 
-    Each BOM line's quantity is converted from the unit it was entered in
-    to the raw material's own unit (via units_of_measure) before being
-    added to the running total -- two lines for the same material from
-    different points in the tree can legitimately be in different units
-    (one sub-assembly's line in 'bag', another's in 'kg'), so conversion
-    has to happen per line, not once after summing. This is the fix that
-    makes feasibility/MRP numbers trustworthy when a BOM mixes units;
-    previously this function summed raw line.quantity values regardless
-    of unit.
+    A BOM line's quantity is assumed to already be expressed in the raw
+    material's own unit -- there's no unit conversion here (the BOM
+    editor auto-derives a line's unit from its component's own `unit`
+    and doesn't let it be changed, see BomEditor.tsx's defaultUnitFor),
+    so summing line.quantity directly is safe. If a BOM line's unit ever
+    genuinely differs from its material's unit (e.g. old data), this
+    silently sums the raw numbers rather than converting -- there is no
+    unit master to convert against anymore.
     """
     _get_active_product(db, product_id)
     totals: dict[int, float] = {}
-    units_by_code = _active_units_by_code(db)
-    material_unit_cache: dict[int, str | None] = {}
-
-    def _material_unit(material_id: int) -> str | None:
-        if material_id not in material_unit_cache:
-            material = db.query(RawMaterial).filter(RawMaterial.id == material_id).first()
-            material_unit_cache[material_id] = material.unit if material else None
-        return material_unit_cache[material_id]
 
     def _walk(current_product_id: int, multiplier: float, depth: int) -> None:
         if depth > MAX_BOM_DEPTH:
@@ -252,13 +189,7 @@ def explode_requirements(db: Session, product_id: int, quantity: float) -> dict[
             # scrap_percent% extra is consumed beyond the "net" quantity
             effective_qty = float(line.quantity) * (1 + float(line.scrap_percent) / 100) * multiplier
             if line.component_type == "raw_material":
-                material_unit = _material_unit(line.component_id)
-                converted_qty = (
-                    _convert_quantity(units_by_code, effective_qty, line.unit, material_unit)
-                    if material_unit
-                    else effective_qty
-                )
-                totals[line.component_id] = totals.get(line.component_id, 0.0) + converted_qty
+                totals[line.component_id] = totals.get(line.component_id, 0.0) + effective_qty
             else:
                 _walk(line.component_id, effective_qty, depth + 1)
 

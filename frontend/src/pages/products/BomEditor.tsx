@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Alert, Button, GlassCard, SelectField, Spinner, TextField } from '@/components/ui'
 import { addBomLine, deleteBomLine, explodeBom, getBom, replaceBom } from '@/api/bom'
 import { listProducts } from '@/api/products'
 import { listRawMaterials } from '@/api/rawMaterials'
-import { listUnits } from '@/api/units'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { generateId } from '@/lib/id'
@@ -50,10 +49,8 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
     [],
   )
   const productsFetcher = useCallback(() => listProducts({ page: 1, page_size: 200, status: 'active' }), [])
-  const unitsFetcher = useCallback(() => listUnits({ page: 1, page_size: 200, status: 'active' }), [])
   const { options: rawMaterials } = useSelectOptions(rawMaterialsFetcher)
   const { options: products } = useSelectOptions(productsFetcher)
-  const { options: units } = useSelectOptions(unitsFetcher)
 
   const [explodeQty, setExplodeQty] = useState('1')
   const [explosion, setExplosion] = useState<BomExplosionResult | null>(null)
@@ -86,38 +83,16 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
     return type === 'raw_material' ? rawMaterials : products
   }
 
-  // Every raw material/product carries its own `unit` (the one it's
-  // stocked/produced in) -- keyed by code here so a BOM line's dropdown
-  // can be narrowed to units in the same category as whatever component
-  // is currently selected on that line, instead of the full list. This
-  // is what stops someone picking e.g. a piece-count unit for a
-  // weight-tracked material in the UI, on top of the same check the
-  // backend already enforces on save (see bom_service._validate_unit).
-  const unitsByCode = useMemo(() => Object.fromEntries(units.map((u) => [u.code, u])), [units])
-
-  function compatibleUnits(type: ComponentType, componentId: number) {
-    if (!componentId) return units
-    const component = componentOptions(type).find((opt) => opt.id === componentId)
-    const componentUnit = component ? unitsByCode[component.unit] : undefined
-    // Unrecognized/legacy component unit -- nothing to narrow against,
-    // same fallback the backend uses (bom_service._validate_unit).
-    return componentUnit ? units.filter((u) => u.category === componentUnit.category) : units
-  }
-
-  /** Component's own unit is the correct default for a new line -- the
-   * user can still change it (e.g. entering "ton" against a
-   * kg-tracked material), but starting from the material's own unit
-   * means zero conversion ambiguity unless they deliberately choose
-   * otherwise. Only defaults to it when that unit is itself a
-   * recognized code, though -- a legacy material whose `unit` predates
-   * units_of_measure would otherwise get defaulted to a value the
-   * backend rejects on save (bom_service._validate_unit requires a
-   * recognized code unconditionally); leaving it blank forces an
-   * explicit, valid pick instead. */
+  /** A BOM line's unit always mirrors whatever unit its component is
+   * itself stocked/produced in -- there's no unit conversion in the app
+   * (see bom_service.explode_requirements, which sums quantities
+   * directly), so letting a line's unit differ from its component's own
+   * unit would silently produce wrong requirement totals rather than
+   * converting correctly. Auto-derived and not user-editable, instead
+   * of a picker, to make that mismatch structurally impossible. */
   function defaultUnitFor(type: ComponentType, componentId: number): string {
     const component = componentOptions(type).find((opt) => opt.id === componentId)
-    if (!component) return ''
-    return unitsByCode[component.unit] ? component.unit : ''
+    return component?.unit ?? ''
   }
 
   function updateLine(key: string, patch: Partial<EditableLine>) {
@@ -236,11 +211,8 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
           <h2 className="font-display text-lg font-medium text-white">Bill of materials</h2>
         </div>
         <p className="mb-4 text-xs text-white/40">
-          Picking a component defaults its Unit to whatever that material/product is stocked in, and the Unit
-          dropdown only offers units compatible with it (e.g. only weight units for a kg-tracked material) — so a
-          category mismatch (weight vs. piece-count) can't be selected here in the first place. Quantities then
-          convert automatically between compatible units (e.g. "bag" against a material tracked in "kg") using the
-          factors set under Master Data → Materials → Units of measure.
+          A line's Unit always matches whatever unit its component is itself stocked/produced in -- there's no
+          conversion between units, so quantities here are read directly in that unit.
         </p>
 
         {lines.length === 0 ? (
@@ -298,19 +270,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <SelectField
-                    label="Unit"
-                    value={line.unit}
-                    disabled={!canEdit}
-                    onChange={(e) => updateLine(line.key, { unit: e.target.value })}
-                  >
-                    <option value="">Choose…</option>
-                    {compatibleUnits(line.component_type, line.component_id).map((u) => (
-                      <option key={u.id} value={u.code}>
-                        {u.name} ({u.code})
-                      </option>
-                    ))}
-                  </SelectField>
+                  <TextField label="Unit" value={line.unit} disabled readOnly />
                 </div>
                 <div className="sm:col-span-1">
                   <TextField
@@ -391,18 +351,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                 />
               </div>
               <div className="sm:col-span-2">
-                <SelectField
-                  label="Unit"
-                  value={newLine.unit}
-                  onChange={(e) => setNewLine((prev) => ({ ...prev, unit: e.target.value }))}
-                >
-                  <option value="">Choose…</option>
-                  {compatibleUnits(newLine.component_type, newLine.component_id).map((u) => (
-                    <option key={u.id} value={u.code}>
-                      {u.name} ({u.code})
-                    </option>
-                  ))}
-                </SelectField>
+                <TextField label="Unit" value={newLine.unit} disabled readOnly />
               </div>
               <div className="sm:col-span-1">
                 <TextField

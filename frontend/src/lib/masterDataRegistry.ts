@@ -56,7 +56,6 @@ export const MASTER_DATA_REGISTRY: MasterDataEntry[] = [
   { key: 'suppliers', label: 'Suppliers', group: 'commercial', route: '/suppliers', pageKey: 'suppliers' },
   { key: 'raw_materials', label: 'Raw Materials', group: 'materials', route: '/raw-materials', pageKey: 'raw_materials' },
   { key: 'products', label: 'Products', group: 'materials', route: '/products', pageKey: 'products' },
-  { key: 'units', label: 'Units of Measure', group: 'materials', route: '/units', adminOnly: true },
   { key: 'machines', label: 'Machines', group: 'manufacturing', route: '/machines', pageKey: 'machines' },
 ]
 
