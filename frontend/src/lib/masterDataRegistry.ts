@@ -52,7 +52,6 @@ export const MASTER_DATA_REGISTRY: MasterDataEntry[] = [
     route: '/roles-permissions',
     adminOnly: true,
   },
-  { key: 'org-chart', label: 'Org Chart', group: 'people_org', route: '/admin?section=org-chart', adminOnly: true },
   { key: 'customers', label: 'Customers', group: 'commercial', route: '/customers', pageKey: 'customers' },
   { key: 'suppliers', label: 'Suppliers', group: 'commercial', route: '/suppliers', pageKey: 'suppliers' },
   { key: 'raw_materials', label: 'Raw Materials', group: 'materials', route: '/raw-materials', pageKey: 'raw_materials' },
