@@ -12,6 +12,9 @@ import type { CalendarEvent, MentionableUser } from '@/types/calendar'
 import { getMonthGrid, isPastDate, isToday, MONTH_LABELS, toISODate, WEEKDAY_LABELS } from '@/lib/calendarGrid'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { cn } from '@/lib/cn'
+import { DayActionsModal } from './DayActionsModal'
+import { LogProductionModal } from '@/pages/production/LogProductionModal'
+import { LogSaleModal } from '@/pages/orders/LogSaleModal'
 
 interface CalendarModalProps {
   open: boolean
@@ -38,6 +41,10 @@ export function CalendarModal({ open, onClose }: CalendarModalProps) {
   const [deleteTarget, setDeleteTarget] = useState<CalendarEvent | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  const [dayActionsOpen, setDayActionsOpen] = useState(false)
+  const [logProductionOpen, setLogProductionOpen] = useState(false)
+  const [logSaleOpen, setLogSaleOpen] = useState(false)
+
   // Reset to the current month/day every time the calendar is opened, so
   // it doesn't reopen wherever it was last left.
   useEffect(() => {
@@ -49,6 +56,9 @@ export function CalendarModal({ open, onClose }: CalendarModalProps) {
     setForm(EMPTY_FORM)
     setEditingId(null)
     setSaveError(null)
+    setDayActionsOpen(false)
+    setLogProductionOpen(false)
+    setLogSaleOpen(false)
     listMentionableUsers()
       .then(setMentionableUsers)
       .catch(() => setMentionableUsers([]))
@@ -108,6 +118,7 @@ export function CalendarModal({ open, onClose }: CalendarModalProps) {
     setForm(EMPTY_FORM)
     setEditingId(null)
     setSaveError(null)
+    setDayActionsOpen(true)
   }
 
   function startEdit(event: CalendarEvent) {
@@ -407,6 +418,40 @@ export function CalendarModal({ open, onClose }: CalendarModalProps) {
         busy={deleting}
         onConfirm={handleDeleteConfirmed}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      <DayActionsModal
+        open={dayActionsOpen}
+        date={selectedDate}
+        onClose={() => setDayActionsOpen(false)}
+        onPickProduction={() => {
+          setDayActionsOpen(false)
+          setLogProductionOpen(true)
+        }}
+        onPickSale={() => {
+          setDayActionsOpen(false)
+          setLogSaleOpen(true)
+        }}
+      />
+
+      <LogProductionModal
+        open={logProductionOpen}
+        defaultDate={selectedDate}
+        onClose={() => setLogProductionOpen(false)}
+        onLogged={() => {
+          setLogProductionOpen(false)
+          setDayActionsOpen(true)
+        }}
+      />
+
+      <LogSaleModal
+        open={logSaleOpen}
+        defaultDate={selectedDate}
+        onClose={() => setLogSaleOpen(false)}
+        onLogged={() => {
+          setLogSaleOpen(false)
+          setDayActionsOpen(true)
+        }}
       />
     </>
   )

@@ -73,13 +73,18 @@ class OrderQuickLogLine(BaseModel):
 class OrderQuickLog(BaseModel):
     """Log a sale that's already happened -- e.g. a walk-in/cash sale --
     in one call instead of working through draft -> confirm -> deliver
-    by hand. Always fulfilled from stock on hand right now (see
-    order_service.log_sale); order_date/delivery_date are today, not
-    user-supplied."""
+    by hand. Always fulfilled from stock on hand as of `date` (see
+    order_service.log_sale), which becomes both order_date and
+    delivery_date."""
 
     customer_id: int
     lines: list[OrderQuickLogLine] = Field(min_length=1)
     notes: str | None = None
+    # Defaults to today when omitted (the Orders list's button); the
+    # calendar's day-actions popup sends the clicked day instead.
+    # Validated server-side against MAX_BACKDATE_DAYS -- see
+    # order_service.log_sale.
+    entry_date: date | None = None
 
 
 class OrderStatusUpdate(BaseModel):

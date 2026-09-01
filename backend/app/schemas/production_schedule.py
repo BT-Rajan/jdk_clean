@@ -54,6 +54,11 @@ class ProductionQuickLog(BaseModel):
     product_id: int
     quantity: float = Field(gt=0)
     notes: str | None = None
+    # Defaults to today when omitted (the Production list's button);
+    # the calendar's day-actions popup sends the clicked day instead.
+    # Validated server-side against MAX_BACKDATE_DAYS -- see
+    # production_service.log_production.
+    entry_date: date | None = None
 
 
 class ProductionScheduleStatusUpdate(BaseModel):

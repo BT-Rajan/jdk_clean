@@ -30,6 +30,8 @@ export interface ProductionQuickLogPayload {
   product_id: number
   quantity: number
   notes?: string
+  /** ISO date (YYYY-MM-DD) -- defaults to today server-side when omitted. */
+  entry_date?: string
 }
 
 /** Creates and completes a batch in one call, for production that's

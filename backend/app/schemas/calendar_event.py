@@ -51,3 +51,48 @@ class MentionableUserOut(BaseModel):
     full_name: str
 
     model_config = {"from_attributes": True}
+
+
+class DaySnapshotProductionOut(BaseModel):
+    id: int
+    batch_number: str
+    product_code: str | None = None
+    product_name: str | None = None
+    status: str
+    planned_quantity: float
+    produced_quantity: float
+
+    model_config = {"from_attributes": True}
+
+    @staticmethod
+    def from_model(batch) -> "DaySnapshotProductionOut":
+        data = DaySnapshotProductionOut.model_validate(batch)
+        data.product_code = batch.product.code if batch.product else None
+        data.product_name = batch.product.name if batch.product else None
+        return data
+
+
+class DaySnapshotSaleOut(BaseModel):
+    id: int
+    order_number: str
+    customer_name: str | None = None
+    status: str
+    total_amount: float
+
+    model_config = {"from_attributes": True}
+
+    @staticmethod
+    def from_model(order) -> "DaySnapshotSaleOut":
+        data = DaySnapshotSaleOut.model_validate(order)
+        data.customer_name = order.customer.name if order.customer else None
+        return data
+
+
+class DaySnapshotOut(BaseModel):
+    date: date
+    production: list[DaySnapshotProductionOut]
+    sales: list[DaySnapshotSaleOut]
+    # Whether "Log production"/"Log a sale" can still target this date --
+    # not in the future, not more than MAX_BACKDATE_DAYS in the past (see
+    # core/workflow.py's is_within_backdate_window).
+    can_log: bool

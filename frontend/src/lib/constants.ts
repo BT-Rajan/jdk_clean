@@ -6,3 +6,12 @@
  * but should still match everyone else.
  */
 export const DEFAULT_PAGE_SIZE = 10
+
+/**
+ * Mirrors backend/app/core/workflow.py's MAX_BACKDATE_DAYS -- how many
+ * days in the past a "quick log" entry (production output, a sale) can
+ * be backdated to. Display-only here (the real enforcement is
+ * server-side); used by the calendar's day-actions popup to explain why
+ * logging is disabled for a given day.
+ */
+export const MAX_BACKDATE_DAYS = 3

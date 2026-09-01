@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.exceptions import AppError, ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
 from app.core.pricing import compute_document_totals, price_line
-from app.core.workflow import assert_reason_given, assert_transition_allowed
+from app.core.workflow import assert_reason_given, assert_transition_allowed, assert_within_backdate_window
 from app.models.customer import Customer
 from app.models.delivery_note import DeliveryNote
 from app.models.order import (
@@ -201,7 +201,12 @@ def update_order(db: Session, order_id: int, data: dict, user_id: int | None = N
 
 
 def log_sale(
-    db: Session, customer_id: int, lines: list[dict], notes: str | None = None, user_id: int | None = None
+    db: Session,
+    customer_id: int,
+    lines: list[dict],
+    notes: str | None = None,
+    entry_date: date | None = None,
+    user_id: int | None = None,
 ) -> Order:
     """One-step logging for a sale that's already happened -- e.g. a
     walk-in/cash sale entered after the fact -- instead of working
@@ -211,6 +216,12 @@ def log_sale(
     trail (an order plus a delivery note) and moves stock through the
     same reserve-then-issue path as always -- there's no separate,
     duplicated "quick" code path.
+
+    `entry_date` defaults to today (e.g. the Orders list's "Log a sale"
+    button); the calendar's day-actions popup passes the clicked day
+    instead, so a person can catch up on a sale they forgot to log --
+    but only up to MAX_BACKDATE_DAYS back, and never into the future
+    (see assert_within_backdate_window).
 
     Every line is checked against available finished-goods stock before
     anything is created; the order is then taken straight from
@@ -227,6 +238,10 @@ def log_sale(
     doesn't leave a dangling order behind; the caller just sees the
     original error.
     """
+    today = datetime.now(timezone.utc).date()
+    target_date = entry_date or today
+    assert_within_backdate_window(target_date, today, "a sale")
+
     shortfalls = []
     for line in lines:
         product = (
@@ -244,10 +259,9 @@ def log_sale(
     if shortfalls:
         raise ValidationAppError("Not enough stock on hand to log this sale: " + "; ".join(shortfalls))
 
-    today = datetime.now(timezone.utc).date()
     order = create_order(
         db,
-        {"customer_id": customer_id, "order_date": today, "notes": notes, "lines": lines},
+        {"customer_id": customer_id, "order_date": target_date, "notes": notes, "lines": lines},
         user_id=user_id,
     )
     try:
@@ -257,7 +271,7 @@ def log_sale(
         from app.services import delivery_note_service
 
         note = delivery_note_service.create_delivery_note(
-            db, {"order_id": order.id, "delivery_date": today}, user_id=user_id
+            db, {"order_id": order.id, "delivery_date": target_date}, user_id=user_id
         )
         delivery_note_service.change_status(db, note.id, "issued", user_id=user_id)
     except AppError:

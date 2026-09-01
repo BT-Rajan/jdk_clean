@@ -42,6 +42,8 @@ export interface OrderQuickLogPayload {
   customer_id: number
   lines: OrderQuickLogLinePayload[]
   notes?: string
+  /** ISO date (YYYY-MM-DD) -- defaults to today server-side when omitted. */
+  entry_date?: string
 }
 
 /** Creates an order, confirms it, and issues a delivery note for it in

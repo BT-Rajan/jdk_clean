@@ -106,7 +106,12 @@ def log_sale(
     call instead of working through 3 separate screens. See
     order_service.log_sale."""
     order = order_service.log_sale(
-        db, payload.customer_id, [line.model_dump() for line in payload.lines], notes=payload.notes, user_id=user.id
+        db,
+        payload.customer_id,
+        [line.model_dump() for line in payload.lines],
+        notes=payload.notes,
+        entry_date=payload.entry_date,
+        user_id=user.id,
     )
     return OrderOut.from_model(order)
 

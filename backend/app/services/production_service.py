@@ -1,10 +1,10 @@
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
-from app.core.workflow import assert_reason_given, assert_transition_allowed
+from app.core.workflow import assert_reason_given, assert_transition_allowed, assert_within_backdate_window
 from app.models.order import Order
 from app.models.product import Product
 from app.models.production_schedule import ALLOWED_TRANSITIONS, ProductionSchedule
@@ -326,7 +326,12 @@ def change_status(
 
 
 def log_production(
-    db: Session, product_id: int, quantity: float, notes: str | None = None, user_id: int | None = None
+    db: Session,
+    product_id: int,
+    quantity: float,
+    notes: str | None = None,
+    entry_date: date | None = None,
+    user_id: int | None = None,
 ) -> ProductionSchedule:
     """One-step logging for production that's already happened -- e.g.
     entering today's output at day's end, rather than planning a batch
@@ -338,6 +343,12 @@ def log_production(
     auto-progression hooks if it happened to be tied to one -- there's no
     separate, duplicated "quick" code path.
 
+    `entry_date` defaults to today (e.g. the Production list's "Log
+    production" button); the calendar's day-actions popup passes the
+    clicked day instead, so a person can catch up on an entry they
+    forgot to make -- but only up to MAX_BACKDATE_DAYS back, and never
+    into the future (see assert_within_backdate_window).
+
     Not tied to any order (make-to-stock, the normal case for a
     same-day log) and always runs on the product's own default machine
     (create_batch already falls back to product.machine_id when none is
@@ -348,6 +359,9 @@ def log_production(
     error and nothing else changed.
     """
     today = datetime.now(timezone.utc).date()
+    target_date = entry_date or today
+    assert_within_backdate_window(target_date, today, "production")
+
     batch = create_batch(
         db,
         {
@@ -355,8 +369,8 @@ def log_production(
             "machine_id": None,
             "order_id": None,
             "planned_quantity": quantity,
-            "scheduled_start": today,
-            "scheduled_end": today,
+            "scheduled_start": target_date,
+            "scheduled_end": target_date,
             "notes": notes,
         },
         user_id=user_id,

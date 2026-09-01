@@ -4,10 +4,13 @@ import re
 from datetime import date, datetime, timezone
 
 from sqlalchemy import or_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import NotFoundError, PermissionError_
+from app.core.workflow import is_within_backdate_window
 from app.models.calendar_event import CalendarEvent, CalendarEventMention
+from app.models.order import Order
+from app.models.production_schedule import ProductionSchedule
 from app.models.user import User
 from app.schemas.calendar_event import CalendarEventCreate, CalendarEventUpdate
 
@@ -124,6 +127,38 @@ def delete_event(db: Session, user: User, event_id: int) -> None:
     event.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
     event.updated_by = user.id
     db.commit()
+
+
+def get_day_snapshot(db: Session, target_date: date) -> dict:
+    """What's already logged against `target_date` -- production batches
+    scheduled/completed for that day and sales orders dated that day --
+    plus whether it's still a legal target for "Log production"/"Log a
+    sale" (see core/workflow.MAX_BACKDATE_DAYS). Powers the calendar's
+    day-actions popup: a snapshot of what happened, alongside the option
+    to log something that hasn't been entered yet.
+    """
+    today = datetime.now(timezone.utc).date()
+
+    batches = (
+        db.query(ProductionSchedule)
+        .options(joinedload(ProductionSchedule.product))
+        .filter(ProductionSchedule.deleted_at.is_(None), ProductionSchedule.scheduled_start == target_date)
+        .order_by(ProductionSchedule.id)
+        .all()
+    )
+    orders = (
+        db.query(Order)
+        .options(joinedload(Order.customer))
+        .filter(Order.deleted_at.is_(None), Order.order_date == target_date)
+        .order_by(Order.id)
+        .all()
+    )
+    return {
+        "date": target_date,
+        "production": batches,
+        "sales": orders,
+        "can_log": is_within_backdate_window(target_date, today),
+    }
 
 
 def list_mentionable_users(db: Session) -> list[User]:

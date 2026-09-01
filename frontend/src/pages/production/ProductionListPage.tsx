@@ -1,6 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
+import { useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
@@ -8,95 +6,19 @@ import {
   Button,
   EmptyState,
   GlassCard,
-  Modal,
   Pagination,
   SelectField,
   SortableHeader,
   Spinner,
   StatusBadge,
-  TextareaField,
   TextField,
 } from '@/components/ui'
-import { listProductionBatches, logProduction } from '@/api/production'
-import { listProducts } from '@/api/products'
+import { listProductionBatches } from '@/api/production'
 import { usePagedResource } from '@/hooks/usePagedResource'
-import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
 import { formatDate } from '@/lib/dateFormat'
-import { getApiErrorMessage } from '@/lib/apiError'
-import {
-  productionQuickLogSchema,
-  type ProductionQuickLogFormValues,
-  type ProductionQuickLogSubmitValues,
-} from '@/lib/validation'
-
-function useProductOptions() {
-  const fetcher = useCallback(() => listProducts({ page: 1, page_size: 200, status: 'active' }), [])
-  return useSelectOptions(fetcher)
-}
-
-function LogProductionModal({ open, onClose, onLogged }: { open: boolean; onClose: () => void; onLogged: () => void }) {
-  const { options: products } = useProductOptions()
-  const [formError, setFormError] = useState<string | null>(null)
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { errors, isSubmitting },
-  } = useForm<ProductionQuickLogFormValues, unknown, ProductionQuickLogSubmitValues>({
-    resolver: zodResolver(productionQuickLogSchema),
-    defaultValues: { product_id: 0, quantity: 1, notes: '' },
-  })
-
-  useEffect(() => {
-    if (open) {
-      setFormError(null)
-      reset({ product_id: 0, quantity: 1, notes: '' })
-    }
-  }, [open, reset])
-
-  async function onSubmit(values: ProductionQuickLogSubmitValues) {
-    setFormError(null)
-    try {
-      await logProduction({ product_id: values.product_id, quantity: values.quantity, notes: values.notes || undefined })
-      onLogged()
-      onClose()
-    } catch (err) {
-      setFormError(getApiErrorMessage(err))
-    }
-  }
-
-  return (
-    <Modal open={open} title="Log production" onClose={onClose}>
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-4">
-        <p className="text-xs text-white/40">
-          For output that's already happened -- creates and completes a batch in one step, consuming raw materials
-          per the product's formula and adding the finished goods to stock right away.
-        </p>
-        <Alert variant="error">{formError}</Alert>
-        <SelectField label="Product" error={errors.product_id?.message} {...register('product_id')}>
-          <option value="">Choose…</option>
-          {products.map((p) => (
-            <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
-          ))}
-        </SelectField>
-        <TextField
-          label="Quantity produced"
-          type="number"
-          step="0.0001"
-          error={errors.quantity?.message}
-          {...register('quantity')}
-        />
-        <TextareaField label="Notes (optional)" {...register('notes')} />
-        <div className="mt-2 flex justify-end gap-3">
-          <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
-          <Button type="submit" isLoading={isSubmitting}>Log production</Button>
-        </div>
-      </form>
-    </Modal>
-  )
-}
+import { LogProductionModal } from './LogProductionModal'
 
 export function ProductionListPage() {
   const { user } = useAuth()

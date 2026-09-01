@@ -1,5 +1,5 @@
 import { apiClient } from './client'
-import type { CalendarEvent, CalendarEventInput, MentionableUser } from '@/types/calendar'
+import type { CalendarEvent, CalendarEventInput, DaySnapshot, MentionableUser } from '@/types/calendar'
 
 export async function listCalendarEvents(year: number, month: number): Promise<CalendarEvent[]> {
   const { data } = await apiClient.get<CalendarEvent[]>('/api/calendar/events', { params: { year, month } })
@@ -22,6 +22,14 @@ export async function deleteCalendarEvent(id: number): Promise<void> {
 
 export async function listMentionableUsers(): Promise<MentionableUser[]> {
   const { data } = await apiClient.get<MentionableUser[]>('/api/calendar/mentionable-users')
+  return data
+}
+
+/** What's already logged for a given day (production, sales) plus
+ * whether it's still a legal target for logging something new -- powers
+ * the calendar's day-actions popup. */
+export async function getDaySnapshot(isoDate: string): Promise<DaySnapshot> {
+  const { data } = await apiClient.get<DaySnapshot>('/api/calendar/day-snapshot', { params: { date: isoDate } })
   return data
 }
 

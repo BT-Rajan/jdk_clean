@@ -22,3 +22,29 @@ export interface CalendarEventInput {
   title: string
   notes?: string | null
 }
+
+export interface DaySnapshotProduction {
+  id: number
+  batch_number: string
+  product_code: string | null
+  product_name: string | null
+  status: string
+  planned_quantity: number
+  produced_quantity: number
+}
+
+export interface DaySnapshotSale {
+  id: number
+  order_number: string
+  customer_name: string | null
+  status: string
+  total_amount: number
+}
+
+export interface DaySnapshot {
+  date: string // YYYY-MM-DD
+  production: DaySnapshotProduction[]
+  sales: DaySnapshotSale[]
+  /** Whether "Log production"/"Log a sale" can still target this date. */
+  can_log: boolean
+}

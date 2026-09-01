@@ -84,7 +84,7 @@ def log_production(
     and completes a batch in a single call instead of planning, starting,
     then completing it by hand. See production_service.log_production."""
     batch = production_service.log_production(
-        db, payload.product_id, payload.quantity, notes=payload.notes, user_id=user.id
+        db, payload.product_id, payload.quantity, notes=payload.notes, entry_date=payload.entry_date, user_id=user.id
     )
     return ProductionScheduleOut.from_model(batch)
 

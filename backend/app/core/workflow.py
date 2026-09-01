@@ -20,7 +20,35 @@ checking a transition against whichever table a module defines, not the
 states themselves.
 """
 
+from datetime import date, timedelta
+
 from app.core.exceptions import ConflictError, ValidationAppError
+
+# How many days in the past a "quick log" entry (production output, a
+# sale) can be backdated to -- e.g. logging yesterday's production the
+# next morning is fine, but the books shouldn't be rewritable
+# indefinitely. Shared by production_service.log_production and
+# order_service.log_sale, and by calendar_service's day-snapshot (to
+# tell the frontend whether "Log production"/"Log a sale" should even
+# be offered for a given day).
+MAX_BACKDATE_DAYS = 3
+
+
+def is_within_backdate_window(entry_date: date, today: date) -> bool:
+    return today - timedelta(days=MAX_BACKDATE_DAYS) <= entry_date <= today
+
+
+def assert_within_backdate_window(entry_date: date, today: date, entity_label: str) -> None:
+    """Raises ValidationAppError if `entry_date` is in the future, or
+    more than MAX_BACKDATE_DAYS in the past relative to `today`."""
+    if entry_date > today:
+        raise ValidationAppError(f"Cannot log {entity_label} for a future date.")
+    if not is_within_backdate_window(entry_date, today):
+        earliest = today - timedelta(days=MAX_BACKDATE_DAYS)
+        raise ValidationAppError(
+            f"Cannot log {entity_label} more than {MAX_BACKDATE_DAYS} days in the past "
+            f"(earliest allowed: {earliest.isoformat()})."
+        )
 
 
 def assert_transition_allowed(
