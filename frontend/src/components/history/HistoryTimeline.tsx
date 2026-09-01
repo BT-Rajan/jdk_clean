@@ -16,6 +16,13 @@ interface HistoryTimelineProps {
    * /api/products/{id}/bom/history). Takes precedence over
    * resourcePath/id when provided. */
   url?: string
+  /** Heading shown on the collapsed bar. Defaults to "History". Pages
+   * that mount more than one timeline for the same record (e.g. a
+   * product's own history alongside its BOM and packaging history)
+   * must set distinct titles here, or the identical "History" headers
+   * read as the same section duplicated rather than three different
+   * audit trails. */
+  title?: string
 }
 
 function describeEntry(entry: HistoryEntry): string {
@@ -41,7 +48,7 @@ function describeEntry(entry: HistoryEntry): string {
  * show -- one shared component instead of building this per page.
  * Collapsed by default; fetches only when first expanded, so it costs
  * nothing on pages where nobody looks at it. */
-export function HistoryTimeline({ resourcePath, id, url }: HistoryTimelineProps) {
+export function HistoryTimeline({ resourcePath, id, url, title = 'History' }: HistoryTimelineProps) {
   const [open, setOpen] = useState(false)
   const [entries, setEntries] = useState<HistoryEntry[] | null>(null)
   const [loading, setLoading] = useState(false)
@@ -67,7 +74,7 @@ export function HistoryTimeline({ resourcePath, id, url }: HistoryTimelineProps)
         onClick={handleToggle}
         className="flex w-full items-center justify-between text-left"
       >
-        <h2 className="font-display text-base font-medium text-white">History</h2>
+        <h2 className="font-display text-base font-medium text-white">{title}</h2>
         <span className="text-sm text-white/40">{open ? 'Hide ▲' : 'Show ▼'}</span>
       </button>
 

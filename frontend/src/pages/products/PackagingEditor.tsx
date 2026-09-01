@@ -284,7 +284,7 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
         )}
       </GlassCard>
 
-      <HistoryTimeline url={`/api/products/${productId}/packaging/history`} />
+      <HistoryTimeline url={`/api/products/${productId}/packaging/history`} title="Packaging history" />
     </div>
   )
 }

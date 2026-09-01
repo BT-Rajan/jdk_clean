@@ -212,7 +212,7 @@ export function ProductDetailPage() {
       </div>
 
       <div className="mt-6">
-        <HistoryTimeline resourcePath="/api/products" id={productId} />
+        <HistoryTimeline resourcePath="/api/products" id={productId} title="Product history" />
       </div>
 
       <div className="mt-6">
