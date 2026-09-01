@@ -30,6 +30,9 @@ export interface MasterListPageProps<T> {
   searchPlaceholder?: string
   /** Set false for a master with no status column (rare -- most have one). */
   hasStatusFilter?: boolean
+  /** Set false to hide the free-text search box entirely, e.g. when a
+   * master's extraFilters already cover how people narrow the list. */
+  hasSearch?: boolean
   canCreate?: boolean
   createLabel?: string
   onCreate?: () => void
@@ -54,6 +57,7 @@ export function MasterListPage<T>({
   rowKey,
   searchPlaceholder = 'Search…',
   hasStatusFilter = true,
+  hasSearch = true,
   canCreate = false,
   createLabel,
   onCreate,
@@ -87,24 +91,30 @@ export function MasterListPage<T>({
         {canCreate && onCreate && <Button onClick={onCreate}>{createLabel ?? `New ${noun.replace(/s$/, '')}`}</Button>}
       </div>
 
-      <div
-        className="mb-6 grid grid-cols-1 gap-4"
-        style={{ gridTemplateColumns: hasStatusFilter ? '1fr 220px' : '1fr' }}
-      >
-        <TextField
-          label="Search"
-          placeholder={searchPlaceholder}
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
-        {hasStatusFilter && (
-          <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">All statuses</option>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </SelectField>
-        )}
-      </div>
+      {(hasSearch || hasStatusFilter) && (
+        <div
+          className="mb-6 grid grid-cols-1 gap-4"
+          style={{
+            gridTemplateColumns: hasSearch && hasStatusFilter ? '1fr 220px' : '1fr',
+          }}
+        >
+          {hasSearch && (
+            <TextField
+              label="Search"
+              placeholder={searchPlaceholder}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+          )}
+          {hasStatusFilter && (
+            <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </SelectField>
+          )}
+        </div>
+      )}
       {extraFilters}
 
       <Alert variant="error">{error}</Alert>

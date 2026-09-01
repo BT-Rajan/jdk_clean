@@ -35,7 +35,9 @@ function useDepartmentOptions() {
  * see app/crud/master_data.py) but the UI never exposed; the generic
  * MasterListPage status filter is skipped (hasStatusFilter=false) since
  * it assumes a string status ENUM and users.is_active is a real boolean
- * (see backend/app/api/deps.py's dedicated is_active param). */
+ * (see backend/app/api/deps.py's dedicated is_active param). Free-text
+ * search is skipped too (hasSearch=false) -- Role/Department/Active
+ * cover how this list gets narrowed. */
 export function UsersListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
@@ -89,8 +91,8 @@ export function UsersListPage() {
       fetcher={fetcher}
       columns={columns}
       rowKey={(u) => u.id}
-      searchPlaceholder="Username, name, email…"
       hasStatusFilter={false}
+      hasSearch={false}
       canCreate={isAdmin(user?.role)}
       createLabel="New user"
       onCreate={() => navigate('/users/new')}
