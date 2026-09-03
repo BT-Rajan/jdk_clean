@@ -148,3 +148,26 @@ body {
   -webkit-background-clip: text;
   color: transparent;
 }
+
+/* mammoth's converted-from-.docx HTML carries no border styling of its
+   own (Word tables are usually borderless-but-gridlined in the editor,
+   not in the printed/exported file) -- without this, TemplateFieldMapperModal's
+   contentEditable area reads as a wall of un-gridded text and admins
+   can't see where table cells actually start and end while placing
+   fields. Scoped to that one editor rather than every table site-wide. */
+@utility doc-template-editor {
+  & table {
+    border-collapse: collapse;
+    width: 100%;
+    margin-bottom: 0.75rem;
+  }
+  & td,
+  & th {
+    border: 1px solid color-mix(in oklab, black 15%, transparent);
+    padding: 0.35rem 0.5rem;
+    vertical-align: top;
+  }
+  & p {
+    margin-bottom: 0.35rem;
+  }
+}

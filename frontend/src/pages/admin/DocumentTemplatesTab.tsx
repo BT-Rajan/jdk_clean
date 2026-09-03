@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Alert, Button, ConfirmDialog, GlassCard, Spinner } from '@/components/ui'
 import { downloadDocTemplate, listDocTemplates, resetDocTemplate, uploadDocTemplate } from '@/api/docTemplates'
+import { TemplateFieldMapperModal } from './TemplateFieldMapperModal'
 import type { DocTemplateSlot, DocType } from '@/types/docTemplate'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDateTime } from '@/lib/dateFormat'
@@ -8,7 +9,15 @@ import { cn } from '@/lib/cn'
 
 const DOC_TYPE_ORDER: DocType[] = ['feasibility', 'quotation', 'order', 'delivery_note']
 
-function SlotCard({ slot, onChanged }: { slot: DocTemplateSlot; onChanged: (updated: DocTemplateSlot) => void }) {
+function SlotCard({
+  slot,
+  onChanged,
+  onMapFields,
+}: {
+  slot: DocTemplateSlot
+  onChanged: (updated: DocTemplateSlot) => void
+  onMapFields: (slot: DocTemplateSlot) => void
+}) {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmResetOpen, setConfirmResetOpen] = useState(false)
@@ -76,6 +85,9 @@ function SlotCard({ slot, onChanged }: { slot: DocTemplateSlot; onChanged: (upda
       <Alert variant="error">{error}</Alert>
 
       <div className="flex flex-wrap gap-2">
+        <Button variant="ghost" size="sm" onClick={() => onMapFields(slot)} disabled={busy}>
+          Map fields
+        </Button>
         <Button variant="ghost" size="sm" onClick={handleDownload} isLoading={busy}>
           Download current
         </Button>
@@ -118,6 +130,7 @@ function SlotCard({ slot, onChanged }: { slot: DocTemplateSlot; onChanged: (upda
 export function DocumentTemplatesTab() {
   const [slots, setSlots] = useState<DocTemplateSlot[] | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [mappingSlot, setMappingSlot] = useState<DocTemplateSlot | null>(null)
 
   useEffect(() => {
     listDocTemplates()
@@ -135,12 +148,13 @@ export function DocumentTemplatesTab() {
     <div className="flex flex-col gap-8">
       <p className="text-sm text-white/50">
         The .docx layout each Feasibility Report, Quotation, Sales Order, and Delivery Note is generated from --
-        one file per document type, per language. Upload your own .docx to replace either language's default: use{' '}
-        <code className="rounded bg-white/10 px-1">{'{{ field }}'}</code> for a placeholder, and{' '}
+        one file per document type, per language. Use "Map fields" to edit a template in the browser and insert
+        fields from a list, or "Upload new" to replace it with your own .docx (placeholders there follow the
+        same <code className="rounded bg-white/10 px-1">{'{{ field }}'}</code> /{' '}
         <code className="rounded bg-white/10 px-1">{'{%tr for line in lines %}'}</code> ...{' '}
-        <code className="rounded bg-white/10 px-1">{'{%tr endfor %}'}</code> inside a table row to repeat it once
-        per line item. "Download current" gets you the active file (custom or default) to edit and re-upload;
-        "Reset to default" drops back to the bundled version.
+        <code className="rounded bg-white/10 px-1">{'{%tr endfor %}'}</code> syntax). "Download current" gets you
+        the active file (custom or default) to edit externally; "Reset to default" drops back to the bundled
+        version.
       </p>
 
       <Alert variant="error">{error}</Alert>
@@ -156,16 +170,26 @@ export function DocumentTemplatesTab() {
           return (
             <div key={docType}>
               <h2 className="font-display text-lg font-medium text-white">{items[0].doc_type_label}</h2>
-              <p className="mt-1 mb-3 text-xs text-white/40">Available placeholders: {items[0].placeholders}</p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
                 {items.map((slot) => (
-                  <SlotCard key={`${slot.doc_type}-${slot.language}`} slot={slot} onChanged={updateSlot} />
+                  <SlotCard
+                    key={`${slot.doc_type}-${slot.language}`}
+                    slot={slot}
+                    onChanged={updateSlot}
+                    onMapFields={setMappingSlot}
+                  />
                 ))}
               </div>
             </div>
           )
         })
       )}
+
+      <TemplateFieldMapperModal
+        slot={mappingSlot}
+        onClose={() => setMappingSlot(null)}
+        onSaved={updateSlot}
+      />
     </div>
   )
 }

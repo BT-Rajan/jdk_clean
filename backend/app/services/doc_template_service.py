@@ -25,9 +25,11 @@ import uuid
 from datetime import date, datetime
 from pathlib import Path
 
+import mammoth
 from docx import Document as DocxDocument
 from docx.shared import Mm
 from docxtpl import DocxTemplate, InlineImage
+from htmldocx import HtmlToDocx
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
@@ -50,6 +52,120 @@ DOC_TYPE_LABELS = {
 }
 
 LANGUAGE_LABELS = {"en": "English", "ar": "Arabic"}
+
+# Structured field lists for the in-browser field-mapping editor (see
+# .../html endpoints below and render_template_html/save_template_from_html).
+# Kept in sync by hand with PLACEHOLDERS above and with the context
+# builders further down -- same non-enforcing "documentation, not
+# validated against actual template content" spirit as PLACEHOLDERS.
+# (key, label) pairs; key is exactly what goes inside `{{ }}`.
+SIMPLE_FIELD_DEFS: dict[str, list[tuple[str, str]]] = {
+    "feasibility": [
+        ("company_name", "Company name"),
+        ("feasibility_number", "Feasibility number"),
+        ("customer_name", "Customer name"),
+        ("deal_number", "Deal number"),
+        ("required_by_date", "Required by date"),
+        ("checked_at", "Checked at"),
+        ("status_label", "Status"),
+        ("notes", "Notes"),
+        ("generated_date", "Generated date"),
+        ("signer_name", "Signer name"),
+        ("signature_image", "Signature image"),
+    ],
+    "quotation": [
+        ("company_name", "Company name"),
+        ("quotation_number", "Quotation number"),
+        ("customer_name", "Customer name"),
+        ("quotation_date", "Quotation date"),
+        ("valid_until", "Valid until"),
+        ("status_label", "Status"),
+        ("subtotal_amount", "Subtotal"),
+        ("discount_amount", "Discount"),
+        ("total_amount", "Total"),
+        ("notes", "Notes"),
+        ("generated_date", "Generated date"),
+        ("signer_name", "Signer name"),
+        ("signature_image", "Signature image"),
+    ],
+    "order": [
+        ("company_name", "Company name"),
+        ("order_number", "Order number"),
+        ("customer_name", "Customer name"),
+        ("order_date", "Order date"),
+        ("requested_delivery_date", "Requested delivery date"),
+        ("status_label", "Status"),
+        ("subtotal_amount", "Subtotal"),
+        ("discount_amount", "Discount"),
+        ("total_amount", "Total"),
+        ("notes", "Notes"),
+        ("generated_date", "Generated date"),
+        ("signer_name", "Signer name"),
+        ("signature_image", "Signature image"),
+    ],
+    "delivery_note": [
+        ("company_name", "Company name"),
+        ("delivery_note_number", "Delivery note number"),
+        ("order_number", "Order number"),
+        ("customer_name", "Customer name"),
+        ("delivery_date", "Delivery date"),
+        ("status_label", "Status"),
+        ("notes", "Notes"),
+        ("generated_date", "Generated date"),
+        ("signer_name", "Signer name"),
+        ("signature_image", "Signature image"),
+    ],
+}
+
+# Fields available inside the repeating `lines` block (one row per line
+# item -- see PLACEHOLDERS' "and a `lines` list" note). key is what goes
+# after `line.` inside `{{ }}`, e.g. `line.product_code`.
+REPEATING_FIELD_DEFS: dict[str, list[tuple[str, str]]] = {
+    "feasibility": [
+        ("index", "Line number"),
+        ("product_code", "Product code"),
+        ("product_name", "Product name"),
+        ("quantity", "Quantity"),
+        ("supply_note", "Supply note"),
+        ("feasible_label", "Feasible?"),
+    ],
+    "quotation": [
+        ("index", "Line number"),
+        ("product_code", "Product code"),
+        ("product_name", "Product name"),
+        ("unit", "Unit"),
+        ("quantity", "Quantity"),
+        ("unit_price", "Unit price"),
+        ("line_total", "Line total"),
+    ],
+    "order": [
+        ("index", "Line number"),
+        ("product_code", "Product code"),
+        ("product_name", "Product name"),
+        ("unit", "Unit"),
+        ("quantity", "Quantity"),
+        ("unit_price", "Unit price"),
+        ("line_total", "Line total"),
+    ],
+    "delivery_note": [
+        ("index", "Line number"),
+        ("product_code", "Product code"),
+        ("product_name", "Product name"),
+        ("unit", "Unit"),
+        ("quantity_delivered", "Quantity delivered"),
+    ],
+}
+
+
+def _fields_for(doc_type: str) -> dict:
+    return {
+        "simple_fields": [{"key": k, "label": lbl} for k, lbl in SIMPLE_FIELD_DEFS[doc_type]],
+        "repeating": {
+            "loop_name": "lines",
+            "item_label": "line",
+            "fields": [{"key": k, "label": lbl} for k, lbl in REPEATING_FIELD_DEFS[doc_type]],
+        },
+    }
 
 # Documentation only, surfaced to the admin UI -- render_document() below
 # never validates a template's actual content against this, same
@@ -145,6 +261,7 @@ def _slot_for(db: Session, doc_type: str, language: str) -> dict:
         "original_filename": row.original_filename if row else None,
         "updated_at": row.updated_at if row else None,
         "placeholders": PLACEHOLDERS[doc_type],
+        **_fields_for(doc_type),
     }
 
 
@@ -232,6 +349,49 @@ def reset_template(db: Session, doc_type: str, language: str, user_id: int | Non
 
 def read_active_template_bytes(db: Session, doc_type: str, language: str) -> bytes:
     return get_active_template_path(db, doc_type, language).read_bytes()
+
+
+def render_template_html(db: Session, doc_type: str, language: str) -> str:
+    """Converts whichever template is currently active (custom or
+    default) into HTML for the admin's in-browser field-mapping editor
+    -- see api/doc_templates.py's GET .../html. Best-effort: mammoth
+    keeps text, bold/italic, paragraphs and table structure (including
+    the `{%tr %}` row-repeat markers, which are just paragraph text), but
+    drops finer Word styling like fonts, colors and exact spacing --
+    fine for placing/rewording placeholders, not a pixel-perfect Word
+    preview. Never touches storage; save_template_from_html below is
+    what actually writes a new custom template."""
+    _validate_doc_type(doc_type)
+    _validate_language(language)
+    raw_bytes = read_active_template_bytes(db, doc_type, language)
+    result = mammoth.convert_to_html(io.BytesIO(raw_bytes))
+    return result.value
+
+
+def save_template_from_html(
+    db: Session, doc_type: str, language: str, html: str, user_id: int | None = None
+) -> dict:
+    """Converts the admin's edited HTML back into a real .docx (genuine
+    paragraphs/runs/tables via htmldocx + python-docx, not an HTML
+    wrapper) and stores it exactly like a manual upload -- same
+    validation, uuid filename, and audit trail as upload_template. This
+    is what lets a template built this way still work with docxtpl:
+    the `{{ field }}` / `{%tr for line in lines %}` placeholder text
+    typed here ends up as real paragraph/cell text, just like in a
+    hand-edited Word file."""
+    _validate_doc_type(doc_type)
+    _validate_language(language)
+    if not html or not html.strip():
+        raise ValidationAppError("Template content can't be empty.")
+
+    converter = HtmlToDocx()
+    document = converter.parse_html_string(html)
+    buffer = io.BytesIO()
+    document.save(buffer)
+
+    return upload_template(
+        db, doc_type, language, buffer.getvalue(), "edited-in-browser.docx", user_id=user_id
+    )
 
 
 def render_document(db: Session, doc_type: str, language: str, context: dict) -> bytes:

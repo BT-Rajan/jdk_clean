@@ -37,3 +37,22 @@ export async function downloadDocTemplate(docType: DocType, language: DocLanguag
   link.remove()
   window.URL.revokeObjectURL(url)
 }
+
+/** The active template's content as editable HTML, for the full-screen
+ * field-mapping editor (TemplateFieldMapperModal) -- distinct from
+ * downloadDocTemplate, which triggers a file download instead. */
+export async function getDocTemplateHtml(docType: DocType, language: DocLanguage): Promise<string> {
+  const { data } = await apiClient.get<{ html: string }>(`/api/doc-templates/${docType}/${language}/html`)
+  return data.html
+}
+
+/** Saves the field-mapping editor's edited HTML as the new custom
+ * template for this slot. */
+export async function saveDocTemplateHtml(
+  docType: DocType,
+  language: DocLanguage,
+  html: string,
+): Promise<DocTemplateSlot> {
+  const { data } = await apiClient.put<DocTemplateSlot>(`/api/doc-templates/${docType}/${language}/html`, { html })
+  return data
+}

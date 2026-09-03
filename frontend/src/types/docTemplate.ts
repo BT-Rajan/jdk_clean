@@ -15,4 +15,19 @@ export interface DocTemplateSlot {
    * use -- documentation only, shown as a hint (see backend's
    * doc_template_service.PLACEHOLDERS). */
   placeholders: string
+  /** Structured version of `placeholders`, for the field-mapping editor's
+   * clickable field list -- see doc_template_service._fields_for. */
+  simple_fields: TemplateField[]
+  repeating: RepeatingFields
+}
+
+export interface TemplateField {
+  key: string
+  label: string
+}
+
+export interface RepeatingFields {
+  loop_name: string
+  item_label: string
+  fields: TemplateField[]
 }

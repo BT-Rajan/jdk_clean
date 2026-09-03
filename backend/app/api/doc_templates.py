@@ -7,7 +7,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_role
 from app.core.database import get_db
 from app.models.user import User
-from app.schemas.doc_template import DocTemplateSlotOut
+from app.schemas.doc_template import DocTemplateHtmlIn, DocTemplateHtmlOut, DocTemplateSlotOut
 from app.services import doc_template_service
 
 router = APIRouter(prefix="/api/doc-templates", tags=["doc-templates"])
@@ -44,6 +44,33 @@ def download_doc_template(
         media_type=doc_template_service.DOCX_MEDIA_TYPE,
         headers={"Content-Disposition": f'attachment; filename="{doc_type}_{language}.docx"'},
     )
+
+
+@router.get("/{doc_type}/{language}/html", response_model=DocTemplateHtmlOut)
+def get_doc_template_html(
+    doc_type: DocType,
+    language: Language,
+    db: Session = Depends(get_db),
+    _: User = Depends(admin_guard),
+):
+    """Powers the full-screen field-mapping editor: the active template
+    converted to editable HTML, alongside DocTemplateSlotOut's
+    simple_fields/repeating for the clickable field list."""
+    return {"html": doc_template_service.render_template_html(db, doc_type, language)}
+
+
+@router.put("/{doc_type}/{language}/html", response_model=DocTemplateSlotOut)
+def save_doc_template_html(
+    doc_type: DocType,
+    language: Language,
+    payload: DocTemplateHtmlIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    """Saves the field-mapping editor's edited HTML as the new custom
+    template for this slot -- same storage/validation/audit path as
+    uploading a .docx file."""
+    return doc_template_service.save_template_from_html(db, doc_type, language, payload.html, user_id=user.id)
 
 
 @router.post("/{doc_type}/{language}", response_model=DocTemplateSlotOut)
