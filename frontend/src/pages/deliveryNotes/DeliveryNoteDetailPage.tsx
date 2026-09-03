@@ -5,6 +5,7 @@ import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, St
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   deleteDeliveryNote,
+  downloadDeliveryNoteDocx,
   downloadDeliveryNotePdf,
   emailDeliveryNote,
   getDeliveryNote,
@@ -129,6 +130,18 @@ export function DeliveryNoteDetailPage() {
     }
   }
 
+  async function handleDownloadDocx(language: 'en' | 'ar') {
+    if (!note) return
+    setBusy(true)
+    try {
+      await downloadDeliveryNoteDocx(note.id, note.delivery_note_number, language)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -159,6 +172,8 @@ export function DeliveryNoteDetailPage() {
           !justDeleted ? (
             <>
               <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
+              <Button variant="ghost" onClick={() => handleDownloadDocx('en')} isLoading={busy}>Word (EN)</Button>
+              <Button variant="ghost" onClick={() => handleDownloadDocx('ar')} isLoading={busy}>Word (AR)</Button>
               <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
               {allowWrite && isDraft && (
                 <Button variant="danger" onClick={() => setConfirmOpen(true)}>Delete</Button>

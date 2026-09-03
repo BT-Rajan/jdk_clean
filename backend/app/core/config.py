@@ -45,6 +45,10 @@ class Settings(BaseSettings):
     # resolution), so there's no matching MAX_DIMENSION here, just a
     # separate upload-size cap.
     LOGO_MAX_UPLOAD_MB: int = 5
+    # .docx document templates (see doc_template_service.py) run bigger
+    # than a logo image -- a template can carry embedded letterhead
+    # artwork -- so it gets its own, larger cap.
+    DOC_TEMPLATE_MAX_UPLOAD_MB: int = 10
 
     # Email (Phase 6): deliberately .env-only, not part of the Settings
     # DB table/UI (see settings_service.py) -- SMTP credentials are

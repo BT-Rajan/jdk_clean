@@ -68,6 +68,21 @@ export async function downloadDeliveryNotePdf(id: number, noteNumber: string): P
   window.URL.revokeObjectURL(url)
 }
 
+/** Triggers a browser download of the delivery note as a .docx, rendered
+ * from whichever template is active for that language -- see
+ * Admin -> Documents -> Document Templates. */
+export async function downloadDeliveryNoteDocx(id: number, noteNumber: string, language: 'en' | 'ar'): Promise<void> {
+  const response = await apiClient.get(`/api/delivery-notes/${id}/docx`, { params: { language }, responseType: 'blob' })
+  const url = window.URL.createObjectURL(new Blob([response.data]))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${noteNumber}_${language}.docx`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 /** Sends the delivery note PDF as an email attachment. */
 export async function emailDeliveryNote(id: number, toEmail: string, message?: string): Promise<MessageResponse> {
   const { data } = await apiClient.post<MessageResponse>(`/api/delivery-notes/${id}/email`, {

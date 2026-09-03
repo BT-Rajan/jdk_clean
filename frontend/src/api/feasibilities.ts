@@ -70,3 +70,18 @@ export async function reviveFeasibility(id: number): Promise<Feasibility> {
   const { data } = await apiClient.post<Feasibility>(`/api/feasibility/${id}/revive`)
   return data
 }
+
+/** Triggers a browser download of the feasibility check as a .docx,
+ * rendered from whichever template is active for that language -- see
+ * Admin -> Documents -> Document Templates. */
+export async function downloadFeasibilityDocx(id: number, feasibilityNumber: string, language: 'en' | 'ar'): Promise<void> {
+  const response = await apiClient.get(`/api/feasibility/${id}/docx`, { params: { language }, responseType: 'blob' })
+  const url = window.URL.createObjectURL(new Blob([response.data]))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${feasibilityNumber}_${language}.docx`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}

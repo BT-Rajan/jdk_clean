@@ -1,4 +1,5 @@
 from datetime import timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
@@ -23,6 +24,7 @@ from app.schemas.order import (
 from app.schemas.order_journey import OrderJourneyOut
 from app.services import (
     audit_service,
+    doc_template_service,
     email_service,
     email_template_service,
     order_journey_service,
@@ -252,6 +254,24 @@ def download_order_pdf(
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{order_id}/docx")
+def download_order_docx(
+    order_id: int,
+    language: Literal["en", "ar"] = Query("en"),
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    order = order_service.get_order(db, order_id)
+    context = doc_template_service.build_order_context(db, order)
+    docx_bytes = doc_template_service.render_document(db, "order", language, context)
+    filename = f"{order.order_number}_{language}.docx"
+    return Response(
+        content=docx_bytes,
+        media_type=doc_template_service.DOCX_MEDIA_TYPE,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

@@ -9,12 +9,13 @@ import { OrgChartTab } from '@/pages/settings/OrgChartTab'
 import { EmailTab } from '@/pages/communication/EmailTab'
 import { SmsTab } from '@/pages/communication/SmsTab'
 import { WhatsAppTab } from '@/pages/communication/WhatsAppTab'
+import { DocumentTemplatesTab } from './DocumentTemplatesTab'
 import { EmailTemplatesTab } from './EmailTemplatesTab'
 import { GeneralSettingsForm } from './GeneralSettingsForm'
 import { GENERAL_SECTION_KEYS } from './sections'
 import type { GeneralSectionKey } from './sections'
 
-type SectionKey = GeneralSectionKey | 'communication' | 'org-chart' | 'email-templates'
+type SectionKey = GeneralSectionKey | 'communication' | 'org-chart' | 'email-templates' | 'doc-templates'
 
 type SectionItem = { key: SectionKey; label: string }
 type LinkItem = { href: string; label: string }
@@ -50,7 +51,10 @@ const GROUPS: SectionGroup[] = [
   },
   {
     label: 'Documents',
-    items: [{ key: 'email-templates', label: 'Email Templates' }],
+    items: [
+      { key: 'email-templates', label: 'Email Templates' },
+      { key: 'doc-templates', label: 'Document Templates' },
+    ],
   },
   {
     label: 'Access',
@@ -189,6 +193,10 @@ export function AdminShell() {
 
             <TabPanel id="email-templates" activeId={activeSection}>
               <EmailTemplatesTab />
+            </TabPanel>
+
+            <TabPanel id="doc-templates" activeId={activeSection}>
+              <DocumentTemplatesTab />
             </TabPanel>
           </div>
         </div>

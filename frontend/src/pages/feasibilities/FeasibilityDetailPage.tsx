@@ -21,6 +21,7 @@ import {
   closeFeasibility,
   decideFeasibilityException,
   deleteFeasibility,
+  downloadFeasibilityDocx,
   getFeasibility,
   reviveFeasibility,
   runFeasibilityCheck,
@@ -176,6 +177,13 @@ export function FeasibilityDetailPage() {
     })
   }
 
+  async function handleDownloadDocx(language: 'en' | 'ar') {
+    if (!feasibility) return
+    await withBusy(async () => {
+      await downloadFeasibilityDocx(feasibility.id, feasibility.feasibility_number, language)
+    })
+  }
+
   async function handleRevive() {
     await withBusy(async () => {
       const updated = await reviveFeasibility(feasibilityId)
@@ -218,6 +226,8 @@ export function FeasibilityDetailPage() {
               {f.checked_at && (
                 <Button variant="ghost" onClick={() => setStageResultsOpen(true)}>View check results</Button>
               )}
+              <Button variant="ghost" onClick={() => handleDownloadDocx('en')} isLoading={busy}>Word (EN)</Button>
+              <Button variant="ghost" onClick={() => handleDownloadDocx('ar')} isLoading={busy}>Word (AR)</Button>
               {allowWrite && f.status === 'exception_pending' && !f.admin_review_required && (
                 <>
                   <Button variant="ghost" onClick={() => setRejectOpen(true)}>Reject</Button>

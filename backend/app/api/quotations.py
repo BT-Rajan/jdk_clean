@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -14,7 +16,7 @@ from app.schemas.quotation import (
     QuotationStatusUpdate,
     QuotationUpdate,
 )
-from app.services import audit_service, email_service, pdf_generator, quotation_service
+from app.services import audit_service, doc_template_service, email_service, pdf_generator, quotation_service
 
 router = APIRouter(prefix="/api/quotations", tags=["quotations"])
 read_guard = require_page_access("quotations", "read")
@@ -158,6 +160,24 @@ def download_quotation_pdf(
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{quotation_id}/docx")
+def download_quotation_docx(
+    quotation_id: int,
+    language: Literal["en", "ar"] = Query("en"),
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    quotation = quotation_service.get_quotation(db, quotation_id)
+    context = doc_template_service.build_quotation_context(db, quotation)
+    docx_bytes = doc_template_service.render_document(db, "quotation", language, context)
+    filename = f"{quotation.quotation_number}_{language}.docx"
+    return Response(
+        content=docx_bytes,
+        media_type=doc_template_service.DOCX_MEDIA_TYPE,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

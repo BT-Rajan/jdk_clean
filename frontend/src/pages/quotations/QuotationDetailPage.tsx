@@ -7,6 +7,7 @@ import {
   approveQuotation,
   convertQuotationToOrder,
   deleteQuotation,
+  downloadQuotationDocx,
   downloadQuotationPdf,
   emailQuotation,
   getQuotation,
@@ -102,6 +103,18 @@ export function QuotationDetailPage() {
     }
   }
 
+  async function handleDownloadDocx(language: 'en' | 'ar') {
+    if (!quotation) return
+    setBusy(true)
+    try {
+      await downloadQuotationDocx(quotation.id, quotation.quotation_number, language)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   async function handleDelete() {
     setBusy(true)
     try {
@@ -160,6 +173,8 @@ export function QuotationDetailPage() {
           !justDeleted ? (
             <>
               <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
+              <Button variant="ghost" onClick={() => handleDownloadDocx('en')} isLoading={busy}>Word (EN)</Button>
+              <Button variant="ghost" onClick={() => handleDownloadDocx('ar')} isLoading={busy}>Word (AR)</Button>
               <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
               {allowWrite && quotation.status === 'draft' && (
                 <Button variant="ghost" onClick={() => navigate(`/quotations/${quotationId}/edit`)}>Edit</Button>

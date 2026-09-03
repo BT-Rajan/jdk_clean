@@ -65,6 +65,21 @@ export async function downloadQuotationPdf(id: number, quotationNumber: string):
   window.URL.revokeObjectURL(url)
 }
 
+/** Triggers a browser download of the quotation as a .docx, rendered
+ * from whichever template is active for that language -- see
+ * Admin -> Documents -> Document Templates. */
+export async function downloadQuotationDocx(id: number, quotationNumber: string, language: 'en' | 'ar'): Promise<void> {
+  const response = await apiClient.get(`/api/quotations/${id}/docx`, { params: { language }, responseType: 'blob' })
+  const url = window.URL.createObjectURL(new Blob([response.data]))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${quotationNumber}_${language}.docx`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 /** Sends the quotation PDF as an email attachment. */
 export async function emailQuotation(id: number, toEmail: string, message?: string): Promise<MessageResponse> {
   const { data } = await apiClient.post<MessageResponse>(`/api/quotations/${id}/email`, {

@@ -1,3 +1,5 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -13,7 +15,7 @@ from app.schemas.delivery_note import (
     DeliveryNoteUpdate,
 )
 from app.schemas.email import SendDocumentEmailRequest
-from app.services import audit_service, delivery_note_service, email_service, pdf_generator
+from app.services import audit_service, delivery_note_service, doc_template_service, email_service, pdf_generator
 
 router = APIRouter(prefix="/api/delivery-notes", tags=["delivery-notes"])
 read_guard = require_page_access("delivery_notes", "read")
@@ -125,6 +127,24 @@ def download_delivery_note_pdf(
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/{note_id}/docx")
+def download_delivery_note_docx(
+    note_id: int,
+    language: Literal["en", "ar"] = Query("en"),
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    note = delivery_note_service.get_delivery_note(db, note_id)
+    context = doc_template_service.build_delivery_note_context(db, note)
+    docx_bytes = doc_template_service.render_document(db, "delivery_note", language, context)
+    filename = f"{note.delivery_note_number}_{language}.docx"
+    return Response(
+        content=docx_bytes,
+        media_type=doc_template_service.DOCX_MEDIA_TYPE,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 

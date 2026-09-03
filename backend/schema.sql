@@ -923,6 +923,28 @@ CREATE TABLE IF NOT EXISTS email_templates (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- DOCUMENTS: Document templates (Admin -> Documents). An admin-uploaded
+-- .docx template overriding the bundled default for one (doc_type,
+-- language) pair -- see doc_template_service.py. A row only exists once
+-- someone has uploaded a replacement; the bundled EN/AR defaults ship
+-- as files under backend/app/assets/doc_templates/, so a fresh install
+-- works out of the box before any admin ever visits this page, same as
+-- email_templates above.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS doc_templates (
+    id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    doc_type            VARCHAR(20) NOT NULL,
+    language            VARCHAR(5) NOT NULL,
+    filename            VARCHAR(255) NOT NULL,
+    original_filename   VARCHAR(255) NOT NULL,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by          BIGINT UNSIGNED NULL,
+    updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by          BIGINT UNSIGNED NULL,
+    UNIQUE KEY uq_doc_templates_type_lang (doc_type, language)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
 -- COMMUNICATION MODULE: email channel
 -- One admin-configured mailbox account (IMAP or POP3 incoming, SMTP
 -- outgoing). Password stored encrypted, never plaintext -- see

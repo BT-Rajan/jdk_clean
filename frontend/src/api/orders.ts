@@ -97,6 +97,21 @@ export async function downloadOrderPdf(id: number, orderNumber: string): Promise
   window.URL.revokeObjectURL(url)
 }
 
+/** Triggers a browser download of the order as a .docx, rendered from
+ * whichever template is active for that language -- see
+ * Admin -> Documents -> Document Templates. */
+export async function downloadOrderDocx(id: number, orderNumber: string, language: 'en' | 'ar'): Promise<void> {
+  const response = await apiClient.get(`/api/orders/${id}/docx`, { params: { language }, responseType: 'blob' })
+  const url = window.URL.createObjectURL(new Blob([response.data]))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `${orderNumber}_${language}.docx`
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 /** Sends the order PDF as an email attachment. */
 export async function emailOrder(id: number, toEmail: string, message?: string): Promise<MessageResponse> {
   const { data } = await apiClient.post<MessageResponse>(`/api/orders/${id}/email`, {

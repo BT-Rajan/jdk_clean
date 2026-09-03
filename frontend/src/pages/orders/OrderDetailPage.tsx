@@ -9,6 +9,7 @@ import {
   adminReviewOrder,
   approveOrder,
   deleteOrder,
+  downloadOrderDocx,
   downloadOrderPdf,
   emailOrder,
   getOrder,
@@ -247,6 +248,18 @@ export function OrderDetailPage() {
     }
   }
 
+  async function handleDownloadDocx(language: 'en' | 'ar') {
+    if (!order) return
+    setBusy(true)
+    try {
+      await downloadOrderDocx(order.id, order.order_number, language)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -276,6 +289,8 @@ export function OrderDetailPage() {
           !justDeleted ? (
             <>
               <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
+              <Button variant="ghost" onClick={() => handleDownloadDocx('en')} isLoading={busy}>Word (EN)</Button>
+              <Button variant="ghost" onClick={() => handleDownloadDocx('ar')} isLoading={busy}>Word (AR)</Button>
               <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
               {allowWrite && <Button variant="ghost" onClick={() => setPaymentEmailOpen(true)}>Send payment request</Button>}
               {allowWrite && order.status === 'ready_to_ship' && (

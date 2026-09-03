@@ -1,4 +1,7 @@
+from typing import Literal
+
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
@@ -14,7 +17,7 @@ from app.schemas.feasibility import (
     FeasibilityExceptionDecision,
     FeasibilityOut,
 )
-from app.services import audit_service, feasibility_service
+from app.services import audit_service, doc_template_service, feasibility_service
 
 router = APIRouter(prefix="/api/feasibility", tags=["feasibility"])
 read_guard = require_page_access("feasibilities", "read")
@@ -59,6 +62,24 @@ def get_feasibility(
     _: User = Depends(read_guard),
 ):
     return FeasibilityOut.from_model(feasibility_service.get_feasibility(db, feasibility_id))
+
+
+@router.get("/{feasibility_id}/docx")
+def download_feasibility_docx(
+    feasibility_id: int,
+    language: Literal["en", "ar"] = Query("en"),
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    feasibility = feasibility_service.get_feasibility(db, feasibility_id)
+    context = doc_template_service.build_feasibility_context(db, feasibility)
+    docx_bytes = doc_template_service.render_document(db, "feasibility", language, context)
+    filename = f"{feasibility.feasibility_number}_{language}.docx"
+    return Response(
+        content=docx_bytes,
+        media_type=doc_template_service.DOCX_MEDIA_TYPE,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/{feasibility_id}/history")
