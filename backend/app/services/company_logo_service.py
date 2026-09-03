@@ -132,3 +132,15 @@ def get_logo_path(db: Session, variant: str) -> Path | None:
         return None
     path = _logos_dir() / row.setting_value
     return path if path.is_file() else None
+
+
+def get_active_logo_path(db: Session) -> Path | None:
+    """The one logo variant the admin has picked as active (see
+    company_logo_active in GeneralSettingsForm), if any -- what
+    app/api/settings.py's public .../logo/active endpoint serves for
+    the app chrome's <Logo> (top-left nav, login page) to show instead
+    of the hardcoded wordmark fallback."""
+    row = db.query(Setting).filter(Setting.setting_key == "company_logo_active").first()
+    if row is None or not row.setting_value:
+        return None
+    return get_logo_path(db, row.setting_value)

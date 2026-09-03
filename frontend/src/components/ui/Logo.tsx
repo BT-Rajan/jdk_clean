@@ -1,3 +1,5 @@
+import { useState } from 'react'
+import { env } from '@/config/env'
 import { cn } from '@/lib/cn'
 
 interface LogoProps {
@@ -5,7 +7,38 @@ interface LogoProps {
   withWordmark?: boolean
 }
 
+// Deliberately unauthenticated on the backend (see
+// app/api/settings.py's get_active_company_logo) -- AuthLayout renders
+// this before there's any signed-in user, so it can't go through
+// apiClient's Bearer-token flow like GeneralSettingsForm's
+// fetchCompanyLogoBlob does. A plain <img src> is enough since no auth
+// header is required to view it.
+const ACTIVE_LOGO_URL = `${env.apiBaseUrl}/api/settings/logo/active/current`
+
+/** The org's own uploaded logo wherever the app shows its brand mark
+ * (top-left nav, login page) -- falls back to the placeholder gold
+ * wordmark below when no logo has been uploaded/activated yet (a 404
+ * from ACTIVE_LOGO_URL), so a fresh install never shows a broken image
+ * icon. Nothing here is per-current-UI-language: the app chrome itself
+ * has no language toggle, so whichever single variant the admin marked
+ * "Active logo" under Settings -> General is what shows -- that's
+ * still where an English- vs Arabic-market install picks the matching
+ * logo, just as a one-time admin choice rather than something that
+ * switches live. */
 export function Logo({ className, withWordmark = true }: LogoProps) {
+  const [logoFailed, setLogoFailed] = useState(false)
+
+  if (!logoFailed) {
+    return (
+      <img
+        src={ACTIVE_LOGO_URL}
+        alt="Company logo"
+        onError={() => setLogoFailed(true)}
+        className={cn('h-9 w-auto object-contain', className)}
+      />
+    )
+  }
+
   return (
     <div className={cn('flex items-center gap-3', className)}>
       <svg width="34" height="34" viewBox="0 0 64 64" aria-hidden="true">

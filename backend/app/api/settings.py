@@ -70,3 +70,18 @@ def get_company_logo(
         raise NotFoundError("Logo")
     media_type = "image/png" if path.suffix == ".png" else "image/jpeg"
     return FileResponse(path, media_type=media_type)
+
+
+@router.get("/logo/active/current")
+def get_active_company_logo(db: Session = Depends(get_db)):
+    """Deliberately unauthenticated, unlike the admin-only .../logo/{variant}
+    above -- this is what the app chrome's <Logo> (top-left nav header,
+    and the login page which by definition has no signed-in user yet)
+    fetches directly as an <img src>. Serves whichever variant is
+    currently marked active; a company logo image itself isn't
+    sensitive, so no auth is needed to view it, just to change it."""
+    path = company_logo_service.get_active_logo_path(db)
+    if path is None:
+        raise NotFoundError("Logo")
+    media_type = "image/png" if path.suffix == ".png" else "image/jpeg"
+    return FileResponse(path, media_type=media_type)
