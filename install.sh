@@ -4,9 +4,19 @@
 # frontend (React), and process management (pm2), asking along the way
 # rather than requiring a pile of flags up front.
 #
-# Safe to re-run: existing .env files, an existing venv/node_modules, an
-# existing database/schema, and an existing admin user are all detected
-# and left alone (or you're asked before anything is overwritten).
+# If backend/.env, frontend/.env, and ecosystem.config.js already all
+# exist, you're asked ONCE up front whether to reuse them as-is -- if
+# so, every database/port/secret question is skipped entirely and the
+# existing values (including the backend/frontend ports) are read back
+# out of those files. Say no (or if any of the three is missing) and
+# you get the full configuration walkthrough, same as a fresh install.
+#
+# Both apps run as a single pm2 service ('jdk', via scripts/run-all.mjs)
+# rather than two separate ones, so `pm2 status`/`pm2 logs`/`pm2 restart`
+# only ever have one thing to say. Database migrations always run
+# (idempotent -- safe on every install/re-run), and once pm2 starts the
+# service this script waits for and checks both the backend and frontend
+# to actually answer before declaring success.
 #
 # Usage: ./install.sh   (run from the repo root)
 
@@ -40,16 +50,6 @@ ask() {
     read -r -p "$prompt: " answer
     echo "$answer"
   fi
-}
-
-# Prompt for a required, non-empty value; re-asks until given one.
-ask_required() {
-  local prompt="$1" answer
-  while true; do
-    read -r -p "$prompt: " answer
-    [[ -n "$answer" ]] && { echo "$answer"; return; }
-    fail "This value is required."
-  done
 }
 
 # Hidden-input prompt (passwords/secrets). Prints the answer to stdout.
@@ -92,6 +92,7 @@ require_cmd() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/backend"
 FRONTEND_DIR="$SCRIPT_DIR/frontend"
+ECOSYSTEM_FILE="$SCRIPT_DIR/ecosystem.config.js"
 
 [[ -d "$BACKEND_DIR" && -d "$FRONTEND_DIR" ]] \
   || die "Run this from the repo root (expected ./backend and ./frontend here)."
@@ -108,11 +109,13 @@ heading "Checking prerequisites"
 require_cmd python3 "Install Python 3.11+."
 require_cmd node "Install Node.js 20+."
 require_cmd npm "npm ships with Node.js."
+require_cmd curl "Install curl (used for the post-install health checks)."
 
 PY_VERSION="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
 ok "python3 $PY_VERSION"
 ok "node $(node -v)"
 ok "npm $(npm -v)"
+ok "curl $(curl -V | head -1 | awk '{print $2}')"
 
 if ! command -v pm2 >/dev/null 2>&1; then
   warn "pm2 is not installed globally."
@@ -125,74 +128,109 @@ fi
 ok "pm2 $(pm2 -v)"
 
 # ---------------------------------------------------------------------
-# Gather configuration
+# Configuration: reuse what's already there, or set up fresh -- asked
+# ONCE, up front, instead of once per file further down.
 # ---------------------------------------------------------------------
-heading "Database"
+heading "Configuration"
 
-DB_HOST=$(ask "MySQL host" "localhost")
-DB_PORT=$(ask "MySQL port" "3306")
-DB_NAME=$(ask "Database name" "jdk_clean")
-DB_USER=$(ask "Database user" "erp_user")
-DB_PASSWORD=$(ask_secret "Database password")
+REUSE_CONFIG=n
+if [[ -f "$BACKEND_DIR/.env" && -f "$FRONTEND_DIR/.env" && -f "$ECOSYSTEM_FILE" ]]; then
+  ok "Found existing backend/.env, frontend/.env, and ecosystem.config.js."
+  if ask_yes_no "Use them as-is (skip database/port/secret questions)?" y; then
+    REUSE_CONFIG=y
+  fi
+else
+  info "No complete existing configuration found -- let's set it up."
+fi
 
 CREATE_DB=n
-ADMIN_DB_USER=""
-ADMIN_DB_PASSWORD=""
-if ask_yes_no "Create the database/user now with a MySQL admin login (skip if you've already created them)?" y; then
-  CREATE_DB=y
-  ADMIN_DB_USER=$(ask "MySQL admin user (for CREATE DATABASE/USER)" "root")
-  ADMIN_DB_PASSWORD=$(ask_secret "MySQL admin password")
-fi
+LOAD_SCHEMA=n
+WRITE_BACKEND_ENV=n
+WRITE_FRONTEND_ENV=n
+WRITE_ECOSYSTEM=n
 
-LOAD_SCHEMA=y
-ask_yes_no "Load backend/schema.sql into the database now (safe to re-run)?" y || LOAD_SCHEMA=n
-
-heading "Backend"
-
-BACKEND_PORT=$(ask "Backend port" "8000")
-
-if ask_yes_no "Auto-generate a secure JWT secret?" y; then
-  JWT_SECRET=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
-  ok "Generated a JWT secret."
+if [[ "$REUSE_CONFIG" == "y" ]]; then
+  # Everything the rest of this script needs (DB creds, JWT secret,
+  # CORS, VITE_API_BASE_URL) is already in the .env files and read by
+  # the app itself -- the only values this script's own logic still
+  # needs are the ports and backend URL baked into ecosystem.config.js.
+  BACKEND_PORT=$(grep -oP "(?<=BACKEND_PORT: ')\d+" "$ECOSYSTEM_FILE" | head -1)
+  FRONTEND_PORT=$(grep -oP "(?<=FRONTEND_PORT: ')\d+" "$ECOSYSTEM_FILE" | head -1)
+  BACKEND_URL=$(grep -oP "(?<=API_BASE_URL: ')[^']+" "$ECOSYSTEM_FILE" | head -1)
+  [[ -n "$BACKEND_PORT" && -n "$FRONTEND_PORT" ]] \
+    || die "Couldn't parse ports out of the existing ecosystem.config.js -- run this again and choose to reconfigure."
+  ok "Using existing ports: backend ${BACKEND_PORT}, frontend ${FRONTEND_PORT}, API base URL ${BACKEND_URL:-<not set>}."
 else
-  JWT_SECRET=$(ask_secret_min_len "Paste your JWT secret" 32)
+  heading "Database"
+
+  DB_HOST=$(ask "MySQL host" "localhost")
+  DB_PORT=$(ask "MySQL port" "3306")
+  DB_NAME=$(ask "Database name" "jdk_clean")
+  DB_USER=$(ask "Database user" "erp_user")
+  DB_PASSWORD=$(ask_secret "Database password")
+
+  ADMIN_DB_USER=""
+  ADMIN_DB_PASSWORD=""
+  if ask_yes_no "Create the database/user now with a MySQL admin login (skip if you've already created them)?" y; then
+    CREATE_DB=y
+    ADMIN_DB_USER=$(ask "MySQL admin user (for CREATE DATABASE/USER)" "root")
+    ADMIN_DB_PASSWORD=$(ask_secret "MySQL admin password")
+  fi
+
+  LOAD_SCHEMA=y
+  ask_yes_no "Load backend/schema.sql into the database now (safe to re-run)?" y || LOAD_SCHEMA=n
+
+  heading "Backend"
+
+  BACKEND_PORT=$(ask "Backend port" "8000")
+
+  if ask_yes_no "Auto-generate a secure JWT secret?" y; then
+    JWT_SECRET=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')
+    ok "Generated a JWT secret."
+  else
+    JWT_SECRET=$(ask_secret_min_len "Paste your JWT secret" 32)
+  fi
+
+  ACCESS_TOKEN_EXPIRE_MINUTES=$(ask "Access token lifetime (minutes)" "60")
+  REFRESH_TOKEN_EXPIRE_DAYS=$(ask "Refresh token lifetime (days)" "7")
+
+  heading "Frontend"
+
+  FRONTEND_PORT=$(ask "Frontend port" "4173")
+
+  echo
+  echo "  If this server will only ever be opened from this same machine"
+  echo "  (http://localhost:${FRONTEND_PORT}), leave the next answer blank."
+  echo "  If people will open it from elsewhere -- another machine on your"
+  echo "  network, or the internet -- enter the address they'll actually"
+  echo "  type into their browser: a bare IP (203.0.113.10), or a domain"
+  echo "  (erp.example.com) if you have DNS/HTTPS set up already. Don't"
+  echo "  include http(s):// or a port -- those are added for you below."
+  echo
+  SERVER_HOST=$(ask "Server IP or domain (blank = localhost only)" "")
+
+  if [[ -z "$SERVER_HOST" ]]; then
+    DEFAULT_FRONTEND_ORIGIN="http://localhost:${FRONTEND_PORT}"
+    DEFAULT_BACKEND_URL="http://localhost:${BACKEND_PORT}"
+  else
+    # Both localhost AND the given host are allowed to call the backend --
+    # this is a comma-separated list (see core/config.py's cors_origin_list),
+    # so local testing on the machine itself keeps working alongside real
+    # access from wherever SERVER_HOST actually resolves.
+    DEFAULT_FRONTEND_ORIGIN="http://localhost:${FRONTEND_PORT},http://${SERVER_HOST}:${FRONTEND_PORT}"
+    # The frontend build can only point at one backend address, and it has
+    # to be one a real browser elsewhere can actually reach -- localhost
+    # would resolve to the *visitor's own machine*, not this server.
+    DEFAULT_BACKEND_URL="http://${SERVER_HOST}:${BACKEND_PORT}"
+  fi
+
+  FRONTEND_ORIGIN=$(ask "Frontend origin(s) (used for the backend's CORS_ORIGINS -- comma-separated is fine)" "$DEFAULT_FRONTEND_ORIGIN")
+  BACKEND_URL=$(ask "Backend base URL (used for the frontend's VITE_API_BASE_URL)" "$DEFAULT_BACKEND_URL")
+
+  WRITE_BACKEND_ENV=y
+  WRITE_FRONTEND_ENV=y
+  WRITE_ECOSYSTEM=y
 fi
-
-ACCESS_TOKEN_EXPIRE_MINUTES=$(ask "Access token lifetime (minutes)" "60")
-REFRESH_TOKEN_EXPIRE_DAYS=$(ask "Refresh token lifetime (days)" "7")
-
-heading "Frontend"
-
-FRONTEND_PORT=$(ask "Frontend port" "4173")
-
-echo
-echo "  If this server will only ever be opened from this same machine"
-echo "  (http://localhost:${FRONTEND_PORT}), leave the next answer blank."
-echo "  If people will open it from elsewhere -- another machine on your"
-echo "  network, or the internet -- enter the address they'll actually"
-echo "  type into their browser: a bare IP (203.0.113.10), or a domain"
-echo "  (erp.example.com) if you have DNS/HTTPS set up already. Don't"
-echo "  include http(s):// or a port -- those are added for you below."
-echo
-SERVER_HOST=$(ask "Server IP or domain (blank = localhost only)" "")
-
-if [[ -z "$SERVER_HOST" ]]; then
-  DEFAULT_FRONTEND_ORIGIN="http://localhost:${FRONTEND_PORT}"
-  DEFAULT_BACKEND_URL="http://localhost:${BACKEND_PORT}"
-else
-  # Both localhost AND the given host are allowed to call the backend --
-  # this is a comma-separated list (see core/config.py's cors_origin_list),
-  # so local testing on the machine itself keeps working alongside real
-  # access from wherever SERVER_HOST actually resolves.
-  DEFAULT_FRONTEND_ORIGIN="http://localhost:${FRONTEND_PORT},http://${SERVER_HOST}:${FRONTEND_PORT}"
-  # The frontend build can only point at one backend address, and it has
-  # to be one a real browser elsewhere can actually reach -- localhost
-  # would resolve to the *visitor's own machine*, not this server.
-  DEFAULT_BACKEND_URL="http://${SERVER_HOST}:${BACKEND_PORT}"
-fi
-
-FRONTEND_ORIGIN=$(ask "Frontend origin(s) (used for the backend's CORS_ORIGINS -- comma-separated is fine)" "$DEFAULT_FRONTEND_ORIGIN")
-BACKEND_URL=$(ask "Backend base URL (used for the frontend's VITE_API_BASE_URL)" "$DEFAULT_BACKEND_URL")
 
 heading "Bootstrap admin account"
 
@@ -214,7 +252,7 @@ fi
 heading "Process management"
 
 START_PM2=y
-ask_yes_no "Start both apps under pm2 when setup finishes?" y || START_PM2=n
+ask_yes_no "Start the app under pm2 when setup finishes?" y || START_PM2=n
 PM2_STARTUP=n
 if [[ "$START_PM2" == "y" ]]; then
   ask_yes_no "Enable pm2 to auto-start on system boot (runs 'pm2 startup', may prompt for sudo)?" n && PM2_STARTUP=y
@@ -264,11 +302,6 @@ info "Installing Python dependencies..."
 "$PIP" install --quiet -r requirements.txt
 ok "Backend dependencies installed."
 
-WRITE_BACKEND_ENV=y
-if [[ -f .env ]]; then
-  ask_yes_no ".env already exists in backend/ — overwrite it with these settings?" n && WRITE_BACKEND_ENV=y || WRITE_BACKEND_ENV=n
-fi
-
 if [[ "$WRITE_BACKEND_ENV" == "y" ]]; then
   cat > .env <<ENVFILE
 DB_HOST=${DB_HOST}
@@ -286,7 +319,7 @@ ENVFILE
   chmod 600 .env
   ok "Wrote backend/.env"
 else
-  warn "Left the existing backend/.env untouched."
+  ok "Using existing backend/.env."
 fi
 
 info "Applying database migrations (safe to re-run; already-applied changes are skipped)..."
@@ -315,18 +348,13 @@ info "Installing Node dependencies..."
 npm install --silent
 ok "Frontend dependencies installed."
 
-WRITE_FRONTEND_ENV=y
-if [[ -f .env ]]; then
-  ask_yes_no ".env already exists in frontend/ — overwrite it with these settings?" n && WRITE_FRONTEND_ENV=y || WRITE_FRONTEND_ENV=n
-fi
-
 if [[ "$WRITE_FRONTEND_ENV" == "y" ]]; then
   cat > .env <<ENVFILE
 VITE_API_BASE_URL=${BACKEND_URL}
 ENVFILE
   ok "Wrote frontend/.env"
 else
-  warn "Left the existing frontend/.env untouched."
+  ok "Using existing frontend/.env."
 fi
 
 info "Building the frontend for production..."
@@ -336,44 +364,33 @@ ok "Frontend built."
 cd "$SCRIPT_DIR"
 
 # ---------------------------------------------------------------------
-# pm2 ecosystem file
+# pm2 ecosystem file -- ONE service ('jdk') running both the backend
+# and frontend as child processes via scripts/run-all.mjs, instead of
+# two separate pm2 apps.
 # ---------------------------------------------------------------------
 heading "Process management (pm2)"
-
-ECOSYSTEM_FILE="$SCRIPT_DIR/ecosystem.config.js"
-WRITE_ECOSYSTEM=y
-if [[ -f "$ECOSYSTEM_FILE" ]]; then
-  ask_yes_no "ecosystem.config.js already exists — regenerate it with these settings?" n && WRITE_ECOSYSTEM=y || WRITE_ECOSYSTEM=n
-fi
 
 if [[ "$WRITE_ECOSYSTEM" == "y" ]]; then
   cat > "$ECOSYSTEM_FILE" <<JSFILE
 // Generated by install.sh on $(date -u +"%Y-%m-%dT%H:%M:%SZ").
 // Safe to edit by hand -- re-running install.sh will ask before
-// overwriting it.
+// overwriting it (or will reuse it as-is if you say so up front).
+//
+// One pm2 service runs both the backend and frontend, via
+// scripts/run-all.mjs -- see that file's header for why (they
+// restart together, and 'pm2 logs jdk' shows both, prefixed).
 module.exports = {
   apps: [
     {
-      name: 'jdk-backend',
-      cwd: './backend',
-      script: 'venv/bin/uvicorn',
-      args: 'app.main:app --host 0.0.0.0 --port ${BACKEND_PORT}',
-      interpreter: 'none',
-      autorestart: true,
-      max_restarts: 10,
-      env: {
-        PYTHONUNBUFFERED: '1',
-      },
-    },
-    {
-      name: 'jdk-frontend',
-      cwd: './frontend',
-      script: 'scripts/serve-static.mjs',
+      name: 'jdk',
+      script: 'scripts/run-all.mjs',
       interpreter: 'node',
+      cwd: '${SCRIPT_DIR}',
       autorestart: true,
       max_restarts: 10,
       env: {
-        PORT: '${FRONTEND_PORT}',
+        BACKEND_PORT: '${BACKEND_PORT}',
+        FRONTEND_PORT: '${FRONTEND_PORT}',
         API_BASE_URL: '${BACKEND_URL}',
       },
     },
@@ -382,14 +399,18 @@ module.exports = {
 JSFILE
   ok "Wrote ecosystem.config.js"
 else
-  warn "Left the existing ecosystem.config.js untouched."
+  ok "Using existing ecosystem.config.js."
 fi
 
 if [[ "$START_PM2" == "y" ]]; then
-  info "Starting apps under pm2..."
+  info "Starting the app under pm2..."
+  # Clean up an older two-app install (jdk-backend/jdk-frontend) if one
+  # is still registered under pm2 from before this script moved to a
+  # single combined service -- harmless no-op otherwise.
+  pm2 delete jdk-backend jdk-frontend >/dev/null 2>&1 || true
   pm2 start "$ECOSYSTEM_FILE"
   pm2 save
-  ok "pm2 apps started and saved."
+  ok "pm2 app started and saved."
 
   if [[ "$PM2_STARTUP" == "y" ]]; then
     info "Configuring pm2 to start on boot..."
@@ -402,6 +423,36 @@ if [[ "$START_PM2" == "y" ]]; then
       echo "  $STARTUP_CMD"
     fi
   fi
+
+  # -------------------------------------------------------------
+  # Health checks -- wait for both the backend and frontend to
+  # actually answer, not just for pm2 to say "online".
+  # -------------------------------------------------------------
+  heading "Health checks"
+
+  wait_for_http() {
+    local name="$1" url="$2" tries=30 i
+    for ((i = 1; i <= tries; i++)); do
+      if curl -fsS "$url" >/dev/null 2>&1; then
+        ok "$name answers on $url"
+        return 0
+      fi
+      sleep 1
+    done
+    fail "$name did NOT answer on $url after ${tries}s"
+    fail "Check: pm2 logs jdk --lines 50"
+    return 1
+  }
+
+  HEALTH_OK=y
+  wait_for_http "Backend" "http://localhost:${BACKEND_PORT}/api/health" || HEALTH_OK=n
+  wait_for_http "Frontend" "http://localhost:${FRONTEND_PORT}/" || HEALTH_OK=n
+
+  if [[ "$HEALTH_OK" != "y" ]]; then
+    warn "One or more health checks failed -- see 'pm2 logs jdk' for details. (./relaunch.sh re-runs these checks plus a few extra consistency checks any time.)"
+  fi
+else
+  warn "Skipped starting pm2 -- skipping health checks too. Start it yourself with: pm2 start ecosystem.config.js"
 fi
 
 # ---------------------------------------------------------------------
@@ -426,10 +477,10 @@ fi
 
 if [[ "$START_PM2" == "y" ]]; then
   echo ""
-  echo "  pm2 status         -- check both processes"
-  echo "  pm2 logs           -- tail logs for both"
-  echo "  pm2 restart all    -- restart both"
-  echo "  pm2 stop all       -- stop both"
+  echo "  pm2 status         -- check the service"
+  echo "  pm2 logs jdk       -- tail logs (both backend and frontend, prefixed)"
+  echo "  pm2 restart jdk    -- restart"
+  echo "  pm2 stop jdk       -- stop"
 fi
 
 echo ""

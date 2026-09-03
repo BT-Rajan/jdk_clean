@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 #
 # Cleanly stops, cross-checks, and restarts jdk_clean's backend +
-# frontend -- built specifically to catch, automatically where
-# possible, the handful of things that have caused "frontend can't
-# reach backend" after almost every relaunch so far:
+# frontend (run together as a single pm2 service, 'jdk' -- see
+# ecosystem.config.js and scripts/run-all.mjs) -- built specifically to
+# catch, automatically where possible, the handful of things that have
+# caused "frontend can't reach backend" after almost every relaunch so far:
 #
 #   1. A stray process (not managed by pm2, or a pm2 process under some
 #      other name) already squatting on the configured port, so the
@@ -54,8 +55,8 @@ if [[ ! -f ecosystem.config.js ]]; then
   exit 1
 fi
 
-BACKEND_PORT=$(grep -oP "(?<=--port )\d+" ecosystem.config.js | head -1)
-FRONTEND_PORT=$(grep -oP "(?<=PORT: ')\d+" ecosystem.config.js | head -1)
+BACKEND_PORT=$(grep -oP "(?<=BACKEND_PORT: ')\d+" ecosystem.config.js | head -1)
+FRONTEND_PORT=$(grep -oP "(?<=FRONTEND_PORT: ')\d+" ecosystem.config.js | head -1)
 ECOSYSTEM_API_BASE_URL=$(grep -oP "(?<=API_BASE_URL: ')[^']+" ecosystem.config.js | head -1)
 
 if [[ -z "$BACKEND_PORT" || -z "$FRONTEND_PORT" ]]; then
@@ -162,22 +163,31 @@ check_port_owner() {
   fi
   local cmd
   cmd=$(ps -p "$pid" -o comm= 2>/dev/null || echo "unknown")
-  local owner_name
-  owner_name=$(pm2 jlist 2>/dev/null | python3 -c "
+  # The pm2-tracked process for '$expected_pm2_name' is scripts/run-all.mjs
+  # itself (see ecosystem.config.js) -- it doesn't bind either port
+  # directly, it spawns the backend (uvicorn) and frontend (serve-
+  # static.mjs) as its own direct children, one of which actually holds
+  # the port. So "owned by this service" means "this port's listener is
+  # a direct child of the pm2-tracked pid", not "the listener pid IS the
+  # pm2-tracked pid".
+  local expected_pm2_pid
+  expected_pm2_pid=$(pm2 jlist 2>/dev/null | python3 -c "
 import json, sys
 try:
     procs = json.load(sys.stdin)
 except Exception:
     sys.exit(0)
 for p in procs:
-    if str(p.get('pid')) == '${pid}':
-        print(p.get('name', ''))
+    if p.get('name') == '${expected_pm2_name}':
+        print(p.get('pid', ''))
         break
 " 2>/dev/null)
-  if [[ "$owner_name" == "$expected_pm2_name" ]]; then
-    ok "Port ${port} is held by the correct pm2 process (${expected_pm2_name}, pid ${pid})."
+  local listener_ppid
+  listener_ppid=$(ps -p "$pid" -o ppid= 2>/dev/null | tr -d ' ')
+  if [[ -n "$expected_pm2_pid" && "$listener_ppid" == "$expected_pm2_pid" ]]; then
+    ok "Port ${port} is held by the correct pm2 service (${expected_pm2_name}, pid ${pid}, child of pm2 pid ${expected_pm2_pid})."
   else
-    warn "Port ${port} is held by pid ${pid} (${cmd}${owner_name:+, pm2 name: $owner_name}) -- NOT the expected pm2 process '${expected_pm2_name}'."
+    warn "Port ${port} is held by pid ${pid} (${cmd}) -- not a child of the expected pm2 service '${expected_pm2_name}'${expected_pm2_pid:+ (pm2 pid $expected_pm2_pid)}."
     warn "This is almost always why relaunches fail: the real process can't bind because something else already has the port."
     read -r -p "Kill pid ${pid} now? [y/N]: " KILL_IT
     if [[ "$KILL_IT" =~ ^[Yy]$ ]]; then
@@ -188,8 +198,8 @@ for p in procs:
   fi
 }
 
-check_port_owner "$BACKEND_PORT" "jdk-backend"
-check_port_owner "$FRONTEND_PORT" "jdk-frontend"
+check_port_owner "$BACKEND_PORT" "jdk"
+check_port_owner "$FRONTEND_PORT" "jdk"
 
 # -----------------------------------------------------------------
 # 5. Restart cleanly.
@@ -197,10 +207,12 @@ check_port_owner "$FRONTEND_PORT" "jdk-frontend"
 heading "Restarting"
 
 if command -v pm2 >/dev/null 2>&1; then
-  pm2 delete jdk-backend jdk-frontend >/dev/null 2>&1 || true
+  # jdk-backend/jdk-frontend is the old two-app name from before this
+  # became a single combined service -- harmless no-op if not present.
+  pm2 delete jdk-backend jdk-frontend jdk >/dev/null 2>&1 || true
   pm2 start ecosystem.config.js
   pm2 save
-  ok "pm2 processes (re)started."
+  ok "pm2 service (re)started."
 else
   fail "pm2 not found -- start the backend/frontend manually."
   exit 1
@@ -218,7 +230,7 @@ if curl -fsS "http://localhost:${BACKEND_PORT}/api/health" >/dev/null 2>&1; then
   ok "Backend answers on http://localhost:${BACKEND_PORT}/api/health"
 else
   fail "Backend did NOT answer on http://localhost:${BACKEND_PORT}/api/health"
-  fail "Check: pm2 logs jdk-backend --lines 30"
+  fail "Check: pm2 logs jdk --lines 30"
   PROBLEMS=$((PROBLEMS+1))
 fi
 
@@ -227,7 +239,7 @@ if [[ "$FRONTEND_RESPONSE" == "200" ]]; then
   ok "Frontend answers on http://localhost:${FRONTEND_PORT}/"
 else
   fail "Frontend did NOT answer cleanly on http://localhost:${FRONTEND_PORT}/ (got HTTP ${FRONTEND_RESPONSE})"
-  fail "Check: pm2 logs jdk-frontend --lines 30"
+  fail "Check: pm2 logs jdk --lines 30"
   PROBLEMS=$((PROBLEMS+1))
 fi
 

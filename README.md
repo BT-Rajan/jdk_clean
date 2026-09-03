@@ -53,32 +53,50 @@ If you'd rather do it by hand or understand each step, see:
 
 ## Running with pm2
 
-`install.sh`/`install.bat` generate `ecosystem.config.js` at the repo root (not
-committed — it's environment-specific: ports, URLs). It defines two
-apps:
+`install.sh` generates `ecosystem.config.js` at the repo root (not
+committed — it's environment-specific: ports, URLs). It defines a
+single pm2 service, **jdk**, running `scripts/run-all.mjs` — a small
+launcher that starts both the backend and frontend as its own direct
+child processes and forwards their output (prefixed `[backend]`/
+`[frontend]`) and shutdown signals, so the pair is managed, restarted,
+and logged as one unit rather than two separate pm2 apps:
 
-- **jdk-backend** — `uvicorn app.main:app` from the backend venv
-- **jdk-frontend** — `frontend/scripts/serve-static.mjs`, a small
+- **backend** — `uvicorn app.main:app` from the backend venv
+- **frontend** — `frontend/scripts/serve-static.mjs`, a small
   dependency-free static file server (gzip, immutable caching on
   hashed assets, SPA fallback, security headers including a CSP) —
   see [frontend/README.md](frontend/README.md#deploying) for why this
   exists instead of a third-party static-server package.
 
+If either child process dies unexpectedly, the launcher stops the
+other one too and exits non-zero, so pm2's autorestart brings the pair
+back up together instead of leaving one half running alone.
+
 ```bash
-pm2 status              # check both processes
-pm2 logs                # tail logs for both
-pm2 logs jdk-backend    # tail logs for one
-pm2 restart all         # restart both
-pm2 stop all            # stop both
+pm2 status              # check the service
+pm2 logs jdk            # tail logs (both backend and frontend, prefixed)
+pm2 restart jdk         # restart
+pm2 stop jdk            # stop
 pm2 save                # persist the current process list
 pm2 startup             # (optional, Linux/macOS) print the command to auto-start pm2 on boot
 ```
 
-On Windows, `pm2 startup` doesn't apply (it targets systemd/upstart/launchd) --
-`install.bat` offers to install the community `pm2-windows-startup` package
-instead, which registers pm2 to resurrect its process list at login.
+`install.sh` re-run on an existing install asks once, up front, whether
+to reuse the existing `backend/.env`, `frontend/.env`, and
+`ecosystem.config.js` as-is — if so, every database/port/secret
+question is skipped and the existing ports are read straight out of
+`ecosystem.config.js`. Database migrations always run on every
+install/re-run (idempotent), and once pm2 starts the service the
+script waits for and health-checks both the backend and frontend
+before declaring success.
 
-If you didn't generate `ecosystem.config.js` via `install.sh`/`install.bat`, you can
+> `install.bat` (Windows) hasn't been updated to this single-service
+> model yet — it still generates two separate pm2 apps, **jdk-backend**
+> and **jdk-frontend**, with `pm2 logs jdk-backend`/`pm2 logs
+> jdk-frontend` and `pm2 restart all`/`pm2 stop all` to manage them.
+> `./relaunch.sh` (below) only understands the single-service layout.
+
+If you didn't generate `ecosystem.config.js` via `install.sh`, you can
 start each app manually — see the "Run the server" sections in each
 app's README — and skip pm2 entirely.
 
@@ -102,10 +120,10 @@ It checks: `frontend/.env`'s `VITE_API_BASE_URL` against
 latter at runtime -- see `frontend/scripts/serve-static.mjs`), whether
 `frontend/dist/` is older than `.env` (a sign it needs rebuilding),
 whether `backend/.env`'s `CORS_ORIGINS` actually covers the frontend's
-real origin, whether anything other than the real `jdk-backend`/
-`jdk-frontend` pm2 processes is holding either port, and finally does
-a live health check against both once restarted -- not just trusting
-that pm2 says "online."
+real origin, whether anything other than the real `jdk` pm2 service's
+own backend/frontend child processes is holding either port, and
+finally does a live health check against both once restarted -- not
+just trusting that pm2 says "online."
 
 ## Testing the login
 
