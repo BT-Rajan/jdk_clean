@@ -34,6 +34,16 @@ from sqlalchemy import text  # noqa: E402
 
 from app.core.database import SessionLocal  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
+
+# Unused directly, but required: User.department is declared as a string
+# relationship("Department") and only type-imports Department under
+# TYPE_CHECKING (see app/models/user.py) to avoid a circular import.
+# Querying User here without this import raises "expression 'Department'
+# failed to locate a name" from SQLAlchemy's mapper configuration --
+# the full app never hits this because some other router along the way
+# always imports app.models.department first, but a standalone script
+# that only touches User doesn't.
+from app.models.department import Department  # noqa: E402, F401
 from app.models.user import User  # noqa: E402
 
 NUMBER_SERIES = [

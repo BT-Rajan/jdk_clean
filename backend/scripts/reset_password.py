@@ -27,6 +27,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.database import SessionLocal  # noqa: E402
 from app.core.security import hash_password  # noqa: E402
+
+# Unused directly, but required -- see the matching comment in
+# scripts/seed_admin.py: User.department is a string relationship() that
+# needs app.models.department imported somewhere before mapper
+# configuration, and this script (unlike the full app) doesn't otherwise
+# import it.
+from app.models.department import Department  # noqa: E402, F401
 from app.models.user import User  # noqa: E402
 
 MIN_PASSWORD_LENGTH = 8
