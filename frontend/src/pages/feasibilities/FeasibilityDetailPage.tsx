@@ -569,6 +569,10 @@ export function FeasibilityDetailPage() {
           setStageResultsOpen(false)
           setAdminRejectOverrideOpen(true)
         }}
+        onAcknowledgeStaleOpen={() => {
+          setStageResultsOpen(false)
+          setAdminReviewOpen(true)
+        }}
       />
 
       <NotesModal

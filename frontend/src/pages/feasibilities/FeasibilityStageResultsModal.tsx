@@ -54,6 +54,7 @@ interface FeasibilityStageResultsModalProps {
   onSendForApproval: () => void
   onAdminApproveOverride: () => void
   onAdminRejectOverride: () => void
+  onAcknowledgeStaleOpen: () => void
 }
 
 /** Pops up right after "Run check" (and via "View check results") --
@@ -76,15 +77,19 @@ export function FeasibilityStageResultsModal({
   onSendForApproval,
   onAdminApproveOverride,
   onAdminRejectOverride,
+  onAcknowledgeStaleOpen,
 }: FeasibilityStageResultsModalProps) {
   if (!feasibility) return null
   const stages = computeFeasibilityStages(feasibility)
   const overallFeasible = feasibility.status === 'feasible'
 
+  const overridePending = feasibility.admin_review_required && feasibility.admin_review_reason === 'override'
+  const staleOpenPending = feasibility.admin_review_required && feasibility.admin_review_reason === 'stale_open'
+
   const canDecideException =
     !overallFeasible && feasibility.status === 'exception_pending' && !feasibility.admin_review_required && allowWrite
-  const canDecideOverride =
-    feasibility.admin_review_required && feasibility.admin_review_reason === 'override' && allowAdmin
+  const canDecideOverride = overridePending && allowAdmin
+  const canAcknowledgeStaleOpen = staleOpenPending && allowAdmin
 
   return (
     <Modal open={open} title="Feasibility check results" onClose={onClose} wide>
@@ -135,9 +140,23 @@ export function FeasibilityStageResultsModal({
         </div>
       )}
 
-      {!overallFeasible && !canDecideException && !canDecideOverride && feasibility.admin_review_required && (
+      {canAcknowledgeStaleOpen && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <span>This check has been open more than 5 days with no resolution — needs admin review.</span>
+          <Button size="sm" onClick={onAcknowledgeStaleOpen}>Acknowledge</Button>
+        </div>
+      )}
+
+      {overridePending && !allowAdmin && (
         <p className="mt-6 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           Sent to admin for approval — awaiting their decision before this can be quoted.
+        </p>
+      )}
+
+      {staleOpenPending && !allowAdmin && (
+        <p className="mt-6 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          This check has been open more than 5 days with no resolution — flagged for admin review before it can
+          move forward.
         </p>
       )}
 
