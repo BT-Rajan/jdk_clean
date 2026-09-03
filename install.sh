@@ -154,12 +154,30 @@ if [[ "$REUSE_CONFIG" == "y" ]]; then
   # CORS, VITE_API_BASE_URL) is already in the .env files and read by
   # the app itself -- the only values this script's own logic still
   # needs are the ports and backend URL baked into ecosystem.config.js.
-  BACKEND_PORT=$(grep -oP "(?<=BACKEND_PORT: ')\d+" "$ECOSYSTEM_FILE" | head -1)
-  FRONTEND_PORT=$(grep -oP "(?<=FRONTEND_PORT: ')\d+" "$ECOSYSTEM_FILE" | head -1)
-  BACKEND_URL=$(grep -oP "(?<=API_BASE_URL: ')[^']+" "$ECOSYSTEM_FILE" | head -1)
-  [[ -n "$BACKEND_PORT" && -n "$FRONTEND_PORT" ]] \
-    || die "Couldn't parse ports out of the existing ecosystem.config.js -- run this again and choose to reconfigure."
-  ok "Using existing ports: backend ${BACKEND_PORT}, frontend ${FRONTEND_PORT}, API base URL ${BACKEND_URL:-<not set>}."
+  #
+  # The `|| true` on each grep matters: under `set -e` + `pipefail`, a
+  # `grep ... | head -1` whose grep matches nothing makes the WHOLE
+  # pipeline exit non-zero (pipefail sees grep's own failure even
+  # though head itself exits 0), which would silently kill this
+  # script right here with no message at all -- exactly what an older
+  # ecosystem.config.js (from before this became a single-service
+  # layout, e.g. one with no BACKEND_PORT key at all) does. `|| true`
+  # lets that fall through to the explicit, informative check below.
+  BACKEND_PORT=$(grep -oP "(?<=BACKEND_PORT: ')\d+" "$ECOSYSTEM_FILE" | head -1 || true)
+  FRONTEND_PORT=$(grep -oP "(?<=FRONTEND_PORT: ')\d+" "$ECOSYSTEM_FILE" | head -1 || true)
+  BACKEND_URL=$(grep -oP "(?<=API_BASE_URL: ')[^']+" "$ECOSYSTEM_FILE" | head -1 || true)
+
+  if [[ -z "$BACKEND_PORT" || -z "$FRONTEND_PORT" ]]; then
+    warn "ecosystem.config.js doesn't look like the current single-service format (no BACKEND_PORT/FRONTEND_PORT found in it) -- looks like it's from an older two-app install."
+    info "backend/.env and frontend/.env are still being reused as-is; just need the ports again to regenerate ecosystem.config.js in the current format."
+    DEFAULT_BACKEND_URL_FROM_ENV=$(grep -oP '(?<=^VITE_API_BASE_URL=).+' "$FRONTEND_DIR/.env" | head -1 || true)
+    BACKEND_PORT=$(ask "Backend port" "8000")
+    FRONTEND_PORT=$(ask "Frontend port" "4173")
+    BACKEND_URL=$(ask "Backend base URL (used for the frontend's VITE_API_BASE_URL / CSP)" "${DEFAULT_BACKEND_URL_FROM_ENV:-http://localhost:${BACKEND_PORT}}")
+    WRITE_ECOSYSTEM=y
+  else
+    ok "Using existing ports: backend ${BACKEND_PORT}, frontend ${FRONTEND_PORT}, API base URL ${BACKEND_URL:-<not set>}."
+  fi
 else
   heading "Database"
 
