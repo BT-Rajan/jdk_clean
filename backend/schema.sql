@@ -113,6 +113,12 @@ CREATE TABLE IF NOT EXISTS customers (
     credit_limit    DECIMAL(14,2) NOT NULL DEFAULT 0,
     payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
     status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    -- Onboarding workflow for a newly created customer -- see
+    -- app/models/customer.py ONBOARDING_ALLOWED_TRANSITIONS. Independent
+    -- of `status` above: a customer can finish onboarding (reach
+    -- 'active') and still be toggled inactive later.
+    onboarding_status ENUM('pending','under_review','active','on_hold','rejected') NOT NULL DEFAULT 'pending',
+    onboarding_reason TEXT NULL,        -- reason recorded the last time onboarding moved to 'rejected'/'on_hold'
     notes           TEXT NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,

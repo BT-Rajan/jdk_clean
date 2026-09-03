@@ -6,11 +6,17 @@ from app.core.database import get_db
 from app.core.permissions import require_page_access
 from app.crud.master_data import customer_crud
 from app.models.user import User
-from app.schemas.customer import CustomerCreate, CustomerOut, CustomerUpdate
+from app.schemas.customer import (
+    CustomerCreate,
+    CustomerOnboardingStatusUpdate,
+    CustomerOut,
+    CustomerUpdate,
+)
 from app.schemas.payment import CustomerCreditStatusOut
-from app.services import payment_service
+from app.services import customer_service, payment_service
 
 read_guard = require_page_access("customers", "read")
+write_guard = require_page_access("customers", "write")
 
 router = build_crud_router(
     crud=customer_crud,
@@ -34,3 +40,15 @@ def get_customer_credit(
     change_status starts refusing to confirm a new order for this
     customer without admin approval."""
     return payment_service.get_customer_credit_status(db, customer_id)
+
+
+@router.post("/{customer_id}/onboarding-status", response_model=CustomerOut)
+def update_customer_onboarding_status(
+    customer_id: int,
+    payload: CustomerOnboardingStatusUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    return customer_service.change_onboarding_status(
+        db, customer_id, payload.status, payload.reason, user.id
+    )

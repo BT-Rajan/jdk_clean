@@ -2,6 +2,9 @@
 
 export type ActiveStatus = 'active' | 'inactive'
 
+/** Mirrors backend/app/models/customer.py CUSTOMER_ONBOARDING_STATUSES. */
+export type CustomerOnboardingStatus = 'pending' | 'under_review' | 'active' | 'on_hold' | 'rejected'
+
 export interface Customer {
   id: number
   code: string
@@ -14,6 +17,8 @@ export interface Customer {
   credit_limit: number
   payment_terms_days: number
   status: ActiveStatus
+  onboarding_status: CustomerOnboardingStatus
+  onboarding_reason: string | null
 }
 
 export interface CustomerPayload {

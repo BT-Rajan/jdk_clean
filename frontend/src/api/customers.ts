@@ -1,5 +1,5 @@
 import type { PagedResponse, ListQueryParams, MessageResponse } from '@/types/common'
-import type { Customer, CustomerPayload } from '@/types/customer'
+import type { Customer, CustomerOnboardingStatus, CustomerPayload } from '@/types/customer'
 import type { CustomerCreditStatus } from '@/types/payment'
 import { apiClient } from './client'
 
@@ -37,5 +37,14 @@ export async function restoreCustomer(id: number): Promise<Customer> {
  * confirming a new order for this customer needs admin approval. */
 export async function getCustomerCredit(id: number): Promise<CustomerCreditStatus> {
   const { data } = await apiClient.get<CustomerCreditStatus>(`/api/customers/${id}/credit`)
+  return data
+}
+
+export async function updateCustomerOnboardingStatus(
+  id: number,
+  status: CustomerOnboardingStatus,
+  reason?: string,
+): Promise<Customer> {
+  const { data } = await apiClient.post<Customer>(`/api/customers/${id}/onboarding-status`, { status, reason })
   return data
 }

@@ -27,6 +27,9 @@ const CustomersListPage = lazy(() =>
 const CustomerFormPage = lazy(() =>
   import('@/pages/customers/CustomerFormPage').then((m) => ({ default: m.CustomerFormPage })),
 )
+const CustomerOnboardingWizardPage = lazy(() =>
+  import('@/pages/customers/CustomerOnboardingWizardPage').then((m) => ({ default: m.CustomerOnboardingWizardPage })),
+)
 const CustomerDetailPage = lazy(() =>
   import('@/pages/customers/CustomerDetailPage').then((m) => ({ default: m.CustomerDetailPage })),
 )
@@ -192,7 +195,7 @@ export function App() {
             <Route path="/change-password" element={<Navigate to="/profile" replace />} />
 
             <Route path="/customers" element={<CustomersListPage />} />
-            <Route path="/customers/new" element={<CustomerFormPage />} />
+            <Route path="/customers/new" element={<CustomerOnboardingWizardPage />} />
             <Route path="/customers/:id" element={<CustomerDetailPage />} />
             <Route path="/customers/:id/edit" element={<CustomerFormPage />} />
 

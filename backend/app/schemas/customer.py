@@ -44,5 +44,16 @@ class CustomerOut(BaseModel):
     credit_limit: float
     payment_terms_days: int
     status: str
+    onboarding_status: str
+    onboarding_reason: str | None
 
     model_config = {"from_attributes": True}
+
+
+class CustomerOnboardingStatusUpdate(BaseModel):
+    """'active'/'pending' etc. -- see app/models/customer.py
+    CUSTOMER_ONBOARDING_STATUSES. reason is required by the service layer
+    when status is 'rejected' or 'on_hold' (assert_reason_given)."""
+
+    status: str = Field(pattern="^(pending|under_review|active|on_hold|rejected)$")
+    reason: str | None = None
