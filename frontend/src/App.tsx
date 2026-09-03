@@ -40,6 +40,9 @@ const SuppliersListPage = lazy(() =>
 const SupplierFormPage = lazy(() =>
   import('@/pages/suppliers/SupplierFormPage').then((m) => ({ default: m.SupplierFormPage })),
 )
+const SupplierOnboardingWizardPage = lazy(() =>
+  import('@/pages/suppliers/SupplierOnboardingWizardPage').then((m) => ({ default: m.SupplierOnboardingWizardPage })),
+)
 const SupplierDetailPage = lazy(() =>
   import('@/pages/suppliers/SupplierDetailPage').then((m) => ({ default: m.SupplierDetailPage })),
 )
@@ -200,7 +203,7 @@ export function App() {
             <Route path="/customers/:id/edit" element={<CustomerFormPage />} />
 
             <Route path="/suppliers" element={<SuppliersListPage />} />
-            <Route path="/suppliers/new" element={<SupplierFormPage />} />
+            <Route path="/suppliers/new" element={<SupplierOnboardingWizardPage />} />
             <Route path="/suppliers/:id" element={<SupplierDetailPage />} />
             <Route path="/suppliers/:id/edit" element={<SupplierFormPage />} />
 

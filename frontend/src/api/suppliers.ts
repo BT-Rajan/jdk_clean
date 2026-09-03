@@ -1,5 +1,5 @@
 import type { PagedResponse, ListQueryParams, MessageResponse } from '@/types/common'
-import type { Supplier, SupplierPayload } from '@/types/supplier'
+import type { Supplier, SupplierOnboardingStatus, SupplierPayload } from '@/types/supplier'
 import { apiClient } from './client'
 
 export async function listSuppliers(params: ListQueryParams): Promise<PagedResponse<Supplier>> {
@@ -29,5 +29,14 @@ export async function deleteSupplier(id: number): Promise<MessageResponse> {
 
 export async function restoreSupplier(id: number): Promise<Supplier> {
   const { data } = await apiClient.post<Supplier>(`/api/suppliers/${id}/restore`)
+  return data
+}
+
+export async function updateSupplierOnboardingStatus(
+  id: number,
+  status: SupplierOnboardingStatus,
+  reason?: string,
+): Promise<Supplier> {
+  const { data } = await apiClient.post<Supplier>(`/api/suppliers/${id}/onboarding-status`, { status, reason })
   return data
 }

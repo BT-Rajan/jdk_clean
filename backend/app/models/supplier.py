@@ -1,4 +1,4 @@
-from sqlalchemy import Enum, SmallInteger, String
+from sqlalchemy import Enum, SmallInteger, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -6,6 +6,26 @@ from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.user import BigPK
 
 SUPPLIER_MODES_OF_SUPPLY = ("direct", "distributor", "broker", "import")
+
+# Onboarding tracks getting a new supplier record fully set up and
+# reviewed after the "New supplier" wizard creates it -- separate from
+# `status` (active/inactive/suspended), which is whether the supplier is
+# currently usable for purchase orders at all once onboarded. Mirrors
+# app/models/customer.py's onboarding workflow exactly -- same shape,
+# applied to suppliers instead of customers.
+SUPPLIER_ONBOARDING_STATUSES = ("pending", "under_review", "active", "on_hold", "rejected")
+
+ONBOARDING_ALLOWED_TRANSITIONS = {
+    "pending": {"under_review"},
+    "under_review": {"active", "rejected", "pending"},
+    "active": {"on_hold"},
+    "on_hold": {"under_review", "active"},
+    "rejected": {"pending"},
+}
+# Rejecting or putting onboarding on hold needs a reason on record --
+# same rule quotations/orders/production/customers apply to their own
+# reason-gated transitions (see supplier_service.change_onboarding_status).
+ONBOARDING_STATUSES_REQUIRING_REASON = {"rejected", "on_hold"}
 
 
 class Supplier(Base, TimestampMixin, SoftDeleteMixin):
@@ -30,3 +50,12 @@ class Supplier(Base, TimestampMixin, SoftDeleteMixin):
         nullable=False,
         default="active",
     )
+    onboarding_status: Mapped[str] = mapped_column(
+        Enum(*SUPPLIER_ONBOARDING_STATUSES, name="supplier_onboarding_status"),
+        nullable=False,
+        default="pending",
+    )
+    # Reason the last time onboarding moved to 'rejected' or 'on_hold' --
+    # set by supplier_service.change_onboarding_status, mirrors
+    # Customer.onboarding_reason / Quotation.close_reason.
+    onboarding_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
