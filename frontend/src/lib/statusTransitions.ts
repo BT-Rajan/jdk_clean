@@ -3,6 +3,31 @@ import type { OrderStatus, SettableOrderStatus } from '@/types/order'
 import type { ProductionStatus, SettableProductionStatus } from '@/types/production'
 import type { PurchaseOrderStatus, SettablePurchaseOrderStatus } from '@/types/purchaseOrder'
 import type { DeliveryNoteStatus, SettableDeliveryNoteStatus } from '@/types/deliveryNote'
+import type { CustomerOnboardingStatus } from '@/types/customer'
+import type { SupplierOnboardingStatus } from '@/types/supplier'
+
+/** Mirrors ONBOARDING_ALLOWED_TRANSITIONS in backend/app/models/customer.py. */
+export const CUSTOMER_ONBOARDING_TRANSITIONS: Record<CustomerOnboardingStatus, CustomerOnboardingStatus[]> = {
+  pending: ['under_review'],
+  under_review: ['active', 'rejected', 'pending'],
+  active: ['on_hold'],
+  on_hold: ['under_review', 'active'],
+  rejected: ['pending'],
+}
+/** Mirrors backend/app/models/customer.py ONBOARDING_STATUSES_REQUIRING_REASON. */
+export const CUSTOMER_ONBOARDING_STATUSES_REQUIRING_REASON: CustomerOnboardingStatus[] = ['rejected', 'on_hold']
+
+/** Mirrors ONBOARDING_ALLOWED_TRANSITIONS in backend/app/models/supplier.py --
+ * same shape as CUSTOMER_ONBOARDING_TRANSITIONS, applied to suppliers. */
+export const SUPPLIER_ONBOARDING_TRANSITIONS: Record<SupplierOnboardingStatus, SupplierOnboardingStatus[]> = {
+  pending: ['under_review'],
+  under_review: ['active', 'rejected', 'pending'],
+  active: ['on_hold'],
+  on_hold: ['under_review', 'active'],
+  rejected: ['pending'],
+}
+/** Mirrors backend/app/models/supplier.py ONBOARDING_STATUSES_REQUIRING_REASON. */
+export const SUPPLIER_ONBOARDING_STATUSES_REQUIRING_REASON: SupplierOnboardingStatus[] = ['rejected', 'on_hold']
 
 /** Mirrors ALLOWED_TRANSITIONS in backend/app/models/quotation.py. Drives
  * which status-change buttons the detail page offers -- 'converted' is

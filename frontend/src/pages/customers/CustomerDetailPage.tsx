@@ -4,7 +4,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
-import { deleteCustomer, getCustomer, getCustomerCredit, restoreCustomer } from '@/api/customers'
+import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
+import {
+  deleteCustomer,
+  getCustomer,
+  getCustomerCredit,
+  restoreCustomer,
+  updateCustomerOnboardingStatus,
+} from '@/api/customers'
 import { listFeasibilities } from '@/api/feasibilities'
 import { listQuotations } from '@/api/quotations'
 import { listOrders } from '@/api/orders'
@@ -18,6 +25,7 @@ import { formatCurrency } from '@/lib/currency'
 import { formatDate } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
+import { CUSTOMER_ONBOARDING_STATUSES_REQUIRING_REASON, CUSTOMER_ONBOARDING_TRANSITIONS } from '@/lib/statusTransitions'
 
 function ActivitySection<T>({
   title,
@@ -57,6 +65,7 @@ export function CustomerDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [onboardingBusy, setOnboardingBusy] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -98,6 +107,20 @@ export function CustomerDetailPage() {
       setError(getApiErrorMessage(err))
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function handleOnboardingStatusChange(status: (typeof CUSTOMER_ONBOARDING_TRANSITIONS)['pending'][number], reason?: string) {
+    setOnboardingBusy(true)
+    setError(null)
+    try {
+      const updated = await updateCustomerOnboardingStatus(customerId, status, reason)
+      setCustomer(updated)
+      setNotice(`Onboarding status changed to ${status.replace(/_/g, ' ')}.`)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setOnboardingBusy(false)
     }
   }
 
@@ -167,6 +190,7 @@ export function CustomerDetailPage() {
       <GlassCard className="p-8">
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <Field label="Status" value={<StatusBadge status={customer.status} />} />
+          <Field label="Onboarding" value={<StatusBadge status={customer.onboarding_status} />} />
           <Field label="Contact person" value={customer.contact_person} />
           <Field label="Email" value={customer.email} />
           <Field label="Phone" value={customer.phone} />
@@ -198,6 +222,32 @@ export function CustomerDetailPage() {
           </div>
         )}
       </GlassCard>
+
+      {(() => {
+        const nextOnboardingStatuses = CUSTOMER_ONBOARDING_TRANSITIONS[customer.onboarding_status]
+        const canChangeOnboarding = canWrite(user?.role) && !justDeleted && nextOnboardingStatuses.length > 0
+        if (!customer.onboarding_reason && !canChangeOnboarding) return null
+        return (
+          <GlassCard className="mt-6 p-8">
+            <h2 className="mb-4 font-display text-base font-medium text-white">Onboarding</h2>
+            {customer.onboarding_reason && (
+              <p className="mb-4 text-sm text-white/60">
+                <span className="text-white/40">Reason on file: </span>
+                {customer.onboarding_reason}
+              </p>
+            )}
+            {canChangeOnboarding && (
+              <StatusTransitionButtons
+                nextStatuses={nextOnboardingStatuses}
+                reasonRequiredFor={CUSTOMER_ONBOARDING_STATUSES_REQUIRING_REASON}
+                reasonLabel="Reason"
+                busy={onboardingBusy}
+                onChange={handleOnboardingStatusChange}
+              />
+            )}
+          </GlassCard>
+        )
+      })()}
 
       <div className="mt-6 flex flex-col gap-6">
         <ActivitySection

@@ -3,11 +3,13 @@ import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, RatingStars, Spinner, StatusBadge } from '@/components/ui'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
-import { deleteSupplier, getSupplier, restoreSupplier } from '@/api/suppliers'
+import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
+import { deleteSupplier, getSupplier, restoreSupplier, updateSupplierOnboardingStatus } from '@/api/suppliers'
 import type { Supplier } from '@/types/supplier'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
+import { SUPPLIER_ONBOARDING_STATUSES_REQUIRING_REASON, SUPPLIER_ONBOARDING_TRANSITIONS } from '@/lib/statusTransitions'
 import { SuppliedMaterialsEditor } from './SuppliedMaterialsEditor'
 
 const MODE_OF_SUPPLY_LABELS: Record<string, string> = {
@@ -28,6 +30,7 @@ export function SupplierDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [onboardingBusy, setOnboardingBusy] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
 
@@ -49,6 +52,20 @@ export function SupplierDetailPage() {
       setError(getApiErrorMessage(err))
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function handleOnboardingStatusChange(status: (typeof SUPPLIER_ONBOARDING_TRANSITIONS)['pending'][number], reason?: string) {
+    setOnboardingBusy(true)
+    setError(null)
+    try {
+      const updated = await updateSupplierOnboardingStatus(supplierId, status, reason)
+      setSupplier(updated)
+      setNotice(`Onboarding status changed to ${status.replace(/_/g, ' ')}.`)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setOnboardingBusy(false)
     }
   }
 
@@ -114,6 +131,7 @@ export function SupplierDetailPage() {
       <GlassCard className="p-8">
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <Field label="Status" value={<StatusBadge status={supplier.status} />} />
+          <Field label="Onboarding" value={<StatusBadge status={supplier.onboarding_status} />} />
           <Field label="Contact person" value={supplier.contact_person} />
           <Field label="Email" value={supplier.email} />
           <Field label="Phone" value={supplier.phone} />
@@ -127,6 +145,32 @@ export function SupplierDetailPage() {
           <Field label="Rating" value={<RatingStars rating={supplier.rating} />} />
         </dl>
       </GlassCard>
+
+      {(() => {
+        const nextOnboardingStatuses = SUPPLIER_ONBOARDING_TRANSITIONS[supplier.onboarding_status]
+        const canChangeOnboarding = canWrite(user?.role) && !justDeleted && nextOnboardingStatuses.length > 0
+        if (!supplier.onboarding_reason && !canChangeOnboarding) return null
+        return (
+          <GlassCard className="mt-6 p-8">
+            <h2 className="mb-4 font-display text-base font-medium text-white">Onboarding</h2>
+            {supplier.onboarding_reason && (
+              <p className="mb-4 text-sm text-white/60">
+                <span className="text-white/40">Reason on file: </span>
+                {supplier.onboarding_reason}
+              </p>
+            )}
+            {canChangeOnboarding && (
+              <StatusTransitionButtons
+                nextStatuses={nextOnboardingStatuses}
+                reasonRequiredFor={SUPPLIER_ONBOARDING_STATUSES_REQUIRING_REASON}
+                reasonLabel="Reason"
+                busy={onboardingBusy}
+                onChange={handleOnboardingStatusChange}
+              />
+            )}
+          </GlassCard>
+        )
+      })()}
 
       <div className="mt-6">
         <SuppliedMaterialsEditor supplierId={supplierId} canEdit={canWrite(user?.role)} />

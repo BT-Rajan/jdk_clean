@@ -2,29 +2,17 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { Alert, Button, GlassCard, SelectField, Spinner, TextareaField, TextField } from '@/components/ui'
-import { createCustomer, getCustomer, updateCustomer } from '@/api/customers'
+import { Alert, Button, GlassCard, SelectField, Spinner, TextField } from '@/components/ui'
+import { getCustomer, updateCustomer } from '@/api/customers'
 import { getApiErrorMessage } from '@/lib/apiError'
 import {
   customerEditSchema,
-  customerSchema,
   type CustomerEditFormValues,
   type CustomerEditSubmitValues,
-  type CustomerFormValues,
-  type CustomerSubmitValues,
 } from '@/lib/validation'
-
-/** Dispatches to a create or edit form -- the two have different field
- * sets (see types/customer.ts on why edit omits code/billing_address/
- * shipping_address/notes), so they're kept as separate, cleanly
- * typed components rather than one form with a union type. */
-export function CustomerFormPage() {
-  const { id } = useParams()
-  return id ? <CustomerEditForm id={Number(id)} /> : <CustomerCreateForm />
-}
 
 function FormShell({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -37,84 +25,13 @@ function FormShell({ title, children }: { title: string; children: ReactNode }) 
   )
 }
 
-function CustomerCreateForm() {
-  const navigate = useNavigate()
-  const [formError, setFormError] = useState<string | null>(null)
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<CustomerFormValues, unknown, CustomerSubmitValues>({
-    resolver: zodResolver(customerSchema),
-    defaultValues: {
-      code: '',
-      name: '',
-      contact_person: '',
-      email: '',
-      phone: '',
-      billing_address: '',
-      shipping_address: '',
-      city: '',
-      country: '',
-      credit_limit: 0,
-      payment_terms_days: 30,
-      status: 'active',
-      notes: '',
-    },
-  })
-
-  async function onSubmit(values: CustomerSubmitValues) {
-    setFormError(null)
-    try {
-      const created = await createCustomer(values)
-      navigate(`/customers/${created.id}`)
-    } catch (err) {
-      setFormError(getApiErrorMessage(err))
-    }
-  }
-
-  return (
-    <FormShell title="New customer">
-      <Alert variant="error">{formError}</Alert>
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <TextField label="Code" error={errors.code?.message} {...register('code')} />
-          <TextField label="Name" error={errors.name?.message} {...register('name')} />
-        </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <TextField label="Contact person" {...register('contact_person')} />
-          <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
-        </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-          <TextField label="Phone" {...register('phone')} />
-          <TextField label="City" {...register('city')} />
-          <TextField label="Country" {...register('country')} />
-        </div>
-        <TextareaField label="Billing address" {...register('billing_address')} />
-        <TextareaField label="Shipping address" {...register('shipping_address')} />
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-          <TextField
-            label="Credit limit"
-            type="number"
-            step="0.01"
-            hint="0 = not enforced. Above 0, confirming a new order that would push this customer's outstanding balance over the limit needs admin approval."
-            error={errors.credit_limit?.message}
-            {...register('credit_limit')}
-          />
-          <TextField label="Payment terms (days)" type="number" error={errors.payment_terms_days?.message} {...register('payment_terms_days')} />
-          <SelectField label="Status" {...register('status')}>
-            <option value="active">Active</option>
-            <option value="inactive">Inactive</option>
-          </SelectField>
-        </div>
-        <TextareaField label="Notes" {...register('notes')} />
-        <div className="mt-2 flex justify-end gap-3">
-          <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
-          <Button type="submit" isLoading={isSubmitting}>Create customer</Button>
-        </div>
-      </form>
-    </FormShell>
-  )
+/** Editing an existing customer. Creating a new one goes through the
+ * multi-step CustomerOnboardingWizardPage instead (see /customers/new
+ * in App.tsx) -- this component only handles /customers/:id/edit now. */
+export function CustomerFormPage() {
+  const { id } = useParams()
+  if (!id) return <Navigate to="/customers/new" replace />
+  return <CustomerEditForm id={Number(id)} />
 }
 
 function CustomerEditForm({ id }: { id: number }) {

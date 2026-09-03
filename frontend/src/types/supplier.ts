@@ -3,6 +3,9 @@
 export type SupplierStatus = 'active' | 'inactive' | 'suspended'
 export type ModeOfSupply = 'direct' | 'distributor' | 'broker' | 'import'
 
+/** Mirrors backend/app/models/supplier.py SUPPLIER_ONBOARDING_STATUSES. */
+export type SupplierOnboardingStatus = 'pending' | 'under_review' | 'active' | 'on_hold' | 'rejected'
+
 export interface Supplier {
   id: number
   code: string
@@ -16,6 +19,8 @@ export interface Supplier {
   mode_of_supply: ModeOfSupply | null
   rating: number | null
   status: SupplierStatus
+  onboarding_status: SupplierOnboardingStatus
+  onboarding_reason: string | null
 }
 
 export interface SupplierPayload {

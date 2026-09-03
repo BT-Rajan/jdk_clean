@@ -5,6 +5,26 @@ from app.core.database import Base
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.user import BigPK
 
+# Onboarding tracks getting a new customer record fully set up and
+# reviewed after the "New customer" wizard creates it -- separate from
+# `status` (active/inactive), which is whether the customer account is
+# currently usable at all once onboarded. A customer can be onboarded
+# (onboarding_status == 'active') and still be toggled inactive later,
+# same as any other master record.
+CUSTOMER_ONBOARDING_STATUSES = ("pending", "under_review", "active", "on_hold", "rejected")
+
+ONBOARDING_ALLOWED_TRANSITIONS = {
+    "pending": {"under_review"},
+    "under_review": {"active", "rejected", "pending"},
+    "active": {"on_hold"},
+    "on_hold": {"under_review", "active"},
+    "rejected": {"pending"},
+}
+# Rejecting or putting onboarding on hold needs a reason on record --
+# same rule quotations/orders/production/etc. apply to their own
+# reason-gated transitions (see customer_service.change_onboarding_status).
+ONBOARDING_STATUSES_REQUIRING_REASON = {"rejected", "on_hold"}
+
 
 class Customer(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "customers"
@@ -24,4 +44,13 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     status: Mapped[str] = mapped_column(
         Enum("active", "inactive", name="customer_status"), nullable=False, default="active"
     )
+    onboarding_status: Mapped[str] = mapped_column(
+        Enum(*CUSTOMER_ONBOARDING_STATUSES, name="customer_onboarding_status"),
+        nullable=False,
+        default="pending",
+    )
+    # Sales/admin's reason the last time onboarding moved to 'rejected' or
+    # 'on_hold' -- set by customer_service.change_onboarding_status,
+    # mirrors Quotation.close_reason.
+    onboarding_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

@@ -113,6 +113,12 @@ CREATE TABLE IF NOT EXISTS customers (
     credit_limit    DECIMAL(14,2) NOT NULL DEFAULT 0,
     payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
     status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    -- Onboarding workflow for a newly created customer -- see
+    -- app/models/customer.py ONBOARDING_ALLOWED_TRANSITIONS. Independent
+    -- of `status` above: a customer can finish onboarding (reach
+    -- 'active') and still be toggled inactive later.
+    onboarding_status ENUM('pending','under_review','active','on_hold','rejected') NOT NULL DEFAULT 'pending',
+    onboarding_reason TEXT NULL,        -- reason recorded the last time onboarding moved to 'rejected'/'on_hold'
     notes           TEXT NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -140,6 +146,11 @@ CREATE TABLE IF NOT EXISTS suppliers (
     mode_of_supply  ENUM('direct','distributor','broker','import') NULL,
     rating          TINYINT UNSIGNED NULL,          -- 1-5 stars
     status          ENUM('active','inactive','suspended') NOT NULL DEFAULT 'active',
+    -- Onboarding workflow for a newly created supplier -- see
+    -- app/models/supplier.py ONBOARDING_ALLOWED_TRANSITIONS. Independent
+    -- of `status` above, same as customers.onboarding_status.
+    onboarding_status ENUM('pending','under_review','active','on_hold','rejected') NOT NULL DEFAULT 'pending',
+    onboarding_reason TEXT NULL,        -- reason recorded the last time onboarding moved to 'rejected'/'on_hold'
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,

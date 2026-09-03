@@ -46,5 +46,16 @@ class SupplierOut(BaseModel):
     mode_of_supply: str | None
     rating: int | None
     status: str
+    onboarding_status: str
+    onboarding_reason: str | None
 
     model_config = {"from_attributes": True}
+
+
+class SupplierOnboardingStatusUpdate(BaseModel):
+    """See app/models/supplier.py SUPPLIER_ONBOARDING_STATUSES. reason is
+    required by the service layer when status is 'rejected' or 'on_hold'
+    (assert_reason_given)."""
+
+    status: str = Field(pattern="^(pending|under_review|active|on_hold|rejected)$")
+    reason: str | None = None
