@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, EmailStr, Field
 
 
@@ -23,7 +25,11 @@ class CustomerUpdate(BaseModel):
     """name and code (civil ID / registration number) are deliberately
     absent -- they're locked after creation (see CustomerOnboardingWizardPage
     and CustomerFormPage on the frontend). Every other field, including
-    customer_type and nature_of_business, is editable at any time."""
+    customer_type and nature_of_business, is editable at any time.
+    customer_number and the id_verified/id_document fields are also
+    absent -- customer_number is system-generated, and id_verified/
+    id_document_filename change only via the dedicated endpoints in
+    api/customers.py (verify-id, id-document), never a plain field edit."""
 
     customer_type: str | None = Field(default=None, pattern="^(individual|business)$")
     nature_of_business: str | None = None
@@ -42,6 +48,7 @@ class CustomerUpdate(BaseModel):
 
 class CustomerOut(BaseModel):
     id: int
+    customer_number: str
     customer_type: str
     code: str
     name: str
@@ -59,6 +66,10 @@ class CustomerOut(BaseModel):
     onboarding_status: str
     onboarding_reason: str | None
     notes: str | None
+    id_document_filename: str | None
+    id_verified: bool
+    id_verified_at: datetime | None
+    id_verified_by: int | None
 
     model_config = {"from_attributes": True}
 

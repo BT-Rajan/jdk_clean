@@ -8,6 +8,7 @@ export type SupplierOnboardingStatus = 'pending' | 'under_review' | 'active' | '
 
 export interface Supplier {
   id: number
+  /** Auto-generated -- no longer part of the create payload below. */
   code: string
   name: string
   contact_person: string | null
@@ -21,10 +22,15 @@ export interface Supplier {
   status: SupplierStatus
   onboarding_status: SupplierOnboardingStatus
   onboarding_reason: string | null
+  id_document_filename: string | null
+  id_verified: boolean
+  id_verified_at: string | null
+  id_verified_by: number | null
 }
 
+/** code is deliberately absent -- SupplierCRUD.create generates it
+ * server-side (see backend/app/schemas/supplier.py SupplierCreate). */
 export interface SupplierPayload {
-  code: string
   name: string
   contact_person?: string | null
   email?: string | null

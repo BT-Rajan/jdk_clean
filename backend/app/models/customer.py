@@ -1,4 +1,6 @@
-from sqlalchemy import DECIMAL, Enum, SmallInteger, String, Text
+from datetime import datetime
+
+from sqlalchemy import DECIMAL, Boolean, DateTime, Enum, ForeignKey, SmallInteger, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -38,6 +40,9 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "customers"
 
     id: Mapped[int] = mapped_column(BigPK, primary_key=True)
+    # Internal reference, auto-generated via number_series (doc_type
+    # 'CUSTOMER') -- see customer_service.py. Distinct from `code` below.
+    customer_number: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     customer_type: Mapped[str] = mapped_column(
         Enum(*CUSTOMER_TYPES, name="customer_type"), nullable=False, default="business"
     )
@@ -68,3 +73,13 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     # mirrors Quotation.close_reason.
     onboarding_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Proof of `code` (the Civil ID / Registration number above) -- an
+    # uploaded image or PDF, stored on disk under uploads/customer_ids/
+    # (see id_document_service.py), this column holding only the
+    # generated filename. id_verified is admin-set after reviewing it;
+    # order_service.change_status refuses to extend credit (credit_limit
+    # > 0) to a customer whose id isn't verified yet.
+    id_document_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    id_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    id_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    id_verified_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)

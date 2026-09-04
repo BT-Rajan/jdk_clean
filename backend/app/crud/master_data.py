@@ -9,6 +9,7 @@ from app.models.product import Product
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
 from app.models.user import User
+from app.services import number_series_service
 
 
 class DepartmentCRUD(BaseCRUD):
@@ -50,9 +51,17 @@ class UserCRUD(BaseCRUD):
 class CustomerCRUD(BaseCRUD):
     model = Customer
     table_name = "customers"
-    searchable_fields = ["name", "code", "email"]
-    sortable_fields = ["name", "code", "created_at"]
+    searchable_fields = ["name", "code", "customer_number", "email"]
+    sortable_fields = ["name", "code", "customer_number", "created_at"]
     filterable_fields = ["status", "city", "country"]
+
+    def create(self, db: Session, data: dict, user_id: int | None = None) -> Customer:
+        # customer_number is an internal reference, auto-generated the
+        # same way order_number/quotation_number/etc. are -- never
+        # client-supplied (see schemas/customer.py CustomerCreate, which
+        # has no such field at all).
+        data = {**data, "customer_number": number_series_service.next_number(db, "CUSTOMER")}
+        return super().create(db, data, user_id=user_id)
 
 
 class SupplierCRUD(BaseCRUD):
@@ -61,6 +70,13 @@ class SupplierCRUD(BaseCRUD):
     searchable_fields = ["name", "code", "email"]
     sortable_fields = ["name", "code", "rating", "created_at"]
     filterable_fields = ["status", "city", "country", "mode_of_supply"]
+
+    def create(self, db: Session, data: dict, user_id: int | None = None) -> Supplier:
+        # code is auto-generated the same way order_number/quotation_number
+        # /etc. are -- never client-supplied (see schemas/supplier.py
+        # SupplierCreate, which has no such field at all).
+        data = {**data, "code": number_series_service.next_number(db, "SUPPLIER")}
+        return super().create(db, data, user_id=user_id)
 
 
 class RawMaterialCRUD(BaseCRUD):

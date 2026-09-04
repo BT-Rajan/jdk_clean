@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     # than a logo image -- a template can carry embedded letterhead
     # artwork -- so it gets its own, larger cap.
     DOC_TEMPLATE_MAX_UPLOAD_MB: int = 10
+    # Customer/supplier id documents (see id_document_service.py) can be
+    # a scanned PDF, not just a photo -- larger than an avatar, smaller
+    # than a doc template.
+    ID_DOCUMENT_MAX_UPLOAD_MB: int = 8
 
     # Email (Phase 6): deliberately .env-only, not part of the Settings
     # DB table/UI (see settings_service.py) -- SMTP credentials are

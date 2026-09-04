@@ -107,6 +107,9 @@ def get_customer_credit_status(db: Session, customer_id: int) -> dict:
         "limit_enforced": enforced,
         "outstanding_balance": outstanding,
         "available_credit": round(limit - outstanding, 2) if enforced else None,
+        # See order_service.change_status: confirming an order that
+        # relies on credit is blocked until this is true.
+        "id_verified": customer.id_verified,
     }
 
 

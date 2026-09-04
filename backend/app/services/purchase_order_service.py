@@ -10,6 +10,7 @@ from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.purchase_order import ALLOWED_TRANSITIONS, PurchaseOrder, PurchaseOrderLine
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
+from app.models.supplier_material import SupplierMaterial
 from app.services import audit_service, inventory_service, mrp_service, number_series_service, settings_service
 
 TABLE_NAME = "purchase_orders"
@@ -401,6 +402,16 @@ def receive_lines(
             received_date=received_date,
         )
         line.received_quantity = float(line.received_quantity) + qty
+
+        # Auto-captured "last transaction date" on the supplier's
+        # materials-supplied list (see models/supplier_material.py) --
+        # only touches a line that already exists (declared during
+        # onboarding or added later), never creates one on the fly.
+        db.query(SupplierMaterial).filter(
+            SupplierMaterial.supplier_id == po.supplier_id,
+            SupplierMaterial.raw_material_id == line.raw_material_id,
+            SupplierMaterial.deleted_at.is_(None),
+        ).update({"last_transaction_at": received_date})
 
     all_received = all(float(l.received_quantity) >= float(l.quantity) for l in po.lines)
     old_status = po.status

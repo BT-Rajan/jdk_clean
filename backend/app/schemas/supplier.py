@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, EmailStr, Field
 
 MODE_OF_SUPPLY_PATTERN = "^(direct|distributor|broker|import)$"
@@ -5,7 +7,11 @@ STATUS_PATTERN = "^(active|inactive|suspended)$"
 
 
 class SupplierCreate(BaseModel):
-    code: str = Field(min_length=1, max_length=30)
+    """code is deliberately absent -- SupplierCRUD.create generates it via
+    number_series (doc_type 'SUPPLIER'), the same way order_number/
+    quotation_number/etc. are generated, rather than being typed in on
+    the wizard."""
+
     name: str = Field(min_length=1, max_length=150)
     contact_person: str | None = None
     email: EmailStr | None = None
@@ -48,6 +54,10 @@ class SupplierOut(BaseModel):
     status: str
     onboarding_status: str
     onboarding_reason: str | None
+    id_document_filename: str | None
+    id_verified: bool
+    id_verified_at: datetime | None
+    id_verified_by: int | None
 
     model_config = {"from_attributes": True}
 

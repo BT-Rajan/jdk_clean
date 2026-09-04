@@ -22,6 +22,8 @@ def _to_out(line: SupplierMaterial) -> SupplierMaterialOut:
         material_unit=line.raw_material.unit if line.raw_material else None,
         max_supply_quantity=line.max_supply_quantity,
         lead_time_days=line.lead_time_days,
+        onboarded_at=line.onboarded_at,
+        last_transaction_at=line.last_transaction_at,
         created_at=line.created_at,
         updated_at=line.updated_at,
     )

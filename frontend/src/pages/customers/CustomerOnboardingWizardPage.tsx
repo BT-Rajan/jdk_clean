@@ -14,7 +14,8 @@ import {
   TextareaField,
   TextField,
 } from '@/components/ui'
-import { createCustomer } from '@/api/customers'
+import { IdDocumentPicker } from '@/components/documents/IdDocumentPicker'
+import { createCustomer, uploadCustomerIdDocument } from '@/api/customers'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { customerSchema, type CustomerFormValues, type CustomerSubmitValues } from '@/lib/validation'
 import { formatCurrency } from '@/lib/currency'
@@ -44,6 +45,10 @@ export function CustomerOnboardingWizardPage() {
   const [stepIndex, setStepIndex] = useState(0)
   const [furthestStep, setFurthestStep] = useState(0)
   const [formError, setFormError] = useState<string | null>(null)
+  // Uploaded separately after creation (it's a multipart request, the
+  // rest of this form is JSON) -- see onSubmit below.
+  const [idDocumentFile, setIdDocumentFile] = useState<File | null>(null)
+  const [idDocumentError, setIdDocumentError] = useState<string | null>(null)
   const {
     register,
     handleSubmit,
@@ -102,6 +107,12 @@ export function CustomerOnboardingWizardPage() {
     setFormError(null)
     try {
       const created = await createCustomer(values)
+      if (idDocumentFile) {
+        // Best-effort: the customer record itself is already created at
+        // this point, so a failed upload here shouldn't block navigating
+        // to it -- the document can always be added from the detail page.
+        await uploadCustomerIdDocument(created.id, idDocumentFile).catch(() => {})
+      }
       navigate(`/customers/${created.id}`)
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -138,14 +149,24 @@ export function CustomerOnboardingWizardPage() {
             )}
 
             {step.id === 'company' && (
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <TextField label={idLabel} error={errors.code?.message} {...register('code')} />
-                <TextField label="Name" error={errors.name?.message} {...register('name')} />
-                {!isIndividual && (
-                  <TextField label="Nature of business" {...register('nature_of_business')} />
-                )}
-                <TextField label="Contact person" {...register('contact_person')} />
-              </div>
+              <>
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                  <TextField label={idLabel} error={errors.code?.message} {...register('code')} />
+                  <TextField label="Name" error={errors.name?.message} {...register('name')} />
+                  {!isIndividual && (
+                    <TextField label="Nature of business" {...register('nature_of_business')} />
+                  )}
+                  <TextField label="Contact person" {...register('contact_person')} />
+                </div>
+                <IdDocumentPicker
+                  label={`${idLabel} document`}
+                  hint="A photo or scan of the document, or a PDF. Can be added later from the customer's page instead. A credit limit can only be enforced once this is uploaded and verified by admin."
+                  value={idDocumentFile}
+                  onChange={setIdDocumentFile}
+                  error={idDocumentError}
+                  onError={setIdDocumentError}
+                />
+              </>
             )}
 
             {step.id === 'contact' && (

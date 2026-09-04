@@ -1,9 +1,13 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
 
 class SupplierMaterialIn(BaseModel):
+    """onboarded_at/last_transaction_at are deliberately absent -- both
+    are auto-captured (see supplier_material_service.SupplierMaterialCRUD.
+    replace_lines), never part of what the client sends."""
+
     raw_material_id: int
     max_supply_quantity: float = Field(gt=0)
     lead_time_days: int | None = Field(default=None, ge=0)
@@ -18,6 +22,8 @@ class SupplierMaterialOut(BaseModel):
     material_unit: str | None = None
     max_supply_quantity: float
     lead_time_days: int | None
+    onboarded_at: date
+    last_transaction_at: date | None
     created_at: datetime
     updated_at: datetime
 
