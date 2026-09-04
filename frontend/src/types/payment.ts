@@ -33,4 +33,8 @@ export interface CustomerCreditStatus {
   limit_enforced: boolean
   outstanding_balance: number
   available_credit: number | null
+  /** See CustomerDetailPage's credit warning and order_service.
+   * change_status -- confirming an order that relies on credit is
+   * blocked until this is true. */
+  id_verified: boolean
 }
