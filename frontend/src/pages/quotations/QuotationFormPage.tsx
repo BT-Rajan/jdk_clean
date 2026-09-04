@@ -5,8 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { Alert, Button, GlassCard, SelectField, Spinner, TextareaField, TextField } from '@/components/ui'
-import { createQuotation, getQuotation, updateQuotation } from '@/api/quotations'
+import { Alert, Button, ConfirmDialog, GlassCard, SelectField, Spinner, TextareaField, TextField } from '@/components/ui'
+import { checkMaterialConflicts, createQuotation, getQuotation, updateQuotation } from '@/api/quotations'
 import { listCustomers } from '@/api/customers'
 import { listProducts } from '@/api/products'
 import { listAvailableForQuotation } from '@/api/feasibilities'
@@ -16,6 +16,7 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDateTime } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
 import type { Feasibility } from '@/types/feasibility'
+import type { MaterialConflict } from '@/types/quotation'
 import {
   quotationSchema,
   todayDateInputMin,
@@ -129,6 +130,9 @@ function QuotationCreateForm() {
   const { options: customers } = useCustomerOptions()
   const { options: products } = useProductOptions()
   const { busy: submitting, run: runGuarded } = useAsyncGuard()
+  const [materialConflicts, setMaterialConflicts] = useState<MaterialConflict[]>([])
+  const [conflictConfirmOpen, setConflictConfirmOpen] = useState(false)
+  const [pendingValues, setPendingValues] = useState<QuotationSubmitValues | null>(null)
 
   const {
     register,
@@ -176,7 +180,39 @@ function QuotationCreateForm() {
     }
   }
 
+  // Live material-conflict pre-check: whether these lines, combined with
+  // every other still-open quotation's own needs, would claim more of a
+  // raw material than is actually available -- "subject to" what a
+  // prior quotation (or order, already netted into available stock) has
+  // a claim on. Debounced the same way ClientWizard-style duplicate
+  // checks are elsewhere in this app, so it doesn't fire on every
+  // keystroke.
+  const watchedLines = watch('lines')
+  useEffect(() => {
+    const validLines = (watchedLines || [])
+      .filter((l) => Number(l.product_id) > 0 && Number(l.quantity) > 0)
+      .map((l) => ({ product_id: Number(l.product_id), quantity: Number(l.quantity) }))
+    if (validLines.length === 0) {
+      setMaterialConflicts([])
+      return
+    }
+    const timeout = setTimeout(() => {
+      checkMaterialConflicts(validLines)
+        .then(setMaterialConflicts)
+        .catch(() => setMaterialConflicts([]))
+    }, 400)
+    return () => clearTimeout(timeout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(watchedLines)])
+
   async function onSubmit(values: QuotationSubmitValues) {
+    // A conflict needs an explicit "proceed anyway" click every time this
+    // fires while one is showing -- see handleConfirmProceed.
+    if (materialConflicts.length > 0) {
+      setPendingValues(values)
+      setConflictConfirmOpen(true)
+      return
+    }
     setFormError(null)
     try {
       await runGuarded(async () => {
@@ -185,6 +221,22 @@ function QuotationCreateForm() {
       })
     } catch (err) {
       setFormError(getApiErrorMessage(err))
+    }
+  }
+
+  async function handleConfirmProceed() {
+    if (!pendingValues) return
+    setConflictConfirmOpen(false)
+    setFormError(null)
+    try {
+      await runGuarded(async () => {
+        const created = await createQuotation({ ...pendingValues, material_conflict_acknowledged: true })
+        navigate(`/quotations/${created.id}`)
+      })
+    } catch (err) {
+      setFormError(getApiErrorMessage(err))
+    } finally {
+      setPendingValues(null)
     }
   }
 
@@ -278,6 +330,20 @@ function QuotationCreateForm() {
 
         <LineItemsEditor control={control} register={register} watch={watch} errors={errors} products={products} />
 
+        {materialConflicts.length > 0 && (
+          <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+            <p className="mb-2 font-medium">Subject to material availability</p>
+            <ul className="flex flex-col gap-1 text-xs text-amber-100/90">
+              {materialConflicts.map((c) => (
+                <li key={c.raw_material_id}>
+                  {c.name}: short {c.shortfall} {c.unit} once{' '}
+                  {c.competing_quotations.map((cq) => cq.quotation_number).join(', ')} {c.competing_quotations.length === 1 ? 'is' : 'are'} also counted.
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <TextareaField label="Notes" {...register('notes')} />
 
         <div className="mt-2 flex justify-end gap-3">
@@ -286,6 +352,27 @@ function QuotationCreateForm() {
         </div>
       </form>
       )}
+
+      <ConfirmDialog
+        open={conflictConfirmOpen}
+        title="Material availability conflict"
+        message={
+          materialConflicts.length > 0
+            ? `This quotation's material needs overlap another open quotation: ${materialConflicts
+                .map(
+                  (c) =>
+                    `${c.name} short by ${c.shortfall} ${c.unit} (also needed by ${c.competing_quotations
+                      .map((cq) => cq.quotation_number)
+                      .join(', ')})`,
+                )
+                .join('; ')}. Create it anyway?`
+            : ''
+        }
+        confirmLabel="Create anyway"
+        busy={submitting}
+        onConfirm={handleConfirmProceed}
+        onCancel={() => setConflictConfirmOpen(false)}
+      />
     </FormShell>
   )
 }
@@ -297,6 +384,9 @@ function QuotationEditForm({ id }: { id: number }) {
   const { options: customers } = useCustomerOptions()
   const { options: products } = useProductOptions()
   const { busy: submitting, run: runGuarded } = useAsyncGuard()
+  const [materialConflicts, setMaterialConflicts] = useState<MaterialConflict[]>([])
+  const [conflictConfirmOpen, setConflictConfirmOpen] = useState(false)
+  const [pendingValues, setPendingValues] = useState<QuotationSubmitValues | null>(null)
 
   const {
     register,
@@ -329,7 +419,33 @@ function QuotationEditForm({ id }: { id: number }) {
       .finally(() => setLoading(false))
   }, [id, reset])
 
+  // Same live pre-check as the create form, excluding this quotation's
+  // own current lines from "other open quotations" so it doesn't flag
+  // against itself.
+  const watchedLines = watch('lines')
+  useEffect(() => {
+    const validLines = (watchedLines || [])
+      .filter((l) => Number(l.product_id) > 0 && Number(l.quantity) > 0)
+      .map((l) => ({ product_id: Number(l.product_id), quantity: Number(l.quantity) }))
+    if (validLines.length === 0) {
+      setMaterialConflicts([])
+      return
+    }
+    const timeout = setTimeout(() => {
+      checkMaterialConflicts(validLines, id)
+        .then(setMaterialConflicts)
+        .catch(() => setMaterialConflicts([]))
+    }, 400)
+    return () => clearTimeout(timeout)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(watchedLines), id])
+
   async function onSubmit(values: QuotationSubmitValues) {
+    if (materialConflicts.length > 0) {
+      setPendingValues(values)
+      setConflictConfirmOpen(true)
+      return
+    }
     setFormError(null)
     try {
       await runGuarded(async () => {
@@ -338,6 +454,22 @@ function QuotationEditForm({ id }: { id: number }) {
       })
     } catch (err) {
       setFormError(getApiErrorMessage(err))
+    }
+  }
+
+  async function handleConfirmProceed() {
+    if (!pendingValues) return
+    setConflictConfirmOpen(false)
+    setFormError(null)
+    try {
+      await runGuarded(async () => {
+        await updateQuotation(id, { ...pendingValues, material_conflict_acknowledged: true })
+        navigate(`/quotations/${id}`)
+      })
+    } catch (err) {
+      setFormError(getApiErrorMessage(err))
+    } finally {
+      setPendingValues(null)
     }
   }
 
@@ -372,6 +504,20 @@ function QuotationEditForm({ id }: { id: number }) {
 
           <LineItemsEditor control={control} register={register} watch={watch} errors={errors} products={products} />
 
+          {materialConflicts.length > 0 && (
+            <div className="rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+              <p className="mb-2 font-medium">Subject to material availability</p>
+              <ul className="flex flex-col gap-1 text-xs text-amber-100/90">
+                {materialConflicts.map((c) => (
+                  <li key={c.raw_material_id}>
+                    {c.name}: short {c.shortfall} {c.unit} once{' '}
+                    {c.competing_quotations.map((cq) => cq.quotation_number).join(', ')} {c.competing_quotations.length === 1 ? 'is' : 'are'} also counted.
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           <TextareaField label="Notes" {...register('notes')} />
 
           <div className="mt-2 flex justify-end gap-3">
@@ -380,6 +526,27 @@ function QuotationEditForm({ id }: { id: number }) {
           </div>
         </form>
       )}
+
+      <ConfirmDialog
+        open={conflictConfirmOpen}
+        title="Material availability conflict"
+        message={
+          materialConflicts.length > 0
+            ? `These lines' material needs overlap another open quotation: ${materialConflicts
+                .map(
+                  (c) =>
+                    `${c.name} short by ${c.shortfall} ${c.unit} (also needed by ${c.competing_quotations
+                      .map((cq) => cq.quotation_number)
+                      .join(', ')})`,
+                )
+                .join('; ')}. Save anyway?`
+            : ''
+        }
+        confirmLabel="Save anyway"
+        busy={submitting}
+        onConfirm={handleConfirmProceed}
+        onCancel={() => setConflictConfirmOpen(false)}
+      />
     </FormShell>
   )
 }

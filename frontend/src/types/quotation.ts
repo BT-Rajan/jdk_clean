@@ -47,9 +47,30 @@ export interface Quotation {
    * (Settings -> large_discount_approval_threshold). Null if never
    * required or not yet approved. */
   approved_at: string | null
+  /** True when this quotation's material needs overlapped another
+   * still-open quotation/order and Sales explicitly proceeded anyway --
+   * see check_material_conflicts. */
+  material_conflict_acknowledged: boolean
+  material_conflict_details: MaterialConflict[] | null
   lines: QuotationLine[]
   created_at: string
   updated_at: string
+}
+
+export interface MaterialConflictCompetitor {
+  quotation_id: number
+  quotation_number: string
+}
+
+export interface MaterialConflict {
+  raw_material_id: number
+  code: string
+  name: string
+  unit: string
+  required_by_this: number
+  available: number
+  shortfall: number
+  competing_quotations: MaterialConflictCompetitor[]
 }
 
 export interface QuotationPayload {
@@ -63,6 +84,7 @@ export interface QuotationPayload {
   discount_percent?: number
   lines: QuotationLineInput[]
   language: QuotationLanguage
+  material_conflict_acknowledged?: boolean
 }
 
 /** 'converted' is deliberately excluded -- only create_order_from_quotation sets it. */

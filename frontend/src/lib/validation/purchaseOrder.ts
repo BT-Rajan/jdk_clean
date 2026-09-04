@@ -12,7 +12,10 @@ export const purchaseOrderLineSchema = z.object({
 export const purchaseOrderSchema = z.object({
   supplier_id: z.coerce.number().int().positive('Choose a supplier'),
   order_date: z.string().min(1, 'Date is required').refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
-  expected_delivery_date: z.string().optional().or(z.literal('')).refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
+  // The empty-string branch goes FIRST and transforms to undefined --
+  // see quotation.ts's valid_until for why the reverse order silently
+  // never applies the transform at all (z.string() already accepts '').
+  expected_delivery_date: z.literal('').transform(() => undefined).or(z.string()).optional().refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
   notes: z.string().trim().optional().or(z.literal('')),
   discount_percent: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),
   lines: z.array(purchaseOrderLineSchema).min(1, 'At least one line item is required'),

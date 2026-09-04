@@ -183,6 +183,11 @@ export function QuotationDetailPage() {
               Auto-created from feasibility
             </span>
           )}
+          {quotation.material_conflict_acknowledged && (
+            <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2.5 py-1 text-xs font-medium text-amber-200">
+              Material conflict acknowledged
+            </span>
+          )}
           {quotation.deal_number && (
             <Link
               to={`/deals/${quotation.deal_id}`}
@@ -235,6 +240,22 @@ export function QuotationDetailPage() {
         {quotation.notes && (
           <div className="mt-6">
             <Field label="Notes" value={quotation.notes} />
+          </div>
+        )}
+
+        {quotation.material_conflict_acknowledged && quotation.material_conflict_details && (
+          <div className="mt-6 rounded-xl border border-amber-400/30 bg-amber-500/10 p-4">
+            <p className="mb-2 text-sm font-medium text-amber-200">
+              Material conflict acknowledged at creation
+            </p>
+            <ul className="flex flex-col gap-1 text-xs text-amber-100/90">
+              {quotation.material_conflict_details.map((c) => (
+                <li key={c.raw_material_id}>
+                  {c.name}: short {c.shortfall} {c.unit} (also needed by{' '}
+                  {c.competing_quotations.map((cq) => cq.quotation_number).join(', ')})
+                </li>
+              ))}
+            </ul>
           </div>
         )}
       </GlassCard>

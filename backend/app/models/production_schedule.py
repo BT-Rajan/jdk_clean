@@ -59,6 +59,15 @@ class ProductionSchedule(Base, TimestampMixin, SoftDeleteMixin):
     # orders/quotations/feasibility.
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Set on completion (see production_service._complete_batch) when any
+    # raw material's actual usage either exceeds its BOM line(s)'
+    # admin-configured scrap_percent allowance, or comes in below the
+    # bare zero-scrap requirement (physically implausible for the
+    # reported produced_quantity) -- either way, admin gets a
+    # notification (see notification_service.py). material_discrepancy_notes
+    # is a JSON list of the specific per-material findings.
+    material_discrepancy_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    material_discrepancy_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     product: Mapped[Product] = relationship(foreign_keys=[product_id], lazy="joined")
     machine: Mapped[Machine | None] = relationship(foreign_keys=[machine_id], lazy="joined")

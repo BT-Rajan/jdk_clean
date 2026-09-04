@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime
 from typing import Literal
 
@@ -43,6 +44,11 @@ class QuotationCreate(BaseModel):
     # this quotation is raised in -- drives the default language for
     # Print/Email. Sales' choice on the form, not the customer's.
     language: Literal["en", "ar"] = "en"
+    # Must be true if quotation_service.check_material_conflicts finds
+    # this quotation's material needs overlapping another still-open
+    # quotation/order -- Sales explicitly proceeding despite the overlap.
+    # Ignored (no gate) when there's no conflict to begin with.
+    material_conflict_acknowledged: bool = False
 
     @field_validator("quotation_date", "valid_until")
     @classmethod
@@ -67,6 +73,7 @@ class QuotationUpdate(BaseModel):
     discount_percent: float | None = Field(default=None, ge=0, le=100)
     lines: list[QuotationLineIn] | None = Field(default=None, min_length=1)
     language: Literal["en", "ar"] | None = None
+    material_conflict_acknowledged: bool = False
 
     @field_validator("quotation_date", "valid_until")
     @classmethod
@@ -82,6 +89,38 @@ class QuotationStatusUpdate(BaseModel):
     # Required by the service layer when status == 'rejected' (Sales closing
     # the quotation without an order); ignored otherwise.
     reason: str | None = None
+
+
+class MaterialConflictLineIn(BaseModel):
+    """One line of a not-yet-created quotation, for the live
+    material-conflict pre-check -- see POST /api/quotations/material-conflicts."""
+
+    product_id: int
+    quantity: float = Field(gt=0)
+
+
+class MaterialConflictCheckRequest(BaseModel):
+    lines: list[MaterialConflictLineIn] = Field(min_length=1)
+    # When checking an existing draft quotation's edited lines, leave that
+    # quotation's own demand out of "other open quotations" -- otherwise
+    # it would flag itself against its own current lines.
+    exclude_quotation_id: int | None = None
+
+
+class MaterialConflictCompetitor(BaseModel):
+    quotation_id: int
+    quotation_number: str
+
+
+class MaterialConflictOut(BaseModel):
+    raw_material_id: int
+    code: str
+    name: str
+    unit: str
+    required_by_this: float
+    available: float
+    shortfall: float
+    competing_quotations: list[MaterialConflictCompetitor]
 
 
 class QuotationOut(BaseModel):
@@ -106,6 +145,12 @@ class QuotationOut(BaseModel):
     auto_created: bool
     close_reason: str | None
     approved_at: datetime | None
+    material_conflict_acknowledged: bool
+    # Deliberately not named material_conflict_notes (the ORM column it's
+    # parsed from) -- from_attributes model_validate would otherwise try
+    # to coerce that raw JSON *string* directly into this list field and
+    # fail before from_model ever gets to parse it.
+    material_conflict_details: list[MaterialConflictOut] | None = None
     lines: list[QuotationLineOut] = []
     created_at: datetime
     updated_at: datetime
@@ -118,6 +163,9 @@ class QuotationOut(BaseModel):
         data.customer_name = obj.customer.name if obj.customer else None
         data.customer_email = obj.customer.email if obj.customer else None
         data.deal_number = obj.deal.deal_number if obj.deal else None
+        data.material_conflict_details = (
+            json.loads(obj.material_conflict_notes) if obj.material_conflict_notes else None
+        )
         for line, src in zip(data.lines, obj.lines):
             line.product_code = src.product.code if src.product else None
             line.product_name = src.product.name if src.product else None

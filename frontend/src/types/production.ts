@@ -22,8 +22,41 @@ export interface ProductionBatch {
    * confirmation, rather than a person scheduling it by hand. */
   auto_scheduled: boolean
   notes: string | null
+  /** True when completing this batch found actual raw-material usage
+   * either over a material's BOM-configured scrap allowance or below
+   * the bare zero-scrap requirement for the reported output. */
+  material_discrepancy_flag: boolean
+  material_discrepancy_findings: MaterialDiscrepancyFinding[] | null
   created_at: string
   updated_at: string
+}
+
+export interface MaterialDiscrepancyFinding {
+  raw_material_id: number
+  material: string
+  unit: string
+  type: 'discrepancy' | 'scrap_allowance_breach'
+  actual_used: number
+  minimum_required?: number
+  allowed_up_to?: number
+  actual_scrap_percent?: number | null
+  allowed_scrap_percent?: number
+  message: string
+}
+
+export interface MaterialRequirement {
+  raw_material_id: number
+  code: string
+  name: string
+  unit: string
+  net_required: number
+  planned_required: number
+  current_on_hand: number
+}
+
+export interface ActualMaterialUsed {
+  raw_material_id: number
+  quantity_used: number
 }
 
 export interface ProductionBatchPayload {

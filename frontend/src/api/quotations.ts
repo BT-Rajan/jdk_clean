@@ -1,5 +1,5 @@
 import type { PagedResponse, ListQueryParams, MessageResponse } from '@/types/common'
-import type { Quotation, QuotationPayload, SettableQuotationStatus } from '@/types/quotation'
+import type { MaterialConflict, Quotation, QuotationPayload, SettableQuotationStatus } from '@/types/quotation'
 import type { Order } from '@/types/order'
 import { apiClient } from './client'
 
@@ -19,6 +19,22 @@ export async function getQuotation(id: number): Promise<Quotation> {
 
 export async function approveQuotation(id: number): Promise<Quotation> {
   const { data } = await apiClient.post<Quotation>(`/api/quotations/${id}/approve`)
+  return data
+}
+
+/** Live pre-check: whether these lines' material needs, combined with
+ * every other still-open quotation's own needs, would claim more of a
+ * raw material than is actually available. Used by the New/Edit
+ * quotation form to warn before submit -- creating/editing itself
+ * re-checks and gates on the same logic server-side. */
+export async function checkMaterialConflicts(
+  lines: { product_id: number; quantity: number }[],
+  excludeQuotationId?: number,
+): Promise<MaterialConflict[]> {
+  const { data } = await apiClient.post<MaterialConflict[]>('/api/quotations/material-conflicts', {
+    lines,
+    exclude_quotation_id: excludeQuotationId,
+  })
   return data
 }
 

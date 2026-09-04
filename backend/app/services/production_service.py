@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime, timezone
 
 from sqlalchemy.orm import Session, joinedload
@@ -128,6 +129,42 @@ def _release_batch_materials(db: Session, batch: ProductionSchedule) -> None:
             inventory_service.release_reservation(db, "raw_material", raw_material_id, required_qty)
 
 
+def get_material_requirements(db: Session, batch_id: int) -> list[dict]:
+    """The per-raw-material breakdown for this batch's *planned* run --
+    net (zero-scrap) requirement, the scrap-inflated figure the BOM
+    already reserved (see _reserve_batch_materials), and current stock --
+    for the "Complete batch" screen to show alongside an actual-quantity
+    input per material. Purely a read; entering nothing for a material
+    when actually completing the batch means it's deducted at the
+    scrap-inflated figure shown here, same as before this existed.
+    """
+    batch = get_batch(db, batch_id)
+    detailed = bom_service.explode_requirements_detailed(db, batch.product_id, float(batch.planned_quantity))
+    if not detailed:
+        return []
+
+    materials = {
+        m.id: m for m in db.query(RawMaterial).filter(RawMaterial.id.in_(detailed.keys())).all()
+    }
+    results = []
+    for raw_material_id, req in detailed.items():
+        material = materials.get(raw_material_id)
+        stock = inventory_service.get_stock(db, "raw_material", raw_material_id)
+        results.append(
+            {
+                "raw_material_id": raw_material_id,
+                "code": material.code if material else f"#{raw_material_id}",
+                "name": material.name if material else "Unknown material",
+                "unit": material.unit if material else "",
+                "net_required": round(req["net_required"], 4),
+                "planned_required": round(req["scrap_inflated_required"], 4),
+                "current_on_hand": stock["quantity_on_hand"],
+            }
+        )
+    results.sort(key=lambda r: r["code"])
+    return results
+
+
 def create_batch(db: Session, data: dict, user_id: int | None = None) -> ProductionSchedule:
     product = _validate_product(db, data["product_id"])
     order = None
@@ -222,24 +259,40 @@ def _start_batch(db: Session, batch: ProductionSchedule, user_id: int | None) ->
 
 
 def _complete_batch(
-    db: Session, batch: ProductionSchedule, produced_quantity: float, user_id: int | None
+    db: Session,
+    batch: ProductionSchedule,
+    produced_quantity: float,
+    actual_materials: dict[int, float] | None,
+    user_id: int | None,
 ) -> None:
-    requirements = bom_service.explode_requirements(db, batch.product_id, produced_quantity)
+    detailed = bom_service.explode_requirements_detailed(db, batch.product_id, produced_quantity)
+    actual_materials = actual_materials or {}
+
+    # What actually gets deducted from stock: the entered actual figure
+    # for a material, or the BOM's own scrap-inflated planned figure for
+    # any material nobody entered a number for -- same "no actual data,
+    # trust the formula" default as before this feature existed, so a
+    # completion with no actual_materials given behaves identically to
+    # the old behavior.
+    consumption: dict[int, float] = {
+        raw_material_id: actual_materials.get(raw_material_id, req["scrap_inflated_required"])
+        for raw_material_id, req in detailed.items()
+    }
 
     # Check every required material is available before touching any stock.
     # adjust_stock() commits per call, so issuing materials one at a time
     # in a loop and discovering a shortfall partway through would leave
     # some materials already deducted -- this pre-check is what keeps
     # completion effectively all-or-nothing instead.
-    if requirements:
+    if consumption:
         materials = {
             m.id: m
             for m in db.query(RawMaterial)
-            .filter(RawMaterial.id.in_(requirements.keys()))
+            .filter(RawMaterial.id.in_(consumption.keys()))
             .all()
         }
         shortfalls = []
-        for raw_material_id, required_qty in requirements.items():
+        for raw_material_id, required_qty in consumption.items():
             stock = inventory_service.get_stock(db, "raw_material", raw_material_id)
             available = stock["quantity_on_hand"]
             if available < required_qty:
@@ -251,12 +304,77 @@ def _complete_batch(
                 "Not enough raw material on hand to complete this batch: " + "; ".join(shortfalls)
             )
 
-    for raw_material_id, required_qty in requirements.items():
+    # Compare actual consumption against what the BOM says this material's
+    # own contributing line(s) allow, in both directions:
+    #  - over the scrap_percent allowance -> used more than the admin-
+    #    configured tolerance for waste explains -- a scrap-allowance breach.
+    #  - under the zero-scrap requirement -> used less than the bare
+    #    minimum physically needed for the reported produced_quantity --
+    #    a material discrepancy (the numbers don't add up: either the
+    #    output is overstated, the usage is understated, or material
+    #    went somewhere the record doesn't show).
+    # Only materials someone actually entered an actual figure for are
+    # checked -- one left at the BOM default trivially matches it.
+    findings: list[dict] = []
+    materials_for_findings: dict[int, RawMaterial] = {}
+    if actual_materials:
+        materials_for_findings = {
+            m.id: m
+            for m in db.query(RawMaterial).filter(RawMaterial.id.in_(actual_materials.keys())).all()
+        }
+    for raw_material_id, actual_qty in actual_materials.items():
+        req = detailed.get(raw_material_id)
+        if req is None:
+            continue
+        net_required = req["net_required"]
+        planned_required = req["scrap_inflated_required"]
+        material = materials_for_findings.get(raw_material_id)
+        label = material.name if material else f"#{raw_material_id}"
+        unit = material.unit if material else ""
+        if net_required > 0 and actual_qty < net_required:
+            findings.append(
+                {
+                    "raw_material_id": raw_material_id,
+                    "material": label,
+                    "unit": unit,
+                    "type": "discrepancy",
+                    "actual_used": actual_qty,
+                    "minimum_required": round(net_required, 4),
+                    "message": (
+                        f"{label}: used {actual_qty:.4f} {unit}, but producing this output needs at "
+                        f"least {net_required:.4f} {unit} -- the numbers don't add up."
+                    ),
+                }
+            )
+        elif planned_required > 0 and actual_qty > planned_required:
+            actual_scrap_percent = round((actual_qty - net_required) / net_required * 100, 2) if net_required > 0 else None
+            allowed_scrap_percent = (
+                round((planned_required - net_required) / net_required * 100, 2) if net_required > 0 else 0.0
+            )
+            findings.append(
+                {
+                    "raw_material_id": raw_material_id,
+                    "material": label,
+                    "unit": unit,
+                    "type": "scrap_allowance_breach",
+                    "actual_used": actual_qty,
+                    "allowed_up_to": round(planned_required, 4),
+                    "actual_scrap_percent": actual_scrap_percent,
+                    "allowed_scrap_percent": allowed_scrap_percent,
+                    "message": (
+                        f"{label}: used {actual_qty:.4f} {unit} ({actual_scrap_percent}% scrap), "
+                        f"over the {allowed_scrap_percent}% allowance configured for this product "
+                        f"(allowed up to {planned_required:.4f} {unit})."
+                    ),
+                }
+            )
+
+    for raw_material_id, quantity_used in consumption.items():
         inventory_service.adjust_stock(
             db,
             item_type="raw_material",
             item_id=raw_material_id,
-            quantity=-required_qty,
+            quantity=-quantity_used,
             movement_type="issue",
             reference_type="production_schedule",
             reference_id=batch.id,
@@ -286,6 +404,9 @@ def _complete_batch(
 
     batch.produced_quantity = produced_quantity
     batch.actual_end = datetime.now(timezone.utc)
+    if findings:
+        batch.material_discrepancy_flag = True
+        batch.material_discrepancy_notes = json.dumps(findings)
 
 
 def change_status(
@@ -293,6 +414,7 @@ def change_status(
     batch_id: int,
     new_status: str,
     produced_quantity: float | None = None,
+    actual_materials: dict[int, float] | None = None,
     reason: str | None = None,
     user_id: int | None = None,
 ) -> ProductionSchedule:
@@ -304,7 +426,7 @@ def change_status(
     elif new_status == "completed":
         if not produced_quantity:
             raise ValidationAppError("produced_quantity is required to complete a batch.")
-        _complete_batch(db, batch, produced_quantity, user_id)
+        _complete_batch(db, batch, produced_quantity, actual_materials, user_id)
     elif new_status == "cancelled":
         assert_reason_given(reason, "A reason is required to cancel a production batch.")
         batch.cancel_reason = reason

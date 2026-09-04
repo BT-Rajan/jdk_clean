@@ -1,5 +1,11 @@
 import type { PagedResponse, ListQueryParams, MessageResponse } from '@/types/common'
-import type { ProductionBatch, ProductionBatchPayload, SettableProductionStatus } from '@/types/production'
+import type {
+  ActualMaterialUsed,
+  MaterialRequirement,
+  ProductionBatch,
+  ProductionBatchPayload,
+  SettableProductionStatus,
+} from '@/types/production'
 import { apiClient } from './client'
 
 export interface ProductionListParams extends ListQueryParams {
@@ -55,12 +61,24 @@ export async function updateProductionBatchStatus(
   status: SettableProductionStatus,
   producedQuantity?: number,
   reason?: string,
+  actualMaterials?: ActualMaterialUsed[],
 ): Promise<ProductionBatch> {
   const { data } = await apiClient.post<ProductionBatch>(`/api/production-schedules/${id}/status`, {
     status,
     produced_quantity: producedQuantity,
     reason,
+    actual_materials: actualMaterials,
   })
+  return data
+}
+
+/** Per-raw-material breakdown for this batch's planned run -- net
+ * (zero-scrap) requirement, the BOM's scrap-inflated figure, and current
+ * stock -- for the "Complete batch" screen's actual-quantity inputs. */
+export async function getMaterialRequirements(batchId: number): Promise<MaterialRequirement[]> {
+  const { data } = await apiClient.get<MaterialRequirement[]>(
+    `/api/production-schedules/${batchId}/material-requirements`,
+  )
   return data
 }
 

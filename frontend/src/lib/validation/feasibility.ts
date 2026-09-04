@@ -9,7 +9,10 @@ export const feasibilityLineSchema = z.object({
 
 export const feasibilitySchema = z.object({
   customer_id: z.coerce.number().int().positive('Choose a customer'),
-  required_by_date: z.string().optional().or(z.literal('')).refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
+  // The empty-string branch goes FIRST and transforms to undefined --
+  // see quotation.ts's valid_until for why the reverse order silently
+  // never applies the transform at all (z.string() already accepts '').
+  required_by_date: z.literal('').transform(() => undefined).or(z.string()).optional().refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
   notes: z.string().trim().optional().or(z.literal('')),
   lines: z.array(feasibilityLineSchema).min(1, 'At least one product line is required'),
 })
