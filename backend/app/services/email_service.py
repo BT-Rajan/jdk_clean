@@ -88,7 +88,11 @@ def send_document_email(
     message.attach(MIMEText(body, "plain"))
 
     if attachment_bytes is not None:
-        attachment = MIMEApplication(attachment_bytes, Name=attachment_filename)
+        # _subtype defaults to "octet-stream" (generic/unknown binary) --
+        # every attachment here is our own generated PDF, so give it its
+        # real MIME type. A properly-typed attachment reads as less
+        # suspicious to spam/malware filters than an untyped binary blob.
+        attachment = MIMEApplication(attachment_bytes, _subtype="pdf", Name=attachment_filename)
         attachment["Content-Disposition"] = f'attachment; filename="{attachment_filename}"'
         message.attach(attachment)
 
