@@ -1,3 +1,4 @@
+import json
 from datetime import date, datetime, timezone
 from typing import Any
 
@@ -15,9 +16,125 @@ from app.models.quotation import (
     Quotation,
     QuotationDetail,
 )
-from app.services import audit_service, deal_service, feasibility_service, number_series_service, settings_service
+from app.models.raw_material import RawMaterial
+from app.services import (
+    audit_service,
+    bom_service,
+    deal_service,
+    feasibility_service,
+    inventory_service,
+    number_series_service,
+    settings_service,
+)
 
 TABLE_NAME = "quotations"
+
+# A quotation in either of these statuses is still a live, unresolved
+# claim on whatever raw materials its lines need -- unlike a confirmed
+# order (which already holds a real inventory_service reservation, netted
+# into quantity_available automatically), an open quotation holds nothing
+# in the ledger, so it has to be found by scanning for it explicitly. See
+# check_material_conflicts.
+_OPEN_QUOTATION_STATUSES = ("draft", "sent")
+
+
+def _explode_lines_requirement(db: Session, lines: list) -> dict[int, float]:
+    """Sums bom_service.explode_requirements across every line of a
+    quotation (or a prospective one) into one {raw_material_id: quantity}
+    total. `lines` may be QuotationLineIn-style dicts (product_id,
+    quantity keys) or QuotationDetail ORM rows (product_id, quantity
+    attributes) -- both are accessed the same way below via a small
+    local getter rather than requiring the caller to normalize first.
+    """
+
+    def _get(line, key):
+        return line[key] if isinstance(line, dict) else getattr(line, key)
+
+    requirement: dict[int, float] = {}
+    for line in lines:
+        product_id = _get(line, "product_id")
+        quantity = float(_get(line, "quantity"))
+        for raw_material_id, qty in bom_service.explode_requirements(db, product_id, quantity).items():
+            requirement[raw_material_id] = requirement.get(raw_material_id, 0.0) + qty
+    return requirement
+
+
+def check_material_conflicts(
+    db: Session, lines: list, exclude_quotation_id: int | None = None
+) -> list[dict]:
+    """Whether raising a quotation with these lines would, combined with
+    every OTHER still-open quotation's own material needs, claim more of
+    a raw material than is actually available -- i.e. this quotation's
+    fulfillment is subject to what a prior quotation (or order, already
+    netted into quantity_available's reservation) already has a claim on.
+
+    Confirmed orders already hold a real reservation (see
+    production_service._reserve_batch_materials), which
+    inventory_service.get_stock's quantity_available already nets out --
+    so they never need to be found by scanning here, only open
+    quotations do, since a quotation holds nothing in the ledger.
+
+    Returns one entry per raw material that would be oversubscribed, each
+    naming which other open quotation(s) are contributing to it -- empty
+    when nothing conflicts. Purely a read: computes fresh every call
+    against current data, nothing here is persisted (see
+    Quotation.material_conflict_notes for the snapshot taken when Sales
+    acknowledges a conflict at creation/edit time).
+    """
+    my_requirement = _explode_lines_requirement(db, lines)
+    if not my_requirement:
+        return []
+
+    other_quotations = (
+        db.query(Quotation)
+        .options(joinedload(Quotation.lines))
+        .filter(
+            Quotation.deleted_at.is_(None),
+            Quotation.status.in_(_OPEN_QUOTATION_STATUSES),
+        )
+        .all()
+    )
+    if exclude_quotation_id is not None:
+        other_quotations = [q for q in other_quotations if q.id != exclude_quotation_id]
+
+    other_demand: dict[int, float] = {}
+    competitors: dict[int, dict[int, dict]] = {}
+    for q in other_quotations:
+        q_requirement = _explode_lines_requirement(db, q.lines)
+        for raw_material_id, qty in q_requirement.items():
+            if raw_material_id not in my_requirement:
+                continue  # only relevant if THIS quotation also needs it
+            other_demand[raw_material_id] = other_demand.get(raw_material_id, 0.0) + qty
+            competitors.setdefault(raw_material_id, {})[q.id] = {
+                "quotation_id": q.id,
+                "quotation_number": q.quotation_number,
+            }
+
+    materials = {
+        m.id: m for m in db.query(RawMaterial).filter(RawMaterial.id.in_(my_requirement.keys())).all()
+    }
+
+    conflicts: list[dict] = []
+    for raw_material_id, required in my_requirement.items():
+        available = inventory_service.get_stock(db, "raw_material", raw_material_id)["quantity_available"]
+        total_claim = required + other_demand.get(raw_material_id, 0.0)
+        if total_claim <= available:
+            continue
+        material = materials.get(raw_material_id)
+        conflicts.append(
+            {
+                "raw_material_id": raw_material_id,
+                "code": material.code if material else f"#{raw_material_id}",
+                "name": material.name if material else "Unknown material",
+                "unit": material.unit if material else "",
+                "required_by_this": round(required, 4),
+                "available": round(available, 4),
+                "shortfall": round(total_claim - available, 4),
+                "competing_quotations": list(competitors.get(raw_material_id, {}).values()),
+            }
+        )
+    conflicts.sort(key=lambda c: c["shortfall"], reverse=True)
+    return conflicts
 
 
 def _price_lines(db: Session, lines: list[dict]) -> list[dict]:
@@ -97,6 +214,29 @@ def create_quotation(db: Session, data: dict, user_id: int | None = None) -> Quo
     if customer is None:
         raise ValidationAppError(f"Customer {data['customer_id']} not found.")
 
+    # Sales must explicitly acknowledge (material_conflict_acknowledged)
+    # before a quotation whose material needs overlap another still-open
+    # quotation/order can be created at all -- this is the server-side
+    # half of the gate the "New quotation" form's warning dialog enforces
+    # client-side; re-checked here so it can't be bypassed by calling the
+    # API directly. A snapshot of what was flagged is kept on the row
+    # (material_conflict_notes) so the acknowledgment is visible later,
+    # not just a one-time client-side click-through.
+    material_conflict_acknowledged = data.pop("material_conflict_acknowledged", False)
+    conflicts = check_material_conflicts(db, data["lines"])
+    if conflicts and not material_conflict_acknowledged:
+        raise ConflictError(
+            "This quotation's material needs overlap another open quotation/order -- "
+            "acknowledge the conflict to proceed: "
+            + "; ".join(
+                f"{c['name']} short by {c['shortfall']} {c['unit']} "
+                f"(also needed by {', '.join(comp['quotation_number'] for comp in c['competing_quotations'])})"
+                for c in conflicts
+            )
+            + "."
+        )
+    material_conflict_notes = json.dumps(conflicts) if conflicts else None
+
     # A quotation can be raised off a feasibility check that came back
     # feasible, or one Sales explicitly exception-approved despite a raw
     # material shortfall -- or created standalone with no check at all
@@ -132,6 +272,8 @@ def create_quotation(db: Session, data: dict, user_id: int | None = None) -> Quo
         discount_percent=discount_percent,
         discount_amount=totals["discount_amount"],
         total_amount=totals["total_amount"],
+        material_conflict_acknowledged=bool(conflicts) and material_conflict_acknowledged,
+        material_conflict_notes=material_conflict_notes,
         created_by=user_id,
         **data,
     )
@@ -163,6 +305,11 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
 
     lines = data.pop("lines", None)
     discount_percent_update = data.pop("discount_percent", None)
+    # Only meaningful (and only re-checked) when lines are actually being
+    # edited below -- popped here regardless so the generic setattr loop
+    # never overwrites the stored acknowledgment with whatever the client
+    # happened to submit on an update that doesn't touch lines at all.
+    material_conflict_acknowledged = data.pop("material_conflict_acknowledged", False)
     # customer_id is required on the model; a None here means "not supplied"
     # rather than "clear it", so drop it if absent/blank.
     if data.get("customer_id") is None:
@@ -181,6 +328,25 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
         quotation.approved_by = None
 
     if lines is not None:
+        # Same acknowledge-before-proceeding gate as create_quotation,
+        # re-checked against the *new* lines -- editing a draft's lines
+        # can introduce (or resolve) a conflict just as much as creating
+        # one can.
+        conflicts = check_material_conflicts(db, lines, exclude_quotation_id=quotation_id)
+        if conflicts and not material_conflict_acknowledged:
+            raise ConflictError(
+                "These lines' material needs overlap another open quotation/order -- "
+                "acknowledge the conflict to proceed: "
+                + "; ".join(
+                    f"{c['name']} short by {c['shortfall']} {c['unit']} "
+                    f"(also needed by {', '.join(comp['quotation_number'] for comp in c['competing_quotations'])})"
+                    for c in conflicts
+                )
+                + "."
+            )
+        quotation.material_conflict_acknowledged = bool(conflicts) and material_conflict_acknowledged
+        quotation.material_conflict_notes = json.dumps(conflicts) if conflicts else None
+
         priced = _price_lines(db, [dict(line) for line in lines])
         quotation.lines.clear()
         db.flush()

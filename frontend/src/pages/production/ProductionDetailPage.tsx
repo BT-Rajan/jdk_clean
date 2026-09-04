@@ -4,11 +4,12 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
 import {
   deleteProductionBatch,
+  getMaterialRequirements,
   getProductionBatch,
   restoreProductionBatch,
   updateProductionBatchStatus,
 } from '@/api/production'
-import type { ProductionBatch, SettableProductionStatus } from '@/types/production'
+import type { MaterialRequirement, ProductionBatch, SettableProductionStatus } from '@/types/production'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
@@ -32,6 +33,8 @@ export function ProductionDetailPage() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
   const [producedQuantity, setProducedQuantity] = useState('')
+  const [materialRequirements, setMaterialRequirements] = useState<MaterialRequirement[]>([])
+  const [actualUsage, setActualUsage] = useState<Record<number, string>>({})
 
   function load() {
     setLoading(true)
@@ -45,6 +48,23 @@ export function ProductionDetailPage() {
   }
 
   useEffect(load, [batchId])
+
+  useEffect(() => {
+    if (batch?.status !== 'in_progress') return
+    getMaterialRequirements(batchId)
+      .then((reqs) => {
+        setMaterialRequirements(reqs)
+        // Pre-fill with the BOM's own planned (scrap-inflated) figure --
+        // production staff adjusts from there to what was actually used;
+        // leaving a field untouched deducts this same default.
+        setActualUsage(Object.fromEntries(reqs.map((r) => [r.raw_material_id, String(r.planned_required)])))
+      })
+      .catch(() => {
+        // Best-effort: a product with no BOM has nothing to show here,
+        // and "Complete batch" still works fine with no actual-quantity
+        // inputs at all -- same as before this existed.
+      })
+  }, [batchId, batch?.status])
 
   async function handleStatusChange(status: SettableProductionStatus, reason?: string) {
     setBusy(true)
@@ -64,9 +84,22 @@ export function ProductionDetailPage() {
     setBusy(true)
     setError(null)
     try {
-      const updated = await updateProductionBatchStatus(batchId, 'completed', Number(producedQuantity))
+      const actualMaterials = materialRequirements
+        .map((r) => ({ raw_material_id: r.raw_material_id, quantity_used: Number(actualUsage[r.raw_material_id]) }))
+        .filter((m) => Number.isFinite(m.quantity_used) && m.quantity_used >= 0)
+      const updated = await updateProductionBatchStatus(
+        batchId,
+        'completed',
+        Number(producedQuantity),
+        undefined,
+        actualMaterials.length > 0 ? actualMaterials : undefined,
+      )
       setBatch(updated)
-      setNotice('Batch completed. Raw materials consumed and finished goods received into inventory.')
+      setNotice(
+        updated.material_discrepancy_flag
+          ? 'Batch completed, but actual material usage needs a look -- see below.'
+          : 'Batch completed. Raw materials consumed and finished goods received into inventory.',
+      )
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -175,20 +208,63 @@ export function ProductionDetailPage() {
         </div>
 
         {canComplete && (
-          <div className="mb-6 flex flex-wrap items-end gap-3 rounded-xl border border-white/10 p-4">
-            <div className="w-40">
-              <TextField
-                label="Produced quantity"
-                type="number"
-                step="0.0001"
-                value={producedQuantity}
-                onChange={(e) => setProducedQuantity(e.target.value)}
-              />
+          <div className="mb-6 flex flex-col gap-4 rounded-xl border border-white/10 p-4">
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="w-40">
+                <TextField
+                  label="Produced quantity"
+                  type="number"
+                  step="0.0001"
+                  value={producedQuantity}
+                  onChange={(e) => setProducedQuantity(e.target.value)}
+                />
+              </div>
+              <Button isLoading={busy} onClick={handleComplete}>Complete batch</Button>
             </div>
-            <Button isLoading={busy} onClick={handleComplete}>Complete batch</Button>
-            <p className="w-full text-xs text-white/40">
-              Consumes raw materials per the product's bill of materials and receives the finished goods into inventory.
+
+            {materialRequirements.length > 0 && (
+              <div>
+                <p className="mb-2 text-xs font-medium tracking-wide text-white/50 uppercase">Actual material used</p>
+                <div className="flex flex-col gap-2">
+                  {materialRequirements.map((r) => (
+                    <div key={r.raw_material_id} className="flex flex-wrap items-center gap-3 text-sm">
+                      <span className="w-40 shrink-0 text-white/70">{r.code} — {r.name}</span>
+                      <div className="w-36">
+                        <TextField
+                          label="Actual used"
+                          type="number"
+                          step="0.0001"
+                          value={actualUsage[r.raw_material_id] ?? ''}
+                          onChange={(e) =>
+                            setActualUsage((prev) => ({ ...prev, [r.raw_material_id]: e.target.value }))
+                          }
+                        />
+                      </div>
+                      <span className="text-xs text-white/40">
+                        {r.unit} · planned {r.planned_required} (net {r.net_required}) · {r.current_on_hand} on hand
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            <p className="text-xs text-white/40">
+              Consumes raw materials per the product's bill of materials (or the actual quantities entered above)
+              and receives the finished goods into inventory. Leaving a material's actual quantity at its planned
+              figure deducts that; entering a different number is what's actually checked against this product's
+              scrap allowance.
             </p>
+          </div>
+        )}
+
+        {batch.material_discrepancy_flag && batch.material_discrepancy_findings && (
+          <div className="mb-6 rounded-xl border border-amber-400/30 bg-amber-500/10 p-4">
+            <p className="mb-2 text-sm font-medium text-amber-200">Material usage needs review</p>
+            <ul className="flex flex-col gap-1 text-xs text-amber-100/90">
+              {batch.material_discrepancy_findings.map((f) => (
+                <li key={f.raw_material_id}>{f.message}</li>
+              ))}
+            </ul>
           </div>
         )}
 

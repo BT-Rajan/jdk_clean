@@ -80,6 +80,13 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
     # 'draft' until an admin approves it.
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     approved_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+    # Set when this quotation was created (or last edited) despite a raw
+    # material it needs also being needed by another still-open
+    # quotation/order, and Sales explicitly acknowledged that overlap --
+    # see quotation_service.check_material_conflicts. A snapshot of what
+    # was flagged at that moment, not a live check (availability moves on).
+    material_conflict_acknowledged: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    material_conflict_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     deal: Mapped[Deal | None] = relationship(lazy="joined")

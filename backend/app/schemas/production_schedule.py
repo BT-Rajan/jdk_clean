@@ -1,8 +1,14 @@
+import json
 from datetime import date, datetime
 
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.validators import not_in_past
+
+
+class ProductionMaterialActual(BaseModel):
+    raw_material_id: int
+    quantity_used: float = Field(ge=0)
 
 
 class ProductionScheduleCreate(BaseModel):
@@ -66,6 +72,12 @@ class ProductionScheduleStatusUpdate(BaseModel):
     # Only required (and only used) when status == 'completed': the real
     # output of the batch, which may differ from planned_quantity.
     produced_quantity: float | None = Field(default=None, gt=0)
+    # Optional, only used when status == 'completed': actual raw material
+    # consumed, per material -- any material not listed here is deducted
+    # at its BOM-calculated (scrap-inflated) figure instead, same as
+    # before this existed. Given figures drive the scrap-allowance-breach
+    # and material-discrepancy checks (see production_service._complete_batch).
+    actual_materials: list[ProductionMaterialActual] | None = None
     # Required when status == 'cancelled' (enforced in the service layer).
     reason: str | None = None
 
@@ -91,6 +103,13 @@ class ProductionScheduleOut(BaseModel):
     auto_scheduled: bool
     cancel_reason: str | None
     notes: str | None
+    material_discrepancy_flag: bool
+    # Deliberately not named material_discrepancy_notes (the ORM column
+    # it's parsed from) -- from_attributes model_validate would otherwise
+    # try to coerce that raw JSON *string* directly into this list field
+    # and fail before from_model ever gets to parse it. Same reason
+    # FeasibilityLineOut's `shortfalls` isn't named shortfall_json.
+    material_discrepancy_findings: list[dict] | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -104,4 +123,17 @@ class ProductionScheduleOut(BaseModel):
         data.unit = obj.product.unit if obj.product else None
         data.machine_name = obj.machine.name if obj.machine else None
         data.order_number = obj.order.order_number if obj.order else None
+        data.material_discrepancy_findings = (
+            json.loads(obj.material_discrepancy_notes) if obj.material_discrepancy_notes else None
+        )
         return data
+
+
+class MaterialRequirementOut(BaseModel):
+    raw_material_id: int
+    code: str
+    name: str
+    unit: str
+    net_required: float
+    planned_required: float
+    current_on_hand: float

@@ -6,6 +6,7 @@ from app.core.database import get_db
 from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.production_schedule import (
+    MaterialRequirementOut,
     ProductionQuickLog,
     ProductionScheduleCreate,
     ProductionScheduleOut,
@@ -101,6 +102,19 @@ def update_batch(
     return ProductionScheduleOut.from_model(batch)
 
 
+@router.get("/{batch_id}/material-requirements", response_model=list[MaterialRequirementOut])
+def get_material_requirements(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    """Per-raw-material breakdown for this batch's planned run -- net
+    (zero-scrap) requirement, the BOM's scrap-inflated figure, and current
+    stock -- for the "Complete batch" screen to show alongside an actual-
+    quantity input per material."""
+    return production_service.get_material_requirements(db, batch_id)
+
+
 @router.post("/{batch_id}/status", response_model=ProductionScheduleOut)
 def update_status(
     batch_id: int,
@@ -108,11 +122,17 @@ def update_status(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
+    actual_materials = (
+        {m.raw_material_id: m.quantity_used for m in payload.actual_materials}
+        if payload.actual_materials
+        else None
+    )
     batch = production_service.change_status(
         db,
         batch_id,
         payload.status,
         produced_quantity=payload.produced_quantity,
+        actual_materials=actual_materials,
         reason=payload.reason,
         user_id=user.id,
     )

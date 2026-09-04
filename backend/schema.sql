@@ -789,6 +789,11 @@ CREATE TABLE IF NOT EXISTS quotations (
     -- leave 'draft' until an admin approves it.
     approved_at     DATETIME NULL,
     approved_by     BIGINT UNSIGNED NULL,
+    -- Set when this quotation's material needs overlapped another
+    -- still-open quotation/order and Sales explicitly acknowledged that
+    -- at creation/edit time -- see quotation_service.check_material_conflicts.
+    material_conflict_acknowledged TINYINT(1) NOT NULL DEFAULT 0,
+    material_conflict_notes TEXT NULL, -- JSON snapshot of what was flagged
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -844,6 +849,13 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     -- orders/quotations/feasibility, previously missing here.
     cancel_reason   TEXT NULL,
     notes           TEXT NULL,
+    -- Set on completion when actual raw-material usage (see
+    -- app/api/production_schedules.py's actual_materials) either exceeds
+    -- a raw material's BOM-configured scrap_percent allowance or comes
+    -- in below the bare zero-scrap requirement -- see
+    -- production_service._complete_batch and notification_service.py.
+    material_discrepancy_flag TINYINT(1) NOT NULL DEFAULT 0,
+    material_discrepancy_notes TEXT NULL, -- JSON list of per-material findings
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,

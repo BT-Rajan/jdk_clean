@@ -11,6 +11,8 @@ from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.email import SendDocumentEmailRequest
 from app.schemas.quotation import (
+    MaterialConflictCheckRequest,
+    MaterialConflictOut,
     QuotationCreate,
     QuotationOut,
     QuotationStatusUpdate,
@@ -67,6 +69,23 @@ def get_quotation_history(
 ):
     quotation_service.get_quotation(db, quotation_id, include_deleted=True)  # 404s if never existed
     return audit_service.get_history(db, "quotations", quotation_id)
+
+
+@router.post("/material-conflicts", response_model=list[MaterialConflictOut])
+def check_material_conflicts(
+    payload: MaterialConflictCheckRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    """Live pre-check for the "New quotation" / edit form: whether these
+    lines' material needs, combined with every other still-open
+    quotation's own needs, would claim more of a raw material than is
+    actually available. Read-only -- creating/editing the quotation
+    itself re-checks and gates on this same logic server-side."""
+    conflicts = quotation_service.check_material_conflicts(
+        db, [line.model_dump() for line in payload.lines], exclude_quotation_id=payload.exclude_quotation_id
+    )
+    return conflicts
 
 
 @router.post("", response_model=QuotationOut, status_code=201)

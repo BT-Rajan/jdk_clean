@@ -328,6 +328,36 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
                         }
                     )
 
+    # 11. Completed production batches with a material discrepancy or
+    # scrap-allowance breach (see production_service._complete_batch) --
+    # admin-only, same visibility as the other admin-review items above.
+    if _visible(user, None):
+        flagged_batches = (
+            db.query(ProductionSchedule)
+            .options(joinedload(ProductionSchedule.product))
+            .filter(
+                ProductionSchedule.deleted_at.is_(None),
+                ProductionSchedule.material_discrepancy_flag.is_(True),
+            )
+            .order_by(ProductionSchedule.updated_at.desc())
+            .all()
+        )
+        for batch in flagged_batches:
+            items.append(
+                {
+                    "id": f"production-material-discrepancy-{batch.id}",
+                    "type": "production_material_discrepancy",
+                    "severity": "high",
+                    "title": f"{batch.batch_number} has a material discrepancy",
+                    "message": (
+                        f"Actual raw-material usage didn't match expectations for "
+                        f"{batch.product.name if batch.product else 'this product'} -- review before it's relied on."
+                    ),
+                    "link": f"/production/{batch.id}",
+                    "created_at": batch.updated_at,
+                }
+            )
+
     def _sort_key(item: dict):
         created = item["created_at"]
         if created is None:

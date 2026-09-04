@@ -195,3 +195,45 @@ def explode_requirements(db: Session, product_id: int, quantity: float) -> dict[
 
     _walk(product_id, float(quantity), depth=1)
     return totals
+
+
+def explode_requirements_detailed(db: Session, product_id: int, quantity: float) -> dict[int, dict[str, float]]:
+    """Same recursive walk as explode_requirements, but also returns each
+    raw material's *net* (zero-scrap) requirement alongside its
+    scrap-inflated one -- {raw_material_id: {"net_required":,
+    "scrap_inflated_required":}}. The gap between the two, as a
+    percentage of net, is the admin-configured scrap allowance for
+    however this material's own contributing BOM line(s) are set up
+    (used by production_service to check actual usage against it at
+    batch completion -- see _complete_batch).
+
+    Kept as a separate function rather than changing explode_requirements
+    itself so every existing caller (feasibility's shortfall check,
+    _reserve_batch_materials, mrp_service) keeps getting the flat,
+    scrap-inflated-only totals it already expects.
+    """
+    _get_active_product(db, product_id)
+    totals: dict[int, dict[str, float]] = {}
+
+    def _walk(current_product_id: int, multiplier: float, depth: int) -> None:
+        if depth > MAX_BOM_DEPTH:
+            raise ConflictError(
+                f"BOM nesting exceeds the maximum supported depth ({MAX_BOM_DEPTH})."
+            )
+        lines = (
+            db.query(BomLine)
+            .filter(BomLine.parent_product_id == current_product_id, BomLine.deleted_at.is_(None))
+            .all()
+        )
+        for line in lines:
+            net_qty = float(line.quantity) * multiplier
+            scrap_inflated_qty = net_qty * (1 + float(line.scrap_percent) / 100)
+            if line.component_type == "raw_material":
+                entry = totals.setdefault(line.component_id, {"net_required": 0.0, "scrap_inflated_required": 0.0})
+                entry["net_required"] += net_qty
+                entry["scrap_inflated_required"] += scrap_inflated_qty
+            else:
+                _walk(line.component_id, scrap_inflated_qty, depth + 1)
+
+    _walk(product_id, float(quantity), depth=1)
+    return totals
