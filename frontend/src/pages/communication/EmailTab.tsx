@@ -85,7 +85,7 @@ export function EmailTab() {
 
   async function saveValues(values: EmailAccountFormValues) {
     const payload: EmailAccountFormValues = { ...values }
-    if (!changePassword) {
+    if (hasPassword && !changePassword) {
       delete payload.password
     }
     const updated = await updateEmailAccount(payload)

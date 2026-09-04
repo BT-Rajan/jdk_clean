@@ -78,7 +78,7 @@ export function WhatsAppTab() {
 
   async function saveValues(values: WhatsAppAccountFormValues) {
     const payload: WhatsAppAccountFormValues = { ...values }
-    if (!changeToken) {
+    if (hasToken && !changeToken) {
       delete payload.access_token
     }
     const updated = await updateWhatsAppAccount(payload)
