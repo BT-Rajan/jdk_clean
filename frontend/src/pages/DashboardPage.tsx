@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { GlassCard, Button, Alert } from '@/components/ui'
 import { useAuth } from '@/hooks/useAuth'
+import { useCompanyName } from '@/hooks/useCompanyName'
 import { useDashboardPreferences } from '@/hooks/useDashboardPreferences'
 import { getDashboardStats } from '@/api/dashboard'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -35,6 +36,7 @@ const STAT_ROUTES: Record<string, string> = {
 
 export function DashboardPage() {
   const { user } = useAuth()
+  const companyName = useCompanyName()
   const { isLoading: prefsLoading, getEnabledWidgets } = useDashboardPreferences(user?.role)
 
   const [data, setData] = useState<DashboardStatsResponse | null>(null)
@@ -56,7 +58,7 @@ export function DashboardPage() {
       <h1 className="font-display text-3xl font-medium text-white">
         Welcome, <span className="text-gradient-gold">{user?.full_name}</span>
       </h1>
-      <p className="mt-2 text-sm text-white/50">You're signed in to the JDK MEA workspace.</p>
+      <p className="mt-2 text-sm text-white/50">You're signed in to the {companyName ?? 'JDK MEA'} workspace.</p>
 
       <Alert variant="error">{error}</Alert>
 

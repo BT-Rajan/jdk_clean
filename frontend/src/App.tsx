@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AuthProvider } from '@/context/AuthProvider'
 import { PagePermissionGuard } from '@/routes/PagePermissionGuard'
@@ -7,6 +7,7 @@ import { ProtectedRoute } from '@/routes/ProtectedRoute'
 import { PublicOnlyRoute } from '@/routes/PublicOnlyRoute'
 import { LoginPage } from '@/pages/LoginPage'
 import { FullScreenLoader } from '@/components/layout/FullScreenLoader'
+import { useCompanyName } from '@/hooks/useCompanyName'
 
 const DashboardPage = lazy(() =>
   import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
@@ -192,6 +193,16 @@ const InventoryReportPage = lazy(() =>
 )
 
 export function App() {
+  // Keeps the browser tab title in sync with the admin-configured company
+  // name (falls back to the index.html default, "JDK MEA", until it loads
+  // or if none has been set) -- the same source <Logo>'s text fallback and
+  // the dashboard greeting read from, so the tab title isn't the one place
+  // still stuck on a hardcoded name.
+  const companyName = useCompanyName()
+  useEffect(() => {
+    if (companyName) document.title = companyName
+  }, [companyName])
+
   return (
     <AuthProvider>
       <Suspense fallback={<FullScreenLoader />}>

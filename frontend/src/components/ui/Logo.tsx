@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { env } from '@/config/env'
-import { getActiveCompanyName } from '@/api/settings'
+import { useCompanyName } from '@/hooks/useCompanyName'
 import { cn } from '@/lib/cn'
 
 interface LogoProps {
@@ -32,19 +32,7 @@ const ACTIVE_LOGO_URL = `${env.apiBaseUrl}/api/settings/logo/active/current`
  * something that switches live. */
 export function Logo({ className, withWordmark = true }: LogoProps) {
   const [logoFailed, setLogoFailed] = useState(false)
-  const [companyName, setCompanyName] = useState<string | null>(null)
-
-  useEffect(() => {
-    let cancelled = false
-    getActiveCompanyName()
-      .then((name) => {
-        if (!cancelled && name) setCompanyName(name)
-      })
-      .catch(() => {})
-    return () => {
-      cancelled = true
-    }
-  }, [])
+  const companyName = useCompanyName()
 
   if (!logoFailed) {
     return (
