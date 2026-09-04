@@ -119,27 +119,56 @@ export function AppLayout({ children }: AppLayoutProps) {
         { to: '/quotations', label: 'Quotations' },
         { to: '/orders', label: 'Orders' },
         { to: '/delivery-notes', label: 'Delivery notes' },
+        { to: '/customers', label: 'Customers' },
+        { to: '/reports/sales-report', label: 'Sales Report' },
+      ],
+    },
+    {
+      label: 'Production',
+      items: [
+        { to: '/orders', label: 'Orders (view)' },
+        { to: '/purchase-orders', label: 'Purchase orders (view)' },
+        { to: '/mrp', label: 'MRP' },
+        { to: '/production', label: 'Production schedule' },
+        { to: '/machines', label: 'Production Line' },
+        { to: '/reports/production-report', label: 'Production Report' },
       ],
     },
     {
       label: 'Purchasing',
       items: [
         { to: '/purchase-orders', label: 'Purchase orders' },
+        { to: '/suppliers', label: 'Suppliers' },
+        { to: '/raw-materials', label: 'Raw Materials' },
         { to: '/supplier-returns', label: 'Supplier returns' },
+        { to: '/reports/purchasing-report', label: 'Purchasing Report' },
       ],
     },
     {
-      label: 'Inventory',
-      items: [{ to: '/inventory', label: 'Stock levels' }],
-    },
-    {
-      label: 'Production',
+      label: 'Warehouse/Inventory',
       items: [
-        { to: '/production', label: 'Production schedule' },
-        { to: '/mrp', label: 'MRP' },
+        { to: '/inventory', label: 'Stock levels' },
+        { to: '/delivery-notes', label: 'Delivery notes (view)' },
+        { to: '/reports/inventory-report', label: 'Inventory Report' },
       ],
     },
-    ...(isAdmin(user?.role) ? [{ to: '/admin', label: 'Admin' } satisfies NavLeaf] : []),
+    ...(isAdmin(user?.role)
+      ? [
+          {
+            label: 'Admin',
+            items: [
+              { to: '/users', label: 'Users' },
+              { to: '/departments', label: 'Departments' },
+              { to: '/roles-permissions', label: 'Roles & Permissions' },
+              { to: '/admin?section=company', label: 'Company Settings' },
+              { to: '/admin?section=communication', label: 'Communication' },
+              { to: '/admin?section=email-templates', label: 'Templates' },
+              { to: '/admin?section=org-chart', label: 'Org Chart' },
+              { to: '/admin?section=ai-assistant', label: 'AI Assistant' },
+            ],
+          } satisfies NavGroup,
+        ]
+      : []),
   ]
 
   // Hides a nav link/group the user's department has no access to at
@@ -204,27 +233,13 @@ export function AppLayout({ children }: AppLayoutProps) {
     { id: 'action:logout', label: 'Sign out', keywords: 'logout', onSelect: handleLogout },
     ...(isAdmin(user?.role)
       ? [
-          {
-            id: 'admin:company',
-            label: 'Company',
-            hint: 'Admin',
-            keywords: 'factory setup working hours weekdays',
-            onSelect: () => navigate('/admin?section=company'),
-          },
           { id: 'admin:workflow-automation', label: 'Workflow Automation', hint: 'Admin', onSelect: () => navigate('/admin?section=workflow-automation') },
           { id: 'admin:approvals', label: 'Approvals', hint: 'Admin', onSelect: () => navigate('/admin?section=approvals') },
-          { id: 'admin:ai-assistant', label: 'AI Assistant settings', hint: 'Admin', keywords: 'api key', onSelect: () => navigate('/admin?section=ai-assistant') },
-          {
-            id: 'admin:communication',
-            label: 'Communication',
-            hint: 'Admin',
-            keywords: 'email whatsapp sms imap pop3 smtp meta templates kwtsms unifonic smsala',
-            onSelect: () => navigate('/admin?section=communication'),
-          },
-          { id: 'admin:org-chart', label: 'Org Chart', hint: 'Admin', onSelect: () => navigate('/admin?section=org-chart') },
           { id: 'admin:master-data', label: 'Master Data', hint: 'Admin', onSelect: () => navigate('/master-data') },
-          // Users, Departments, and Roles & Permissions are covered by
-          // the Master Data entries above now -- not duplicated here.
+          // Users, Departments, Roles & Permissions, Company Settings,
+          // Communication, Templates, Org Chart, and AI Assistant are
+          // covered by the Admin nav dropdown's own entries (see
+          // navEntries above) -- not duplicated here.
         ]
       : []),
   ]
