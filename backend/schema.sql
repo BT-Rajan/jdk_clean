@@ -590,6 +590,29 @@ CREATE TABLE IF NOT EXISTS payments (
     INDEX idx_payments_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- A recorded commitment to pay an order off by some date (amount + a
+-- single target date, no per-installment breakdown yet) -- purely
+-- informational, does NOT feed the credit-limit check the way a real
+-- Payment does. See app/services/payment_plan_service.py.
+CREATE TABLE IF NOT EXISTS payment_plans (
+    id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    order_id        BIGINT UNSIGNED NOT NULL,
+    customer_id     BIGINT UNSIGNED NOT NULL, -- denormalized from orders.customer_id, same as payments.customer_id
+    amount          DECIMAL(14,2) NOT NULL,
+    target_date     DATE NOT NULL,
+    notes           TEXT NULL,
+    deleted_at      DATETIME NULL,
+    created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by      BIGINT UNSIGNED NULL,
+    updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by      BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_payment_plans_order FOREIGN KEY (order_id) REFERENCES orders(id),
+    CONSTRAINT fk_payment_plans_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    INDEX idx_payment_plans_order (order_id),
+    INDEX idx_payment_plans_customer (customer_id),
+    INDEX idx_payment_plans_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- ============================================================
 -- PURCHASE ORDERS (the supply-side counterpart to orders: what we're
 -- buying from a supplier, rather than what a customer is buying from us)

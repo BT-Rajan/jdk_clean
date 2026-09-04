@@ -19,6 +19,7 @@ import {
   updateOrderStatus,
 } from '@/api/orders'
 import { PaymentsPanel } from './PaymentsPanel'
+import { PaymentPlansPanel } from './PaymentPlansPanel'
 import type { Order } from '@/types/order'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
@@ -451,6 +452,10 @@ export function OrderDetailPage() {
 
       <div className="mt-6">
         <PaymentsPanel orderId={orderId} orderTotal={order.total_amount} allowWrite={allowWrite} allowAdmin={allowAdmin} />
+      </div>
+
+      <div className="mt-6">
+        <PaymentPlansPanel orderId={orderId} allowWrite={allowWrite} allowAdmin={allowAdmin} />
       </div>
 
       <div className="mt-6">
