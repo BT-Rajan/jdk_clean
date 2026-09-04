@@ -34,3 +34,12 @@ export async function fetchCompanyLogoBlob(variant: LogoVariant): Promise<Blob> 
   const { data } = await apiClient.get<Blob>(`/api/settings/logo/${variant}`, { responseType: 'blob' })
   return data
 }
+
+/** Deliberately unauthenticated on the backend (see api/settings.py's
+ * get_active_company_name) -- <Logo> calls this before there's
+ * necessarily a signed-in user (the login page), same reasoning as the
+ * logo image's own public endpoint. */
+export async function getActiveCompanyName(): Promise<string> {
+  const { data } = await apiClient.get<{ company_name: string }>('/api/settings/company-name/current')
+  return data.company_name
+}

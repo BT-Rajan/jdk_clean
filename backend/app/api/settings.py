@@ -8,7 +8,7 @@ from app.api.deps import require_role
 from app.core.database import get_db
 from app.core.exceptions import NotFoundError
 from app.models.user import User
-from app.schemas.settings import SettingsOut, SettingsUpdate
+from app.schemas.settings import CompanyNameOut, SettingsOut, SettingsUpdate
 from app.services import company_logo_service, settings_service
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
@@ -70,6 +70,17 @@ def get_company_logo(
         raise NotFoundError("Logo")
     media_type = "image/png" if path.suffix == ".png" else "image/jpeg"
     return FileResponse(path, media_type=media_type)
+
+
+@router.get("/company-name/current", response_model=CompanyNameOut)
+def get_active_company_name(db: Session = Depends(get_db)):
+    """Deliberately unauthenticated, same reasoning as .../logo/active/current
+    below -- <Logo>'s text fallback (used wherever the uploaded logo image
+    itself isn't set/hasn't loaded, including the login page, which has no
+    signed-in user yet) reads the admin-configured company name from here
+    instead of a hardcoded string. A company's own name isn't sensitive,
+    so no auth is needed to view it, just to change it."""
+    return {"company_name": settings_service.get_all(db)["company_name"]}
 
 
 @router.get("/logo/active/current")
