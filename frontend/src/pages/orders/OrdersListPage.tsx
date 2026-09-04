@@ -49,28 +49,29 @@ export function OrdersListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Orders</h1>
           <p className="mt-2 text-sm text-white/50">{total} on file</p>
         </div>
-        {canWriteDepartment(user, 'sales') && (
-          <div className="flex gap-3">
-            <Button variant="ghost" onClick={() => navigate('/orders/new')}>New order</Button>
-            <Button onClick={() => setLogOpen(true)}>Log a sale</Button>
+        <div className="flex items-end gap-3">
+          <div className="w-44">
+            <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="in_production">In production</option>
+              <option value="ready_to_ship">Ready to ship</option>
+              <option value="shipped">Shipped</option>
+              <option value="delivered">Delivered</option>
+              <option value="cancelled">Cancelled</option>
+            </SelectField>
           </div>
-        )}
+          {canWriteDepartment(user, 'sales') && (
+            <div className="flex gap-3">
+              <Button variant="ghost" onClick={() => navigate('/orders/new')}>New order</Button>
+              <Button onClick={() => setLogOpen(true)}>Log a sale</Button>
+            </div>
+          )}
+        </div>
       </div>
 
       <LogSaleModal open={logOpen} onClose={() => setLogOpen(false)} />
-
-      <div className="mb-6 max-w-xs">
-        <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="in_production">In production</option>
-          <option value="ready_to_ship">Ready to ship</option>
-          <option value="shipped">Shipped</option>
-          <option value="delivered">Delivered</option>
-          <option value="cancelled">Cancelled</option>
-        </SelectField>
-      </div>
 
       <Alert variant="error">{error}</Alert>
 

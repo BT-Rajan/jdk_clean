@@ -47,19 +47,20 @@ export function QuotationsListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Quotations</h1>
           <p className="mt-2 text-sm text-white/50">{total} on file</p>
         </div>
-        {canWriteDepartment(user, 'sales') && <Button onClick={() => navigate('/quotations/new')}>New quotation</Button>}
-      </div>
-
-      <div className="mb-6 max-w-xs">
-        <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="sent">Sent</option>
-          <option value="accepted">Accepted</option>
-          <option value="rejected">Rejected</option>
-          <option value="expired">Expired</option>
-          <option value="converted">Converted</option>
-        </SelectField>
+        <div className="flex items-end gap-3">
+          <div className="w-44">
+            <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+              <option value="expired">Expired</option>
+              <option value="converted">Converted</option>
+            </SelectField>
+          </div>
+          {canWriteDepartment(user, 'sales') && <Button onClick={() => navigate('/quotations/new')}>New quotation</Button>}
+        </div>
       </div>
 
       <Alert variant="error">{error}</Alert>

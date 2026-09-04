@@ -48,19 +48,20 @@ export function PurchaseOrdersListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Purchase orders</h1>
           <p className="mt-2 text-sm text-white/50">{total} purchase orders on file</p>
         </div>
-        {canWriteDepartment(user, 'procurement') && <Button onClick={() => navigate('/purchase-orders/new')}>New purchase order</Button>}
-      </div>
-
-      <div className="mb-6 max-w-xs">
-        <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="sent">Sent</option>
-          <option value="confirmed">Confirmed</option>
-          <option value="partially_received">Partially received</option>
-          <option value="received">Received</option>
-          <option value="cancelled">Cancelled</option>
-        </SelectField>
+        <div className="flex items-end gap-3">
+          <div className="w-44">
+            <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="confirmed">Confirmed</option>
+              <option value="partially_received">Partially received</option>
+              <option value="received">Received</option>
+              <option value="cancelled">Cancelled</option>
+            </SelectField>
+          </div>
+          {canWriteDepartment(user, 'procurement') && <Button onClick={() => navigate('/purchase-orders/new')}>New purchase order</Button>}
+        </div>
       </div>
 
       <Alert variant="error">{error}</Alert>
