@@ -175,6 +175,7 @@ export function InventoryAdjustPage() {
                     label="Unit cost"
                     type="number"
                     step="0.0001"
+                    min="0"
                     error={errors.unit_cost?.message}
                     {...register('unit_cost')}
                   />

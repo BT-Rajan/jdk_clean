@@ -6,6 +6,7 @@ import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { generateId } from '@/lib/id'
+import { clampNonNegative } from '@/lib/number'
 import type { SupplierMaterialInput } from '@/types/supplierMaterial'
 
 interface EditableLine extends SupplierMaterialInput {
@@ -64,9 +65,21 @@ export function SuppliedMaterialsEditor({ supplierId, canEdit }: SuppliedMateria
   }
 
   async function handleSave() {
-    setSaving(true)
     setError(null)
     setNotice(null)
+    // Mirrors the backend's SupplierMaterialIn constraints (max_supply_
+    // quantity > 0, lead_time_days >= 0) -- this editor has no zod form
+    // behind it (unlike the onboarding wizard's materials step), so
+    // without this check a negative or zero capacity would sail past
+    // every input here and only get caught by the API's 422.
+    const invalid = lines.some(
+      (l) => !l.raw_material_id || l.max_supply_quantity <= 0 || (l.lead_time_days ?? 0) < 0,
+    )
+    if (invalid) {
+      setError('Every line needs a material, a supply capacity greater than 0, and a lead time of 0 or more.')
+      return
+    }
+    setSaving(true)
     try {
       const payload: SupplierMaterialInput[] = lines.map(({ key: _key, ...line }) => line)
       await replaceSupplierMaterials(supplierId, payload)
@@ -140,20 +153,26 @@ export function SuppliedMaterialsEditor({ supplierId, canEdit }: SuppliedMateria
                   label="Supply capacity (per year)"
                   type="number"
                   step="0.0001"
+                  min="0"
                   hint={selectedMaterial ? `In ${selectedMaterial.unit}` : undefined}
                   value={line.max_supply_quantity}
                   disabled={!canEdit}
-                  onChange={(e) => updateLine(line.key, { max_supply_quantity: Number(e.target.value) })}
+                  onChange={(e) =>
+                    updateLine(line.key, { max_supply_quantity: clampNonNegative(Number(e.target.value)) })
+                  }
                 />
               </div>
               <div className="sm:col-span-2">
                 <TextField
                   label="Lead time (days)"
                   type="number"
+                  min="0"
                   value={line.lead_time_days ?? ''}
                   disabled={!canEdit}
                   onChange={(e) =>
-                    updateLine(line.key, { lead_time_days: e.target.value ? Number(e.target.value) : null })
+                    updateLine(line.key, {
+                      lead_time_days: e.target.value ? clampNonNegative(Number(e.target.value)) : null,
+                    })
                   }
                 />
               </div>

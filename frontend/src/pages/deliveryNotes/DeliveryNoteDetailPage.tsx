@@ -16,6 +16,7 @@ import {
 import type { DeliveryNote } from '@/types/deliveryNote'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
+import { clampNonNegativeString } from '@/lib/number'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
 import { useAsyncGuard } from '@/hooks/useAsyncGuard'
@@ -223,8 +224,11 @@ export function DeliveryNoteDetailPage() {
                           label=""
                           type="number"
                           step="0.0001"
+                          min="0"
                           value={quantities[line.id] ?? ''}
-                          onChange={(e) => setQuantities((prev) => ({ ...prev, [line.id]: e.target.value }))}
+                          onChange={(e) =>
+                            setQuantities((prev) => ({ ...prev, [line.id]: clampNonNegativeString(e.target.value) }))
+                          }
                         />
                       </div>
                     ) : (

@@ -20,6 +20,7 @@ import type { PurchaseOrder } from '@/types/purchaseOrder'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
+import { clampNonNegativeString } from '@/lib/number'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment, isAdmin } from '@/lib/roles'
@@ -378,10 +379,14 @@ export function PurchaseOrderDetailPage() {
                               label=""
                               type="number"
                               step="0.0001"
+                              min="0"
                               max={remaining}
                               value={receiveQuantities[line.id] ?? ''}
                               onChange={(e) =>
-                                setReceiveQuantities((prev) => ({ ...prev, [line.id]: e.target.value }))
+                                setReceiveQuantities((prev) => ({
+                                  ...prev,
+                                  [line.id]: clampNonNegativeString(e.target.value),
+                                }))
                               }
                             />
                           </div>
@@ -397,9 +402,10 @@ export function PurchaseOrderDetailPage() {
                             label=""
                             type="number"
                             step="0.0001"
+                            min="0"
                             placeholder={String(line.unit_price)}
                             value={receiveLineDetails[line.id]?.unit_cost ?? ''}
-                            onChange={(e) => updateLineDetail(line.id, 'unit_cost', e.target.value)}
+                            onChange={(e) => updateLineDetail(line.id, 'unit_cost', clampNonNegativeString(e.target.value))}
                           />
                         </div>
                       </td>

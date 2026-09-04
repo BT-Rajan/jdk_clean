@@ -5,6 +5,7 @@ import { listRawMaterials } from '@/api/rawMaterials'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { generateId } from '@/lib/id'
+import { clampNonNegative } from '@/lib/number'
 import type { PackagingLineInput } from '@/types/packaging'
 
 interface EditableLine extends PackagingLineInput {
@@ -196,9 +197,12 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
                     label="Qty per unit"
                     type="number"
                     step="0.0001"
+                    min="0"
                     value={line.quantity_per_unit}
                     disabled={!canEdit}
-                    onChange={(e) => updateLine(line.key, { quantity_per_unit: Number(e.target.value) })}
+                    onChange={(e) =>
+                      updateLine(line.key, { quantity_per_unit: clampNonNegative(Number(e.target.value)) })
+                    }
                   />
                 </div>
                 <div className="sm:col-span-3">
@@ -249,8 +253,11 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
                   label="Qty per unit"
                   type="number"
                   step="0.0001"
+                  min="0"
                   value={newLine.quantity_per_unit}
-                  onChange={(e) => setNewLine((prev) => ({ ...prev, quantity_per_unit: Number(e.target.value) }))}
+                  onChange={(e) =>
+                    setNewLine((prev) => ({ ...prev, quantity_per_unit: clampNonNegative(Number(e.target.value)) }))
+                  }
                 />
               </div>
               <div className="sm:col-span-3">
