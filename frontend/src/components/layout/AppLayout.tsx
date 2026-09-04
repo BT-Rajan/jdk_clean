@@ -11,6 +11,7 @@ import { getPageKeyForPath } from '@/lib/pagePermissions'
 import { MASTER_DATA_REGISTRY } from '@/lib/masterDataRegistry'
 import { cn } from '@/lib/cn'
 import { AmbientBackground } from './AmbientBackground'
+import { Breadcrumbs } from './Breadcrumbs'
 import { CalendarModal } from './CalendarModal'
 import { NavDropdown } from './NavDropdown'
 import { NotificationsModal } from './NotificationsModal'
@@ -256,13 +257,14 @@ export function AppLayout({ children }: AppLayoutProps) {
                 type="button"
                 onClick={() => setIsPaletteOpen(true)}
                 aria-label="Search (Cmd+K)"
-                className="flex items-center gap-2 rounded-xl border border-white/10 px-2.5 py-2 text-white/40 transition-colors hover:border-white/20 hover:text-white/60"
+                className="flex w-10 items-center gap-2 rounded-xl border border-white/10 px-2.5 py-2 text-white/40 transition-colors hover:border-white/20 hover:text-white/60 sm:w-48 sm:justify-start md:w-64 lg:w-80"
               >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="shrink-0">
                   <circle cx="11" cy="11" r="7" stroke="currentColor" strokeWidth="1.6" />
                   <path d="m20 20-3.5-3.5" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
                 </svg>
-                <kbd className="hidden text-[10px] text-white/30 sm:inline">⌘K</kbd>
+                <span className="hidden flex-1 truncate text-left text-sm sm:inline">Search…</span>
+                <kbd className="hidden shrink-0 rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] text-white/30 sm:inline">⌘K</kbd>
               </button>
             )}
             {user && (
@@ -369,6 +371,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       </header>
 
       <main className="relative z-10 mx-auto max-w-[1920px] px-4 pt-32 pb-10 sm:px-6 lg:px-8 xl:px-12">
+        <Breadcrumbs />
         {children}
       </main>
 
