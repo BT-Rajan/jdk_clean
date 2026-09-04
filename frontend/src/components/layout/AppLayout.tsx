@@ -243,14 +243,14 @@ export function AppLayout({ children }: AppLayoutProps) {
 
       <header
         className={cn(
-          'sticky top-0 z-50 mx-4 mt-4 flex flex-col gap-3 rounded-2xl px-5 py-3 transition-[background-color,box-shadow] duration-300 sm:mx-6 sm:px-6',
+          'sticky top-0 z-50 mx-4 mt-4 flex flex-col gap-3 rounded-2xl px-5 py-3 transition-[background-color,box-shadow] duration-300 sm:mx-6 sm:px-6 lg:mx-8 xl:mx-12',
           isScrolled ? 'glass-panel-header-scrolled' : 'glass-panel-header',
         )}
       >
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-y-2">
           <Logo />
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-4">
             {user && (
               <button
                 type="button"
@@ -368,7 +368,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         </nav>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-5xl px-4 pt-32 pb-10 sm:px-6">{children}</main>
+      <main className="relative z-10 mx-auto max-w-[1920px] px-4 pt-32 pb-10 sm:px-6 lg:px-8 xl:px-12">
+        {children}
+      </main>
 
       {user && (
         <>
