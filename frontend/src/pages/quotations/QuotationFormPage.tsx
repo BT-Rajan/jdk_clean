@@ -202,7 +202,6 @@ function QuotationCreateForm() {
         .catch(() => setMaterialConflicts([]))
     }, 400)
     return () => clearTimeout(timeout)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(watchedLines)])
 
   async function onSubmit(values: QuotationSubmitValues) {
@@ -437,7 +436,6 @@ function QuotationEditForm({ id }: { id: number }) {
         .catch(() => setMaterialConflicts([]))
     }, 400)
     return () => clearTimeout(timeout)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(watchedLines), id])
 
   async function onSubmit(values: QuotationSubmitValues) {

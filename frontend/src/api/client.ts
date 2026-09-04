@@ -29,7 +29,6 @@ function debugLoggingEnabled(): boolean {
 
 apiClient.interceptors.request.use((config) => {
   if (debugLoggingEnabled()) {
-    // eslint-disable-next-line no-console
     console.log(`[jdk-diag] -> ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`)
   }
   const token = tokenStore.getAccessToken()
@@ -42,7 +41,6 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => {
     if (debugLoggingEnabled()) {
-      // eslint-disable-next-line no-console
       console.log(`[jdk-diag] <- ${response.status} ${response.config.method?.toUpperCase()} ${response.config.url}`)
     }
     return response
@@ -50,12 +48,10 @@ apiClient.interceptors.response.use(
   (error: AxiosError) => {
     if (debugLoggingEnabled()) {
       if (error.response) {
-        // eslint-disable-next-line no-console
         console.log(
           `[jdk-diag] <- ${error.response.status} ${error.config?.method?.toUpperCase()} ${error.config?.url} (server responded)`,
         )
       } else {
-        // eslint-disable-next-line no-console
         console.log(
           `[jdk-diag] <- NO RESPONSE for ${error.config?.method?.toUpperCase()} ${error.config?.url} -- request left the browser but nothing came back (network/CORS/CSP block, or the request never reached the server at all). error.message: ${error.message}`,
         )

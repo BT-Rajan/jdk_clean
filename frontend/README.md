@@ -69,7 +69,7 @@ for exactly this.
 | `npm run build`    | Type-check (`tsc -b`) then production build    |
 | `npm run preview`  | Preview the production build locally (dev use only, see "Deploying") |
 | `npm run serve`    | Serve the production build the way pm2/production does |
-| `npm run lint`     | Run oxlint                                     |
+| `npm run lint`     | Run ESLint                                     |
 
 ## How auth is wired
 

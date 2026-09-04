@@ -74,7 +74,6 @@ export function WhatsAppTab() {
       })
       .catch((err) => setFormError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reset])
 
   async function onSubmit(values: WhatsAppAccountFormValues) {

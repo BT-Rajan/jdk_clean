@@ -73,7 +73,6 @@ function LogoSlot({ variant, filename, onChange }: LogoSlotProps) {
       cancelled = true
       if (currentUrl) URL.revokeObjectURL(currentUrl)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [variant, filename])
 
   function validate(file: File): string | null {

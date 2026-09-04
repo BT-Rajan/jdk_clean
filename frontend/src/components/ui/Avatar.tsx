@@ -50,7 +50,6 @@ export function Avatar({ avatarUrl, name, size = 'md', className }: AvatarProps)
       cancelled = true
       if (currentUrl) URL.revokeObjectURL(currentUrl)
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [avatarUrl])
 
   const base = cn(
