@@ -60,12 +60,19 @@ class SettingsUpdate(BaseModel):
         default=None, pattern="^(dark_english|dark_arabic|light_english|light_arabic|)$"
     )
     ai_api_key: str | None = None
-    factory_total_workers: str | None = None
-    factory_workday_hours: str | None = None
+    # Non-negative integer, or "" to leave unset -- see settings_service.
+    # get_factory_capacity, which would otherwise happily int() a
+    # negative string into a negative worker count.
+    factory_total_workers: str | None = Field(default=None, pattern=r"^$|^\d+$")
+    # Non-negative number (int or decimal), or "" to leave unset.
+    factory_workday_hours: str | None = Field(default=None, pattern=r"^$|^\d+(\.\d+)?$")
     factory_working_days: str | None = None
     auto_create_quotation_from_feasibility: str | None = Field(default=None, pattern="^(true|false)$")
     auto_schedule_production_on_order_confirm: str | None = Field(default=None, pattern="^(true|false)$")
     auto_create_delivery_note_on_ready_to_ship: str | None = Field(default=None, pattern="^(true|false)$")
     auto_draft_purchase_orders_from_mrp: str | None = Field(default=None, pattern="^(true|false)$")
-    large_po_approval_threshold: str | None = None
-    large_discount_approval_threshold: str | None = None
+    # Non-negative number, or "" to turn the approval gate off -- see
+    # settings_service.get_large_po_approval_threshold /
+    # get_large_discount_approval_threshold.
+    large_po_approval_threshold: str | None = Field(default=None, pattern=r"^$|^\d+(\.\d+)?$")
+    large_discount_approval_threshold: str | None = Field(default=None, pattern=r"^$|^\d+(\.\d+)?$")

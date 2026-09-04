@@ -12,6 +12,7 @@ import {
 import type { MaterialRequirement, ProductionBatch, SettableProductionStatus } from '@/types/production'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
+import { clampNonNegativeString } from '@/lib/number'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
@@ -215,8 +216,9 @@ export function ProductionDetailPage() {
                   label="Produced quantity"
                   type="number"
                   step="0.0001"
+                  min="0"
                   value={producedQuantity}
-                  onChange={(e) => setProducedQuantity(e.target.value)}
+                  onChange={(e) => setProducedQuantity(clampNonNegativeString(e.target.value))}
                 />
               </div>
               <Button isLoading={busy} onClick={handleComplete}>Complete batch</Button>
@@ -234,9 +236,13 @@ export function ProductionDetailPage() {
                           label="Actual used"
                           type="number"
                           step="0.0001"
+                          min="0"
                           value={actualUsage[r.raw_material_id] ?? ''}
                           onChange={(e) =>
-                            setActualUsage((prev) => ({ ...prev, [r.raw_material_id]: e.target.value }))
+                            setActualUsage((prev) => ({
+                              ...prev,
+                              [r.raw_material_id]: clampNonNegativeString(e.target.value),
+                            }))
                           }
                         />
                       </div>

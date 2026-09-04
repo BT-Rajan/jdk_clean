@@ -248,7 +248,11 @@ export function InventoryPage() {
                           </Badge>
                         </td>
                         <td className="px-6 py-4 text-white/60">{`${item.quantity_reserved} ${item.unit}`}</td>
-                        <td className="px-6 py-4 text-white/60">{`${item.quantity_available} ${item.unit}`}</td>
+                        <td className="px-6 py-4 text-white/60">
+                          <span className={item.quantity_available < 0 ? 'text-red-300' : undefined}>
+                            {item.quantity_available} {item.unit}
+                          </span>
+                        </td>
                         <td className="px-6 py-4 text-white/60">{`${item.reorder_point} ${item.unit}`}</td>
                         <td className="px-6 py-4">
                           <Badge tone={item.product_status === 'active' ? 'success' : 'neutral'}>

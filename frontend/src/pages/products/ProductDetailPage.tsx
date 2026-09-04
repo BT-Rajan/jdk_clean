@@ -138,9 +138,21 @@ export function ProductDetailPage() {
           <Field
             label="On hand"
             value={
-              stock
-                ? `${stock.quantity_on_hand} ${product.unit}${stock.quantity_reserved ? ` (${stock.quantity_available} available)` : ''}`
-                : undefined
+              stock ? (
+                <>
+                  {stock.quantity_on_hand} {product.unit}
+                  {stock.quantity_reserved ? (
+                    <>
+                      {' '}
+                      (
+                      <span className={stock.quantity_available < 0 ? 'text-red-300' : undefined}>
+                        {stock.quantity_available} available
+                      </span>
+                      )
+                    </>
+                  ) : null}
+                </>
+              ) : undefined
             }
           />
           <Field

@@ -6,6 +6,7 @@ import { listRawMaterials } from '@/api/rawMaterials'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { generateId } from '@/lib/id'
+import { clampNonNegative } from '@/lib/number'
 import type { BomExplosionResult, BomLineInput, ComponentType } from '@/types/bom'
 
 interface EditableLine extends BomLineInput {
@@ -263,9 +264,10 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                     label="Quantity"
                     type="number"
                     step="0.0001"
+                    min="0"
                     value={line.quantity}
                     disabled={!canEdit}
-                    onChange={(e) => updateLine(line.key, { quantity: Number(e.target.value) })}
+                    onChange={(e) => updateLine(line.key, { quantity: clampNonNegative(Number(e.target.value)) })}
                   />
                 </div>
                 <div className="sm:col-span-2">
@@ -276,9 +278,13 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                     label="Scrap %"
                     type="number"
                     step="0.01"
+                    min="0"
+                    max="100"
                     value={line.scrap_percent}
                     disabled={!canEdit}
-                    onChange={(e) => updateLine(line.key, { scrap_percent: Number(e.target.value) })}
+                    onChange={(e) =>
+                      updateLine(line.key, { scrap_percent: Math.min(100, clampNonNegative(Number(e.target.value))) })
+                    }
                   />
                 </div>
                 {canEdit && (
@@ -345,8 +351,11 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                   label="Quantity"
                   type="number"
                   step="0.0001"
+                  min="0"
                   value={newLine.quantity}
-                  onChange={(e) => setNewLine((prev) => ({ ...prev, quantity: Number(e.target.value) }))}
+                  onChange={(e) =>
+                    setNewLine((prev) => ({ ...prev, quantity: clampNonNegative(Number(e.target.value)) }))
+                  }
                 />
               </div>
               <div className="sm:col-span-2">
@@ -357,8 +366,15 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                   label="Scrap %"
                   type="number"
                   step="0.01"
+                  min="0"
+                  max="100"
                   value={newLine.scrap_percent}
-                  onChange={(e) => setNewLine((prev) => ({ ...prev, scrap_percent: Number(e.target.value) }))}
+                  onChange={(e) =>
+                    setNewLine((prev) => ({
+                      ...prev,
+                      scrap_percent: Math.min(100, clampNonNegative(Number(e.target.value))),
+                    }))
+                  }
                 />
               </div>
               <div className="sm:col-span-1">
@@ -390,7 +406,14 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
 
         <div className="mt-4 flex items-end gap-3">
           <div className="w-40">
-            <TextField label="Quantity" type="number" step="0.0001" value={explodeQty} onChange={(e) => setExplodeQty(e.target.value)} />
+            <TextField
+              label="Quantity"
+              type="number"
+              step="0.0001"
+              min="0"
+              value={explodeQty}
+              onChange={(e) => setExplodeQty(e.target.value === '' ? '' : String(clampNonNegative(Number(e.target.value))))}
+            />
           </div>
           <Button variant="ghost" onClick={handleExplode} isLoading={exploding}>
             Calculate

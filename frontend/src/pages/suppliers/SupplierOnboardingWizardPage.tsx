@@ -12,6 +12,7 @@ import { listRawMaterials } from '@/api/rawMaterials'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { generateId } from '@/lib/id'
+import { clampNonNegative } from '@/lib/number'
 import { supplierSchema, type SupplierFormValues, type SupplierSubmitValues } from '@/lib/validation'
 import type { SupplierMaterialInput } from '@/types/supplierMaterial'
 
@@ -257,9 +258,12 @@ export function SupplierOnboardingWizardPage() {
                             label="Supply capacity (per year)"
                             type="number"
                             step="0.0001"
+                            min="0"
                             hint={`How much this supplier can provide in a year${selectedMaterial ? `, in ${selectedMaterial.unit}` : ''}.`}
                             value={line.max_supply_quantity}
-                            onChange={(e) => updateMaterialLine(line.key, { max_supply_quantity: Number(e.target.value) })}
+                            onChange={(e) =>
+                              updateMaterialLine(line.key, { max_supply_quantity: clampNonNegative(Number(e.target.value)) })
+                            }
                           />
                         </div>
                         <div className="sm:col-span-1">
