@@ -3,8 +3,19 @@ import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { StatsWidget } from '@/components/dashboard/DashboardWidgets'
-import { Alert, Button, EmptyState, GlassCard, PageHeader, SelectField, Spinner, StatusBadge } from '@/components/ui'
+import {
+  Alert,
+  Button,
+  EmptyState,
+  GlassCard,
+  PageHeader,
+  SelectField,
+  Spinner,
+  StatusBadge,
+  TextField,
+} from '@/components/ui'
 import { getPurchasingDrilldown, getPurchasingReport } from '@/api/reports'
+import { todayDateInputMin } from '@/lib/validation/dateRules'
 import type {
   PurchasingDrilldownOrder,
   PurchasingReport,
@@ -48,6 +59,8 @@ interface DrilldownFilter {
 
 export function PurchasingReportPage() {
   const [months, setMonths] = useState(12)
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
   const [report, setReport] = useState<PurchasingReport | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -60,11 +73,11 @@ export function PurchasingReportPage() {
   const load = useCallback(() => {
     setLoading(true)
     setError(null)
-    getPurchasingReport(months)
+    getPurchasingReport({ months, dateFrom, dateTo })
       .then(setReport)
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
-  }, [months])
+  }, [months, dateFrom, dateTo])
 
   useEffect(load, [load])
 
@@ -102,7 +115,26 @@ export function PurchasingReportPage() {
         title="Purchasing report"
         subtitle="Purchase order spend, supplier performance, and lead times. Click any chart to drill into the orders behind it."
         actions={
-          <div className="flex items-end gap-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="w-40">
+              <TextField
+                label="From date"
+                type="date"
+                max={dateTo || todayDateInputMin}
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+            </div>
+            <div className="w-40">
+              <TextField
+                label="To date"
+                type="date"
+                min={dateFrom || undefined}
+                max={todayDateInputMin}
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </div>
             <div className="w-44">
               <SelectField label="Range" value={String(months)} onChange={(e) => setMonths(Number(e.target.value))}>
                 <option value="6">Last 6 months</option>

@@ -10,8 +10,21 @@ import type {
 } from '@/types/reports'
 import { apiClient } from './client'
 
-export async function getSalesReport(months = 12): Promise<SalesReport> {
-  const { data } = await apiClient.get<SalesReport>('/api/reports/sales', { params: { months } })
+/** `months` is only used as a fallback default when neither date is set --
+ * once the user picks a from/to date, that pair drives the report window
+ * instead (dateTo can't be a future date; dateFrom can be any past date). */
+export interface ReportRangeParams {
+  months?: number
+  dateFrom?: string
+  dateTo?: string
+}
+
+function rangeQueryParams({ months = 12, dateFrom, dateTo }: ReportRangeParams) {
+  return { months, date_from: dateFrom || undefined, date_to: dateTo || undefined }
+}
+
+export async function getSalesReport(range: ReportRangeParams = {}): Promise<SalesReport> {
+  const { data } = await apiClient.get<SalesReport>('/api/reports/sales', { params: rangeQueryParams(range) })
   return data
 }
 
@@ -28,8 +41,8 @@ export async function getSalesDrilldown(params: SalesDrilldownParams): Promise<S
   return data
 }
 
-export async function getProductionReport(months = 12): Promise<ProductionReport> {
-  const { data } = await apiClient.get<ProductionReport>('/api/reports/production', { params: { months } })
+export async function getProductionReport(range: ReportRangeParams = {}): Promise<ProductionReport> {
+  const { data } = await apiClient.get<ProductionReport>('/api/reports/production', { params: rangeQueryParams(range) })
   return data
 }
 
@@ -45,8 +58,8 @@ export async function getProductionDrilldown(params: ProductionDrilldownParams):
   return data
 }
 
-export async function getPurchasingReport(months = 12): Promise<PurchasingReport> {
-  const { data } = await apiClient.get<PurchasingReport>('/api/reports/purchasing', { params: { months } })
+export async function getPurchasingReport(range: ReportRangeParams = {}): Promise<PurchasingReport> {
+  const { data } = await apiClient.get<PurchasingReport>('/api/reports/purchasing', { params: rangeQueryParams(range) })
   return data
 }
 
@@ -63,8 +76,8 @@ export async function getPurchasingDrilldown(params: PurchasingDrilldownParams):
   return data
 }
 
-export async function getInventoryReport(months = 12): Promise<InventoryReport> {
-  const { data } = await apiClient.get<InventoryReport>('/api/reports/inventory', { params: { months } })
+export async function getInventoryReport(range: ReportRangeParams = {}): Promise<InventoryReport> {
+  const { data } = await apiClient.get<InventoryReport>('/api/reports/inventory', { params: rangeQueryParams(range) })
   return data
 }
 

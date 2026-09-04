@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, Query
+from datetime import date
+
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -28,13 +30,27 @@ purchasing_read_guard = require_page_access("purchase_orders", "read")
 inventory_read_guard = require_page_access("inventory", "read")
 
 
+def _validate_date_range(date_from: date | None, date_to: date | None) -> None:
+    """The "to" side of a report's date range can be any past date up to
+    today, never in the future -- report_service.py's _resolve_range
+    would silently clamp this, but a report is a case where telling the
+    user their filter was rejected beats quietly showing them a
+    different range than the one they asked for.
+    """
+    if date_to is not None and date_to > date.today():
+        raise HTTPException(status_code=400, detail="To date cannot be in the future")
+
+
 @router.get("/sales", response_model=SalesReportOut)
 def get_sales_report(
     months: int = Query(default=12, ge=1, le=36),
+    date_from: date | None = None,
+    date_to: date | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(sales_read_guard),
 ):
-    return report_service.get_sales_report(db, months=months)
+    _validate_date_range(date_from, date_to)
+    return report_service.get_sales_report(db, months=months, date_from=date_from, date_to=date_to)
 
 
 @router.get("/sales/drilldown", response_model=SalesDrilldownOut)
@@ -56,10 +72,13 @@ def get_sales_drilldown(
 @router.get("/production", response_model=ProductionReportOut)
 def get_production_report(
     months: int = Query(default=12, ge=1, le=36),
+    date_from: date | None = None,
+    date_to: date | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(production_read_guard),
 ):
-    return report_service.get_production_report(db, months=months)
+    _validate_date_range(date_from, date_to)
+    return report_service.get_production_report(db, months=months, date_from=date_from, date_to=date_to)
 
 
 @router.get("/production/drilldown", response_model=ProductionDrilldownOut)
@@ -78,10 +97,13 @@ def get_production_drilldown(
 @router.get("/purchasing", response_model=PurchasingReportOut)
 def get_purchasing_report(
     months: int = Query(default=12, ge=1, le=36),
+    date_from: date | None = None,
+    date_to: date | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(purchasing_read_guard),
 ):
-    return report_service.get_purchasing_report(db, months=months)
+    _validate_date_range(date_from, date_to)
+    return report_service.get_purchasing_report(db, months=months, date_from=date_from, date_to=date_to)
 
 
 @router.get("/purchasing/drilldown", response_model=PurchasingDrilldownOut)
@@ -103,10 +125,13 @@ def get_purchasing_drilldown(
 @router.get("/inventory", response_model=InventoryReportOut)
 def get_inventory_report(
     months: int = Query(default=12, ge=1, le=36),
+    date_from: date | None = None,
+    date_to: date | None = None,
     db: Session = Depends(get_db),
     _: User = Depends(inventory_read_guard),
 ):
-    return report_service.get_inventory_report(db, months=months)
+    _validate_date_range(date_from, date_to)
+    return report_service.get_inventory_report(db, months=months, date_from=date_from, date_to=date_to)
 
 
 @router.get("/inventory/drilldown", response_model=InventoryDrilldownOut)
