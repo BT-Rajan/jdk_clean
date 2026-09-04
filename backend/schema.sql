@@ -101,8 +101,13 @@ CREATE TABLE IF NOT EXISTS users (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS customers (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    -- Individual (civil ID in `code`) or business (registration number in
+    -- `code`) -- asked as the wizard's first question. See
+    -- app/models/customer.py CUSTOMER_TYPES.
+    customer_type   ENUM('individual','business') NOT NULL DEFAULT 'business',
     code            VARCHAR(30)  NOT NULL UNIQUE,
     name            VARCHAR(150) NOT NULL,
+    nature_of_business VARCHAR(150) NULL,
     contact_person  VARCHAR(120) NULL,
     email           VARCHAR(120) NULL,
     phone           VARCHAR(30)  NULL,

@@ -25,13 +25,27 @@ ONBOARDING_ALLOWED_TRANSITIONS = {
 # reason-gated transitions (see customer_service.change_onboarding_status).
 ONBOARDING_STATUSES_REQUIRING_REASON = {"rejected", "on_hold"}
 
+# Whether the customer is a private person or a registered business --
+# asked as the first question in the onboarding wizard because it decides
+# what `code` actually means: a civil ID number for an individual, a
+# registration number for a business. Like `name`, `code` is locked after
+# creation (see schemas/customer.py CustomerUpdate) since it's the
+# identifier the rest of the app keys off of.
+CUSTOMER_TYPES = ("individual", "business")
+
 
 class Customer(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "customers"
 
     id: Mapped[int] = mapped_column(BigPK, primary_key=True)
+    customer_type: Mapped[str] = mapped_column(
+        Enum(*CUSTOMER_TYPES, name="customer_type"), nullable=False, default="business"
+    )
+    # Civil ID for an individual, registration number for a business --
+    # see customer_type above.
     code: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
+    nature_of_business: Mapped[str | None] = mapped_column(String(150), nullable=True)
     contact_person: Mapped[str | None] = mapped_column(String(120), nullable=True)
     email: Mapped[str | None] = mapped_column(String(120), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)

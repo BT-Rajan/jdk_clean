@@ -5,7 +5,17 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { Navigate, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { Alert, Button, GlassCard, SelectField, Spinner, TextField } from '@/components/ui'
+import {
+  Alert,
+  Button,
+  Field,
+  GlassCard,
+  RadioGroupField,
+  SelectField,
+  Spinner,
+  TextareaField,
+  TextField,
+} from '@/components/ui'
 import { getCustomer, updateCustomer } from '@/api/customers'
 import { getApiErrorMessage } from '@/lib/apiError'
 import {
@@ -38,10 +48,14 @@ function CustomerEditForm({ id }: { id: number }) {
   const navigate = useNavigate()
   const [loading, setLoading] = useState(true)
   const [formError, setFormError] = useState<string | null>(null)
+  // Locked after creation -- shown read-only, never submitted for edit.
+  // See lib/validation/customer.ts customerEditSchema.
+  const [locked, setLocked] = useState<{ name: string; code: string; idLabel: string } | null>(null)
   const {
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<CustomerEditFormValues, unknown, CustomerEditSubmitValues>({
     resolver: zodResolver(customerEditSchema),
@@ -50,21 +64,32 @@ function CustomerEditForm({ id }: { id: number }) {
   useEffect(() => {
     getCustomer(id)
       .then((customer) => {
-        reset({
+        setLocked({
           name: customer.name,
+          code: customer.code,
+          idLabel: customer.customer_type === 'individual' ? 'Civil ID' : 'Registration number',
+        })
+        reset({
+          customer_type: customer.customer_type,
+          nature_of_business: customer.nature_of_business ?? '',
           contact_person: customer.contact_person ?? '',
           email: customer.email ?? '',
           phone: customer.phone ?? '',
+          billing_address: customer.billing_address ?? '',
+          shipping_address: customer.shipping_address ?? '',
           city: customer.city ?? '',
           country: customer.country ?? '',
           credit_limit: customer.credit_limit,
           payment_terms_days: customer.payment_terms_days,
           status: customer.status,
+          notes: customer.notes ?? '',
         })
       })
       .catch((err) => setFormError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
   }, [id, reset])
+
+  const isIndividual = watch('customer_type') === 'individual'
 
   async function onSubmit(values: CustomerEditSubmitValues) {
     setFormError(null)
@@ -85,7 +110,23 @@ function CustomerEditForm({ id }: { id: number }) {
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
-          <TextField label="Name" error={errors.name?.message} {...register('name')} />
+          <div className="grid grid-cols-1 gap-6 rounded-xl border border-white/10 bg-white/5 p-5 sm:grid-cols-2">
+            <Field label="Name" value={locked?.name} />
+            <Field label={locked?.idLabel ?? 'ID'} value={locked?.code} />
+          </div>
+          <p className="text-xs text-white/40">Name and {locked?.idLabel?.toLowerCase()} are set at creation and can't be changed here.</p>
+
+          <RadioGroupField
+            label="Business or individual"
+            error={errors.customer_type?.message}
+            options={[
+              { value: 'business', label: 'Business' },
+              { value: 'individual', label: 'Individual' },
+            ]}
+            {...register('customer_type')}
+          />
+          {!isIndividual && <TextField label="Nature of business" {...register('nature_of_business')} />}
+
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <TextField label="Contact person" {...register('contact_person')} />
             <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
@@ -95,9 +136,9 @@ function CustomerEditForm({ id }: { id: number }) {
             <TextField label="City" {...register('city')} />
           </div>
           <TextField label="Country" {...register('country')} />
-          <p className="text-xs text-white/40">
-            Billing/shipping address and notes can only be set when the customer is created.
-          </p>
+          <TextareaField label="Billing address" {...register('billing_address')} />
+          <TextareaField label="Shipping address" {...register('shipping_address')} />
+          <TextareaField label="Notes" {...register('notes')} />
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             <TextField
             label="Credit limit"

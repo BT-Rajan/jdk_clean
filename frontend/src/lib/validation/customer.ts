@@ -2,8 +2,10 @@ import { z } from 'zod'
 
 // Mirrors backend/app/schemas/customer.py CustomerCreate/CustomerUpdate.
 export const customerSchema = z.object({
-  code: z.string().trim().min(1, 'Code is required').max(30),
+  customer_type: z.enum(['individual', 'business']),
+  code: z.string().trim().min(1, 'Civil ID / Registration number is required').max(30),
   name: z.string().trim().min(1, 'Name is required').max(150),
+  nature_of_business: z.string().trim().optional().or(z.literal('')),
   contact_person: z.string().trim().optional().or(z.literal('')),
   email: z.string().trim().email('Enter a valid email').optional().or(z.literal('')),
   phone: z.string().trim().optional().or(z.literal('')),
@@ -20,15 +22,12 @@ export const customerSchema = z.object({
 export type CustomerFormValues = z.input<typeof customerSchema>
 export type CustomerSubmitValues = z.output<typeof customerSchema>
 
-/** Edit form only: CustomerOut doesn't return billing_address,
- * shipping_address, or notes, so those are create-only fields --
- * see types/customer.ts. Editing re-submits everything CustomerOut did
- * return, plus the fields the user can change. */
+/** Edit form only: name and code (civil ID / registration number) are
+ * locked after creation -- see CustomerFormPage. Every other field,
+ * billing/shipping address and notes included, is editable at any time. */
 export const customerEditSchema = customerSchema.omit({
   code: true,
-  billing_address: true,
-  shipping_address: true,
-  notes: true,
+  name: true,
 })
 
 export type CustomerEditFormValues = z.input<typeof customerEditSchema>
