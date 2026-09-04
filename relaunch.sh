@@ -54,7 +54,22 @@ step "2/6: Backend dependencies (backend/venv)"
 )
 
 step "3/6: Frontend dependencies (frontend/node_modules)"
-(cd frontend && npm install)
+(
+  cd frontend
+  # Same sha256-next-to-the-install-dir skip check as the backend's
+  # requirements.txt in step 2 -- npm install is the slowest step in
+  # this whole script, so skip it outright once package-lock.json
+  # (the actual source of truth for what gets installed) hasn't
+  # changed since the last time it succeeded.
+  PACKAGE_LOCK_HASH_FILE="node_modules/.package-lock.sha256"
+  PACKAGE_LOCK_HASH="$(sha256sum package-lock.json | awk '{print $1}')"
+  if [[ -d node_modules && -f "$PACKAGE_LOCK_HASH_FILE" && "$(cat "$PACKAGE_LOCK_HASH_FILE")" == "$PACKAGE_LOCK_HASH" ]]; then
+    echo "package-lock.json unchanged -- skipping npm install."
+  else
+    npm install
+    echo "$PACKAGE_LOCK_HASH" > "$PACKAGE_LOCK_HASH_FILE"
+  fi
+)
 
 step "4/6: Frontend build (frontend/dist)"
 # tsc -b's incremental build cache (node_modules/.tmp/*.tsbuildinfo) can
