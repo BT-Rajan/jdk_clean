@@ -1,24 +1,26 @@
 import json
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.validators import not_in_past
 
 
 class ProductionMaterialActual(BaseModel):
-    raw_material_id: int
+    raw_material_id: int = Field(gt=0)
     quantity_used: float = Field(ge=0)
 
 
 class ProductionScheduleCreate(BaseModel):
-    product_id: int
-    machine_id: int | None = None
-    order_id: int | None = None
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    product_id: int = Field(gt=0)
+    machine_id: int | None = Field(default=None, gt=0)
+    order_id: int | None = Field(default=None, gt=0)
     planned_quantity: float = Field(gt=0)
     scheduled_start: date
     scheduled_end: date
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5000)
 
     @field_validator("scheduled_start")
     @classmethod
@@ -37,12 +39,14 @@ class ProductionScheduleCreate(BaseModel):
 class ProductionScheduleUpdate(BaseModel):
     """Only 'planned' batches may be edited (enforced in the service layer)."""
 
-    order_id: int | None = None
-    machine_id: int | None = None
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    order_id: int | None = Field(default=None, gt=0)
+    machine_id: int | None = Field(default=None, gt=0)
     planned_quantity: float | None = Field(default=None, gt=0)
     scheduled_start: date | None = None
     scheduled_end: date | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5000)
 
     @field_validator("scheduled_start", "scheduled_end")
     @classmethod
@@ -57,9 +61,11 @@ class ProductionQuickLog(BaseModel):
     product's own default machine and isn't tied to an order (see
     production_service.log_production)."""
 
-    product_id: int
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    product_id: int = Field(gt=0)
     quantity: float = Field(gt=0)
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5000)
     # Defaults to today when omitted (the Production list's button);
     # the calendar's day-actions popup sends the clicked day instead.
     # Validated server-side against MAX_BACKDATE_DAYS -- see
@@ -68,6 +74,8 @@ class ProductionQuickLog(BaseModel):
 
 
 class ProductionScheduleStatusUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     status: str = Field(pattern="^(in_progress|completed|cancelled)$")
     # Only required (and only used) when status == 'completed': the real
     # output of the batch, which may differ from planned_quantity.
@@ -79,7 +87,7 @@ class ProductionScheduleStatusUpdate(BaseModel):
     # and material-discrepancy checks (see production_service._complete_batch).
     actual_materials: list[ProductionMaterialActual] | None = None
     # Required when status == 'cancelled' (enforced in the service layer).
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=5000)
 
 
 class ProductionScheduleOut(BaseModel):

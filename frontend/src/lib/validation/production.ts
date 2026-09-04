@@ -9,7 +9,7 @@ export const productionBatchSchema = z
     planned_quantity: z.coerce.number().positive('Must be greater than 0'),
     scheduled_start: z.string().min(1, 'Date is required').refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
     scheduled_end: z.string().min(1, 'Date is required').refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
-    notes: z.string().trim().optional().or(z.literal('')),
+    notes: z.string().trim().max(5000, 'Max 5000 characters').optional().or(z.literal('')),
   })
   .refine((v) => v.scheduled_end >= v.scheduled_start, {
     message: 'End date cannot be before the start date',
@@ -29,7 +29,7 @@ export type ProductionCompleteFormValues = z.infer<typeof productionCompleteSche
 export const productionQuickLogSchema = z.object({
   product_id: z.coerce.number().int().positive('Choose a product'),
   quantity: z.coerce.number().positive('Must be greater than 0'),
-  notes: z.string().trim().optional().or(z.literal('')),
+  notes: z.string().trim().max(5000, 'Max 5000 characters').optional().or(z.literal('')),
 })
 
 export type ProductionQuickLogFormValues = z.input<typeof productionQuickLogSchema>

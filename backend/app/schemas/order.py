@@ -1,12 +1,12 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.validators import not_in_past
 
 
 class OrderLineIn(BaseModel):
-    product_id: int
+    product_id: int = Field(gt=0)
     quantity: float = Field(gt=0)
     unit_price: float = Field(ge=0)
     discount_percent: float = Field(default=0, ge=0, le=100)
@@ -27,10 +27,12 @@ class OrderLineOut(BaseModel):
 
 
 class OrderCreate(BaseModel):
-    customer_id: int
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    customer_id: int = Field(gt=0)
     order_date: date
     requested_delivery_date: date | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5000)
     discount_percent: float | None = Field(default=None, ge=0, le=100)
     lines: list[OrderLineIn] = Field(min_length=1)
 
@@ -50,11 +52,13 @@ class OrderCreate(BaseModel):
 class OrderUpdate(BaseModel):
     """Only draft orders may be edited (enforced in the service layer)."""
 
-    customer_id: int | None = None
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    customer_id: int | None = Field(default=None, gt=0)
     order_date: date | None = None
     requested_delivery_date: date | None = None
     confirmed_delivery_date: date | None = None
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5000)
     discount_percent: float | None = Field(default=None, ge=0, le=100)
     lines: list[OrderLineIn] | None = Field(default=None, min_length=1)
 
@@ -65,7 +69,7 @@ class OrderUpdate(BaseModel):
 
 
 class OrderQuickLogLine(BaseModel):
-    product_id: int
+    product_id: int = Field(gt=0)
     quantity: float = Field(gt=0)
     unit_price: float = Field(ge=0)
 
@@ -77,9 +81,11 @@ class OrderQuickLog(BaseModel):
     order_service.log_sale), which becomes both order_date and
     delivery_date."""
 
-    customer_id: int
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    customer_id: int = Field(gt=0)
     lines: list[OrderQuickLogLine] = Field(min_length=1)
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5000)
     # Defaults to today when omitted (the Orders list's button); the
     # calendar's day-actions popup sends the clicked day instead.
     # Validated server-side against MAX_BACKDATE_DAYS -- see
@@ -88,20 +94,24 @@ class OrderQuickLog(BaseModel):
 
 
 class OrderStatusUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     status: str = Field(
         pattern="^(confirmed|in_production|ready_to_ship|shipped|delivered|cancelled)$"
     )
     # Required by the service layer when status == 'cancelled' (Sales
     # closing the order with a comment instead of a delivery note).
-    reason: str | None = None
+    reason: str | None = Field(default=None, max_length=5000)
 
 
 class OrderAdminReview(BaseModel):
-    notes: str = Field(min_length=1)
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    notes: str = Field(min_length=1, max_length=5000)
 
 
 class SplitOrderLine(BaseModel):
-    order_detail_id: int
+    order_detail_id: int = Field(gt=0)
     quantity: float = Field(gt=0)
 
 
