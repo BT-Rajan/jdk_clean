@@ -7,6 +7,11 @@ interface ConfirmDialogProps {
   confirmLabel?: string
   danger?: boolean
   busy?: boolean
+  /** Most confirmations are a short one-liner and fit the default
+   * (28rem) box fine -- set this for one built from dynamic, possibly
+   * long content (e.g. a list of conflicts) that would otherwise wrap
+   * into a tall, narrow wall of text. */
+  wide?: boolean
   onConfirm: () => void
   onCancel: () => void
 }
@@ -18,6 +23,7 @@ export function ConfirmDialog({
   confirmLabel = 'Confirm',
   danger = false,
   busy = false,
+  wide = false,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -26,6 +32,7 @@ export function ConfirmDialog({
       open={open}
       title={title}
       onClose={onCancel}
+      wide={wide}
       footer={
         <>
           <Button variant="ghost" onClick={onCancel} disabled={busy}>

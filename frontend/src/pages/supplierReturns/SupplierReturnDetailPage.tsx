@@ -144,6 +144,7 @@ export function SupplierReturnDetailPage() {
       <ConfirmDialog
         open={confirmOpen}
         title="Reverse supplier return"
+        wide
         message={`Reverse ${supplierReturn.return_number}? This puts every returned quantity back onto raw-material stock on hand, as though this return was never recorded -- use this only to correct a data-entry mistake, not because the supplier later accepted the goods (record a fresh receipt for that instead).`}
         confirmLabel="Reverse"
         danger

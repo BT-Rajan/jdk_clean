@@ -355,6 +355,7 @@ function QuotationCreateForm() {
       <ConfirmDialog
         open={conflictConfirmOpen}
         title="Material availability conflict"
+        wide
         message={
           materialConflicts.length > 0
             ? `This quotation's material needs overlap another open quotation: ${materialConflicts
@@ -528,6 +529,7 @@ function QuotationEditForm({ id }: { id: number }) {
       <ConfirmDialog
         open={conflictConfirmOpen}
         title="Material availability conflict"
+        wide
         message={
           materialConflicts.length > 0
             ? `These lines' material needs overlap another open quotation: ${materialConflicts
