@@ -46,21 +46,22 @@ export function FeasibilitiesListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Feasibility Checks</h1>
           <p className="mt-2 text-sm text-white/50">{total} on file</p>
         </div>
-        {canWriteDepartment(user, 'sales') && <Button onClick={() => navigate('/feasibilities/new')}>New check</Button>}
-      </div>
-
-      <div className="mb-6 max-w-xs">
-        <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="feasible">Feasible</option>
-          <option value="exception_pending">Exception pending</option>
-          <option value="exception_approved">Exception approved</option>
-          <option value="exception_rejected">Exception rejected</option>
-          <option value="closed">Closed</option>
-          <option value="converted">Converted</option>
-          <option value="expired">Expired</option>
-        </SelectField>
+        <div className="flex items-end gap-3">
+          <div className="w-44">
+            <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="feasible">Feasible</option>
+              <option value="exception_pending">Exception pending</option>
+              <option value="exception_approved">Exception approved</option>
+              <option value="exception_rejected">Exception rejected</option>
+              <option value="closed">Closed</option>
+              <option value="converted">Converted</option>
+              <option value="expired">Expired</option>
+            </SelectField>
+          </div>
+          {canWriteDepartment(user, 'sales') && <Button onClick={() => navigate('/feasibilities/new')}>New check</Button>}
+        </div>
       </div>
 
       <Alert variant="error">{error}</Alert>

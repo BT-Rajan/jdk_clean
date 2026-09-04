@@ -47,18 +47,19 @@ export function DeliveryNotesListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Delivery notes</h1>
           <p className="mt-2 text-sm text-white/50">{total} delivery notes on file</p>
         </div>
-        {canWriteDepartment(user, 'warehouse') && (
-          <Button onClick={() => navigate('/delivery-notes/new')}>New delivery note</Button>
-        )}
-      </div>
-
-      <div className="mb-6 max-w-xs">
-        <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="issued">Issued</option>
-          <option value="cancelled">Cancelled</option>
-        </SelectField>
+        <div className="flex items-end gap-3">
+          <div className="w-44">
+            <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="draft">Draft</option>
+              <option value="issued">Issued</option>
+              <option value="cancelled">Cancelled</option>
+            </SelectField>
+          </div>
+          {canWriteDepartment(user, 'warehouse') && (
+            <Button onClick={() => navigate('/delivery-notes/new')}>New delivery note</Button>
+          )}
+        </div>
       </div>
 
       <Alert variant="error">{error}</Alert>

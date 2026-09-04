@@ -50,25 +50,26 @@ export function ProductionListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Production</h1>
           <p className="mt-2 text-sm text-white/50">{total} batches on file</p>
         </div>
-        {canWrite(user?.role) && (
-          <div className="flex gap-3">
-            <Button variant="ghost" onClick={() => navigate('/production/new')}>New batch</Button>
-            <Button onClick={() => setLogOpen(true)}>Log production</Button>
+        <div className="flex items-end gap-3">
+          <div className="w-44">
+            <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="planned">Planned</option>
+              <option value="in_progress">In progress</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </SelectField>
           </div>
-        )}
+          {canWrite(user?.role) && (
+            <div className="flex gap-3">
+              <Button variant="ghost" onClick={() => navigate('/production/new')}>New batch</Button>
+              <Button onClick={() => setLogOpen(true)}>Log production</Button>
+            </div>
+          )}
+        </div>
       </div>
 
       <LogProductionModal open={logOpen} onClose={() => setLogOpen(false)} onLogged={refetch} />
-
-      <div className="mb-6 max-w-xs">
-        <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          <option value="planned">Planned</option>
-          <option value="in_progress">In progress</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </SelectField>
-      </div>
 
       <Alert variant="error">{error}</Alert>
 
