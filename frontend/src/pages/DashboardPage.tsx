@@ -70,7 +70,7 @@ export function DashboardPage() {
             </Link>
           </div>
 
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {enabledWidgets.map((widget) => {
               if (widget.type === 'stats') {
                 const stat = data?.stats[widget.dataSource]
@@ -101,7 +101,7 @@ export function DashboardPage() {
       {isLoading && (
         <div className="mt-8">
           <h2 className="mb-6 font-display text-xl font-medium text-white">Loading Dashboard...</h2>
-          <div className="grid gap-6 sm:grid-cols-2">
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {[1, 2, 3].map((i) => (
               <SkeletonWidget key={i} type={i % 2 === 0 ? 'graph' : 'stats'} />
             ))}
