@@ -191,6 +191,7 @@ def email_delivery_note_pdf(
     body = payload.message or template_body
 
     email_service.send_document_email(
+        db=db,
         to_email=payload.to_email,
         subject=subject,
         body=body,

@@ -138,6 +138,25 @@ def _get_password(row: EmailAccount) -> str:
     return decrypt_secret(row.password_encrypted)
 
 
+def get_smtp_credentials(db: Session) -> dict | None:
+    """SMTP half of the saved mailbox, for email_service.py to send
+    business documents (quotations, orders, ...) through when the
+    server has no .env SMTP_* override configured. None if the mailbox
+    isn't usable for sending yet (no host, or no password saved)."""
+    row = _row(db)
+    if not row.smtp_host or not row.password_encrypted:
+        return None
+    return {
+        "host": row.smtp_host,
+        "port": row.smtp_port,
+        "use_tls": row.smtp_use_tls,
+        "username": row.username or row.email_address,
+        "password": decrypt_secret(row.password_encrypted),
+        "from_email": row.email_address,
+        "from_name": row.display_name,
+    }
+
+
 def test_connection(db: Session) -> dict:
     """Opens (and immediately closes) a real connection with the saved
     settings: the chosen incoming protocol (IMAP or POP3) plus SMTP.

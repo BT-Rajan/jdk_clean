@@ -54,12 +54,11 @@ class Settings(BaseSettings):
     # than a doc template.
     ID_DOCUMENT_MAX_UPLOAD_MB: int = 8
 
-    # Email (Phase 6): deliberately .env-only, not part of the Settings
-    # DB table/UI (see settings_service.py) -- SMTP credentials are
-    # infrastructure config, not day-to-day business settings, same
-    # reasoning DB_* already follows. SMTP_HOST empty means email isn't
-    # configured; email_service.py fails with a clear, actionable error
-    # rather than a confusing SMTP connection failure.
+    # Email (Phase 6): an optional infrastructure-level override for
+    # sending business documents. Leave SMTP_HOST empty to send through
+    # whatever mailbox is saved under Communication -> Email instead
+    # (see email_service.py / email_account_service.get_smtp_credentials);
+    # set these only to use a different account than that mailbox.
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""

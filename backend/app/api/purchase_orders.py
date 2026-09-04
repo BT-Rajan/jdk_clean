@@ -230,6 +230,7 @@ def email_purchase_order_pdf(
         f"Please find attached purchase order {po.po_number}."
     )
     email_service.send_document_email(
+        db=db,
         to_email=payload.to_email,
         subject=f"Purchase Order {po.po_number}",
         body=body,

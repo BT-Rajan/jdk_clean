@@ -1,7 +1,10 @@
 """Sends business documents (PDF bytes from pdf_generator.py) as email
-attachments. SMTP credentials are .env-only (see core/config.py) --
-deliberately not part of the Settings DB table/UI, since they're
-infrastructure config rather than a day-to-day business setting.
+attachments. SMTP credentials come from .env (see core/config.py) when
+set -- infrastructure config, for a dedicated sending account -- and
+otherwise fall back to the mailbox saved under Communication -> Email
+(see email_account_service.get_smtp_credentials), so the one mailbox an
+admin already configured and tested there is enough on its own; .env
+just lets that be overridden without touching the database.
 
 Uses only the standard library (smtplib/email), matching the same
 dependency-light philosophy pdf_generator.py states for itself -- no new
@@ -13,15 +16,34 @@ from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
+from sqlalchemy.orm import Session
+
 from app.core.config import get_settings
 from app.core.exceptions import AppError, ValidationAppError
+from app.services import email_account_service
 
 
-def is_configured() -> bool:
-    return bool(get_settings().SMTP_HOST)
+def _resolve_smtp_config(db: Session) -> dict | None:
+    settings = get_settings()
+    if settings.SMTP_HOST:
+        return {
+            "host": settings.SMTP_HOST,
+            "port": settings.SMTP_PORT,
+            "use_tls": settings.SMTP_USE_TLS,
+            "username": settings.SMTP_USERNAME,
+            "password": settings.SMTP_PASSWORD,
+            "from_email": settings.SMTP_FROM_EMAIL,
+            "from_name": settings.SMTP_FROM_NAME,
+        }
+    return email_account_service.get_smtp_credentials(db)
+
+
+def is_configured(db: Session) -> bool:
+    return _resolve_smtp_config(db) is not None
 
 
 def send_document_email(
+    db: Session,
     to_email: str,
     subject: str,
     body: str,
@@ -35,19 +57,20 @@ def send_document_email(
     lets the frontend just show the message directly rather than
     special-casing each failure mode.
     """
-    settings = get_settings()
-    if not settings.SMTP_HOST:
+    config = _resolve_smtp_config(db)
+    if config is None:
         raise AppError(
             "Email isn't configured on this server yet. Set SMTP_HOST (and the "
-            "other SMTP_* variables) in the backend's .env file."
+            "other SMTP_* variables) in the backend's .env file, or save a "
+            "mailbox with a password under Communication -> Email."
         )
     if not to_email or "@" not in to_email:
         raise ValidationAppError("Enter a valid recipient email address.")
 
     from_display = (
-        f"{settings.SMTP_FROM_NAME} <{settings.SMTP_FROM_EMAIL}>"
-        if settings.SMTP_FROM_NAME
-        else settings.SMTP_FROM_EMAIL or settings.SMTP_USERNAME
+        f"{config['from_name']} <{config['from_email']}>"
+        if config["from_name"]
+        else config["from_email"] or config["username"]
     )
 
     message = MIMEMultipart()
@@ -61,13 +84,13 @@ def send_document_email(
     message.attach(attachment)
 
     try:
-        with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as server:
-            if settings.SMTP_USE_TLS:
+        with smtplib.SMTP(config["host"], config["port"], timeout=15) as server:
+            if config["use_tls"]:
                 server.starttls()
-            if settings.SMTP_USERNAME:
-                server.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
+            if config["username"]:
+                server.login(config["username"], config["password"])
             server.sendmail(
-                settings.SMTP_FROM_EMAIL or settings.SMTP_USERNAME, [to_email], message.as_string()
+                config["from_email"] or config["username"], [to_email], message.as_string()
             )
     except (smtplib.SMTPException, OSError, TimeoutError) as exc:
         raise AppError(f"Could not send email: {exc}") from exc

@@ -485,6 +485,7 @@ def _maybe_send_confirmation_email(db: Session, order_id: int, user_id: int | No
             },
         )
         email_service.send_document_email(
+            db=db,
             to_email=order.customer.email,
             subject=subject,
             body=body,

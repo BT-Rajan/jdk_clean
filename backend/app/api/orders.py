@@ -302,6 +302,7 @@ def email_order_pdf(
     )
     body = payload.message or template_body
     email_service.send_document_email(
+        db=db,
         to_email=payload.to_email,
         subject=subject,
         body=body,
@@ -362,6 +363,7 @@ def request_payment(
     )
     body = payload.message or template_body
     email_service.send_document_email(
+        db=db,
         to_email=payload.to_email,
         subject=subject,
         body=body,
