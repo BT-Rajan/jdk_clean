@@ -56,6 +56,7 @@ export function SupplierOnboardingWizardPage() {
   const [idDocumentFile, setIdDocumentFile] = useState<File | null>(null)
   const [idDocumentError, setIdDocumentError] = useState<string | null>(null)
   const [materialLines, setMaterialLines] = useState<EditableMaterialLine[]>([])
+  const [materialsError, setMaterialsError] = useState<string | null>(null)
 
   const rawMaterialsFetcher = useCallback(() => listRawMaterials({ page: 1, page_size: 200, status: 'active' }), [])
   const { options: rawMaterials } = useSelectOptions(rawMaterialsFetcher)
@@ -87,6 +88,7 @@ export function SupplierOnboardingWizardPage() {
   const step = STEPS[stepIndex]
   const isLastStep = stepIndex === STEPS.length - 1
   const values = getValues()
+  const validMaterialLines = materialLines.filter((l) => l.raw_material_id > 0 && l.max_supply_quantity > 0)
 
   function updateMaterialLine(key: string, patch: Partial<EditableMaterialLine>) {
     setMaterialLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)))
@@ -99,6 +101,13 @@ export function SupplierOnboardingWizardPage() {
   async function goNext() {
     const valid = step.fields.length === 0 || (await trigger(step.fields))
     if (!valid) return
+    if (step.id === 'materials') {
+      if (validMaterialLines.length === 0) {
+        setMaterialsError('Add at least one raw material this supplier can provide before continuing.')
+        return
+      }
+      setMaterialsError(null)
+    }
     const next = Math.min(stepIndex + 1, STEPS.length - 1)
     setStepIndex(next)
     setFurthestStep((f) => Math.max(f, next))
@@ -116,6 +125,15 @@ export function SupplierOnboardingWizardPage() {
 
   async function onSubmit(values: SupplierSubmitValues) {
     setFormError(null)
+    // Safety net in case Review was reached some way other than clicking
+    // through the materials step's own "Next" (goNext already blocks
+    // that path) -- a supplier record needs to say what it can actually
+    // supply before it's created.
+    if (validMaterialLines.length === 0) {
+      setFormError('Add at least one raw material this supplier can provide before creating the supplier.')
+      setStepIndex(STEPS.findIndex((s) => s.id === 'materials'))
+      return
+    }
     try {
       const created = await createSupplier({
         ...values,
@@ -129,12 +147,10 @@ export function SupplierOnboardingWizardPage() {
         // below should block navigating to it.
         await uploadSupplierIdDocument(created.id, idDocumentFile).catch(() => {})
       }
-      const validLines: SupplierMaterialInput[] = materialLines
-        .filter((l) => l.raw_material_id > 0 && l.max_supply_quantity > 0)
-        .map(({ raw_material_id, max_supply_quantity }) => ({ raw_material_id, max_supply_quantity, lead_time_days: null }))
-      if (validLines.length > 0) {
-        await replaceSupplierMaterials(created.id, validLines).catch(() => {})
-      }
+      const validLines: SupplierMaterialInput[] = validMaterialLines.map(
+        ({ raw_material_id, max_supply_quantity }) => ({ raw_material_id, max_supply_quantity, lead_time_days: null }),
+      )
+      await replaceSupplierMaterials(created.id, validLines).catch(() => {})
       navigate(`/suppliers/${created.id}`)
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -193,8 +209,9 @@ export function SupplierOnboardingWizardPage() {
               <div className="flex flex-col gap-4">
                 <div className="flex items-center justify-between">
                   <p className="text-sm text-white/50">
-                    Which raw materials this supplier can provide, and how much of each. Onboarding date and last
-                    transaction date are recorded automatically -- there's nothing to fill in for those.
+                    Which raw materials this supplier can provide, and how much of each (annually -- see the hint
+                    on Supply capacity below). At least one is required. Onboarding date and last transaction date
+                    are recorded automatically -- there's nothing to fill in for those.
                   </p>
                   <Button
                     variant="ghost"
@@ -206,13 +223,17 @@ export function SupplierOnboardingWizardPage() {
                   </Button>
                 </div>
 
+                <Alert variant="error">{materialsError}</Alert>
+
                 {materialLines.length === 0 ? (
                   <p className="py-6 text-center text-sm text-white/40">
-                    No materials added yet -- optional, can also be set up later from the supplier's page.
+                    No materials added yet -- add at least one this supplier can provide.
                   </p>
                 ) : (
                   <div className="flex flex-col gap-3">
-                    {materialLines.map((line) => (
+                    {materialLines.map((line) => {
+                      const selectedMaterial = rawMaterials.find((opt) => opt.id === line.raw_material_id)
+                      return (
                       <div
                         key={line.key}
                         className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-end"
@@ -233,9 +254,10 @@ export function SupplierOnboardingWizardPage() {
                         </div>
                         <div className="sm:col-span-4">
                           <TextField
-                            label="Supply capacity"
+                            label="Supply capacity (per year)"
                             type="number"
                             step="0.0001"
+                            hint={`How much this supplier can provide in a year${selectedMaterial ? `, in ${selectedMaterial.unit}` : ''}.`}
                             value={line.max_supply_quantity}
                             onChange={(e) => updateMaterialLine(line.key, { max_supply_quantity: Number(e.target.value) })}
                           />
@@ -246,7 +268,8 @@ export function SupplierOnboardingWizardPage() {
                           </Button>
                         </div>
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 )}
               </div>

@@ -7,7 +7,7 @@ from app.models.supplier import (
     ONBOARDING_STATUSES_REQUIRING_REASON,
     Supplier,
 )
-from app.services import audit_service
+from app.services import audit_service, id_document_service
 
 TABLE_NAME = "suppliers"
 
@@ -34,5 +34,22 @@ def change_onboarding_status(
         db, TABLE_NAME, supplier_id, {"onboarding_status": (old_status, new_status)}, user_id
     )
     db.commit()
+    db.refresh(supplier)
+    return supplier
+
+
+def _auto_advance_onboarding_after_id_verified(db: Session, supplier: Supplier, user_id: int | None) -> None:
+    """Mirrors customer_service.py's identical helper -- see there for
+    the full reasoning. One-way: unverifying an id never reverses this."""
+    allowed = ONBOARDING_ALLOWED_TRANSITIONS.get(supplier.onboarding_status, set())
+    target = "active" if "active" in allowed else "under_review" if "under_review" in allowed else None
+    if target:
+        change_onboarding_status(db, supplier.id, target, reason=None, user_id=user_id)
+
+
+def verify_id(db: Session, supplier_id: int, user_id: int | None) -> Supplier:
+    supplier = supplier_crud.read_one(db, supplier_id)
+    supplier = id_document_service.verify(db, supplier, table_name=TABLE_NAME, user_id=user_id)
+    _auto_advance_onboarding_after_id_verified(db, supplier, user_id)
     db.refresh(supplier)
     return supplier

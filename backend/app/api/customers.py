@@ -105,8 +105,9 @@ def verify_customer_id(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
-    customer = customer_crud.read_one(db, customer_id)
-    return id_document_service.verify(db, customer, table_name=TABLE_NAME, user_id=user.id)
+    """Also auto-advances onboarding_status where that's a legal single
+    step -- see customer_service.verify_id."""
+    return customer_service.verify_id(db, customer_id, user.id)
 
 
 @router.post("/{customer_id}/unverify-id", response_model=CustomerOut)

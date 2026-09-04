@@ -99,7 +99,7 @@ export function SuppliedMaterialsEditor({ supplierId, canEdit }: SuppliedMateria
         <div>
           <h2 className="font-display text-lg font-medium text-white">Materials supplied</h2>
           <p className="mt-1 text-sm text-white/50">
-            Which raw materials this supplier can provide, how much of each, and typical lead time.
+            Which raw materials this supplier can provide, how much of each per year, and typical lead time.
           </p>
         </div>
         {canEdit && (
@@ -113,7 +113,9 @@ export function SuppliedMaterialsEditor({ supplierId, canEdit }: SuppliedMateria
         <p className="py-6 text-center text-sm text-white/40">No materials linked to this supplier yet.</p>
       ) : (
         <div className="flex flex-col gap-3">
-          {lines.map((line) => (
+          {lines.map((line) => {
+            const selectedMaterial = rawMaterials.find((opt) => opt.id === line.raw_material_id)
+            return (
             <div
               key={line.key}
               className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-end"
@@ -135,9 +137,10 @@ export function SuppliedMaterialsEditor({ supplierId, canEdit }: SuppliedMateria
               </div>
               <div className="sm:col-span-3">
                 <TextField
-                  label="Supply capacity"
+                  label="Supply capacity (per year)"
                   type="number"
                   step="0.0001"
+                  hint={selectedMaterial ? `In ${selectedMaterial.unit}` : undefined}
                   value={line.max_supply_quantity}
                   disabled={!canEdit}
                   onChange={(e) => updateLine(line.key, { max_supply_quantity: Number(e.target.value) })}
@@ -170,7 +173,8 @@ export function SuppliedMaterialsEditor({ supplierId, canEdit }: SuppliedMateria
                 </div>
               )}
             </div>
-          ))}
+            )
+          })}
         </div>
       )}
 
