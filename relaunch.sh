@@ -42,7 +42,11 @@ step "3/6: Frontend dependencies (frontend/node_modules)"
 (cd frontend && npm install)
 
 step "4/6: Frontend build (frontend/dist)"
-(cd frontend && npm run build)
+# tsc -b's incremental build cache (node_modules/.tmp/*.tsbuildinfo) can
+# reference file states from before this pull landed, producing
+# confusing type errors on an otherwise-clean checkout -- cheap to
+# clear, no downside, and has fixed real "build suddenly fails" reports.
+(cd frontend && rm -rf node_modules/.tmp && npm run build)
 
 step "5/6: pm2 restart jdk --update-env"
 pm2 restart jdk --update-env
