@@ -18,6 +18,7 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncGuard } from '@/hooks/useAsyncGuard'
 import { canWriteDepartment } from '@/lib/roles'
 import { DELIVERY_NOTE_STATUSES_REQUIRING_REASON, DELIVERY_NOTE_TRANSITIONS } from '@/lib/statusTransitions'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
@@ -33,7 +34,7 @@ export function DeliveryNoteDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const { busy, run: runGuarded } = useAsyncGuard()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
@@ -53,11 +54,17 @@ export function DeliveryNoteDetailPage() {
 
   useEffect(load, [noteId])
 
+  // One request in flight at a time (see useAsyncGuard) -- a fast
+  // double-click on "Issue" or "Save changes" must not fire the request
+  // twice.
+  function withBusy(fn: () => Promise<void>): Promise<void> {
+    setError(null)
+    return runGuarded(fn).catch((err) => setError(getApiErrorMessage(err)))
+  }
+
   async function handleSaveQuantities() {
     if (!note) return
-    setBusy(true)
-    setError(null)
-    try {
+    await withBusy(async () => {
       const lines = note.lines.map((l) => ({
         product_id: l.product_id,
         quantity_delivered: Number(quantities[l.id] ?? l.quantity_delivered),
@@ -65,17 +72,11 @@ export function DeliveryNoteDetailPage() {
       const updated = await updateDeliveryNote(noteId, { lines })
       setNote(updated)
       setNotice('Delivered quantities saved.')
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   async function handleStatusChange(status: 'issued' | 'cancelled', reason?: string) {
-    setBusy(true)
-    setError(null)
-    try {
+    await withBusy(async () => {
       const updated = await updateDeliveryNoteStatus(noteId, status, reason)
       setNote(updated)
       setNotice(
@@ -83,63 +84,39 @@ export function DeliveryNoteDetailPage() {
           ? 'Delivery note issued. The order has been marked shipped and stock updated.'
           : 'Delivery note cancelled.',
       )
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   async function handleDelete() {
-    setBusy(true)
-    try {
+    await withBusy(async () => {
       await deleteDeliveryNote(noteId)
       setConfirmOpen(false)
       setJustDeleted(true)
       setNotice('Delivery note deleted.')
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   async function handleRestore() {
-    setBusy(true)
-    try {
+    await withBusy(async () => {
       const restored = await restoreDeliveryNote(noteId)
       setNote(restored)
       setJustDeleted(false)
       setNotice('Delivery note restored.')
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   async function handleDownload() {
     if (!note) return
-    setBusy(true)
-    try {
+    await withBusy(async () => {
       await downloadDeliveryNotePdf(note.id, note.delivery_note_number)
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   async function handleDownloadDocx(language: 'en' | 'ar') {
     if (!note) return
-    setBusy(true)
-    try {
+    await withBusy(async () => {
       await downloadDeliveryNoteDocx(note.id, note.delivery_note_number, language)
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   if (loading) {

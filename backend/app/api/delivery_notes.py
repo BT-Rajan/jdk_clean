@@ -15,7 +15,15 @@ from app.schemas.delivery_note import (
     DeliveryNoteUpdate,
 )
 from app.schemas.email import SendDocumentEmailRequest
-from app.services import audit_service, delivery_note_service, doc_template_service, email_service, pdf_generator
+from app.services import (
+    audit_service,
+    delivery_note_service,
+    doc_converter,
+    doc_template_service,
+    email_service,
+    email_template_service,
+    pdf_generator,
+)
 
 router = APIRouter(prefix="/api/delivery-notes", tags=["delivery-notes"])
 read_guard = require_page_access("delivery_notes", "read")
@@ -113,16 +121,24 @@ def restore_delivery_note(
     return DeliveryNoteOut.from_model(note)
 
 
+def _render_delivery_note_pdf(db: Session, note, language: str) -> bytes:
+    """Renders the admin template active for (delivery_note, language)
+    through LibreOffice, so Print and Email use the same document Admin
+    -> Documents controls -- see the identical helper in api/quotations.py."""
+    context = doc_template_service.build_delivery_note_context(db, note)
+    docx_bytes = doc_template_service.render_document(db, "delivery_note", language, context)
+    return doc_converter.convert_docx_to_pdf(docx_bytes)
+
+
 @router.get("/{note_id}/pdf")
 def download_delivery_note_pdf(
     note_id: int,
+    language: Literal["en", "ar"] = Query("en"),
     db: Session = Depends(get_db),
     _: User = Depends(read_guard),
 ):
     note = delivery_note_service.get_delivery_note(db, note_id)
-    company_settings = pdf_generator.get_company_settings(db)
-    signer = pdf_generator.resolve_signer(db, note.created_by)
-    pdf_bytes = pdf_generator.generate_delivery_note_pdf(note, company_settings, signer=signer)
+    pdf_bytes = _render_delivery_note_pdf(db, note, language)
     filename = f"{note.delivery_note_number}.pdf"
     return Response(
         content=pdf_bytes,
@@ -157,17 +173,26 @@ def email_delivery_note_pdf(
     user: User = Depends(write_guard),
 ):
     note = delivery_note_service.get_delivery_note(db, note_id)
-    company_settings = pdf_generator.get_company_settings(db)
-    signer = pdf_generator.resolve_signer(db, note.created_by)
-    pdf_bytes = pdf_generator.generate_delivery_note_pdf(note, company_settings, signer=signer)
+    pdf_bytes = _render_delivery_note_pdf(db, note, "en")
     filename = f"{note.delivery_note_number}.pdf"
 
-    body = payload.message or (
-        f"Please find attached delivery note {note.delivery_note_number}."
+    company_settings = pdf_generator.get_company_settings(db)
+    subject, template_body = email_template_service.render(
+        db,
+        "delivery_note_email",
+        {
+            "customer_name": note.order.customer.name if note.order and note.order.customer else "",
+            "delivery_note_number": note.delivery_note_number,
+            "order_number": note.order.order_number if note.order else "",
+            "delivery_date": note.delivery_date.isoformat(),
+            "company_name": company_settings.get("company_name", ""),
+        },
     )
+    body = payload.message or template_body
+
     email_service.send_document_email(
         to_email=payload.to_email,
-        subject=f"Delivery Note {note.delivery_note_number}",
+        subject=subject,
         body=body,
         attachment_bytes=pdf_bytes,
         attachment_filename=filename,
