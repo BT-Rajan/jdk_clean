@@ -94,7 +94,8 @@ before declaring success.
 > model yet — it still generates two separate pm2 apps, **jdk-backend**
 > and **jdk-frontend**, with `pm2 logs jdk-backend`/`pm2 logs
 > jdk-frontend` and `pm2 restart all`/`pm2 stop all` to manage them.
-> `./relaunch.sh` (below) only understands the single-service layout.
+> The "Relaunching cleanly" commands below (`pm2 restart jdk`) only
+> apply to the single-service layout.
 
 If you didn't generate `ecosystem.config.js` via `install.sh`, you can
 start each app manually — see the "Run the server" sections in each
@@ -102,28 +103,59 @@ app's README — and skip pm2 entirely.
 
 ### Relaunching cleanly
 
-`pm2 restart all` is fine day to day, but a full stop/start after
-config changes (a new server IP, a rebuilt frontend, a fresh
-`.env`) is where things tend to go wrong -- a stray process from an
-earlier run still squatting on the port, the frontend's backend URL
-having drifted out of sync between `.env` and the build, that kind of
-thing. `./relaunch.sh` (repo root) checks for exactly that class of
-problem before and after restarting, and prints a plain pass/fail
-report instead of leaving you to read pm2 logs:
+Both apps run as one pm2 service (`jdk`, via `scripts/run-all.mjs`), so
+restarting is one command. If you've pulled new code first, rebuild/
+reinstall before restarting -- a plain restart re-execs the existing
+build/venv, it doesn't pick up new dependencies or source changes on
+its own:
 
 ```bash
-./relaunch.sh
+# Only if backend deps changed (new/updated requirements.txt):
+(cd backend && source venv/bin/activate && pip install -r requirements.txt)
+
+# Only if frontend deps or source changed:
+(cd frontend && npm install && npm run build)
+
+# Always: restart both, then confirm they actually came back up.
+pm2 restart jdk --update-env
+pm2 logs jdk --lines 50 --nostream
 ```
 
-It checks: `frontend/.env`'s `VITE_API_BASE_URL` against
-`ecosystem.config.js`'s own copy of it (the static server prefers the
-latter at runtime -- see `frontend/scripts/serve-static.mjs`), whether
-`frontend/dist/` is older than `.env` (a sign it needs rebuilding),
-whether `backend/.env`'s `CORS_ORIGINS` actually covers the frontend's
-real origin, whether anything other than the real `jdk` pm2 service's
-own backend/frontend child processes is holding either port, and
-finally does a live health check against both once restarted -- not
-just trusting that pm2 says "online."
+Run each command on its own and read its own output before moving to
+the next -- that's deliberate: if one step fails, you're looking
+straight at that command's real error, on that exact line, instead of
+a wrapper script's interpretation of it. A previous version of this
+section pointed at `./relaunch.sh`, a script that tried to
+automatically cross-check `.env`/`ecosystem.config.js` consistency and
+find stray processes squatting on the ports; it became more fragile
+than the problems it was checking for (relying on `sudo`, `python3`,
+and GNU-only `grep -P` all being present and working the same way on
+whatever box it ran on) and has been removed. Diagnosing those same
+issues by hand:
+
+- **Backend didn't come up**: `pm2 logs jdk --lines 50 --nostream` --
+  look for a `[backend]` line. A Python traceback there is almost
+  always a `backend/.env` problem (bad `DB_PASSWORD`, DB not
+  reachable) or a missing dependency (re-run the `pip install` above).
+- **Frontend didn't come up, or the browser can't reach the backend**:
+  check `frontend/.env`'s `VITE_API_BASE_URL` against
+  `ecosystem.config.js`'s own `API_BASE_URL` -- the static server
+  prefers the latter at runtime for its CSP header (see
+  `frontend/scripts/serve-static.mjs`), so if only `.env` was updated,
+  update `ecosystem.config.js` too and restart again. Also confirm
+  `backend/.env`'s `CORS_ORIGINS` actually lists the origin the
+  frontend is really being opened from.
+- **Something's already listening on the port**: `lsof -i :8000` /
+  `lsof -i :4173` (swap in your real ports from `ecosystem.config.js`)
+  shows what and its pid; `kill` it if it's a stray process from an
+  earlier run, then restart again.
+- **pm2 says "online" but nothing answers**: that only means the
+  process hasn't crashed *yet* -- confirm it's actually serving
+  requests:
+  ```bash
+  curl -i http://localhost:8000/api/health
+  curl -i http://localhost:4173/
+  ```
 
 ## Testing the login
 

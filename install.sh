@@ -475,7 +475,7 @@ if [[ "$START_PM2" == "y" ]]; then
   wait_for_http "Frontend" "http://localhost:${FRONTEND_PORT}/" || HEALTH_OK=n
 
   if [[ "$HEALTH_OK" != "y" ]]; then
-    warn "One or more health checks failed -- see 'pm2 logs jdk' for details. (./relaunch.sh re-runs these checks plus a few extra consistency checks any time.)"
+    warn "One or more health checks failed -- see 'pm2 logs jdk --lines 50 --nostream' for details (see README.md's \"Relaunching cleanly\" for what to check next)."
   fi
 else
   warn "Skipped starting pm2 -- skipping health checks too. Start it yourself with: pm2 start ecosystem.config.js"
