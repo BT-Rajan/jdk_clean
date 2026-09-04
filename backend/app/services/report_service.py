@@ -61,18 +61,60 @@ def _last_n_months(today: date, months: int) -> list[tuple[int, int]]:
     return buckets
 
 
-def get_sales_report(db: Session, months: int = 12) -> dict:
-    """Revenue/order trend over the last `months` calendar months, plus
-    a status breakdown, top customers/products, and quotation->order
-    conversion -- all scoped to that same window so every number on the
-    page is drawn from one consistent date range. Computed fresh on
-    every call, same as dashboard_service.get_stats -- nothing cached.
+def _months_between(start: date, end: date) -> list[tuple[int, int]]:
+    """[(year, month), ...] for every calendar month from `start`'s month
+    through `end`'s month inclusive, oldest first -- the explicit-range
+    equivalent of _last_n_months, used once a from/to date is given
+    instead of a "last N months" preset.
+    """
+    buckets = []
+    y, m = start.year, start.month
+    while (y, m) <= (end.year, end.month):
+        buckets.append((y, m))
+        m += 1
+        if m == 13:
+            m = 1
+            y += 1
+    return buckets
+
+
+def _resolve_range(
+    months: int, date_from: date | None, date_to: date | None
+) -> tuple[date, date, list[tuple[int, int]]]:
+    """Resolves a report's window to (range_start, range_end inclusive,
+    monthly buckets). When a from/to date is given, that pair drives the
+    window directly -- date_to is clamped to today (never a future date)
+    and, if it's before date_from, the two are swapped rather than
+    returning an empty/invalid range. With neither date given, falls back
+    to the original "last N calendar months ending today" behavior.
     """
     today = date.today()
-    buckets = _last_n_months(today, months)
-    range_start, _ = _month_bounds(*buckets[0])
-    _, range_end_exclusive = _month_bounds(*buckets[-1])
-    range_end = range_end_exclusive - timedelta(days=1)
+    if date_from is not None or date_to is not None:
+        range_end = min(date_to or today, today)
+        range_start = date_from or range_end
+        if range_start > range_end:
+            range_start, range_end = range_end, range_start
+        buckets = _months_between(range_start, range_end)
+    else:
+        buckets = _last_n_months(today, months)
+        range_start, _ = _month_bounds(*buckets[0])
+        _, range_end_exclusive = _month_bounds(*buckets[-1])
+        range_end = range_end_exclusive - timedelta(days=1)
+    return range_start, range_end, buckets
+
+
+def get_sales_report(
+    db: Session, months: int = 12, date_from: date | None = None, date_to: date | None = None
+) -> dict:
+    """Revenue/order trend over the last `months` calendar months (or an
+    explicit date_from/date_to window when given), plus a status
+    breakdown, top customers/products, and quotation->order conversion --
+    all scoped to that same window so every number on the page is drawn
+    from one consistent date range. Computed fresh on every call, same as
+    dashboard_service.get_stats -- nothing cached.
+    """
+    range_start, range_end, buckets = _resolve_range(months, date_from, date_to)
+    range_end_exclusive = range_end + timedelta(days=1)
 
     monthly = []
     for year, month in buckets:
@@ -258,17 +300,16 @@ def get_sales_drilldown(
     ]
 
 
-def get_production_report(db: Session, months: int = 12) -> dict:
+def get_production_report(
+    db: Session, months: int = 12, date_from: date | None = None, date_to: date | None = None
+) -> dict:
     """Same shape as get_sales_report, scoped to production batches
     instead of orders -- batches bucketed by scheduled_start (when a
     batch was scheduled, not when it finished, so a batch scheduled
     this month but still in_progress still shows up in this month's
     trend rather than not appearing until it completes)."""
-    today = date.today()
-    buckets = _last_n_months(today, months)
-    range_start, _ = _month_bounds(*buckets[0])
-    _, range_end_exclusive = _month_bounds(*buckets[-1])
-    range_end = range_end_exclusive - timedelta(days=1)
+    range_start, range_end, buckets = _resolve_range(months, date_from, date_to)
+    range_end_exclusive = range_end + timedelta(days=1)
 
     monthly = []
     for year, month in buckets:
@@ -392,15 +433,14 @@ def get_production_drilldown(
     ]
 
 
-def get_purchasing_report(db: Session, months: int = 12) -> dict:
+def get_purchasing_report(
+    db: Session, months: int = 12, date_from: date | None = None, date_to: date | None = None
+) -> dict:
     """Same shape as get_sales_report, scoped to purchase orders --
     spend excludes draft/cancelled POs (SPEND_STATUSES) the same way
     sales revenue excludes draft/cancelled orders."""
-    today = date.today()
-    buckets = _last_n_months(today, months)
-    range_start, _ = _month_bounds(*buckets[0])
-    _, range_end_exclusive = _month_bounds(*buckets[-1])
-    range_end = range_end_exclusive - timedelta(days=1)
+    range_start, range_end, buckets = _resolve_range(months, date_from, date_to)
+    range_end_exclusive = range_end + timedelta(days=1)
 
     monthly = []
     for year, month in buckets:
@@ -545,7 +585,9 @@ def get_purchasing_drilldown(
     ]
 
 
-def get_inventory_report(db: Session, months: int = 12) -> dict:
+def get_inventory_report(
+    db: Session, months: int = 12, date_from: date | None = None, date_to: date | None = None
+) -> dict:
     """Unlike the sales/production/purchasing reports, inventory has no
     natural "revenue" figure -- this pairs a monthly stock-movement
     trend (inbound/outbound/production, the same three buckets
@@ -553,11 +595,8 @@ def get_inventory_report(db: Session, months: int = 12) -> dict:
     current, not time-windowed, snapshot the dashboard also shows
     (inventory value, low-stock count) since "value right now" is what
     actually matters for those two, not "value back then"."""
-    today = date.today()
-    buckets = _last_n_months(today, months)
-    range_start, _ = _month_bounds(*buckets[0])
-    _, range_end_exclusive = _month_bounds(*buckets[-1])
-    range_end = range_end_exclusive - timedelta(days=1)
+    range_start, range_end, buckets = _resolve_range(months, date_from, date_to)
+    range_end_exclusive = range_end + timedelta(days=1)
 
     monthly = []
     for year, month in buckets:
