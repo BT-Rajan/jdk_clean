@@ -37,7 +37,7 @@ export function WhatsAppTab() {
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null)
 
-  const { register, handleSubmit, reset, formState: { isSubmitting } } =
+  const { register, getValues, handleSubmit, reset, formState: { isSubmitting } } =
     useForm<WhatsAppAccountFormValues>({
       defaultValues: { api_version: 'v21.0', is_active: true },
     })
@@ -76,24 +76,29 @@ export function WhatsAppTab() {
       .finally(() => setLoading(false))
   }, [reset])
 
+  async function saveValues(values: WhatsAppAccountFormValues) {
+    const payload: WhatsAppAccountFormValues = { ...values }
+    if (!changeToken) {
+      delete payload.access_token
+    }
+    const updated = await updateWhatsAppAccount(payload)
+    setHasToken(updated.has_token)
+    setChangeToken(false)
+    setIdentity({ display_phone_number: updated.display_phone_number, verified_name: updated.verified_name })
+    setLastTest({
+      last_tested_at: updated.last_tested_at,
+      last_test_ok: updated.last_test_ok,
+      last_test_error: updated.last_test_error,
+    })
+    return updated
+  }
+
   async function onSubmit(values: WhatsAppAccountFormValues) {
     setFormError(null)
     setNotice(null)
     setTestResult(null)
     try {
-      const payload: WhatsAppAccountFormValues = { ...values }
-      if (!changeToken) {
-        delete payload.access_token
-      }
-      const updated = await updateWhatsAppAccount(payload)
-      setHasToken(updated.has_token)
-      setChangeToken(false)
-      setIdentity({ display_phone_number: updated.display_phone_number, verified_name: updated.verified_name })
-      setLastTest({
-        last_tested_at: updated.last_tested_at,
-        last_test_ok: updated.last_test_ok,
-        last_test_error: updated.last_test_error,
-      })
+      await saveValues(values)
       setNotice('WhatsApp settings saved.')
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -101,9 +106,14 @@ export function WhatsAppTab() {
   }
 
   async function onTest() {
+    setFormError(null)
+    setNotice(null)
     setTesting(true)
     setTestResult(null)
     try {
+      // Test connection must reflect what's currently on screen, not the
+      // last saved row -- so save the current form values first.
+      await saveValues(getValues())
       const result = await testWhatsAppAccount()
       setTestResult(result)
       setLastTest({

@@ -20,7 +20,7 @@ export function EmailTab() {
     last_test_error: null,
   })
 
-  const { register, watch, setValue, handleSubmit, reset, formState: { isSubmitting } } =
+  const { register, watch, setValue, getValues, handleSubmit, reset, formState: { isSubmitting } } =
     useForm<EmailAccountFormValues>({
       defaultValues: {
         provider: 'gmail',
@@ -83,23 +83,28 @@ export function EmailTab() {
     setValue('smtp_use_tls', preset.smtp_use_tls)
   }
 
+  async function saveValues(values: EmailAccountFormValues) {
+    const payload: EmailAccountFormValues = { ...values }
+    if (!changePassword) {
+      delete payload.password
+    }
+    const updated = await updateEmailAccount(payload)
+    setHasPassword(updated.has_password)
+    setChangePassword(false)
+    setLastTest({
+      last_tested_at: updated.last_tested_at,
+      last_test_ok: updated.last_test_ok,
+      last_test_error: updated.last_test_error,
+    })
+    return updated
+  }
+
   async function onSubmit(values: EmailAccountFormValues) {
     setFormError(null)
     setNotice(null)
     setTestResult(null)
     try {
-      const payload: EmailAccountFormValues = { ...values }
-      if (!changePassword) {
-        delete payload.password
-      }
-      const updated = await updateEmailAccount(payload)
-      setHasPassword(updated.has_password)
-      setChangePassword(false)
-      setLastTest({
-        last_tested_at: updated.last_tested_at,
-        last_test_ok: updated.last_test_ok,
-        last_test_error: updated.last_test_error,
-      })
+      await saveValues(values)
       setNotice('Email settings saved.')
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -107,9 +112,14 @@ export function EmailTab() {
   }
 
   async function onTest() {
+    setFormError(null)
+    setNotice(null)
     setTesting(true)
     setTestResult(null)
     try {
+      // Test connection must reflect what's currently on screen, not the
+      // last saved row -- so save the current form values first.
+      await saveValues(getValues())
       const result = await testEmailAccount()
       setTestResult(result)
       setLastTest({
