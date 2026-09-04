@@ -61,12 +61,22 @@ step "3/6: Frontend dependencies (frontend/node_modules)"
   # this whole script, so skip it outright once package-lock.json
   # (the actual source of truth for what gets installed) hasn't
   # changed since the last time it succeeded.
+  #
+  # `npm ci`, not `npm install`: installs exactly what's pinned in
+  # package-lock.json and errors out rather than silently re-resolving
+  # if package.json and the lockfile ever disagree -- no surprise
+  # version bumps on a codebase that isn't re-tested against every
+  # dependency change. `--no-audit` skips npm's automatic vulnerability
+  # lookup, which traced out to ~99% of this step's wall-clock time (a
+  # single advisory-bulk request took 4+ minutes while every package
+  # itself resolved in 0ms from cache) -- run `npm audit` by hand when
+  # you actually want that check, not on every restart.
   PACKAGE_LOCK_HASH_FILE="node_modules/.package-lock.sha256"
   PACKAGE_LOCK_HASH="$(sha256sum package-lock.json | awk '{print $1}')"
   if [[ -d node_modules && -f "$PACKAGE_LOCK_HASH_FILE" && "$(cat "$PACKAGE_LOCK_HASH_FILE")" == "$PACKAGE_LOCK_HASH" ]]; then
     echo "package-lock.json unchanged -- skipping npm install."
   else
-    npm install
+    npm ci --no-audit --no-fund
     echo "$PACKAGE_LOCK_HASH" > "$PACKAGE_LOCK_HASH_FILE"
   fi
 )
