@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class EmailAccountOut(BaseModel):
@@ -46,6 +46,16 @@ class EmailAccountUpdate(BaseModel):
     smtp_port: int = Field(default=587, ge=1, le=65535)
     smtp_use_tls: bool = True
     is_active: bool = True
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _strip_strings(cls, v):
+        # Every field here is prone to being copy-pasted -- an app
+        # password/host copied from somewhere that displays it with
+        # spacing (Google shows app passwords as "abcd efgh ijkl mnop")
+        # or a trailing newline would otherwise be saved verbatim and
+        # silently break the connection with no validation error.
+        return v.strip() if isinstance(v, str) else v
 
 
 class EmailAccountTestResult(BaseModel):

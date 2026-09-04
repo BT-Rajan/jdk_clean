@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class WhatsAppAccountOut(BaseModel):
@@ -25,6 +25,14 @@ class WhatsAppAccountUpdate(BaseModel):
     # email/sms). Empty string explicitly clears it.
     access_token: str | None = None
     is_active: bool = True
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _strip_strings(cls, v):
+        # A token copy-pasted from Meta's dashboard (or anywhere else)
+        # can carry a trailing newline/space that would otherwise be
+        # saved verbatim and silently break authentication.
+        return v.strip() if isinstance(v, str) else v
 
 
 class WhatsAppTestResult(BaseModel):

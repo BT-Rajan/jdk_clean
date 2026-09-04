@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class SmsAccountOut(BaseModel):
@@ -27,6 +27,11 @@ class SmsAccountUpdate(BaseModel):
     api_secret: str | None = None
     test_mode: bool = True
     is_active: bool = True
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _strip_strings(cls, v):
+        return v.strip() if isinstance(v, str) else v
 
 
 class SmsTestRequest(BaseModel):
