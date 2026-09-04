@@ -382,9 +382,22 @@ cd "$SCRIPT_DIR"
 heading "Setting up the frontend"
 cd "$FRONTEND_DIR"
 
-info "Installing Node dependencies..."
-npm install --silent
-ok "Frontend dependencies installed."
+# Same skip-if-unchanged check as the backend's requirements.txt above:
+# npm install is the slowest step in this whole script, and re-resolving
+# an already-satisfied tree from scratch every run isn't cheap. A sha256
+# of package-lock.json (the actual source of truth for what gets
+# installed, not package.json) stashed next to node_modules covers a
+# fresh checkout, an edited lockfile, and a first-ever install alike.
+PACKAGE_LOCK_HASH_FILE="node_modules/.package-lock.sha256"
+PACKAGE_LOCK_HASH="$(sha256sum package-lock.json | awk '{print $1}')"
+if [[ -d node_modules && -f "$PACKAGE_LOCK_HASH_FILE" && "$(cat "$PACKAGE_LOCK_HASH_FILE")" == "$PACKAGE_LOCK_HASH" ]]; then
+  ok "Node dependencies already up to date (package-lock.json unchanged) -- skipping install."
+else
+  info "Installing Node dependencies..."
+  npm install --silent
+  echo "$PACKAGE_LOCK_HASH" > "$PACKAGE_LOCK_HASH_FILE"
+  ok "Frontend dependencies installed."
+fi
 
 if [[ "$WRITE_FRONTEND_ENV" == "y" ]]; then
   cat > .env <<ENVFILE
