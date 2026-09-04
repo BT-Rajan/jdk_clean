@@ -7,17 +7,18 @@ interface SendEmailDialogProps {
   open: boolean
   title: string
   defaultEmail?: string | null
-  onSend: (toEmail: string, message: string) => Promise<void>
+  onSend: (toEmail: string, message: string, attachPdf: boolean) => Promise<void>
   onClose: () => void
 }
 
 /** Modal used by every document's "Send email" action. The caller's
  * onSend does the actual API call (and its own success notice); this
- * component only owns the recipient/message fields and inline error
- * display for a failed send. */
+ * component only owns the recipient/message fields, the attach-PDF
+ * toggle, and inline error display for a failed send. */
 export function SendEmailDialog({ open, title, defaultEmail, onSend, onClose }: SendEmailDialogProps) {
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
+  const [attachPdf, setAttachPdf] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { busy: sending, run: runGuarded } = useAsyncGuard()
 
@@ -25,6 +26,7 @@ export function SendEmailDialog({ open, title, defaultEmail, onSend, onClose }: 
     if (open) {
       setEmail(defaultEmail ?? '')
       setMessage('')
+      setAttachPdf(true)
       setError(null)
     }
   }, [open, defaultEmail])
@@ -33,7 +35,7 @@ export function SendEmailDialog({ open, title, defaultEmail, onSend, onClose }: 
     setError(null)
     try {
       await runGuarded(async () => {
-        await onSend(email, message)
+        await onSend(email, message, attachPdf)
         onClose()
       })
     } catch (err) {
@@ -66,6 +68,21 @@ export function SendEmailDialog({ open, title, defaultEmail, onSend, onClose }: 
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />
+        <label className="flex items-center gap-3 text-sm text-white/70">
+          <input
+            type="checkbox"
+            checked={attachPdf}
+            onChange={(e) => setAttachPdf(e.target.checked)}
+            className="h-4 w-4 rounded border-gold-400/30 bg-gold-500/10 accent-gold-400"
+          />
+          Attach PDF copy
+        </label>
+        {!attachPdf ? (
+          <p className="-mt-2 text-xs text-white/40">
+            Sends the message text only, no attachment -- useful if a recipient's mail
+            server is blocking or dropping the PDF.
+          </p>
+        ) : null}
       </div>
     </Modal>
   )

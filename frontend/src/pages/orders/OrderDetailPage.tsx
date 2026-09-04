@@ -486,8 +486,8 @@ export function OrderDetailPage() {
         title={`Email ${order.order_number}`}
         defaultEmail={order.customer_email}
         onClose={() => setEmailOpen(false)}
-        onSend={async (toEmail, message) => {
-          await emailOrder(order.id, toEmail, message)
+        onSend={async (toEmail, message, attachPdf) => {
+          await emailOrder(order.id, toEmail, message, attachPdf)
           setNotice(`Emailed to ${toEmail}.`)
         }}
       />
@@ -497,8 +497,8 @@ export function OrderDetailPage() {
         title={`Send payment request — ${order.order_number}`}
         defaultEmail={order.customer_email}
         onClose={() => setPaymentEmailOpen(false)}
-        onSend={async (toEmail, message) => {
-          const updated = await requestPayment(order.id, toEmail, message)
+        onSend={async (toEmail, message, attachPdf) => {
+          const updated = await requestPayment(order.id, toEmail, message, attachPdf)
           setOrder(updated)
           setNotice(`Payment request sent to ${toEmail}.`)
         }}

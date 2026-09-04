@@ -271,8 +271,8 @@ export function DeliveryNoteDetailPage() {
         title={`Email ${note.delivery_note_number}`}
         defaultEmail={note.customer_email}
         onClose={() => setEmailOpen(false)}
-        onSend={async (toEmail, message) => {
-          await emailDeliveryNote(note.id, toEmail, message)
+        onSend={async (toEmail, message, attachPdf) => {
+          await emailDeliveryNote(note.id, toEmail, message, attachPdf)
           setNotice(`Emailed to ${toEmail}.`)
         }}
       />

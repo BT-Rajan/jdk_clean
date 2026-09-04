@@ -493,8 +493,8 @@ export function PurchaseOrderDetailPage() {
         title={`Email ${po.po_number}`}
         defaultEmail={po.supplier_email}
         onClose={() => setEmailOpen(false)}
-        onSend={async (toEmail, message) => {
-          await emailPurchaseOrder(po.id, toEmail, message)
+        onSend={async (toEmail, message, attachPdf) => {
+          await emailPurchaseOrder(po.id, toEmail, message, attachPdf)
           setNotice(`Emailed to ${toEmail}.`)
         }}
       />

@@ -97,10 +97,11 @@ export async function downloadQuotationDocx(id: number, quotationNumber: string,
 }
 
 /** Sends the quotation PDF as an email attachment. */
-export async function emailQuotation(id: number, toEmail: string, message?: string): Promise<MessageResponse> {
+export async function emailQuotation(id: number, toEmail: string, message?: string, attachPdf = true): Promise<MessageResponse> {
   const { data } = await apiClient.post<MessageResponse>(`/api/quotations/${id}/email`, {
     to_email: toEmail,
     message: message || undefined,
+    attach_pdf: attachPdf,
   })
   return data
 }

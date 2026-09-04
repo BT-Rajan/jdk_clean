@@ -113,10 +113,11 @@ export async function downloadOrderDocx(id: number, orderNumber: string, languag
 }
 
 /** Sends the order PDF as an email attachment. */
-export async function emailOrder(id: number, toEmail: string, message?: string): Promise<MessageResponse> {
+export async function emailOrder(id: number, toEmail: string, message?: string, attachPdf = true): Promise<MessageResponse> {
   const { data } = await apiClient.post<MessageResponse>(`/api/orders/${id}/email`, {
     to_email: toEmail,
     message: message || undefined,
+    attach_pdf: attachPdf,
   })
   return data
 }
@@ -127,10 +128,11 @@ export async function emailOrder(id: number, toEmail: string, message?: string):
  * payment_requested_at either way; there's no online payment link yet,
  * the customer pays outside the app and someone records it via
  * createPayment once it's confirmed to have arrived. */
-export async function requestPayment(id: number, toEmail: string, message?: string): Promise<Order> {
+export async function requestPayment(id: number, toEmail: string, message?: string, attachPdf = true): Promise<Order> {
   const { data } = await apiClient.post<Order>(`/api/orders/${id}/request-payment`, {
     to_email: toEmail,
     message: message || undefined,
+    attach_pdf: attachPdf,
   })
   return data
 }

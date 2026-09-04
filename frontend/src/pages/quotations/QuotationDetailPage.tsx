@@ -314,8 +314,8 @@ export function QuotationDetailPage() {
         title={`Email ${quotation.quotation_number}`}
         defaultEmail={quotation.customer_email}
         onClose={() => setEmailOpen(false)}
-        onSend={async (toEmail, message) => {
-          await emailQuotation(quotation.id, toEmail, message)
+        onSend={async (toEmail, message, attachPdf) => {
+          await emailQuotation(quotation.id, toEmail, message, attachPdf)
           setNotice(`Emailed to ${toEmail}.`)
         }}
       />

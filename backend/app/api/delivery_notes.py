@@ -195,8 +195,8 @@ def email_delivery_note_pdf(
         to_email=payload.to_email,
         subject=subject,
         body=body,
-        attachment_bytes=pdf_bytes,
-        attachment_filename=filename,
+        attachment_bytes=pdf_bytes if payload.attach_pdf else None,
+        attachment_filename=filename if payload.attach_pdf else None,
     )
     audit_service.log_update(
         db, "delivery_notes", note_id, {"emailed_to": (None, payload.to_email)}, user.id

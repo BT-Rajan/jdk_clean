@@ -84,10 +84,11 @@ export async function downloadDeliveryNoteDocx(id: number, noteNumber: string, l
 }
 
 /** Sends the delivery note PDF as an email attachment. */
-export async function emailDeliveryNote(id: number, toEmail: string, message?: string): Promise<MessageResponse> {
+export async function emailDeliveryNote(id: number, toEmail: string, message?: string, attachPdf = true): Promise<MessageResponse> {
   const { data } = await apiClient.post<MessageResponse>(`/api/delivery-notes/${id}/email`, {
     to_email: toEmail,
     message: message || undefined,
+    attach_pdf: attachPdf,
   })
   return data
 }

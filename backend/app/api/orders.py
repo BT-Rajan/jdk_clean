@@ -306,8 +306,8 @@ def email_order_pdf(
         to_email=payload.to_email,
         subject=subject,
         body=body,
-        attachment_bytes=pdf_bytes,
-        attachment_filename=filename,
+        attachment_bytes=pdf_bytes if payload.attach_pdf else None,
+        attachment_filename=filename if payload.attach_pdf else None,
     )
     audit_service.log_update(db, "orders", order_id, {"emailed_to": (None, payload.to_email)}, user.id)
     db.commit()
@@ -367,7 +367,7 @@ def request_payment(
         to_email=payload.to_email,
         subject=subject,
         body=body,
-        attachment_bytes=pdf_bytes,
-        attachment_filename=filename,
+        attachment_bytes=pdf_bytes if payload.attach_pdf else None,
+        attachment_filename=filename if payload.attach_pdf else None,
     )
     return order_service.mark_payment_requested(db, order_id, user_id=user.id)

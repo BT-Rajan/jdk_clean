@@ -15,6 +15,7 @@ import smtplib
 from email.mime.application import MIMEApplication
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
 
 from sqlalchemy.orm import Session
 
@@ -47,12 +48,14 @@ def send_document_email(
     to_email: str,
     subject: str,
     body: str,
-    attachment_bytes: bytes,
-    attachment_filename: str,
+    attachment_bytes: bytes | None,
+    attachment_filename: str | None,
 ) -> None:
-    """Sends a plain-text email with a single PDF attachment. Raises
-    AppError with a clear, user-facing message on any failure -- an
-    unconfigured server, a bad recipient address, or an SMTP-level
+    """Sends a plain-text email, optionally with a single PDF attachment
+    (pass attachment_bytes=None to send body text only -- e.g. when a
+    recipient's mail gateway is dropping messages with attachments).
+    Raises AppError with a clear, user-facing message on any failure --
+    an unconfigured server, a bad recipient address, or an SMTP-level
     failure all surface the same way to the API layer, which is what
     lets the frontend just show the message directly rather than
     special-casing each failure mode.
@@ -77,11 +80,17 @@ def send_document_email(
     message["From"] = from_display
     message["To"] = to_email
     message["Subject"] = subject
+    # Both are required by RFC 5322 and their absence is a common,
+    # easy-to-miss reason a receiving mail server spam-scores or
+    # silently drops an otherwise legitimate message.
+    message["Date"] = formatdate(localtime=True)
+    message["Message-ID"] = make_msgid(domain=config["from_email"].rsplit("@", 1)[-1] or None)
     message.attach(MIMEText(body, "plain"))
 
-    attachment = MIMEApplication(attachment_bytes, Name=attachment_filename)
-    attachment["Content-Disposition"] = f'attachment; filename="{attachment_filename}"'
-    message.attach(attachment)
+    if attachment_bytes is not None:
+        attachment = MIMEApplication(attachment_bytes, Name=attachment_filename)
+        attachment["Content-Disposition"] = f'attachment; filename="{attachment_filename}"'
+        message.attach(attachment)
 
     try:
         with smtplib.SMTP(config["host"], config["port"], timeout=15) as server:
