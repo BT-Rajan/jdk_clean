@@ -17,7 +17,7 @@ export const orderSchema = z
     // see quotation.ts's valid_until for why the reverse order silently
     // never applies the transform at all (z.string() already accepts '').
     requested_delivery_date: z.literal('').transform(() => undefined).or(z.string()).optional().refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
-    notes: z.string().trim().optional().or(z.literal('')),
+    notes: z.string().trim().max(5000, 'Max 5000 characters').optional().or(z.literal('')),
     discount_percent: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),
     lines: z.array(orderLineSchema).min(1, 'At least one line item is required'),
   })
@@ -36,7 +36,7 @@ export const orderStatusSchema = z.object({
 export type OrderStatusFormValues = z.infer<typeof orderStatusSchema>
 
 export const orderAdminReviewSchema = z.object({
-  notes: z.string().trim().min(1, 'Notes are required.'),
+  notes: z.string().trim().min(1, 'Notes are required.').max(5000, 'Max 5000 characters'),
 })
 export type OrderAdminReviewFormValues = z.infer<typeof orderAdminReviewSchema>
 
@@ -49,7 +49,7 @@ export const orderQuickLogLineSchema = z.object({
 
 export const orderQuickLogSchema = z.object({
   customer_id: z.coerce.number().int().positive('Choose a customer'),
-  notes: z.string().trim().optional().or(z.literal('')),
+  notes: z.string().trim().max(5000, 'Max 5000 characters').optional().or(z.literal('')),
   lines: z.array(orderQuickLogLineSchema).min(1, 'At least one line item is required'),
 })
 
