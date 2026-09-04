@@ -36,7 +36,22 @@ step "1/6: pm2 stop jdk"
 pm2 stop jdk
 
 step "2/6: Backend dependencies (backend/venv)"
-(cd backend && source venv/bin/activate && pip install -r requirements.txt)
+(
+  cd backend
+  # Skip the reinstall once requirements.txt hasn't changed since the
+  # last time it was actually installed into this venv -- same sha256-
+  # next-to-the-venv check install.sh uses, so a plain restart doesn't
+  # pay pip's full resolve-and-check cost every single time.
+  REQUIREMENTS_HASH_FILE="venv/.requirements.sha256"
+  REQUIREMENTS_HASH="$(sha256sum requirements.txt | awk '{print $1}')"
+  if [[ -f "$REQUIREMENTS_HASH_FILE" && "$(cat "$REQUIREMENTS_HASH_FILE")" == "$REQUIREMENTS_HASH" ]]; then
+    echo "requirements.txt unchanged -- skipping pip install."
+  else
+    source venv/bin/activate
+    pip install -r requirements.txt
+    echo "$REQUIREMENTS_HASH" > "$REQUIREMENTS_HASH_FILE"
+  fi
+)
 
 step "3/6: Frontend dependencies (frontend/node_modules)"
 (cd frontend && npm install)

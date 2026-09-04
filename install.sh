@@ -323,10 +323,22 @@ fi
 PY="$BACKEND_DIR/venv/bin/python3"
 PIP="$BACKEND_DIR/venv/bin/pip"
 
-info "Installing Python dependencies..."
-"$PIP" install --quiet --upgrade pip
-"$PIP" install --quiet -r requirements.txt
-ok "Backend dependencies installed."
+# Skip the reinstall entirely once requirements.txt has already been
+# installed into this venv and hasn't changed since -- a plain sha256
+# of the file, stashed alongside the venv it was installed into, so a
+# fresh venv (or an edited requirements.txt) still triggers a real
+# install while an unchanged repeat run doesn't pay for one.
+REQUIREMENTS_HASH_FILE="venv/.requirements.sha256"
+REQUIREMENTS_HASH="$(sha256sum requirements.txt | awk '{print $1}')"
+if [[ -f "$REQUIREMENTS_HASH_FILE" && "$(cat "$REQUIREMENTS_HASH_FILE")" == "$REQUIREMENTS_HASH" ]]; then
+  ok "Backend dependencies already up to date (requirements.txt unchanged) -- skipping install."
+else
+  info "Installing Python dependencies..."
+  "$PIP" install --quiet --upgrade pip
+  "$PIP" install --quiet -r requirements.txt
+  echo "$REQUIREMENTS_HASH" > "$REQUIREMENTS_HASH_FILE"
+  ok "Backend dependencies installed."
+fi
 
 if [[ "$WRITE_BACKEND_ENV" == "y" ]]; then
   cat > .env <<ENVFILE
