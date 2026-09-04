@@ -384,6 +384,11 @@ else
 fi
 
 info "Building the frontend for production..."
+# tsc -b's incremental build cache (node_modules/.tmp/*.tsbuildinfo) can
+# reference file states from before a git pull landed, producing
+# confusing type errors on an otherwise-clean checkout -- cheap to
+# clear, no downside, and has fixed real "build suddenly fails" reports.
+rm -rf node_modules/.tmp
 npm run build
 ok "Frontend built."
 
