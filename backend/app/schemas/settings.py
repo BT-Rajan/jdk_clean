@@ -47,6 +47,10 @@ class SettingsOut(BaseModel):
     large_discount_approval_threshold: str
 
 
+class CompanyNameOut(BaseModel):
+    company_name: str
+
+
 class SettingsUpdate(BaseModel):
     company_name: str | None = None
     company_address: str | None = None

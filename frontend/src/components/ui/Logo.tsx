@@ -1,5 +1,6 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { env } from '@/config/env'
+import { getActiveCompanyName } from '@/api/settings'
 import { cn } from '@/lib/cn'
 
 interface LogoProps {
@@ -16,23 +17,40 @@ interface LogoProps {
 const ACTIVE_LOGO_URL = `${env.apiBaseUrl}/api/settings/logo/active/current`
 
 /** The org's own uploaded logo wherever the app shows its brand mark
- * (top-left nav, login page) -- falls back to the placeholder gold
- * wordmark below when no logo has been uploaded/activated yet (a 404
- * from ACTIVE_LOGO_URL), so a fresh install never shows a broken image
- * icon. Nothing here is per-current-UI-language: the app chrome itself
- * has no language toggle, so whichever single variant the admin marked
- * "Active logo" under Settings -> General is what shows -- that's
- * still where an English- vs Arabic-market install picks the matching
- * logo, just as a one-time admin choice rather than something that
- * switches live. */
+ * (top-left nav, login page) -- falls back to a text wordmark when no
+ * logo has been uploaded/activated yet (a 404 from ACTIVE_LOGO_URL), so
+ * a fresh install never shows a broken image icon. That text reads
+ * whatever company name is set under Settings -> Company (also fetched
+ * unauthenticated, same reasoning as the logo image -- see
+ * api/settings.py's get_active_company_name), falling back to the
+ * placeholder "JDK MEA" wordmark only if no company name has been
+ * configured either. Nothing here is per-current-UI-language: the app
+ * chrome itself has no language toggle, so whichever single logo
+ * variant the admin marked "Active logo" under Settings -> General is
+ * what shows -- that's still where an English- vs Arabic-market install
+ * picks the matching logo, just as a one-time admin choice rather than
+ * something that switches live. */
 export function Logo({ className, withWordmark = true }: LogoProps) {
   const [logoFailed, setLogoFailed] = useState(false)
+  const [companyName, setCompanyName] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    getActiveCompanyName()
+      .then((name) => {
+        if (!cancelled && name) setCompanyName(name)
+      })
+      .catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   if (!logoFailed) {
     return (
       <img
         src={ACTIVE_LOGO_URL}
-        alt="Company logo"
+        alt={companyName || 'Company logo'}
         onError={() => setLogoFailed(true)}
         className={cn('h-9 w-auto object-contain', className)}
       />
@@ -58,7 +76,11 @@ export function Logo({ className, withWordmark = true }: LogoProps) {
       </svg>
       {withWordmark && (
         <span className="font-display text-lg font-medium tracking-wide text-white">
-          JDK <span className="text-gradient-gold">MEA</span>
+          {companyName ?? (
+            <>
+              JDK <span className="text-gradient-gold">MEA</span>
+            </>
+          )}
         </span>
       )}
     </div>
