@@ -11,7 +11,6 @@ import {
   SortableHeader,
   Spinner,
   StatusBadge,
-  TextField,
 } from '@/components/ui'
 import { listPurchaseOrders } from '@/api/purchaseOrders'
 import { usePagedResource } from '@/hooks/usePagedResource'
@@ -34,8 +33,6 @@ export function PurchaseOrdersListPage() {
     totalPages,
     page,
     setPage,
-    searchInput,
-    setSearchInput,
     status,
     setStatus,
     sort,
@@ -54,13 +51,7 @@ export function PurchaseOrdersListPage() {
         {canWriteDepartment(user, 'procurement') && <Button onClick={() => navigate('/purchase-orders/new')}>New purchase order</Button>}
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_220px]">
-        <TextField
-          label="Search"
-          placeholder="PO number, supplier…"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
+      <div className="mb-6 max-w-xs">
         <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">All statuses</option>
           <option value="draft">Draft</option>
@@ -80,7 +71,7 @@ export function PurchaseOrdersListPage() {
             <Spinner size={24} className="text-gold-300" />
           </div>
         ) : items.length === 0 ? (
-          <EmptyState title="No purchase orders found" message="Try a different search or create a new one." />
+          <EmptyState title="No purchase orders found" message="Try a different status filter or create a new one." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">

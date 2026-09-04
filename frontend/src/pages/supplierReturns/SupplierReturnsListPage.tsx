@@ -9,7 +9,6 @@ import {
   Pagination,
   SortableHeader,
   Spinner,
-  TextField,
 } from '@/components/ui'
 import { listSupplierReturns } from '@/api/supplierReturns'
 import { usePagedResource } from '@/hooks/usePagedResource'
@@ -24,8 +23,7 @@ export function SupplierReturnsListPage() {
     (params: { page: number; page_size?: number; search?: string; sort?: string }) => listSupplierReturns(params),
     [],
   )
-  const { items, total, totalPages, page, setPage, searchInput, setSearchInput, sort, toggleSort, loading, error } =
-    usePagedResource(fetcher)
+  const { items, total, totalPages, page, setPage, sort, toggleSort, loading, error } = usePagedResource(fetcher)
 
   return (
     <AppLayout>
@@ -39,15 +37,6 @@ export function SupplierReturnsListPage() {
         )}
       </div>
 
-      <div className="mb-6 max-w-md">
-        <TextField
-          label="Search"
-          placeholder="Return number, supplier…"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
-      </div>
-
       <Alert variant="error">{error}</Alert>
 
       <GlassCard className="overflow-hidden">
@@ -58,7 +47,7 @@ export function SupplierReturnsListPage() {
         ) : items.length === 0 ? (
           <EmptyState
             title="No supplier returns found"
-            message="Try a different search, or record one when a delivery fails quality check."
+            message="Record one when a delivery fails quality check."
           />
         ) : (
           <div className="overflow-x-auto">

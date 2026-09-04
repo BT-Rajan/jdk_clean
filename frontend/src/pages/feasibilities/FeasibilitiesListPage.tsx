@@ -11,7 +11,6 @@ import {
   SortableHeader,
   Spinner,
   StatusBadge,
-  TextField,
 } from '@/components/ui'
 import { listFeasibilities } from '@/api/feasibilities'
 import { usePagedResource } from '@/hooks/usePagedResource'
@@ -32,8 +31,6 @@ export function FeasibilitiesListPage() {
     totalPages,
     page,
     setPage,
-    searchInput,
-    setSearchInput,
     status,
     setStatus,
     sort,
@@ -52,13 +49,7 @@ export function FeasibilitiesListPage() {
         {canWriteDepartment(user, 'sales') && <Button onClick={() => navigate('/feasibilities/new')}>New check</Button>}
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_220px]">
-        <TextField
-          label="Search"
-          placeholder="Check number or customer…"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
+      <div className="mb-6 max-w-xs">
         <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">All statuses</option>
           <option value="draft">Draft</option>
@@ -80,7 +71,7 @@ export function FeasibilitiesListPage() {
             <Spinner size={24} className="text-gold-300" />
           </div>
         ) : items.length === 0 ? (
-          <EmptyState title="No feasibility checks found" message="Try a different search or create a new check." />
+          <EmptyState title="No feasibility checks found" message="Try a different status filter or create a new check." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
