@@ -29,7 +29,6 @@ export function useSelectOptions<T>(fetcher: () => Promise<PagedResponse<T>>) {
     return () => {
       cancelled = true
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   return { options, loading, error }
