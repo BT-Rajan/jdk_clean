@@ -11,7 +11,6 @@ import {
   PageHeader,
   SortableHeader,
   Spinner,
-  TextField,
 } from '@/components/ui'
 import { getFinishedGoodsStock, getLowStock, getMovements } from '@/api/inventory'
 import { useAuth } from '@/hooks/useAuth'
@@ -36,21 +35,19 @@ export function InventoryPage() {
   const [fgTotal, setFgTotal] = useState(0)
   const [fgTotalPages, setFgTotalPages] = useState(1)
   const [fgPage, setFgPage] = useState(1)
-  const [fgSearchInput, setFgSearchInput] = useState('')
   const [fgSort, setFgSort] = useState('')
   const [fgLowOnly, setFgLowOnly] = useState(false)
   const [fgLoading, setFgLoading] = useState(true)
   const [fgError, setFgError] = useState<string | null>(null)
 
   const loadFinishedGoods = useCallback(
-    async (page: number, search: string, sort: string, lowOnly: boolean) => {
+    async (page: number, sort: string, lowOnly: boolean) => {
       setFgLoading(true)
       setFgError(null)
       try {
         const result = await getFinishedGoodsStock({
           page,
           page_size: FINISHED_GOODS_PAGE_SIZE,
-          search: search || undefined,
           sort: sort || undefined,
           low_only: lowOnly || undefined,
         })
@@ -123,21 +120,9 @@ export function InventoryPage() {
     loadMovements(movementsPage, movementsSort)
   }, [loadMovements, movementsPage, movementsSort])
 
-  // Debounce the finished-goods search box the same way every other list
-  // page in the app does (hooks/usePagedResource.ts), then reset to page 1
-  // once the effective query changes underneath the user.
-  const [fgDebouncedSearch, setFgDebouncedSearch] = useState('')
   useEffect(() => {
-    const handle = window.setTimeout(() => {
-      setFgDebouncedSearch(fgSearchInput)
-      setFgPage(1)
-    }, 350)
-    return () => window.clearTimeout(handle)
-  }, [fgSearchInput])
-
-  useEffect(() => {
-    loadFinishedGoods(fgPage, fgDebouncedSearch, fgSort, fgLowOnly)
-  }, [loadFinishedGoods, fgPage, fgDebouncedSearch, fgSort, fgLowOnly])
+    loadFinishedGoods(fgPage, fgSort, fgLowOnly)
+  }, [loadFinishedGoods, fgPage, fgSort, fgLowOnly])
 
   function toggleFgSort(field: string) {
     setFgSort((current) => {
@@ -201,25 +186,16 @@ export function InventoryPage() {
                 On-hand, reserved, and available stock for every active product.
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <TextField
-                label="Search"
-                placeholder="Search code or name…"
-                value={fgSearchInput}
-                onChange={(e) => setFgSearchInput(e.target.value)}
-                className="w-56"
-              />
-              <Button
-                variant={fgLowOnly ? 'primary' : 'ghost'}
-                size="sm"
-                onClick={() => {
-                  setFgLowOnly((v) => !v)
-                  setFgPage(1)
-                }}
-              >
-                Low only
-              </Button>
-            </div>
+            <Button
+              variant={fgLowOnly ? 'primary' : 'ghost'}
+              size="sm"
+              onClick={() => {
+                setFgLowOnly((v) => !v)
+                setFgPage(1)
+              }}
+            >
+              Low only
+            </Button>
           </div>
           <Alert variant="error">{fgError}</Alert>
           {fgLoading ? (

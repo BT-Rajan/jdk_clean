@@ -11,7 +11,6 @@ import {
   SortableHeader,
   Spinner,
   StatusBadge,
-  TextField,
 } from '@/components/ui'
 import { listQuotations } from '@/api/quotations'
 import { usePagedResource } from '@/hooks/usePagedResource'
@@ -33,8 +32,6 @@ export function QuotationsListPage() {
     totalPages,
     page,
     setPage,
-    searchInput,
-    setSearchInput,
     status,
     setStatus,
     sort,
@@ -53,13 +50,7 @@ export function QuotationsListPage() {
         {canWriteDepartment(user, 'sales') && <Button onClick={() => navigate('/quotations/new')}>New quotation</Button>}
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_220px]">
-        <TextField
-          label="Search"
-          placeholder="Quotation number…"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
+      <div className="mb-6 max-w-xs">
         <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">All statuses</option>
           <option value="draft">Draft</option>
@@ -79,7 +70,7 @@ export function QuotationsListPage() {
             <Spinner size={24} className="text-gold-300" />
           </div>
         ) : items.length === 0 ? (
-          <EmptyState title="No quotations found" message="Try a different search or create a new quotation." />
+          <EmptyState title="No quotations found" message="Try a different status filter or create a new quotation." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">

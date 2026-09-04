@@ -11,7 +11,6 @@ import {
   SortableHeader,
   Spinner,
   StatusBadge,
-  TextField,
 } from '@/components/ui'
 import { listDeliveryNotes } from '@/api/deliveryNotes'
 import { usePagedResource } from '@/hooks/usePagedResource'
@@ -33,8 +32,6 @@ export function DeliveryNotesListPage() {
     totalPages,
     page,
     setPage,
-    searchInput,
-    setSearchInput,
     status,
     setStatus,
     sort,
@@ -55,13 +52,7 @@ export function DeliveryNotesListPage() {
         )}
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_220px]">
-        <TextField
-          label="Search"
-          placeholder="Delivery note number…"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
+      <div className="mb-6 max-w-xs">
         <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">All statuses</option>
           <option value="draft">Draft</option>
@@ -78,7 +69,7 @@ export function DeliveryNotesListPage() {
             <Spinner size={24} className="text-gold-300" />
           </div>
         ) : items.length === 0 ? (
-          <EmptyState title="No delivery notes found" message="Try a different search or create a new one." />
+          <EmptyState title="No delivery notes found" message="Try a different status filter or create a new one." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">

@@ -11,7 +11,6 @@ import {
   SortableHeader,
   Spinner,
   StatusBadge,
-  TextField,
 } from '@/components/ui'
 import { listProductionBatches } from '@/api/production'
 import { usePagedResource } from '@/hooks/usePagedResource'
@@ -35,8 +34,6 @@ export function ProductionListPage() {
     totalPages,
     page,
     setPage,
-    searchInput,
-    setSearchInput,
     status,
     setStatus,
     sort,
@@ -63,13 +60,7 @@ export function ProductionListPage() {
 
       <LogProductionModal open={logOpen} onClose={() => setLogOpen(false)} onLogged={refetch} />
 
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_220px]">
-        <TextField
-          label="Search"
-          placeholder="Batch number…"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
+      <div className="mb-6 max-w-xs">
         <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
           <option value="">All statuses</option>
           <option value="planned">Planned</option>
@@ -87,7 +78,7 @@ export function ProductionListPage() {
             <Spinner size={24} className="text-gold-300" />
           </div>
         ) : items.length === 0 ? (
-          <EmptyState title="No production batches found" message="Try a different search or schedule a new batch." />
+          <EmptyState title="No production batches found" message="Try a different status filter or schedule a new batch." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
