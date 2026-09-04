@@ -10,6 +10,9 @@ export type CustomerOnboardingStatus = 'pending' | 'under_review' | 'active' | '
 
 export interface Customer {
   id: number
+  /** Internal reference, auto-generated -- distinct from `code`, the
+   * externally-issued Civil ID / Registration number. */
+  customer_number: string
   customer_type: CustomerType
   code: string
   name: string
@@ -27,6 +30,10 @@ export interface Customer {
   onboarding_status: CustomerOnboardingStatus
   onboarding_reason: string | null
   notes: string | null
+  id_document_filename: string | null
+  id_verified: boolean
+  id_verified_at: string | null
+  id_verified_by: number | null
 }
 
 export interface CustomerPayload {

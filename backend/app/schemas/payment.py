@@ -50,3 +50,4 @@ class CustomerCreditStatusOut(BaseModel):
     limit_enforced: bool
     outstanding_balance: float
     available_credit: float | None = None
+    id_verified: bool = False

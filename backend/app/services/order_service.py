@@ -317,6 +317,12 @@ def change_status(
         if float(order.customer.credit_limit) > 0:
             from app.services import payment_service
 
+            if not order.customer.id_verified:
+                block_reasons.append(
+                    f"{order.customer.name} has a credit limit set but their id isn't verified yet -- "
+                    "upload/verify their id document, or get admin approval"
+                )
+
             outstanding = payment_service.get_customer_outstanding_balance(
                 db, order.customer_id, exclude_order_id=order.id
             )

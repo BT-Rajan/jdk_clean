@@ -1,4 +1,6 @@
-from sqlalchemy import Enum, SmallInteger, String, Text
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, SmallInteger, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -32,6 +34,8 @@ class Supplier(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "suppliers"
 
     id: Mapped[int] = mapped_column(BigPK, primary_key=True)
+    # Auto-generated via number_series (doc_type 'SUPPLIER') -- see
+    # supplier_service.py. No longer typed in on the wizard.
     code: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     contact_person: Mapped[str | None] = mapped_column(String(120), nullable=True)
@@ -59,3 +63,12 @@ class Supplier(Base, TimestampMixin, SoftDeleteMixin):
     # set by supplier_service.change_onboarding_status, mirrors
     # Customer.onboarding_reason / Quotation.close_reason.
     onboarding_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Proof of registration -- an uploaded image or PDF, stored on disk
+    # under uploads/supplier_ids/ (see id_document_service.py), this
+    # column holding only the generated filename. id_verified is
+    # admin-set after reviewing it; unlike Customer.id_verified, nothing
+    # currently gates on this for suppliers.
+    id_document_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    id_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    id_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    id_verified_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)

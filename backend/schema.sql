@@ -101,6 +101,11 @@ CREATE TABLE IF NOT EXISTS users (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS customers (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    -- Internal reference number, auto-generated via number_series
+    -- (doc_type 'CUSTOMER', prefix CUST) -- distinct from `code` below,
+    -- which is the externally-issued Civil ID / Registration number the
+    -- person types in themselves.
+    customer_number VARCHAR(30)  NOT NULL UNIQUE,
     -- Individual (civil ID in `code`) or business (registration number in
     -- `code`) -- asked as the wizard's first question. See
     -- app/models/customer.py CUSTOMER_TYPES.
@@ -125,11 +130,21 @@ CREATE TABLE IF NOT EXISTS customers (
     onboarding_status ENUM('pending','under_review','active','on_hold','rejected') NOT NULL DEFAULT 'pending',
     onboarding_reason TEXT NULL,        -- reason recorded the last time onboarding moved to 'rejected'/'on_hold'
     notes           TEXT NULL,
+    -- Proof of `code` above -- an uploaded image or PDF, stored on disk
+    -- under uploads/customer_ids/ (see id_document_service.py), this
+    -- column holding only the generated filename. order_service.
+    -- change_status refuses to extend credit (credit_limit > 0) to a
+    -- customer whose id isn't verified yet.
+    id_document_filename VARCHAR(255) NULL,
+    id_verified     TINYINT(1) NOT NULL DEFAULT 0,
+    id_verified_at  DATETIME NULL,
+    id_verified_by  BIGINT UNSIGNED NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
     updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by      BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_customers_id_verified_by FOREIGN KEY (id_verified_by) REFERENCES users(id),
     INDEX idx_customers_deleted_at (deleted_at),
     INDEX idx_customers_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -139,6 +154,8 @@ CREATE TABLE IF NOT EXISTS customers (
 -- ============================================================
 CREATE TABLE IF NOT EXISTS suppliers (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    -- Auto-generated via number_series (doc_type 'SUPPLIER', prefix SUP)
+    -- -- no longer typed in on the wizard.
     code            VARCHAR(30)  NOT NULL UNIQUE,
     name            VARCHAR(150) NOT NULL,
     contact_person  VARCHAR(120) NULL,
@@ -156,11 +173,19 @@ CREATE TABLE IF NOT EXISTS suppliers (
     -- of `status` above, same as customers.onboarding_status.
     onboarding_status ENUM('pending','under_review','active','on_hold','rejected') NOT NULL DEFAULT 'pending',
     onboarding_reason TEXT NULL,        -- reason recorded the last time onboarding moved to 'rejected'/'on_hold'
+    -- Proof of registration -- an uploaded image or PDF, stored on disk
+    -- under uploads/supplier_ids/ (see id_document_service.py), this
+    -- column holding only the generated filename.
+    id_document_filename VARCHAR(255) NULL,
+    id_verified     TINYINT(1) NOT NULL DEFAULT 0,
+    id_verified_at  DATETIME NULL,
+    id_verified_by  BIGINT UNSIGNED NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
     updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by      BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_suppliers_id_verified_by FOREIGN KEY (id_verified_by) REFERENCES users(id),
     INDEX idx_suppliers_deleted_at (deleted_at),
     INDEX idx_suppliers_name (name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -208,6 +233,9 @@ CREATE TABLE IF NOT EXISTS supplier_materials (
     raw_material_id     BIGINT UNSIGNED NOT NULL,
     max_supply_quantity DECIMAL(14,4) NOT NULL,
     lead_time_days      SMALLINT UNSIGNED NULL,
+    -- Both auto-captured -- see app/models/supplier_material.py.
+    onboarded_at        DATE NOT NULL,
+    last_transaction_at DATE NULL,
     deleted_at          DATETIME NULL,
     created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by          BIGINT UNSIGNED NULL,
@@ -1096,6 +1124,8 @@ INSERT IGNORE INTO number_series (doc_type, prefix, next_number, padding) VALUES
     ('DELIVERY_NOTE', 'DN', 1, 5),
     ('FEASIBILITY', 'FSB', 1, 5),
     ('DEAL', 'DEAL', 1, 5),
-    ('SUPPLIER_RETURN', 'SRN', 1, 5);
+    ('SUPPLIER_RETURN', 'SRN', 1, 5),
+    ('CUSTOMER', 'CUST', 1, 5),
+    ('SUPPLIER', 'SUP', 1, 5);
 
 SET FOREIGN_KEY_CHECKS = 1;

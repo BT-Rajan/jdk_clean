@@ -4,7 +4,18 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, RatingStars, Spinner, StatusBadge } from '@/components/ui'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
-import { deleteSupplier, getSupplier, restoreSupplier, updateSupplierOnboardingStatus } from '@/api/suppliers'
+import { IdDocumentPanel } from '@/components/documents/IdDocumentPanel'
+import {
+  deleteSupplier,
+  deleteSupplierIdDocument,
+  fetchSupplierIdDocumentBlob,
+  getSupplier,
+  restoreSupplier,
+  unverifySupplierId,
+  updateSupplierOnboardingStatus,
+  uploadSupplierIdDocument,
+  verifySupplierId,
+} from '@/api/suppliers'
 import type { Supplier } from '@/types/supplier'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
@@ -171,6 +182,24 @@ export function SupplierDetailPage() {
           </GlassCard>
         )
       })()}
+
+      <div className="mt-6">
+        <IdDocumentPanel
+          hasDocument={Boolean(supplier.id_document_filename)}
+          verified={supplier.id_verified}
+          verifiedAt={supplier.id_verified_at}
+          canEdit={canWrite(user?.role) && !justDeleted}
+          canVerify={canWrite(user?.role) && !justDeleted}
+          onUpload={async (file) => setSupplier(await uploadSupplierIdDocument(supplierId, file))}
+          onRemove={async () => setSupplier(await deleteSupplierIdDocument(supplierId))}
+          onView={async () => {
+            const blob = await fetchSupplierIdDocumentBlob(supplierId)
+            window.open(URL.createObjectURL(blob), '_blank')
+          }}
+          onVerify={async () => setSupplier(await verifySupplierId(supplierId))}
+          onUnverify={async () => setSupplier(await unverifySupplierId(supplierId))}
+        />
+      </div>
 
       <div className="mt-6">
         <SuppliedMaterialsEditor supplierId={supplierId} canEdit={canWrite(user?.role)} />

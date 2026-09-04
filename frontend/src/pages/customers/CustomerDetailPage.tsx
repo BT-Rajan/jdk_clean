@@ -5,12 +5,18 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
+import { IdDocumentPanel } from '@/components/documents/IdDocumentPanel'
 import {
   deleteCustomer,
+  deleteCustomerIdDocument,
+  fetchCustomerIdDocumentBlob,
   getCustomer,
   getCustomerCredit,
   restoreCustomer,
+  unverifyCustomerId,
   updateCustomerOnboardingStatus,
+  uploadCustomerIdDocument,
+  verifyCustomerId,
 } from '@/api/customers'
 import { listFeasibilities } from '@/api/feasibilities'
 import { listQuotations } from '@/api/quotations'
@@ -160,7 +166,7 @@ export function CustomerDetailPage() {
     <AppLayout>
       <PageHeader
         title={customer.name}
-        subtitle={customer.code}
+        subtitle={`${customer.customer_number} · ${customer.code}`}
         actions={
           canWrite(user?.role) && !justDeleted ? (
             <>
@@ -189,6 +195,7 @@ export function CustomerDetailPage() {
 
       <GlassCard className="p-8">
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <Field label="Customer ID" value={customer.customer_number} />
           <Field label="Status" value={<StatusBadge status={customer.status} />} />
           <Field label="Onboarding" value={<StatusBadge status={customer.onboarding_status} />} />
           <Field label="Type" value={customer.customer_type === 'individual' ? 'Individual' : 'Business'} />
@@ -213,17 +220,25 @@ export function CustomerDetailPage() {
         {creditStatus && (
           <div className="mt-6 border-t border-white/10 pt-6">
             {creditStatus.limit_enforced ? (
-              <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-                <Field label="Outstanding balance" value={formatCurrency(creditStatus.outstanding_balance)} />
-                <Field
-                  label="Available credit"
-                  value={
-                    <span className={creditStatus.available_credit! < 0 ? 'text-red-300' : undefined}>
-                      {formatCurrency(creditStatus.available_credit!)}
-                    </span>
-                  }
-                />
-              </dl>
+              <>
+                {!creditStatus.id_verified && (
+                  <p className="mb-4 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                    A credit limit is set, but this customer's id isn't verified yet -- confirming an order for
+                    them will need admin approval until the id document below is uploaded and verified.
+                  </p>
+                )}
+                <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+                  <Field label="Outstanding balance" value={formatCurrency(creditStatus.outstanding_balance)} />
+                  <Field
+                    label="Available credit"
+                    value={
+                      <span className={creditStatus.available_credit! < 0 ? 'text-red-300' : undefined}>
+                        {formatCurrency(creditStatus.available_credit!)}
+                      </span>
+                    }
+                  />
+                </dl>
+              </>
             ) : (
               <p className="text-xs text-white/40">
                 No credit limit set -- orders for this customer aren't gated on outstanding balance. Set one above
@@ -233,6 +248,24 @@ export function CustomerDetailPage() {
           </div>
         )}
       </GlassCard>
+
+      <div className="mt-6">
+        <IdDocumentPanel
+          hasDocument={Boolean(customer.id_document_filename)}
+          verified={customer.id_verified}
+          verifiedAt={customer.id_verified_at}
+          canEdit={canWrite(user?.role) && !justDeleted}
+          canVerify={canWrite(user?.role) && !justDeleted}
+          onUpload={async (file) => setCustomer(await uploadCustomerIdDocument(customerId, file))}
+          onRemove={async () => setCustomer(await deleteCustomerIdDocument(customerId))}
+          onView={async () => {
+            const blob = await fetchCustomerIdDocumentBlob(customerId)
+            window.open(URL.createObjectURL(blob), '_blank')
+          }}
+          onVerify={async () => setCustomer(await verifyCustomerId(customerId))}
+          onUnverify={async () => setCustomer(await unverifyCustomerId(customerId))}
+        />
+      </div>
 
       {(() => {
         const nextOnboardingStatuses = CUSTOMER_ONBOARDING_TRANSITIONS[customer.onboarding_status]

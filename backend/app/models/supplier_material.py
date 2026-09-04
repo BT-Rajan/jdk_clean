@@ -1,4 +1,6 @@
-from sqlalchemy import DECIMAL, ForeignKey, SmallInteger
+from datetime import date
+
+from sqlalchemy import DECIMAL, Date, ForeignKey, SmallInteger
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -27,6 +29,15 @@ class SupplierMaterial(Base, TimestampMixin, SoftDeleteMixin):
     )
     max_supply_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False)
     lead_time_days: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    # Both auto-captured, never user-entered -- see supplier_material_
+    # service.py's replace_lines override, which carries these two
+    # forward (matched by raw_material_id) across every PUT .../materials
+    # call instead of resetting them, since that endpoint otherwise
+    # replaces every line wholesale on each save.
+    onboarded_at: Mapped[date] = mapped_column(Date, nullable=False)
+    # Set by purchase_order_service.receive_lines whenever a receipt
+    # against this supplier+material is recorded -- null until then.
+    last_transaction_at: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     raw_material: Mapped[RawMaterial] = relationship(foreign_keys=[raw_material_id], lazy="joined")
     supplier: Mapped[Supplier] = relationship(foreign_keys=[supplier_id], lazy="joined")

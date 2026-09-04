@@ -1,8 +1,9 @@
 import { z } from 'zod'
 
 // Mirrors backend/app/schemas/supplier.py SupplierCreate/SupplierUpdate.
+// code is deliberately absent -- it's auto-generated server-side, never
+// collected in the wizard.
 export const supplierSchema = z.object({
-  code: z.string().trim().min(1, 'Code is required').max(30),
   name: z.string().trim().min(1, 'Name is required').max(150),
   contact_person: z.string().trim().optional().or(z.literal('')),
   email: z.string().trim().email('Enter a valid email').optional().or(z.literal('')),
@@ -22,7 +23,6 @@ export type SupplierSubmitValues = z.output<typeof supplierSchema>
 /** Edit form only: SupplierOut doesn't return address, so it's a
  * create-only field -- see types/supplier.ts. */
 export const supplierEditSchema = supplierSchema.omit({
-  code: true,
   address: true,
 })
 

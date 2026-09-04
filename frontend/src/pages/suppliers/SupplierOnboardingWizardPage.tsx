@@ -1,15 +1,31 @@
-import { useState } from 'react'
+import { useCallback, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, Tabs, TextField } from '@/components/ui'
-import { createSupplier } from '@/api/suppliers'
+import { IdDocumentPicker } from '@/components/documents/IdDocumentPicker'
+import { createSupplier, uploadSupplierIdDocument } from '@/api/suppliers'
+import { replaceSupplierMaterials } from '@/api/supplierMaterials'
+import { listRawMaterials } from '@/api/rawMaterials'
+import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { generateId } from '@/lib/id'
 import { supplierSchema, type SupplierFormValues, type SupplierSubmitValues } from '@/lib/validation'
+import type { SupplierMaterialInput } from '@/types/supplierMaterial'
 
-type StepId = 'company' | 'contact' | 'terms' | 'review'
+type StepId = 'company' | 'contact' | 'materials' | 'terms' | 'review'
+
+interface EditableMaterialLine {
+  key: string
+  raw_material_id: number
+  max_supply_quantity: number
+}
+
+function emptyMaterialLine(): EditableMaterialLine {
+  return { key: generateId(), raw_material_id: 0, max_supply_quantity: 1 }
+}
 
 const MODE_OF_SUPPLY_LABELS: Record<string, string> = {
   direct: 'Direct',
@@ -19,8 +35,9 @@ const MODE_OF_SUPPLY_LABELS: Record<string, string> = {
 }
 
 const STEPS: { id: StepId; label: string; fields: (keyof SupplierFormValues)[] }[] = [
-  { id: 'company', label: 'Company Details', fields: ['code', 'name', 'contact_person'] },
+  { id: 'company', label: 'Company Details', fields: ['name', 'contact_person'] },
   { id: 'contact', label: 'Contact & Address', fields: ['email', 'phone', 'city', 'country', 'address'] },
+  { id: 'materials', label: 'Materials Supplied', fields: [] },
   { id: 'terms', label: 'Terms & Supply', fields: ['payment_terms_days', 'mode_of_supply', 'rating'] },
   { id: 'review', label: 'Review', fields: [] },
 ]
@@ -35,6 +52,14 @@ export function SupplierOnboardingWizardPage() {
   const [stepIndex, setStepIndex] = useState(0)
   const [furthestStep, setFurthestStep] = useState(0)
   const [formError, setFormError] = useState<string | null>(null)
+  // Both uploaded/saved separately after creation -- see onSubmit below.
+  const [idDocumentFile, setIdDocumentFile] = useState<File | null>(null)
+  const [idDocumentError, setIdDocumentError] = useState<string | null>(null)
+  const [materialLines, setMaterialLines] = useState<EditableMaterialLine[]>([])
+
+  const rawMaterialsFetcher = useCallback(() => listRawMaterials({ page: 1, page_size: 200, status: 'active' }), [])
+  const { options: rawMaterials } = useSelectOptions(rawMaterialsFetcher)
+
   const {
     register,
     handleSubmit,
@@ -45,7 +70,6 @@ export function SupplierOnboardingWizardPage() {
     resolver: zodResolver(supplierSchema),
     mode: 'onBlur',
     defaultValues: {
-      code: '',
       name: '',
       contact_person: '',
       email: '',
@@ -63,6 +87,14 @@ export function SupplierOnboardingWizardPage() {
   const step = STEPS[stepIndex]
   const isLastStep = stepIndex === STEPS.length - 1
   const values = getValues()
+
+  function updateMaterialLine(key: string, patch: Partial<EditableMaterialLine>) {
+    setMaterialLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)))
+  }
+
+  function removeMaterialLine(key: string) {
+    setMaterialLines((prev) => prev.filter((l) => l.key !== key))
+  }
 
   async function goNext() {
     const valid = step.fields.length === 0 || (await trigger(step.fields))
@@ -90,6 +122,19 @@ export function SupplierOnboardingWizardPage() {
         mode_of_supply: values.mode_of_supply || null,
         rating: values.rating || null,
       })
+      if (idDocumentFile) {
+        // Best-effort, same reasoning as the id document upload in
+        // CustomerOnboardingWizardPage -- the supplier record already
+        // exists at this point, so neither this nor the materials save
+        // below should block navigating to it.
+        await uploadSupplierIdDocument(created.id, idDocumentFile).catch(() => {})
+      }
+      const validLines: SupplierMaterialInput[] = materialLines
+        .filter((l) => l.raw_material_id > 0 && l.max_supply_quantity > 0)
+        .map(({ raw_material_id, max_supply_quantity }) => ({ raw_material_id, max_supply_quantity, lead_time_days: null }))
+      if (validLines.length > 0) {
+        await replaceSupplierMaterials(created.id, validLines).catch(() => {})
+      }
       navigate(`/suppliers/${created.id}`)
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -113,15 +158,24 @@ export function SupplierOnboardingWizardPage() {
           <Alert variant="error">{formError}</Alert>
 
           <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
-            {stepIndex === 0 && (
-              <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <TextField label="Code" error={errors.code?.message} {...register('code')} />
-                <TextField label="Name" error={errors.name?.message} {...register('name')} />
-                <TextField label="Contact person" {...register('contact_person')} />
-              </div>
+            {step.id === 'company' && (
+              <>
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                  <TextField label="Name" error={errors.name?.message} {...register('name')} />
+                  <TextField label="Contact person" {...register('contact_person')} />
+                </div>
+                <IdDocumentPicker
+                  label="Registration document"
+                  hint="A photo or scan of the supplier's registration document, or a PDF. Can be added later from the supplier's page instead."
+                  value={idDocumentFile}
+                  onChange={setIdDocumentFile}
+                  error={idDocumentError}
+                  onError={setIdDocumentError}
+                />
+              </>
             )}
 
-            {stepIndex === 1 && (
+            {step.id === 'contact' && (
               <>
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
@@ -135,7 +189,70 @@ export function SupplierOnboardingWizardPage() {
               </>
             )}
 
-            {stepIndex === 2 && (
+            {step.id === 'materials' && (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-white/50">
+                    Which raw materials this supplier can provide, and how much of each. Onboarding date and last
+                    transaction date are recorded automatically -- there's nothing to fill in for those.
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    onClick={() => setMaterialLines((prev) => [...prev, emptyMaterialLine()])}
+                  >
+                    Add line
+                  </Button>
+                </div>
+
+                {materialLines.length === 0 ? (
+                  <p className="py-6 text-center text-sm text-white/40">
+                    No materials added yet -- optional, can also be set up later from the supplier's page.
+                  </p>
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {materialLines.map((line) => (
+                      <div
+                        key={line.key}
+                        className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-end"
+                      >
+                        <div className="sm:col-span-7">
+                          <SelectField
+                            label="Raw material"
+                            value={line.raw_material_id || ''}
+                            onChange={(e) => updateMaterialLine(line.key, { raw_material_id: Number(e.target.value) })}
+                          >
+                            <option value="">Choose…</option>
+                            {rawMaterials.map((opt) => (
+                              <option key={opt.id} value={opt.id}>
+                                {opt.code} — {opt.name}
+                              </option>
+                            ))}
+                          </SelectField>
+                        </div>
+                        <div className="sm:col-span-4">
+                          <TextField
+                            label="Supply capacity"
+                            type="number"
+                            step="0.0001"
+                            value={line.max_supply_quantity}
+                            onChange={(e) => updateMaterialLine(line.key, { max_supply_quantity: Number(e.target.value) })}
+                          />
+                        </div>
+                        <div className="sm:col-span-1">
+                          <Button variant="ghost" size="sm" type="button" onClick={() => removeMaterialLine(line.key)}>
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {step.id === 'terms' && (
               <>
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <TextField
@@ -176,7 +293,6 @@ export function SupplierOnboardingWizardPage() {
                   <option value="suspended">Suspended</option>
                 </SelectField>
                 <dl className="grid grid-cols-1 gap-4 rounded-xl border border-white/10 bg-white/5 p-5 sm:grid-cols-2">
-                  <ReviewField label="Code" value={values.code} />
                   <ReviewField label="Name" value={values.name} />
                   <ReviewField label="Contact person" value={values.contact_person} />
                   <ReviewField label="Email" value={values.email} />
@@ -190,6 +306,10 @@ export function SupplierOnboardingWizardPage() {
                     value={values.mode_of_supply ? MODE_OF_SUPPLY_LABELS[values.mode_of_supply] : undefined}
                   />
                   <ReviewField label="Rating" value={values.rating ? `${values.rating} / 5` : undefined} />
+                  <ReviewField
+                    label="Materials supplied"
+                    value={materialLines.filter((l) => l.raw_material_id > 0).length || undefined}
+                  />
                 </dl>
               </div>
             )}

@@ -4,11 +4,15 @@ import { getSupplierMaterials, replaceSupplierMaterials } from '@/api/supplierMa
 import { listRawMaterials } from '@/api/rawMaterials'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDate } from '@/lib/dateFormat'
 import { generateId } from '@/lib/id'
 import type { SupplierMaterialInput } from '@/types/supplierMaterial'
 
 interface EditableLine extends SupplierMaterialInput {
   key: string
+  /** Auto-captured, display-only -- absent for a line not yet saved. */
+  onboarded_at?: string
+  last_transaction_at?: string | null
 }
 
 function emptyLine(): EditableLine {
@@ -42,6 +46,8 @@ export function SuppliedMaterialsEditor({ supplierId, canEdit }: SuppliedMateria
             raw_material_id: l.raw_material_id,
             max_supply_quantity: l.max_supply_quantity,
             lead_time_days: l.lead_time_days,
+            onboarded_at: l.onboarded_at,
+            last_transaction_at: l.last_transaction_at,
           })),
         )
       })
@@ -129,7 +135,7 @@ export function SuppliedMaterialsEditor({ supplierId, canEdit }: SuppliedMateria
               </div>
               <div className="sm:col-span-3">
                 <TextField
-                  label="Max quantity"
+                  label="Supply capacity"
                   type="number"
                   step="0.0001"
                   value={line.max_supply_quantity}
@@ -153,6 +159,14 @@ export function SuppliedMaterialsEditor({ supplierId, canEdit }: SuppliedMateria
                   <Button variant="ghost" size="sm" type="button" onClick={() => removeLine(line.key)}>
                     Remove
                   </Button>
+                </div>
+              )}
+              {(line.onboarded_at || line.last_transaction_at !== undefined) && (
+                <div className="sm:col-span-12 flex flex-wrap gap-x-6 gap-y-1 text-xs text-white/40">
+                  {line.onboarded_at && <span>Onboarded {formatDate(line.onboarded_at)}</span>}
+                  <span>
+                    Last transaction {line.last_transaction_at ? formatDate(line.last_transaction_at) : 'None yet'}
+                  </span>
                 </div>
               )}
             </div>

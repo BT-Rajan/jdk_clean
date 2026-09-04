@@ -1,3 +1,5 @@
+from datetime import date
+
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ValidationAppError
@@ -27,6 +29,33 @@ class SupplierMaterialCRUD(ChildLineCRUD[SupplierMaterial]):
 
     def _duplicate_filter(self, parent_id: int, line: dict) -> list:
         return [SupplierMaterial.raw_material_id == line["raw_material_id"]]
+
+    def replace_lines(
+        self, db: Session, parent_id: int, lines: list[dict], user_id: int | None = None
+    ) -> list[SupplierMaterial]:
+        """onboarded_at/last_transaction_at are auto-captured, never part
+        of the payload (see schemas/supplier_material.py SupplierMaterialIn)
+        -- but the base ChildLineCRUD.replace_lines soft-deletes every
+        existing line and inserts fresh rows on *every* save, so without
+        this override each save would silently reset onboarded_at to
+        today and wipe last_transaction_at. Carry both forward from the
+        existing line for the same raw_material_id when there is one;
+        a genuinely new material gets onboarded_at = today and no
+        transaction yet.
+        """
+        existing_by_material = {
+            row.raw_material_id: row for row in self._active_lines_query(db, parent_id).all()
+        }
+        today = date.today()
+        dated_lines = []
+        for line in lines:
+            existing = existing_by_material.get(line["raw_material_id"])
+            dated_lines.append({
+                **line,
+                "onboarded_at": existing.onboarded_at if existing else today,
+                "last_transaction_at": existing.last_transaction_at if existing else None,
+            })
+        return super().replace_lines(db, parent_id, dated_lines, user_id=user_id)
 
 
 supplier_material_crud = SupplierMaterialCRUD()

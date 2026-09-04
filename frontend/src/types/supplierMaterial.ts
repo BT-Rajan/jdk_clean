@@ -9,6 +9,9 @@ export interface SupplierMaterial {
   material_unit: string | null
   max_supply_quantity: number
   lead_time_days: number | null
+  /** Both auto-captured -- never user-entered. */
+  onboarded_at: string
+  last_transaction_at: string | null
   created_at: string
   updated_at: string
 }

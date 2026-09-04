@@ -48,3 +48,38 @@ export async function updateCustomerOnboardingStatus(
   const { data } = await apiClient.post<Customer>(`/api/customers/${id}/onboarding-status`, { status, reason })
   return data
 }
+
+export async function uploadCustomerIdDocument(id: number, file: File): Promise<Customer> {
+  const form = new FormData()
+  form.append('file', file)
+  // See api/auth.ts's uploadAvatar for why Content-Type must be cleared
+  // here -- apiClient's default JSON header otherwise makes axios
+  // JSON.stringify the FormData instead of sending it as multipart.
+  const { data } = await apiClient.post<Customer>(`/api/customers/${id}/id-document`, form, {
+    headers: { 'Content-Type': undefined },
+  })
+  return data
+}
+
+export async function deleteCustomerIdDocument(id: number): Promise<Customer> {
+  const { data } = await apiClient.delete<Customer>(`/api/customers/${id}/id-document`)
+  return data
+}
+
+/** id-document is served behind auth, same as the avatar endpoint --
+ * fetch it as a blob (the interceptor attaches the Authorization header)
+ * rather than pointing an <img>/<a> straight at the API path. */
+export async function fetchCustomerIdDocumentBlob(id: number): Promise<Blob> {
+  const { data } = await apiClient.get(`/api/customers/${id}/id-document`, { responseType: 'blob' })
+  return data
+}
+
+export async function verifyCustomerId(id: number): Promise<Customer> {
+  const { data } = await apiClient.post<Customer>(`/api/customers/${id}/verify-id`)
+  return data
+}
+
+export async function unverifyCustomerId(id: number): Promise<Customer> {
+  const { data } = await apiClient.post<Customer>(`/api/customers/${id}/unverify-id`)
+  return data
+}
