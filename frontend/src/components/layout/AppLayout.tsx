@@ -135,7 +135,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     {
       label: 'Production',
       items: [
-        { to: '/production', label: 'Schedule' },
+        { to: '/production', label: 'Production schedule' },
         { to: '/mrp', label: 'MRP' },
       ],
     },
