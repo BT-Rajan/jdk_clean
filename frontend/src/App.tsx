@@ -182,13 +182,13 @@ const SalesReportPage = lazy(() =>
   import('@/pages/reports/SalesReportPage').then((m) => ({ default: m.SalesReportPage })),
 )
 const ProductionReportPage = lazy(() =>
-  import('@/pages/reports/ReportPlaceholderPage').then((m) => ({ default: m.ProductionReportPage })),
+  import('@/pages/reports/ProductionReportPage').then((m) => ({ default: m.ProductionReportPage })),
 )
 const PurchasingReportPage = lazy(() =>
-  import('@/pages/reports/ReportPlaceholderPage').then((m) => ({ default: m.PurchasingReportPage })),
+  import('@/pages/reports/PurchasingReportPage').then((m) => ({ default: m.PurchasingReportPage })),
 )
 const InventoryReportPage = lazy(() =>
-  import('@/pages/reports/ReportPlaceholderPage').then((m) => ({ default: m.InventoryReportPage })),
+  import('@/pages/reports/InventoryReportPage').then((m) => ({ default: m.InventoryReportPage })),
 )
 
 export function App() {
