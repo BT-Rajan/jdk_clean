@@ -187,7 +187,19 @@ export function CustomerOnboardingWizardPage() {
                 {stepIndex === 0 ? 'Cancel' : 'Back'}
               </Button>
               {isLastStep ? (
-                <Button type="submit" isLoading={isSubmitting}>
+                // type="button" with an explicit handleSubmit(onSubmit) call, not
+                // type="submit" -- a real mouse click has a non-zero gap between
+                // mousedown and mouseup, and goNext's await trigger(...) above
+                // resolves fast enough to land inside that gap on the click that
+                // lands here: React re-renders this exact button from "Next" to
+                // "Create customer" *between* the down and up of the same click.
+                // If this button's type flips to "submit" during that gap, the
+                // browser's native default action submits the form right then --
+                // skipping Review and posting whatever was last valid, without
+                // the user ever seeing or confirming this button. Keeping it
+                // type="button" always and submitting programmatically removes
+                // that native submit-on-click pathway entirely.
+                <Button type="button" isLoading={isSubmitting} onClick={handleSubmit(onSubmit)}>
                   Create customer
                 </Button>
               ) : (
