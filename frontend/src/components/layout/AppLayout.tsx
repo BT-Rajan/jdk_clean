@@ -370,7 +370,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         </nav>
       </header>
 
-      <main className="relative z-10 mx-auto max-w-[1920px] px-4 pt-32 pb-10 sm:px-6 lg:px-8 xl:px-12">
+      <main className="relative z-10 mx-auto max-w-[1920px] px-4 pt-6 pb-10 sm:px-6 lg:px-8 xl:px-12">
         <Breadcrumbs />
         {children}
       </main>

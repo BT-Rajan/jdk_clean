@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 MODE_OF_SUPPLY_PATTERN = "^(direct|distributor|broker|import)$"
 STATUS_PATTERN = "^(active|inactive|suspended)$"
@@ -12,28 +12,32 @@ class SupplierCreate(BaseModel):
     quotation_number/etc. are generated, rather than being typed in on
     the wizard."""
 
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     name: str = Field(min_length=1, max_length=150)
-    contact_person: str | None = None
-    email: EmailStr | None = None
-    phone: str | None = None
-    address: str | None = None
-    city: str | None = None
-    country: str | None = None
-    payment_terms_days: int = 30
+    contact_person: str | None = Field(default=None, max_length=120)
+    email: EmailStr | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=30)
+    address: str | None = Field(default=None, max_length=255)
+    city: str | None = Field(default=None, max_length=80)
+    country: str | None = Field(default=None, max_length=80)
+    payment_terms_days: int = Field(default=30, ge=0)
     mode_of_supply: str | None = Field(default=None, pattern=MODE_OF_SUPPLY_PATTERN)
     rating: int | None = Field(default=None, ge=1, le=5)
     status: str = Field(default="active", pattern=STATUS_PATTERN)
 
 
 class SupplierUpdate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     name: str | None = Field(default=None, min_length=1, max_length=150)
-    contact_person: str | None = None
-    email: EmailStr | None = None
-    phone: str | None = None
-    address: str | None = None
-    city: str | None = None
-    country: str | None = None
-    payment_terms_days: int | None = None
+    contact_person: str | None = Field(default=None, max_length=120)
+    email: EmailStr | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=30)
+    address: str | None = Field(default=None, max_length=255)
+    city: str | None = Field(default=None, max_length=80)
+    country: str | None = Field(default=None, max_length=80)
+    payment_terms_days: int | None = Field(default=None, ge=0)
     mode_of_supply: str | None = Field(default=None, pattern=MODE_OF_SUPPLY_PATTERN)
     rating: int | None = Field(default=None, ge=1, le=5)
     status: str | None = Field(default=None, pattern=STATUS_PATTERN)

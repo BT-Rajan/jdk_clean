@@ -91,8 +91,9 @@ def verify_supplier_id(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
-    supplier = supplier_crud.read_one(db, supplier_id)
-    return id_document_service.verify(db, supplier, table_name=TABLE_NAME, user_id=user.id)
+    """Also auto-advances onboarding_status where that's a legal single
+    step -- see supplier_service.verify_id."""
+    return supplier_service.verify_id(db, supplier_id, user.id)
 
 
 @router.post("/{supplier_id}/unverify-id", response_model=SupplierOut)

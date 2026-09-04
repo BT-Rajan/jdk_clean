@@ -1,3 +1,5 @@
+import re
+
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, ValidationAppError
@@ -10,6 +12,13 @@ from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
 from app.models.user import User
 from app.services import number_series_service
+
+
+def _normalize_phone(phone: str) -> str:
+    """Digits only, so '+965 1234 5678', '965-1234-5678', and
+    '96512345678' all compare equal -- see _check_duplicate_phone below.
+    """
+    return re.sub(r"\D", "", phone)
 
 
 class DepartmentCRUD(BaseCRUD):
@@ -55,13 +64,34 @@ class CustomerCRUD(BaseCRUD):
     sortable_fields = ["name", "code", "customer_number", "created_at"]
     filterable_fields = ["status", "city", "country"]
 
+    def _check_duplicate_phone(self, db: Session, phone: str | None, exclude_id: int | None = None) -> None:
+        if not phone:
+            return
+        normalized = _normalize_phone(phone)
+        if not normalized:
+            return
+        query = db.query(Customer).filter(Customer.deleted_at.is_(None), Customer.phone.isnot(None))
+        if exclude_id is not None:
+            query = query.filter(Customer.id != exclude_id)
+        for existing in query.all():
+            if _normalize_phone(existing.phone) == normalized:
+                raise ConflictError(
+                    f"A customer with this phone number already exists: {existing.name} ({existing.customer_number})."
+                )
+
     def create(self, db: Session, data: dict, user_id: int | None = None) -> Customer:
+        self._check_duplicate_phone(db, data.get("phone"))
         # customer_number is an internal reference, auto-generated the
         # same way order_number/quotation_number/etc. are -- never
         # client-supplied (see schemas/customer.py CustomerCreate, which
         # has no such field at all).
         data = {**data, "customer_number": number_series_service.next_number(db, "CUSTOMER")}
         return super().create(db, data, user_id=user_id)
+
+    def update(self, db: Session, id: int, data: dict, user_id: int | None = None) -> Customer:
+        if "phone" in data:
+            self._check_duplicate_phone(db, data["phone"], exclude_id=id)
+        return super().update(db, id, data, user_id=user_id)
 
 
 class SupplierCRUD(BaseCRUD):
@@ -71,12 +101,33 @@ class SupplierCRUD(BaseCRUD):
     sortable_fields = ["name", "code", "rating", "created_at"]
     filterable_fields = ["status", "city", "country", "mode_of_supply"]
 
+    def _check_duplicate_phone(self, db: Session, phone: str | None, exclude_id: int | None = None) -> None:
+        if not phone:
+            return
+        normalized = _normalize_phone(phone)
+        if not normalized:
+            return
+        query = db.query(Supplier).filter(Supplier.deleted_at.is_(None), Supplier.phone.isnot(None))
+        if exclude_id is not None:
+            query = query.filter(Supplier.id != exclude_id)
+        for existing in query.all():
+            if _normalize_phone(existing.phone) == normalized:
+                raise ConflictError(
+                    f"A supplier with this phone number already exists: {existing.name} ({existing.code})."
+                )
+
     def create(self, db: Session, data: dict, user_id: int | None = None) -> Supplier:
+        self._check_duplicate_phone(db, data.get("phone"))
         # code is auto-generated the same way order_number/quotation_number
         # /etc. are -- never client-supplied (see schemas/supplier.py
         # SupplierCreate, which has no such field at all).
         data = {**data, "code": number_series_service.next_number(db, "SUPPLIER")}
         return super().create(db, data, user_id=user_id)
+
+    def update(self, db: Session, id: int, data: dict, user_id: int | None = None) -> Supplier:
+        if "phone" in data:
+            self._check_duplicate_phone(db, data["phone"], exclude_id=id)
+        return super().update(db, id, data, user_id=user_id)
 
 
 class RawMaterialCRUD(BaseCRUD):

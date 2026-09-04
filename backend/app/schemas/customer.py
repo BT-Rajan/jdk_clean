@@ -1,24 +1,26 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 
 class CustomerCreate(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     customer_type: str = Field(pattern="^(individual|business)$")
     code: str = Field(min_length=1, max_length=30)
     name: str = Field(min_length=1, max_length=150)
-    nature_of_business: str | None = None
-    contact_person: str | None = None
-    email: EmailStr | None = None
-    phone: str | None = None
-    billing_address: str | None = None
-    shipping_address: str | None = None
-    city: str | None = None
-    country: str | None = None
-    credit_limit: float = 0
-    payment_terms_days: int = 30
+    nature_of_business: str | None = Field(default=None, max_length=150)
+    contact_person: str | None = Field(default=None, max_length=120)
+    email: EmailStr | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=30)
+    billing_address: str | None = Field(default=None, max_length=255)
+    shipping_address: str | None = Field(default=None, max_length=255)
+    city: str | None = Field(default=None, max_length=80)
+    country: str | None = Field(default=None, max_length=80)
+    credit_limit: float = Field(default=0, ge=0)
+    payment_terms_days: int = Field(default=30, ge=0)
     status: str = Field(default="active", pattern="^(active|inactive)$")
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5000)
 
 
 class CustomerUpdate(BaseModel):
@@ -31,19 +33,21 @@ class CustomerUpdate(BaseModel):
     id_document_filename change only via the dedicated endpoints in
     api/customers.py (verify-id, id-document), never a plain field edit."""
 
+    model_config = ConfigDict(str_strip_whitespace=True)
+
     customer_type: str | None = Field(default=None, pattern="^(individual|business)$")
-    nature_of_business: str | None = None
-    contact_person: str | None = None
-    email: EmailStr | None = None
-    phone: str | None = None
-    billing_address: str | None = None
-    shipping_address: str | None = None
-    city: str | None = None
-    country: str | None = None
-    credit_limit: float | None = None
-    payment_terms_days: int | None = None
+    nature_of_business: str | None = Field(default=None, max_length=150)
+    contact_person: str | None = Field(default=None, max_length=120)
+    email: EmailStr | None = Field(default=None, max_length=120)
+    phone: str | None = Field(default=None, max_length=30)
+    billing_address: str | None = Field(default=None, max_length=255)
+    shipping_address: str | None = Field(default=None, max_length=255)
+    city: str | None = Field(default=None, max_length=80)
+    country: str | None = Field(default=None, max_length=80)
+    credit_limit: float | None = Field(default=None, ge=0)
+    payment_terms_days: int | None = Field(default=None, ge=0)
     status: str | None = Field(default=None, pattern="^(active|inactive)$")
-    notes: str | None = None
+    notes: str | None = Field(default=None, max_length=5000)
 
 
 class CustomerOut(BaseModel):
