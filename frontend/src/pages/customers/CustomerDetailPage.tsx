@@ -191,13 +191,24 @@ export function CustomerDetailPage() {
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <Field label="Status" value={<StatusBadge status={customer.status} />} />
           <Field label="Onboarding" value={<StatusBadge status={customer.onboarding_status} />} />
+          <Field label="Type" value={customer.customer_type === 'individual' ? 'Individual' : 'Business'} />
+          <Field
+            label={customer.customer_type === 'individual' ? 'Civil ID' : 'Registration number'}
+            value={customer.code}
+          />
+          {customer.customer_type !== 'individual' && (
+            <Field label="Nature of business" value={customer.nature_of_business} />
+          )}
           <Field label="Contact person" value={customer.contact_person} />
           <Field label="Email" value={customer.email} />
           <Field label="Phone" value={customer.phone} />
           <Field label="City" value={customer.city} />
           <Field label="Country" value={customer.country} />
+          <Field label="Billing address" value={customer.billing_address} />
+          <Field label="Shipping address" value={customer.shipping_address} />
           <Field label="Credit limit" value={formatCurrency(customer.credit_limit)} />
           <Field label="Payment terms" value={`${customer.payment_terms_days} days`} />
+          <Field label="Notes" value={customer.notes} />
         </dl>
         {creditStatus && (
           <div className="mt-6 border-t border-white/10 pt-6">

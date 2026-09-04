@@ -4,16 +4,26 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { Alert, Button, GlassCard, SelectField, Tabs, TextareaField, TextField } from '@/components/ui'
+import {
+  Alert,
+  Button,
+  GlassCard,
+  RadioGroupField,
+  SelectField,
+  Tabs,
+  TextareaField,
+  TextField,
+} from '@/components/ui'
 import { createCustomer } from '@/api/customers'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { customerSchema, type CustomerFormValues, type CustomerSubmitValues } from '@/lib/validation'
 import { formatCurrency } from '@/lib/currency'
 
-type StepId = 'company' | 'contact' | 'financial' | 'review'
+type StepId = 'type' | 'company' | 'contact' | 'financial' | 'review'
 
 const STEPS: { id: StepId; label: string; fields: (keyof CustomerFormValues)[] }[] = [
-  { id: 'company', label: 'Company Details', fields: ['code', 'name', 'contact_person'] },
+  { id: 'type', label: 'Type', fields: ['customer_type'] },
+  { id: 'company', label: 'Company Details', fields: ['code', 'name', 'nature_of_business', 'contact_person'] },
   {
     id: 'contact',
     label: 'Contact & Address',
@@ -39,13 +49,16 @@ export function CustomerOnboardingWizardPage() {
     handleSubmit,
     trigger,
     getValues,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<CustomerFormValues, unknown, CustomerSubmitValues>({
     resolver: zodResolver(customerSchema),
     mode: 'onBlur',
     defaultValues: {
+      customer_type: 'business',
       code: '',
       name: '',
+      nature_of_business: '',
       contact_person: '',
       email: '',
       phone: '',
@@ -63,6 +76,9 @@ export function CustomerOnboardingWizardPage() {
   const step = STEPS[stepIndex]
   const isLastStep = stepIndex === STEPS.length - 1
   const values = getValues()
+  const customerType = watch('customer_type')
+  const isIndividual = customerType === 'individual'
+  const idLabel = isIndividual ? 'Civil ID' : 'Registration number'
 
   async function goNext() {
     const valid = step.fields.length === 0 || (await trigger(step.fields))
@@ -109,15 +125,30 @@ export function CustomerOnboardingWizardPage() {
           <Alert variant="error">{formError}</Alert>
 
           <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
-            {stepIndex === 0 && (
+            {step.id === 'type' && (
+              <RadioGroupField
+                label="Business or individual"
+                error={errors.customer_type?.message}
+                options={[
+                  { value: 'business', label: 'Business' },
+                  { value: 'individual', label: 'Individual' },
+                ]}
+                {...register('customer_type')}
+              />
+            )}
+
+            {step.id === 'company' && (
               <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-                <TextField label="Code" error={errors.code?.message} {...register('code')} />
+                <TextField label={idLabel} error={errors.code?.message} {...register('code')} />
                 <TextField label="Name" error={errors.name?.message} {...register('name')} />
+                {!isIndividual && (
+                  <TextField label="Nature of business" {...register('nature_of_business')} />
+                )}
                 <TextField label="Contact person" {...register('contact_person')} />
               </div>
             )}
 
-            {stepIndex === 1 && (
+            {step.id === 'contact' && (
               <>
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
@@ -132,7 +163,7 @@ export function CustomerOnboardingWizardPage() {
               </>
             )}
 
-            {stepIndex === 2 && (
+            {step.id === 'financial' && (
               <>
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <TextField
@@ -166,8 +197,10 @@ export function CustomerOnboardingWizardPage() {
                   <option value="inactive">Inactive</option>
                 </SelectField>
                 <dl className="grid grid-cols-1 gap-4 rounded-xl border border-white/10 bg-white/5 p-5 sm:grid-cols-2">
-                  <ReviewField label="Code" value={values.code} />
+                  <ReviewField label="Type" value={isIndividual ? 'Individual' : 'Business'} />
+                  <ReviewField label={idLabel} value={values.code} />
                   <ReviewField label="Name" value={values.name} />
+                  {!isIndividual && <ReviewField label="Nature of business" value={values.nature_of_business} />}
                   <ReviewField label="Contact person" value={values.contact_person} />
                   <ReviewField label="Email" value={values.email} />
                   <ReviewField label="Phone" value={values.phone} />
