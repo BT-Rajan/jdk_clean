@@ -179,7 +179,7 @@ const DepartmentFormPage = lazy(() =>
 )
 
 const SalesReportPage = lazy(() =>
-  import('@/pages/reports/ReportPlaceholderPage').then((m) => ({ default: m.SalesReportPage })),
+  import('@/pages/reports/SalesReportPage').then((m) => ({ default: m.SalesReportPage })),
 )
 const ProductionReportPage = lazy(() =>
   import('@/pages/reports/ReportPlaceholderPage').then((m) => ({ default: m.ProductionReportPage })),

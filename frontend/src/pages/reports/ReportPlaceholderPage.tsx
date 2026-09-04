@@ -6,9 +6,10 @@ interface ReportPlaceholderProps {
   subtitle: string
 }
 
-/** Every /reports/* route renders this until each report is actually
- * built (real data/charts are a separate follow-up) -- gives the nav
- * structure a real destination today instead of a dead link. */
+/** Every /reports/* route besides Sales Report (see SalesReportPage.tsx,
+ * which has real charts/data) renders this until it's actually built --
+ * gives the nav structure a real destination today instead of a dead
+ * link. */
 function ReportPlaceholder({ title, subtitle }: ReportPlaceholderProps) {
   return (
     <AppLayout>
@@ -18,10 +19,6 @@ function ReportPlaceholder({ title, subtitle }: ReportPlaceholderProps) {
       </GlassCard>
     </AppLayout>
   )
-}
-
-export function SalesReportPage() {
-  return <ReportPlaceholder title="Sales report" subtitle="Revenue, orders, and quotation performance over time." />
 }
 
 export function ProductionReportPage() {
