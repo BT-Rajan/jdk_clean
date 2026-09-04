@@ -110,7 +110,6 @@ export function ProductionReportPage() {
     <AppLayout>
       <PageHeader
         title="Production report"
-        subtitle="Batches produced, capacity utilization, and material discrepancies. Click any chart to drill into the batches behind it."
         actions={
           <div className="flex flex-wrap items-end gap-3">
             <div className="w-40">
@@ -139,8 +138,20 @@ export function ProductionReportPage() {
                 <option value="24">Last 24 months</option>
               </SelectField>
             </div>
-            <Button variant="ghost" onClick={load} isLoading={loading}>
-              Refresh
+            <Button variant="ghost" size="sm" className="!w-9 !px-0" onClick={load} isLoading={loading} aria-label="Refresh">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="h-4 w-4"
+              >
+                <path d="M21 12a9 9 0 1 1-2.64-6.36" />
+                <polyline points="21 3 21 9 15 9" />
+              </svg>
             </Button>
           </div>
         }
