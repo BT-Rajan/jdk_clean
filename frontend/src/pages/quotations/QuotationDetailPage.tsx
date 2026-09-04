@@ -11,6 +11,7 @@ import {
   downloadQuotationPdf,
   emailQuotation,
   getQuotation,
+  getQuotationEmailPreview,
   restoreQuotation,
   updateQuotationStatus,
 } from '@/api/quotations'
@@ -40,6 +41,22 @@ export function QuotationDetailPage() {
   const { busy, run: runGuarded } = useAsyncGuard()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
+  const [emailPreview, setEmailPreview] = useState<{ to_email: string | null; subject: string; body: string } | null>(null)
+  const [emailPreviewLoading, setEmailPreviewLoading] = useState(false)
+
+  async function handleOpenEmail() {
+    setEmailPreviewLoading(true)
+    try {
+      setEmailPreview(await getQuotationEmailPreview(quotationId))
+    } catch {
+      // Fall back to a blank compose box rather than blocking "Send
+      // email" entirely over a preview-only request failing.
+      setEmailPreview(null)
+    } finally {
+      setEmailPreviewLoading(false)
+      setEmailOpen(true)
+    }
+  }
   const [justDeleted, setJustDeleted] = useState(false)
 
   function load() {
@@ -147,7 +164,7 @@ export function QuotationDetailPage() {
               <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
               <Button variant="ghost" onClick={() => handleDownloadDocx('en')} isLoading={busy}>Word (EN)</Button>
               <Button variant="ghost" onClick={() => handleDownloadDocx('ar')} isLoading={busy}>Word (AR)</Button>
-              <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
+              <Button variant="ghost" onClick={handleOpenEmail} isLoading={emailPreviewLoading}>Send email</Button>
               {allowWrite && quotation.status === 'draft' && (
                 <Button variant="ghost" onClick={() => navigate(`/quotations/${quotationId}/edit`)}>Edit</Button>
               )}
@@ -312,7 +329,9 @@ export function QuotationDetailPage() {
       <SendEmailDialog
         open={emailOpen}
         title={`Email ${quotation.quotation_number}`}
-        defaultEmail={quotation.customer_email}
+        defaultEmail={emailPreview?.to_email ?? quotation.customer_email}
+        defaultMessage={emailPreview?.body}
+        subjectPreview={emailPreview?.subject}
         onClose={() => setEmailOpen(false)}
         onSend={async (toEmail, message, attachPdf) => {
           await emailQuotation(quotation.id, toEmail, message, attachPdf)

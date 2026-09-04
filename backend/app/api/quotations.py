@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -8,8 +9,9 @@ from app.api.common import PagedResponse
 from app.api.deps import require_role
 from app.core.database import get_db
 from app.core.permissions import require_page_access
+from app.models.quotation import Quotation
 from app.models.user import User
-from app.schemas.email import SendDocumentEmailRequest
+from app.schemas.email import EmailPreviewOut, SendDocumentEmailRequest
 from app.schemas.quotation import (
     MaterialConflictCheckRequest,
     MaterialConflictOut,
@@ -219,6 +221,45 @@ def download_quotation_docx(
     )
 
 
+def _quotation_email_template_key(quotation: Quotation) -> str:
+    """quotation_email for the first time this quotation is ever emailed,
+    quotation_followup_email (admin-configurable, defaults to framing it
+    as an update) for every send after that -- see Quotation.last_emailed_at."""
+    return "quotation_followup_email" if quotation.last_emailed_at else "quotation_email"
+
+
+def _quotation_email_context(db: Session, quotation: Quotation) -> dict:
+    company_settings = pdf_generator.get_company_settings(db)
+    return {
+        "customer_name": quotation.customer.name if quotation.customer else "",
+        "quotation_number": quotation.quotation_number,
+        "quotation_date": quotation.quotation_date.isoformat(),
+        "total_amount": f"{float(quotation.total_amount):,.2f}",
+        "company_name": company_settings.get("company_name", ""),
+    }
+
+
+@router.get("/{quotation_id}/email-preview", response_model=EmailPreviewOut)
+def preview_quotation_email(
+    quotation_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    """What the "Send email" dialog should show before anything is sent:
+    the customer's email plus whichever template (first-send or
+    already-sent-before) applies right now, rendered -- so the compose
+    box previews the real content instead of starting blank."""
+    quotation = quotation_service.get_quotation(db, quotation_id)
+    subject, body = email_template_service.render(
+        db, _quotation_email_template_key(quotation), _quotation_email_context(db, quotation)
+    )
+    return EmailPreviewOut(
+        to_email=quotation.customer.email if quotation.customer else None,
+        subject=subject,
+        body=body,
+    )
+
+
 @router.post("/{quotation_id}/email")
 def email_quotation_pdf(
     quotation_id: int,
@@ -230,17 +271,8 @@ def email_quotation_pdf(
     pdf_bytes = _render_quotation_pdf(db, quotation, None)
     filename = f"{quotation.quotation_number}.pdf"
 
-    company_settings = pdf_generator.get_company_settings(db)
     subject, template_body = email_template_service.render(
-        db,
-        "quotation_email",
-        {
-            "customer_name": quotation.customer.name if quotation.customer else "",
-            "quotation_number": quotation.quotation_number,
-            "quotation_date": quotation.quotation_date.isoformat(),
-            "total_amount": f"{float(quotation.total_amount):,.2f}",
-            "company_name": company_settings.get("company_name", ""),
-        },
+        db, _quotation_email_template_key(quotation), _quotation_email_context(db, quotation)
     )
     body = payload.message or template_body
 
@@ -252,6 +284,7 @@ def email_quotation_pdf(
         attachment_bytes=pdf_bytes if payload.attach_pdf else None,
         attachment_filename=filename if payload.attach_pdf else None,
     )
+    quotation.last_emailed_at = datetime.now(timezone.utc)
     audit_service.log_update(
         db, "quotations", quotation_id, {"emailed_to": (None, payload.to_email)}, user.id
     )

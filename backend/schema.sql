@@ -827,6 +827,11 @@ CREATE TABLE IF NOT EXISTS quotations (
     -- at creation/edit time -- see quotation_service.check_material_conflicts.
     material_conflict_acknowledged TINYINT(1) NOT NULL DEFAULT 0,
     material_conflict_notes TEXT NULL, -- JSON snapshot of what was flagged
+    -- NULL until the first time this quotation is emailed -- see
+    -- quotations.py's email_quotation_pdf, which picks the
+    -- quotation_email vs. quotation_followup_email template based on
+    -- whether this is still NULL.
+    last_emailed_at DATETIME NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,

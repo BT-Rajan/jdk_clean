@@ -7,6 +7,13 @@ interface SendEmailDialogProps {
   open: boolean
   title: string
   defaultEmail?: string | null
+  /** Pre-fills the message box -- e.g. the admin-configured template
+   * already rendered for this document, so the sender previews the
+   * real content instead of starting from a blank box. */
+  defaultMessage?: string
+  /** Shown read-only above the message box, for transparency on what
+   * subject line will actually be used (not editable here). */
+  subjectPreview?: string
   onSend: (toEmail: string, message: string, attachPdf: boolean) => Promise<void>
   onClose: () => void
 }
@@ -15,7 +22,9 @@ interface SendEmailDialogProps {
  * onSend does the actual API call (and its own success notice); this
  * component only owns the recipient/message fields, the attach-PDF
  * toggle, and inline error display for a failed send. */
-export function SendEmailDialog({ open, title, defaultEmail, onSend, onClose }: SendEmailDialogProps) {
+export function SendEmailDialog({
+  open, title, defaultEmail, defaultMessage, subjectPreview, onSend, onClose,
+}: SendEmailDialogProps) {
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
   const [attachPdf, setAttachPdf] = useState(true)
@@ -25,10 +34,13 @@ export function SendEmailDialog({ open, title, defaultEmail, onSend, onClose }: 
   useEffect(() => {
     if (open) {
       setEmail(defaultEmail ?? '')
-      setMessage('')
+      setMessage(defaultMessage ?? '')
       setAttachPdf(true)
       setError(null)
     }
+    // Only the fields that seed this dialog's initial state on open --
+    // re-running on every keystroke of defaultMessage would clobber edits.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultEmail])
 
   async function handleSend() {
@@ -63,6 +75,12 @@ export function SendEmailDialog({ open, title, defaultEmail, onSend, onClose }: 
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
+        {subjectPreview ? (
+          <p className="text-sm text-white/60">
+            <span className="text-white/40">Subject: </span>
+            {subjectPreview}
+          </p>
+        ) : null}
         <TextareaField
           label="Message (optional)"
           value={message}

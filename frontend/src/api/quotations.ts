@@ -96,6 +96,14 @@ export async function downloadQuotationDocx(id: number, quotationNumber: string,
   window.URL.revokeObjectURL(url)
 }
 
+/** The subject/body "Send email" would use right now (first-send vs.
+ * already-sent-before template, whichever the admin has configured),
+ * for the compose dialog to preview before anything is sent. */
+export async function getQuotationEmailPreview(id: number): Promise<{ to_email: string | null; subject: string; body: string }> {
+  const { data } = await apiClient.get(`/api/quotations/${id}/email-preview`)
+  return data
+}
+
 /** Sends the quotation PDF as an email attachment. */
 export async function emailQuotation(id: number, toEmail: string, message?: string, attachPdf = true): Promise<MessageResponse> {
   const { data } = await apiClient.post<MessageResponse>(`/api/quotations/${id}/email`, {

@@ -36,11 +36,22 @@ TEMPLATE_DEFINITIONS: dict[str, dict[str, str]] = {
         "placeholders": "customer_name, delivery_note_number, order_number, delivery_date, company_name",
     },
     "quotation_email": {
-        "name": "Quotation email",
+        "name": "Quotation email (first send)",
         "subject": "Quotation {quotation_number}",
         "body": (
             "Dear {customer_name},\n\n"
             "Please find attached quotation {quotation_number}, dated {quotation_date}, "
+            "total {total_amount}.\n\n"
+            "{company_name}"
+        ),
+        "placeholders": "customer_name, quotation_number, quotation_date, total_amount, company_name",
+    },
+    "quotation_followup_email": {
+        "name": "Quotation email (already sent before)",
+        "subject": "Updated Quotation {quotation_number}",
+        "body": (
+            "Dear {customer_name},\n\n"
+            "Please find attached the updated quotation {quotation_number}, dated {quotation_date}, "
             "total {total_amount}.\n\n"
             "{company_name}"
         ),

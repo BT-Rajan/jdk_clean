@@ -9,3 +9,13 @@ class SendDocumentEmailRequest(BaseModel):
     # body text only, to work around that or just when no attachment is
     # wanted.
     attach_pdf: bool = True
+
+
+class EmailPreviewOut(BaseModel):
+    """The subject/body an email-send action would use right now, for
+    the compose dialog to show before the user commits to sending --
+    e.g. picking between a document's first-send and already-sent-before
+    template."""
+    to_email: str | None = None
+    subject: str
+    body: str

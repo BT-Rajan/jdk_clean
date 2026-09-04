@@ -87,6 +87,11 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
     # was flagged at that moment, not a live check (availability moves on).
     material_conflict_acknowledged: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     material_conflict_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # NULL until the first time this quotation is emailed -- see
+    # api/quotations.py's email_quotation_pdf, which picks the
+    # quotation_email vs. quotation_followup_email template based on
+    # whether this is still NULL, then stamps it on send.
+    last_emailed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     deal: Mapped[Deal | None] = relationship(lazy="joined")
