@@ -8,6 +8,7 @@ import { Alert, Button, GlassCard, SelectField, TextareaField, TextField } from 
 import { createDeliveryNote } from '@/api/deliveryNotes'
 import { listOrders } from '@/api/orders'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
+import { useAsyncGuard } from '@/hooks/useAsyncGuard'
 import { getApiErrorMessage } from '@/lib/apiError'
 import {
   deliveryNoteCreateSchema,
@@ -29,11 +30,12 @@ export function DeliveryNoteFormPage() {
     [],
   )
   const { options: orders } = useSelectOptions(ordersFetcher)
+  const { busy: submitting, run: runGuarded } = useAsyncGuard()
 
   const {
     register,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<DeliveryNoteCreateFormValues, unknown, DeliveryNoteCreateSubmitValues>({
     resolver: zodResolver(deliveryNoteCreateSchema),
     defaultValues: {
@@ -46,8 +48,10 @@ export function DeliveryNoteFormPage() {
   async function onSubmit(values: DeliveryNoteCreateSubmitValues) {
     setFormError(null)
     try {
-      const created = await createDeliveryNote(values)
-      navigate(`/delivery-notes/${created.id}`)
+      await runGuarded(async () => {
+        const created = await createDeliveryNote(values)
+        navigate(`/delivery-notes/${created.id}`)
+      })
     } catch (err) {
       setFormError(getApiErrorMessage(err))
     }
@@ -88,7 +92,7 @@ export function DeliveryNoteFormPage() {
             </p>
             <div className="mt-2 flex justify-end gap-3">
               <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
-              <Button type="submit" isLoading={isSubmitting}>Create delivery note</Button>
+              <Button type="submit" isLoading={submitting}>Create delivery note</Button>
             </div>
           </form>
         </GlassCard>
