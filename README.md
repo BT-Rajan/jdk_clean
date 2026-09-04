@@ -94,7 +94,7 @@ before declaring success.
 > model yet — it still generates two separate pm2 apps, **jdk-backend**
 > and **jdk-frontend**, with `pm2 logs jdk-backend`/`pm2 logs
 > jdk-frontend` and `pm2 restart all`/`pm2 stop all` to manage them.
-> The "Relaunching cleanly" commands below (`pm2 restart jdk`) only
+> `./relaunch.sh` and the "Relaunching cleanly" commands below only
 > apply to the single-service layout.
 
 If you didn't generate `ecosystem.config.js` via `install.sh`, you can
@@ -103,35 +103,40 @@ app's README — and skip pm2 entirely.
 
 ### Relaunching cleanly
 
-Both apps run as one pm2 service (`jdk`, via `scripts/run-all.mjs`), so
-restarting is one command. If you've pulled new code first, rebuild/
-reinstall before restarting -- a plain restart re-execs the existing
-build/venv, it doesn't pick up new dependencies or source changes on
-its own:
+Both apps run as one pm2 service (`jdk`, via `scripts/run-all.mjs`).
+`./relaunch.sh` (repo root) is the one-shot command for "pull new code,
+rebuild, restart": `pm2 stop jdk`, backend `pip install`, frontend
+`npm install && npm run build`, `pm2 restart jdk --update-env`, then
+tails the logs -- one real command per step, nothing hidden behind
+custom cross-checking logic:
 
 ```bash
-# Only if backend deps changed (new/updated requirements.txt):
+./relaunch.sh
+```
+
+It runs with `set -e` and prints a `==> N/6: <step>` header before each
+command, so if something fails the script stops right there and what
+you're looking at is that exact command's own real error -- not a
+wrapper's interpretation of it. (An earlier version of this script
+instead tried to automatically cross-check `.env`/`ecosystem.config.js`
+consistency and find stray processes squatting on the ports, relying on
+`sudo`, `python3`, and GNU-only `grep -P` all being present and working
+the same way on whatever box it ran on; it became more fragile than the
+problems it was checking for, and was replaced with this plainer
+version.)
+
+If you'd rather run the same steps by hand -- e.g. to skip the frontend
+rebuild when only backend code changed -- they're exactly:
+
+```bash
+pm2 stop jdk
 (cd backend && source venv/bin/activate && pip install -r requirements.txt)
-
-# Only if frontend deps or source changed:
 (cd frontend && npm install && npm run build)
-
-# Always: restart both, then confirm they actually came back up.
 pm2 restart jdk --update-env
 pm2 logs jdk --lines 50 --nostream
 ```
 
-Run each command on its own and read its own output before moving to
-the next -- that's deliberate: if one step fails, you're looking
-straight at that command's real error, on that exact line, instead of
-a wrapper script's interpretation of it. A previous version of this
-section pointed at `./relaunch.sh`, a script that tried to
-automatically cross-check `.env`/`ecosystem.config.js` consistency and
-find stray processes squatting on the ports; it became more fragile
-than the problems it was checking for (relying on `sudo`, `python3`,
-and GNU-only `grep -P` all being present and working the same way on
-whatever box it ran on) and has been removed. Diagnosing those same
-issues by hand:
+Diagnosing a failure, whether from the script or by hand:
 
 - **Backend didn't come up**: `pm2 logs jdk --lines 50 --nostream` --
   look for a `[backend]` line. A Python traceback there is almost
