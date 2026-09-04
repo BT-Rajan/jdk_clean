@@ -194,10 +194,12 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Master Data entries the user can actually reach -- mirrors
   // MasterDataHomePage's own visibility rule so the palette never offers
-  // a page that 403s. Kept separate from visibleNavEntries since these
-  // aren't in the nav bar itself (Master Data lives under Admin, see
-  // AdminShell's "Master Data" group), but should still be one Cmd/Ctrl+K
-  // search away.
+  // a page that 403s. A Master Data entry whose route is also reachable
+  // from the nav bar itself (Customers, Suppliers, Raw Materials,
+  // Production Line, Users, Departments, and Roles & Permissions all
+  // moved into the operational dropdowns) is skipped below -- kept here
+  // only for the masters that still aren't in the nav bar at all
+  // (Products), so the palette never lists the same destination twice.
   function isMasterEntryVisible(entry: (typeof MASTER_DATA_REGISTRY)[number]): boolean {
     if (entry.adminOnly) return isAdmin(user?.role)
     if (!entry.pageKey) return true
@@ -209,6 +211,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   // the single list the command palette searches/navigates. Built from
   // the exact same visibleNavEntries the nav bar renders, so a page
   // never shows up in one place but not the other.
+  const navRoutes = new Set(
+    visibleNavEntries.flatMap((entry) => (isNavGroup(entry) ? entry.items.map((item) => item.to) : [entry.to])),
+  )
+
   const paletteActions: PaletteAction[] = [
     ...visibleNavEntries.flatMap((entry) =>
       isNavGroup(entry)
@@ -220,12 +226,14 @@ export function AppLayout({ children }: AppLayoutProps) {
           }))
         : [{ id: `nav:${entry.to}`, label: entry.label, onSelect: () => navigate(entry.to) }],
     ),
-    ...MASTER_DATA_REGISTRY.filter(isMasterEntryVisible).map((entry) => ({
-      id: `master-data:${entry.key}`,
-      label: entry.label,
-      hint: 'Master Data',
-      onSelect: () => navigate(entry.route),
-    })),
+    ...MASTER_DATA_REGISTRY.filter(isMasterEntryVisible)
+      .filter((entry) => !navRoutes.has(entry.route))
+      .map((entry) => ({
+        id: `master-data:${entry.key}`,
+        label: entry.label,
+        hint: 'Master Data',
+        onSelect: () => navigate(entry.route),
+      })),
     { id: 'action:calendar', label: 'Open Calendar', keywords: 'schedule events', onSelect: () => setIsCalendarOpen(true) },
     { id: 'action:notifications', label: 'Open Notifications', keywords: 'alerts bell', onSelect: () => setIsNotificationsOpen(true) },
     { id: 'action:assistant', label: 'Open AI Assistant', keywords: 'ai chat help', onSelect: () => setIsAssistantOpen(true) },
