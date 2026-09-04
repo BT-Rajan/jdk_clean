@@ -60,6 +60,7 @@ export function SendEmailDialog({
       open={open}
       title={title}
       onClose={onClose}
+      wide
       footer={
         <>
           <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
@@ -83,6 +84,7 @@ export function SendEmailDialog({
         ) : null}
         <TextareaField
           label="Message (optional)"
+          rows={8}
           value={message}
           onChange={(e) => setMessage(e.target.value)}
         />

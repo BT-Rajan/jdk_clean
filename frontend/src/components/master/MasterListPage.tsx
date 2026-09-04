@@ -95,7 +95,7 @@ export function MasterListPage<T>({
         <div
           className="mb-6 grid grid-cols-1 gap-4"
           style={{
-            gridTemplateColumns: hasSearch && hasStatusFilter ? '1fr 220px' : '1fr',
+            gridTemplateColumns: hasSearch && hasStatusFilter ? '1fr 220px' : hasStatusFilter ? '220px' : '1fr',
           }}
         >
           {hasSearch && (

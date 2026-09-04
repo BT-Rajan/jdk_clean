@@ -52,7 +52,7 @@ export function MachinesListPage() {
       fetcher={fetcher}
       columns={columns}
       rowKey={(m) => m.id}
-      searchPlaceholder="Code or name…"
+      hasSearch={false}
       canCreate={canWrite(user?.role) && total === 0}
       createLabel="Add production line"
       onCreate={() => navigate('/machines/new')}
