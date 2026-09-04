@@ -388,13 +388,28 @@ cd "$FRONTEND_DIR"
 # of package-lock.json (the actual source of truth for what gets
 # installed, not package.json) stashed next to node_modules covers a
 # fresh checkout, an edited lockfile, and a first-ever install alike.
+#
+# `npm ci` instead of `npm install`: installs exactly what's pinned in
+# package-lock.json and refuses (loudly, with an actionable error)
+# rather than silently re-resolving if package.json and the lockfile
+# ever disagree -- unlike `npm install`, which can quietly bump a
+# dependency to a newer version satisfying its semver range with no
+# review, on a codebase that isn't re-tested against every dependency
+# bump. `--no-audit` skips npm's automatic vulnerability-advisory
+# lookup, which measured as ~99% of this step's wall-clock time here
+# (a single request to registry.npmjs.org's bulk advisory endpoint
+# took 4+ minutes while every actual package resolved in 0ms from
+# cache) -- it's a security scan bolted onto every install by default,
+# not a real dependency of installing anything; run `npm audit`
+# yourself when you actually want that check, rather than paying for
+# it on every single install.
 PACKAGE_LOCK_HASH_FILE="node_modules/.package-lock.sha256"
 PACKAGE_LOCK_HASH="$(sha256sum package-lock.json | awk '{print $1}')"
 if [[ -d node_modules && -f "$PACKAGE_LOCK_HASH_FILE" && "$(cat "$PACKAGE_LOCK_HASH_FILE")" == "$PACKAGE_LOCK_HASH" ]]; then
   ok "Node dependencies already up to date (package-lock.json unchanged) -- skipping install."
 else
   info "Installing Node dependencies..."
-  npm install --silent
+  npm ci --no-audit --no-fund --silent
   echo "$PACKAGE_LOCK_HASH" > "$PACKAGE_LOCK_HASH_FILE"
   ok "Frontend dependencies installed."
 fi
