@@ -178,8 +178,8 @@ def test_connection(db: Session) -> dict:
         if row.incoming_protocol == "imap":
             if not row.imap_host:
                 return _record_test(db, row, False, "Enter an IMAP host first.")
-            conn = imaplib.IMAP4_SSL(row.imap_host, row.imap_port) if row.imap_use_ssl \
-                else imaplib.IMAP4(row.imap_host, row.imap_port)
+            conn = imaplib.IMAP4_SSL(row.imap_host, row.imap_port, timeout=15) if row.imap_use_ssl \
+                else imaplib.IMAP4(row.imap_host, row.imap_port, timeout=15)
             try:
                 conn.login(username, password)
                 conn.select("INBOX", readonly=True)
@@ -191,8 +191,8 @@ def test_connection(db: Session) -> dict:
         else:
             if not row.pop3_host:
                 return _record_test(db, row, False, "Enter a POP3 host first.")
-            conn = poplib.POP3_SSL(row.pop3_host, row.pop3_port) if row.pop3_use_ssl \
-                else poplib.POP3(row.pop3_host, row.pop3_port)
+            conn = poplib.POP3_SSL(row.pop3_host, row.pop3_port, timeout=15) if row.pop3_use_ssl \
+                else poplib.POP3(row.pop3_host, row.pop3_port, timeout=15)
             try:
                 conn.user(username)
                 conn.pass_(password)
