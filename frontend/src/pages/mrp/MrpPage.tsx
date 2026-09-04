@@ -3,14 +3,21 @@ import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Badge, Button, EmptyState, GlassCard, PageHeader, Spinner } from '@/components/ui'
 import { getMrpReport } from '@/api/mrp'
+import { autoDraftFromMrp } from '@/api/purchaseOrders'
 import type { MrpReport } from '@/types/mrp'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDateTime } from '@/lib/dateFormat'
+import { useAuth } from '@/hooks/useAuth'
+import { canWriteDepartment } from '@/lib/roles'
 
 export function MrpPage() {
+  const { user } = useAuth()
+  const allowWrite = canWriteDepartment(user, 'procurement')
   const [report, setReport] = useState<MrpReport | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [drafting, setDrafting] = useState(false)
+  const [draftedIds, setDraftedIds] = useState<number[] | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -23,19 +30,65 @@ export function MrpPage() {
 
   useEffect(load, [load])
 
+  async function handleDraftPurchaseOrders() {
+    setDrafting(true)
+    setError(null)
+    setDraftedIds(null)
+    try {
+      const result = await autoDraftFromMrp()
+      setDraftedIds(result.purchase_order_ids)
+      load() // shortages just covered by a new draft PO drop off the report
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setDrafting(false)
+    }
+  }
+
+  const hasCoverableShortage = report?.items.some((item) => item.suggested_purchases.length > 0) ?? false
+
   return (
     <AppLayout>
       <PageHeader
         title="Material requirements planning"
         subtitle="Raw material shortfalls against scheduled production and outstanding orders, netted against current stock"
         actions={
-          <Button variant="ghost" onClick={load} isLoading={loading}>
-            Refresh
-          </Button>
+          <>
+            <Button variant="ghost" onClick={load} isLoading={loading}>
+              Refresh
+            </Button>
+            {allowWrite && hasCoverableShortage && (
+              <Button onClick={handleDraftPurchaseOrders} isLoading={drafting}>
+                Draft purchase orders
+              </Button>
+            )}
+          </>
         }
       />
 
       <Alert variant="error">{error}</Alert>
+
+      {draftedIds && (
+        <Alert variant="success">
+          {draftedIds.length === 0
+            ? 'Nothing new to draft -- every shortage with known supplier coverage already has a pending purchase order.'
+            : (
+              <>
+                Drafted {draftedIds.length} purchase order{draftedIds.length === 1 ? '' : 's'}, one per supplier --
+                review and send from{' '}
+                {draftedIds.map((id, i) => (
+                  <span key={id}>
+                    {i > 0 ? ', ' : ''}
+                    <Link to={`/purchase-orders/${id}`} className="underline hover:text-white">
+                      PO #{id}
+                    </Link>
+                  </span>
+                ))}
+                .
+              </>
+            )}
+        </Alert>
+      )}
 
       {report && !loading && (
         <p className="mb-4 text-xs text-white/40">

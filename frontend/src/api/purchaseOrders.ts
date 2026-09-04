@@ -27,6 +27,16 @@ export async function approvePurchaseOrder(id: number): Promise<PurchaseOrder> {
   return data
 }
 
+/** Drafts one purchase order per supplier (never sent -- always
+ * 'draft', for Procurement to review) covering every current MRP
+ * shortage that has known supplier coverage. Safe to call repeatedly:
+ * a material already covered by an existing non-cancelled PO is
+ * skipped, so this never piles up duplicate drafts. */
+export async function autoDraftFromMrp(): Promise<{ drafted_count: number; purchase_order_ids: number[] }> {
+  const { data } = await apiClient.post('/api/purchase-orders/auto-draft-from-mrp')
+  return data
+}
+
 export async function createPurchaseOrder(payload: PurchaseOrderPayload): Promise<PurchaseOrder> {
   const { data } = await apiClient.post<PurchaseOrder>('/api/purchase-orders', payload)
   return data

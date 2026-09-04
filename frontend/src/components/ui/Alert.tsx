@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { cn } from '@/lib/cn'
 
@@ -5,7 +6,7 @@ type AlertVariant = 'error' | 'success' | 'info'
 
 interface AlertProps {
   variant?: AlertVariant
-  children: string | null | undefined
+  children: ReactNode
 }
 
 const variantStyles: Record<AlertVariant, string> = {
