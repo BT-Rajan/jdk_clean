@@ -48,23 +48,26 @@ export function CustomersListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Customers</h1>
           <p className="mt-2 text-sm text-white/50">{total} on file</p>
         </div>
-        {canWrite(user?.role) && (
-          <Button onClick={() => navigate('/customers/new')}>New customer</Button>
-        )}
-      </div>
-
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_200px]">
-        <TextField
-          label="Search"
-          placeholder="Code, name, email…"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
-        <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-        </SelectField>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-56">
+            <TextField
+              label="Search"
+              placeholder="Code, name, email…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+          </div>
+          <div className="w-44">
+            <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </SelectField>
+          </div>
+          {canWrite(user?.role) && (
+            <Button onClick={() => navigate('/customers/new')}>New customer</Button>
+          )}
+        </div>
       </div>
 
       <Alert variant="error">{error}</Alert>
