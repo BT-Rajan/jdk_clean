@@ -12,6 +12,13 @@ from app.models.user import BigPK
 
 QUOTATION_STATUSES = ("draft", "sent", "accepted", "rejected", "expired", "converted")
 
+# Which of the admin's two (see doc_template_service.LANGUAGES) uploaded
+# quotation templates this quotation was raised in -- set at creation
+# (Sales' choice on the "New quotation" form) and used as the default for
+# Print/Email; a caller can still request the other language's PDF via
+# the `language` query param without changing this.
+QUOTATION_LANGUAGES = ("en", "ar")
+
 # Status transitions allowed from each current status. Used by the service
 # layer to reject invalid jumps (e.g. draft -> converted directly).
 ALLOWED_TRANSITIONS = {
@@ -43,6 +50,9 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
     valid_until: Mapped[date | None] = mapped_column(DATE, nullable=True)
     status: Mapped[str] = mapped_column(
         Enum(*QUOTATION_STATUSES, name="quotation_status"), nullable=False, default="draft"
+    )
+    language: Mapped[str] = mapped_column(
+        Enum(*QUOTATION_LANGUAGES, name="quotation_language"), nullable=False, default="en"
     )
     subtotal_amount: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     # Percentage, e.g. 0 or 10 -- a whole-document discount applied on

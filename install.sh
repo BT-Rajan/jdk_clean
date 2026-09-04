@@ -117,6 +117,14 @@ ok "node $(node -v)"
 ok "npm $(npm -v)"
 ok "curl $(curl -V | head -1 | awk '{print $2}')"
 
+if command -v soffice >/dev/null 2>&1; then
+  ok "soffice (LibreOffice) found"
+else
+  warn "soffice (LibreOffice) not found -- quotation Print and Email will fail until it's installed."
+  echo "${DIM}      It renders each document's admin-uploaded Word template to PDF for those two actions.${RESET}"
+  echo "${DIM}      Install the 'libreoffice-writer' package (Debian/Ubuntu) or your distro's equivalent, then re-run this installer or just restart the backend -- no other setup needed.${RESET}"
+fi
+
 if ! command -v pm2 >/dev/null 2>&1; then
   warn "pm2 is not installed globally."
   if ask_yes_no "Install it now (npm install -g pm2)?" y; then

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Modal, TextareaField, TextField } from '@/components/ui'
+import { useAsyncGuard } from '@/hooks/useAsyncGuard'
 import { getApiErrorMessage } from '@/lib/apiError'
 
 interface SendEmailDialogProps {
@@ -18,7 +19,7 @@ export function SendEmailDialog({ open, title, defaultEmail, onSend, onClose }: 
   const [email, setEmail] = useState('')
   const [message, setMessage] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [sending, setSending] = useState(false)
+  const { busy: sending, run: runGuarded } = useAsyncGuard()
 
   useEffect(() => {
     if (open) {
@@ -30,14 +31,13 @@ export function SendEmailDialog({ open, title, defaultEmail, onSend, onClose }: 
 
   async function handleSend() {
     setError(null)
-    setSending(true)
     try {
-      await onSend(email, message)
-      onClose()
+      await runGuarded(async () => {
+        await onSend(email, message)
+        onClose()
+      })
     } catch (err) {
       setError(getApiErrorMessage(err))
-    } finally {
-      setSending(false)
     }
   }
 

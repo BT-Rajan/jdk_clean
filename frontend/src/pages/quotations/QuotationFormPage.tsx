@@ -11,6 +11,7 @@ import { listCustomers } from '@/api/customers'
 import { listProducts } from '@/api/products'
 import { listAvailableForQuotation } from '@/api/feasibilities'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
+import { useAsyncGuard } from '@/hooks/useAsyncGuard'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDateTime } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
@@ -127,6 +128,7 @@ function QuotationCreateForm() {
   const [selectedFeasibility, setSelectedFeasibility] = useState<Feasibility | null>(null)
   const { options: customers } = useCustomerOptions()
   const { options: products } = useProductOptions()
+  const { busy: submitting, run: runGuarded } = useAsyncGuard()
 
   const {
     register,
@@ -134,7 +136,7 @@ function QuotationCreateForm() {
     watch,
     handleSubmit,
     setValue,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<QuotationFormValues, unknown, QuotationSubmitValues>({
     resolver: zodResolver(quotationSchema),
     defaultValues: {
@@ -144,6 +146,7 @@ function QuotationCreateForm() {
       valid_until: '',
       notes: '',
       lines: [{ product_id: 0, quantity: 1, unit_price: 0 }],
+      language: 'en',
     },
   })
 
@@ -176,8 +179,10 @@ function QuotationCreateForm() {
   async function onSubmit(values: QuotationSubmitValues) {
     setFormError(null)
     try {
-      const created = await createQuotation(values)
-      navigate(`/quotations/${created.id}`)
+      await runGuarded(async () => {
+        const created = await createQuotation(values)
+        navigate(`/quotations/${created.id}`)
+      })
     } catch (err) {
       setFormError(getApiErrorMessage(err))
     }
@@ -251,6 +256,14 @@ function QuotationCreateForm() {
           </div>
 
           <div className="max-w-xs">
+            <SelectField label="Language" error={errors.language?.message} {...register('language')}>
+              <option value="en">English</option>
+              <option value="ar">Arabic</option>
+            </SelectField>
+            <p className="mt-1 text-xs text-white/40">Which template Print and Email use by default.</p>
+          </div>
+
+          <div className="max-w-xs">
             <TextField
               label="Discount (%)"
               type="number"
@@ -269,7 +282,7 @@ function QuotationCreateForm() {
 
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
-          <Button type="submit" isLoading={isSubmitting}>Create quotation</Button>
+          <Button type="submit" isLoading={submitting}>Create quotation</Button>
         </div>
       </form>
       )}
@@ -283,6 +296,7 @@ function QuotationEditForm({ id }: { id: number }) {
   const [formError, setFormError] = useState<string | null>(null)
   const { options: customers } = useCustomerOptions()
   const { options: products } = useProductOptions()
+  const { busy: submitting, run: runGuarded } = useAsyncGuard()
 
   const {
     register,
@@ -290,7 +304,7 @@ function QuotationEditForm({ id }: { id: number }) {
     watch,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<QuotationFormValues, unknown, QuotationSubmitValues>({
     resolver: zodResolver(quotationSchema),
   })
@@ -303,6 +317,7 @@ function QuotationEditForm({ id }: { id: number }) {
           quotation_date: quotation.quotation_date,
           valid_until: quotation.valid_until ?? '',
           notes: quotation.notes ?? '',
+          language: quotation.language,
           lines: quotation.lines.map((l) => ({
             product_id: l.product_id,
             quantity: l.quantity,
@@ -317,8 +332,10 @@ function QuotationEditForm({ id }: { id: number }) {
   async function onSubmit(values: QuotationSubmitValues) {
     setFormError(null)
     try {
-      await updateQuotation(id, values)
-      navigate(`/quotations/${id}`)
+      await runGuarded(async () => {
+        await updateQuotation(id, values)
+        navigate(`/quotations/${id}`)
+      })
     } catch (err) {
       setFormError(getApiErrorMessage(err))
     }
@@ -345,13 +362,21 @@ function QuotationEditForm({ id }: { id: number }) {
             <TextField label="Feasibility ID" type="number" {...register('feasibility_id')} disabled />
           </div>
 
+          <div className="max-w-xs">
+            <SelectField label="Language" error={errors.language?.message} {...register('language')}>
+              <option value="en">English</option>
+              <option value="ar">Arabic</option>
+            </SelectField>
+            <p className="mt-1 text-xs text-white/40">Which template Print and Email use by default.</p>
+          </div>
+
           <LineItemsEditor control={control} register={register} watch={watch} errors={errors} products={products} />
 
           <TextareaField label="Notes" {...register('notes')} />
 
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
-            <Button type="submit" isLoading={isSubmitting}>Save changes</Button>
+            <Button type="submit" isLoading={submitting}>Save changes</Button>
           </div>
         </form>
       )}

@@ -10,6 +10,7 @@ import { createFeasibility } from '@/api/feasibilities'
 import { listCustomers } from '@/api/customers'
 import { listProducts } from '@/api/products'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
+import { useAsyncGuard } from '@/hooks/useAsyncGuard'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { feasibilitySchema, todayDateInputMin, type FeasibilityFormValues, type FeasibilitySubmitValues } from '@/lib/validation'
 
@@ -39,12 +40,13 @@ export function FeasibilityFormPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const { options: customers } = useCustomerOptions()
   const { options: products } = useProductOptions()
+  const { busy: submitting, run: runGuarded } = useAsyncGuard()
 
   const {
     register,
     control,
     handleSubmit,
-    formState: { errors, isSubmitting },
+    formState: { errors },
   } = useForm<FeasibilityFormValues, unknown, FeasibilitySubmitValues>({
     resolver: zodResolver(feasibilitySchema),
     defaultValues: {
@@ -59,12 +61,14 @@ export function FeasibilityFormPage() {
   async function onSubmit(values: FeasibilitySubmitValues) {
     setFormError(null)
     try {
-      const created = await createFeasibility({
-        ...values,
-        required_by_date: values.required_by_date || null,
-        notes: values.notes || null,
+      await runGuarded(async () => {
+        const created = await createFeasibility({
+          ...values,
+          required_by_date: values.required_by_date || null,
+          notes: values.notes || null,
+        })
+        navigate(`/feasibilities/${created.id}`)
       })
-      navigate(`/feasibilities/${created.id}`)
     } catch (err) {
       setFormError(getApiErrorMessage(err))
     }
@@ -130,7 +134,7 @@ export function FeasibilityFormPage() {
 
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
-          <Button type="submit" isLoading={isSubmitting}>Create check</Button>
+          <Button type="submit" isLoading={submitting}>Create check</Button>
         </div>
       </form>
     </FormShell>
