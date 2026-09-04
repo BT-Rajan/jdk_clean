@@ -177,6 +177,20 @@ const DepartmentsListPage = lazy(() =>
 const DepartmentFormPage = lazy(() =>
   import('@/pages/departments/DepartmentFormPage').then((m) => ({ default: m.DepartmentFormPage })),
 )
+
+const SalesReportPage = lazy(() =>
+  import('@/pages/reports/ReportPlaceholderPage').then((m) => ({ default: m.SalesReportPage })),
+)
+const ProductionReportPage = lazy(() =>
+  import('@/pages/reports/ReportPlaceholderPage').then((m) => ({ default: m.ProductionReportPage })),
+)
+const PurchasingReportPage = lazy(() =>
+  import('@/pages/reports/ReportPlaceholderPage').then((m) => ({ default: m.PurchasingReportPage })),
+)
+const InventoryReportPage = lazy(() =>
+  import('@/pages/reports/ReportPlaceholderPage').then((m) => ({ default: m.InventoryReportPage })),
+)
+
 export function App() {
   return (
     <AuthProvider>
@@ -254,6 +268,11 @@ export function App() {
             <Route path="/production/new" element={<ProductionFormPage />} />
             <Route path="/production/:id" element={<ProductionDetailPage />} />
             <Route path="/production/:id/edit" element={<ProductionFormPage />} />
+
+            <Route path="/reports/sales-report" element={<SalesReportPage />} />
+            <Route path="/reports/production-report" element={<ProductionReportPage />} />
+            <Route path="/reports/purchasing-report" element={<PurchasingReportPage />} />
+            <Route path="/reports/inventory-report" element={<InventoryReportPage />} />
 
             <Route element={<AdminOnlyGuard />}>
               <Route path="/admin" element={<AdminShell />} />

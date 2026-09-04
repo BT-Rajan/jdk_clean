@@ -37,6 +37,11 @@ const SEGMENT_LABELS: Record<string, SegmentInfo> = {
   communication: { label: 'Communication' },
   users: { label: 'Users' },
   departments: { label: 'Departments' },
+  reports: { label: 'Reports', indexRoute: false },
+  'sales-report': { label: 'Sales report' },
+  'production-report': { label: 'Production report' },
+  'purchasing-report': { label: 'Purchasing report' },
+  'inventory-report': { label: 'Inventory report' },
   new: { label: 'New' },
   edit: { label: 'Edit' },
 }

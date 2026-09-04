@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { NavLink, useLocation } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { cn } from '@/lib/cn'
 
@@ -19,10 +19,20 @@ export function NavDropdown({ label, items }: NavDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
+  const currentPath = location.pathname + location.search
 
-  const isGroupActive = items.some(
-    (item) => location.pathname === item.to || location.pathname.startsWith(`${item.to}/`),
-  )
+  // Some items in the same dropdown can share a base path but differ
+  // only by query string (e.g. several Admin entries all point at
+  // /admin?section=...) -- react-router's own NavLink match ignores the
+  // search string, which would light up every one of them at once. Query-
+  // bearing links need an exact pathname+search match instead; plain
+  // ones keep the usual "this page or a page under it" match.
+  function isItemActive(to: string): boolean {
+    if (to.includes('?')) return currentPath === to
+    return location.pathname === to || location.pathname.startsWith(`${to}/`)
+  }
+
+  const isGroupActive = items.some((item) => isItemActive(item.to))
 
   // Close on outside click, on Escape, and whenever the route changes.
   useEffect(() => {
@@ -89,18 +99,16 @@ export function NavDropdown({ label, items }: NavDropdownProps) {
             className="glass-panel-header-scrolled absolute left-0 top-[calc(100%+0.5rem)] z-50 min-w-48 overflow-hidden rounded-xl p-1.5"
           >
             {items.map((item) => (
-              <NavLink
+              <Link
                 key={item.to}
                 to={item.to}
-                className={({ isActive }) =>
-                  cn(
-                    'block whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
-                    isActive ? 'bg-gold-500/15 text-gold-200' : 'text-white/60 hover:bg-white/5 hover:text-white',
-                  )
-                }
+                className={cn(
+                  'block whitespace-nowrap rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                  isItemActive(item.to) ? 'bg-gold-500/15 text-gold-200' : 'text-white/60 hover:bg-white/5 hover:text-white',
+                )}
               >
                 {item.label}
-              </NavLink>
+              </Link>
             ))}
           </motion.div>
         )}
