@@ -34,6 +34,10 @@ export function EmailTab() {
 
   const provider = watch('provider')
   const incomingProtocol = watch('incoming_protocol')
+  const imapUseSsl = watch('imap_use_ssl')
+  const pop3UseSsl = watch('pop3_use_ssl')
+  const smtpUseTls = watch('smtp_use_tls')
+  const isActive = watch('is_active')
 
   useEffect(() => {
     Promise.all([getEmailAccount(), getEmailProviders()])
@@ -207,7 +211,11 @@ export function EmailTab() {
           <div className="mt-6 grid gap-6 sm:grid-cols-3">
             <TextField label="IMAP host" {...register('imap_host')} />
             <TextField label="IMAP port" type="number" {...register('imap_port', { valueAsNumber: true })} />
-            <SelectField label="Encryption" {...register('imap_use_ssl', { setValueAs: (v) => v === 'true' })}>
+            <SelectField
+              label="Encryption"
+              value={imapUseSsl ? 'true' : 'false'}
+              {...register('imap_use_ssl', { setValueAs: (v) => v === 'true' })}
+            >
               <option value="true">SSL/TLS</option>
               <option value="false">None</option>
             </SelectField>
@@ -216,7 +224,11 @@ export function EmailTab() {
           <div className="mt-6 grid gap-6 sm:grid-cols-3">
             <TextField label="POP3 host" {...register('pop3_host')} />
             <TextField label="POP3 port" type="number" {...register('pop3_port', { valueAsNumber: true })} />
-            <SelectField label="Encryption" {...register('pop3_use_ssl', { setValueAs: (v) => v === 'true' })}>
+            <SelectField
+              label="Encryption"
+              value={pop3UseSsl ? 'true' : 'false'}
+              {...register('pop3_use_ssl', { setValueAs: (v) => v === 'true' })}
+            >
               <option value="true">SSL/TLS</option>
               <option value="false">None</option>
             </SelectField>
@@ -229,7 +241,11 @@ export function EmailTab() {
         <div className="mt-6 grid gap-6 sm:grid-cols-3">
           <TextField label="SMTP host" {...register('smtp_host')} />
           <TextField label="SMTP port" type="number" {...register('smtp_port', { valueAsNumber: true })} />
-          <SelectField label="Encryption" {...register('smtp_use_tls', { setValueAs: (v) => v === 'true' })}>
+          <SelectField
+            label="Encryption"
+            value={smtpUseTls ? 'true' : 'false'}
+            {...register('smtp_use_tls', { setValueAs: (v) => v === 'true' })}
+          >
             <option value="true">STARTTLS</option>
             <option value="false">None</option>
           </SelectField>
@@ -250,7 +266,11 @@ export function EmailTab() {
           </div>
           <div className="flex items-center gap-4">
             <div className="w-48">
-              <SelectField label="Channel" {...register('is_active', { setValueAs: (v) => v === 'true' })}>
+              <SelectField
+                label="Channel"
+                value={isActive ? 'true' : 'false'}
+                {...register('is_active', { setValueAs: (v) => v === 'true' })}
+              >
                 <option value="true">Enabled</option>
                 <option value="false">Disabled</option>
               </SelectField>

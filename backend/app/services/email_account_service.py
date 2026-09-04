@@ -212,6 +212,15 @@ def test_connection(db: Session) -> dict:
                 if row.smtp_use_tls:
                     server.starttls()
                 server.login(username, password)
+        except smtplib.SMTPNotSupportedError as exc:
+            # Almost always means AUTH was attempted over a connection the
+            # server never upgraded to TLS -- the standard symptom of
+            # Encryption being set to "None" for this host/port.
+            return _record_test(
+                db, row, False,
+                f"Incoming mail OK, but SMTP failed: {exc} Check that SMTP Encryption "
+                "is set to STARTTLS (or SSL/TLS, matching the port), not None.",
+            )
         except (smtplib.SMTPException, OSError, TimeoutError) as exc:
             return _record_test(db, row, False, f"Incoming mail OK, but SMTP failed: {exc}")
 

@@ -37,10 +37,12 @@ export function WhatsAppTab() {
   const [sending, setSending] = useState(false)
   const [sendResult, setSendResult] = useState<{ ok: boolean; message: string } | null>(null)
 
-  const { register, getValues, handleSubmit, reset, formState: { isSubmitting } } =
+  const { register, watch, getValues, handleSubmit, reset, formState: { isSubmitting } } =
     useForm<WhatsAppAccountFormValues>({
       defaultValues: { api_version: 'v21.0', is_active: true },
     })
+
+  const isActive = watch('is_active')
 
   function loadTemplates() {
     setTemplatesError(null)
@@ -240,7 +242,11 @@ export function WhatsAppTab() {
             </div>
             <div className="flex items-center gap-4">
               <div className="w-48">
-                <SelectField label="Channel" {...register('is_active', { setValueAs: (v) => v === 'true' })}>
+                <SelectField
+                  label="Channel"
+                  value={isActive ? 'true' : 'false'}
+                  {...register('is_active', { setValueAs: (v) => v === 'true' })}
+                >
                   <option value="true">Enabled</option>
                   <option value="false">Disabled</option>
                 </SelectField>

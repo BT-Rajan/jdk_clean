@@ -101,5 +101,15 @@ def send_document_email(
             server.sendmail(
                 config["from_email"] or config["username"], [to_email], message.as_string()
             )
+    except smtplib.SMTPNotSupportedError as exc:
+        # Almost always means AUTH was attempted over a connection the
+        # server never upgraded to TLS -- most servers only advertise
+        # AUTH after STARTTLS, so this is the standard symptom of
+        # Encryption being set to "None" (or the wrong port for it).
+        raise AppError(
+            f"Could not send email: {exc} This usually means the mailbox's SMTP "
+            "Encryption is set to \"None\" -- set it to STARTTLS (or SSL/TLS, "
+            "matching the port) under Communication -> Email and save."
+        ) from exc
     except (smtplib.SMTPException, OSError, TimeoutError) as exc:
         raise AppError(f"Could not send email: {exc}") from exc

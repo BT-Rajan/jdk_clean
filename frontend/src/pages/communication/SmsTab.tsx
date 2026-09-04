@@ -31,6 +31,8 @@ export function SmsTab() {
     })
 
   const provider = watch('provider')
+  const testMode = watch('test_mode')
+  const isActive = watch('is_active')
 
   useEffect(() => {
     Promise.all([getSmsAccount(), getSmsProviders()])
@@ -172,7 +174,11 @@ export function SmsTab() {
 
         {provider === 'kwtsms' && (
           <div className="mt-6 max-w-xs">
-            <SelectField label="Test mode" {...register('test_mode', { setValueAs: (v) => v === 'true' })}>
+            <SelectField
+              label="Test mode"
+              value={testMode ? 'true' : 'false'}
+              {...register('test_mode', { setValueAs: (v) => v === 'true' })}
+            >
               <option value="true">On -- messages are queued, not delivered</option>
               <option value="false">Off -- messages deliver for real</option>
             </SelectField>
@@ -193,7 +199,11 @@ export function SmsTab() {
             </p>
           </div>
           <div className="w-48">
-            <SelectField label="Channel" {...register('is_active', { setValueAs: (v) => v === 'true' })}>
+            <SelectField
+              label="Channel"
+              value={isActive ? 'true' : 'false'}
+              {...register('is_active', { setValueAs: (v) => v === 'true' })}
+            >
               <option value="true">Enabled</option>
               <option value="false">Disabled</option>
             </SelectField>
