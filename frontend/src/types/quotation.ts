@@ -1,6 +1,7 @@
 /** Mirrors backend/app/schemas/quotation.py. */
 
 export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'converted'
+export type QuotationLanguage = 'en' | 'ar'
 
 export interface QuotationLineInput {
   product_id: number
@@ -33,6 +34,9 @@ export interface Quotation {
   quotation_date: string
   valid_until: string | null
   status: QuotationStatus
+  /** Which admin-uploaded template (Admin -> Documents) this was raised
+   * in -- what Print/Email default to rendering. */
+  language: QuotationLanguage
   subtotal_amount: number
   discount_percent: number
   discount_amount: number
@@ -58,6 +62,7 @@ export interface QuotationPayload {
    * any per-line discounts. */
   discount_percent?: number
   lines: QuotationLineInput[]
+  language: QuotationLanguage
 }
 
 /** 'converted' is deliberately excluded -- only create_order_from_quotation sets it. */

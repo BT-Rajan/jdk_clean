@@ -14,6 +14,11 @@ and orders — with role-based auth, soft deletes, and a field-level audit log.
 - Python 3.11+
 - MySQL 8.x
 - pip
+- LibreOffice (specifically the `libreoffice-writer` package on Debian/Ubuntu, or the
+  full desktop install on Windows/macOS) -- needed only for a quotation's **Print** and
+  **Email** actions, which render the admin-uploaded Word template (Admin -> Documents)
+  to PDF via headless `soffice` so both use the same document. Everything else works
+  without it; those two actions raise a clear error until it's installed.
 
 ## Installation
 

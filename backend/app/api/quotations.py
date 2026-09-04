@@ -16,7 +16,15 @@ from app.schemas.quotation import (
     QuotationStatusUpdate,
     QuotationUpdate,
 )
-from app.services import audit_service, doc_template_service, email_service, pdf_generator, quotation_service
+from app.services import (
+    audit_service,
+    doc_converter,
+    doc_template_service,
+    email_service,
+    email_template_service,
+    pdf_generator,
+    quotation_service,
+)
 
 router = APIRouter(prefix="/api/quotations", tags=["quotations"])
 read_guard = require_page_access("quotations", "read")
@@ -146,16 +154,26 @@ def restore_quotation(
     return QuotationOut.from_model(quotation)
 
 
+def _render_quotation_pdf(db: Session, quotation, language: str | None) -> bytes:
+    """Renders whichever (quotation, language) admin template is active
+    -- the quotation's own `language` unless a caller explicitly asks for
+    the other one -- through LibreOffice, so Print and Email always
+    produce the same document Admin -> Documents controls, in the
+    quotation's own language."""
+    context = doc_template_service.build_quotation_context(db, quotation)
+    docx_bytes = doc_template_service.render_document(db, "quotation", language or quotation.language, context)
+    return doc_converter.convert_docx_to_pdf(docx_bytes)
+
+
 @router.get("/{quotation_id}/pdf")
 def download_quotation_pdf(
     quotation_id: int,
+    language: Literal["en", "ar"] | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(read_guard),
 ):
     quotation = quotation_service.get_quotation(db, quotation_id)
-    company_settings = pdf_generator.get_company_settings(db)
-    signer = pdf_generator.resolve_signer(db, quotation.created_by)
-    pdf_bytes = pdf_generator.generate_quotation_pdf(quotation, company_settings, signer=signer)
+    pdf_bytes = _render_quotation_pdf(db, quotation, language)
     filename = f"{quotation.quotation_number}.pdf"
     return Response(
         content=pdf_bytes,
@@ -190,18 +208,26 @@ def email_quotation_pdf(
     user: User = Depends(write_guard),
 ):
     quotation = quotation_service.get_quotation(db, quotation_id)
-    company_settings = pdf_generator.get_company_settings(db)
-    signer = pdf_generator.resolve_signer(db, quotation.created_by)
-    pdf_bytes = pdf_generator.generate_quotation_pdf(quotation, company_settings, signer=signer)
+    pdf_bytes = _render_quotation_pdf(db, quotation, None)
     filename = f"{quotation.quotation_number}.pdf"
 
-    body = payload.message or (
-        f"Please find attached quotation {quotation.quotation_number} "
-        f"for your review."
+    company_settings = pdf_generator.get_company_settings(db)
+    subject, template_body = email_template_service.render(
+        db,
+        "quotation_email",
+        {
+            "customer_name": quotation.customer.name if quotation.customer else "",
+            "quotation_number": quotation.quotation_number,
+            "quotation_date": quotation.quotation_date.isoformat(),
+            "total_amount": f"{float(quotation.total_amount):,.2f}",
+            "company_name": company_settings.get("company_name", ""),
+        },
     )
+    body = payload.message or template_body
+
     email_service.send_document_email(
         to_email=payload.to_email,
-        subject=f"Quotation {quotation.quotation_number}",
+        subject=subject,
         body=body,
         attachment_bytes=pdf_bytes,
         attachment_filename=filename,

@@ -24,6 +24,17 @@ TABLE_NAME = "email_templates"
 # untouched rather than raising, and a context key the caller forgot to
 # fill in is left untouched the same way.
 TEMPLATE_DEFINITIONS: dict[str, dict[str, str]] = {
+    "quotation_email": {
+        "name": "Quotation email",
+        "subject": "Quotation {quotation_number}",
+        "body": (
+            "Dear {customer_name},\n\n"
+            "Please find attached quotation {quotation_number}, dated {quotation_date}, "
+            "total {total_amount}.\n\n"
+            "{company_name}"
+        ),
+        "placeholders": "customer_name, quotation_number, quotation_date, total_amount, company_name",
+    },
     "order_confirmation": {
         "name": "Order confirmation (first email)",
         "subject": "Order {order_number}",

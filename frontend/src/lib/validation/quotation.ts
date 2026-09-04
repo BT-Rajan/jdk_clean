@@ -19,6 +19,9 @@ export const quotationSchema = z.object({
   // already line-discounted subtotal.
   discount_percent: z.coerce.number().min(0).max(100).optional().or(z.literal('').transform(() => undefined)),
   lines: z.array(quotationLineSchema).min(1, 'At least one line item is required'),
+  // Which admin-uploaded template (English/Arabic) this quotation is
+  // raised in -- drives the default language Print/Email use.
+  language: z.enum(['en', 'ar']).default('en'),
 })
 
 export type QuotationFormValues = z.input<typeof quotationSchema>

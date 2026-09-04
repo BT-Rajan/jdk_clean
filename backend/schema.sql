@@ -749,6 +749,7 @@ CREATE TABLE IF NOT EXISTS quotations (
     quotation_date  DATE NOT NULL,
     valid_until     DATE NULL,
     status          ENUM('draft','sent','accepted','rejected','expired','converted') NOT NULL DEFAULT 'draft',
+    language        ENUM('en','ar') NOT NULL DEFAULT 'en', -- which admin quotation template (see doc_templates) Print/Email default to
     subtotal_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
     -- Percentage, e.g. 0 or 10 -- a whole-document discount applied on
     -- top of the already line-discounted subtotal.

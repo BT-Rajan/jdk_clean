@@ -20,6 +20,7 @@ import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncGuard } from '@/hooks/useAsyncGuard'
 import { canWriteDepartment, isAdmin } from '@/lib/roles'
 import { QUOTATION_STATUSES_REQUIRING_REASON, QUOTATION_TRANSITIONS } from '@/lib/statusTransitions'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
@@ -36,7 +37,7 @@ export function QuotationDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const { busy, run: runGuarded } = useAsyncGuard()
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [emailOpen, setEmailOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
@@ -51,96 +52,67 @@ export function QuotationDetailPage() {
 
   useEffect(load, [quotationId])
 
-  async function handleStatusChange(status: (typeof QUOTATION_TRANSITIONS)['draft'][number], reason?: string) {
-    setBusy(true)
+  // One request in flight at a time (see useAsyncGuard) -- a fast
+  // double-click on "Convert to order" or "Approve" must not fire the
+  // request twice.
+  function withBusy(fn: () => Promise<void>): Promise<void> {
     setError(null)
-    try {
+    return runGuarded(fn).catch((err) => setError(getApiErrorMessage(err)))
+  }
+
+  async function handleStatusChange(status: (typeof QUOTATION_TRANSITIONS)['draft'][number], reason?: string) {
+    await withBusy(async () => {
       const updated = await updateQuotationStatus(quotationId, status, reason)
       setQuotation(updated)
       setNotice(`Status changed to ${status}.`)
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   async function handleApprove() {
-    setBusy(true)
-    setError(null)
-    try {
+    await withBusy(async () => {
       const updated = await approveQuotation(quotationId)
       setQuotation(updated)
       setNotice('Approved and sent.')
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   async function handleConvert() {
-    setBusy(true)
-    setError(null)
-    try {
+    await withBusy(async () => {
       const order = await convertQuotationToOrder(quotationId)
       navigate(`/orders/${order.id}`)
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-      setBusy(false)
-    }
+    })
   }
 
   async function handleDownload() {
     if (!quotation) return
-    setBusy(true)
-    try {
+    await withBusy(async () => {
       await downloadQuotationPdf(quotation.id, quotation.quotation_number)
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   async function handleDownloadDocx(language: 'en' | 'ar') {
     if (!quotation) return
-    setBusy(true)
-    try {
+    await withBusy(async () => {
       await downloadQuotationDocx(quotation.id, quotation.quotation_number, language)
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   async function handleDelete() {
-    setBusy(true)
-    try {
+    await withBusy(async () => {
       await deleteQuotation(quotationId)
       setConfirmOpen(false)
       setJustDeleted(true)
       setNotice('Quotation deleted.')
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   async function handleRestore() {
-    setBusy(true)
-    try {
+    await withBusy(async () => {
       const restored = await restoreQuotation(quotationId)
       setQuotation(restored)
       setJustDeleted(false)
       setNotice('Quotation restored.')
-    } catch (err) {
-      setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
-    }
+    })
   }
 
   if (loading) {
@@ -203,6 +175,9 @@ export function QuotationDetailPage() {
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-4">
           <StatusBadge status={quotation.status} />
+          <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/50">
+            {quotation.language === 'ar' ? 'Arabic' : 'English'}
+          </span>
           {quotation.auto_created && (
             <span className="rounded-full border border-gold-400/30 bg-gold-500/10 px-2.5 py-1 text-xs font-medium text-gold-200">
               Auto-created from feasibility

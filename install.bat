@@ -68,6 +68,15 @@ call :Ok "python !PY_VERSION!"
 for /f "delims=" %%V in ('node -v') do call :Ok "node %%V"
 for /f "delims=" %%V in ('npm -v') do call :Ok "npm %%V"
 
+where soffice >nul 2>&1
+if errorlevel 1 (
+  call :Warn "soffice (LibreOffice) not found -- quotation Print and Email will fail until it's installed."
+  call :Info "It renders each document's admin-uploaded Word template to PDF for those two actions."
+  call :Info "Install LibreOffice from https://www.libreoffice.org/download/, then re-run this installer or just restart the backend -- no other setup needed."
+) else (
+  call :Ok "soffice (LibreOffice) found"
+)
+
 where pm2 >nul 2>&1
 if errorlevel 1 (
   call :Warn "pm2 is not installed globally."

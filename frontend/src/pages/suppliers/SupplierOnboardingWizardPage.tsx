@@ -199,7 +199,15 @@ export function SupplierOnboardingWizardPage() {
                 {stepIndex === 0 ? 'Cancel' : 'Back'}
               </Button>
               {isLastStep ? (
-                <Button type="submit" isLoading={isSubmitting}>
+                // type="button" with an explicit handleSubmit(onSubmit) call, not
+                // type="submit" -- see CustomerOnboardingWizardPage's identical
+                // button for why: a real click's mousedown-to-mouseup gap can
+                // straddle the re-render that turns this button from "Next" into
+                // "Create supplier", and a type="submit" button flipping to that
+                // type mid-click fires the browser's native submit as its default
+                // action, skipping Review entirely. Submitting programmatically
+                // instead removes that pathway.
+                <Button type="button" isLoading={isSubmitting} onClick={handleSubmit(onSubmit)}>
                   Create supplier
                 </Button>
               ) : (

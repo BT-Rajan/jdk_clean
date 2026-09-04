@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -38,6 +39,10 @@ class QuotationCreate(BaseModel):
     # Percentage, e.g. 0 or 5. Defaults to 0 when not given.
     discount_percent: float | None = Field(default=None, ge=0, le=100)
     lines: list[QuotationLineIn] = Field(min_length=1)
+    # Which admin-uploaded template (see doc_template_service.LANGUAGES)
+    # this quotation is raised in -- drives the default language for
+    # Print/Email. Sales' choice on the form, not the customer's.
+    language: Literal["en", "ar"] = "en"
 
     @field_validator("quotation_date", "valid_until")
     @classmethod
@@ -61,6 +66,7 @@ class QuotationUpdate(BaseModel):
     notes: str | None = None
     discount_percent: float | None = Field(default=None, ge=0, le=100)
     lines: list[QuotationLineIn] | None = Field(default=None, min_length=1)
+    language: Literal["en", "ar"] | None = None
 
     @field_validator("quotation_date", "valid_until")
     @classmethod
@@ -89,6 +95,7 @@ class QuotationOut(BaseModel):
     quotation_date: date
     valid_until: date | None
     status: str
+    language: str
     subtotal_amount: float
     discount_percent: float
     discount_amount: float

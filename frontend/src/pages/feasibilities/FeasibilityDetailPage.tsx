@@ -32,6 +32,7 @@ import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { FeasibilityStageResultsModal } from './FeasibilityStageResultsModal'
 import { useAuth } from '@/hooks/useAuth'
+import { useAsyncGuard } from '@/hooks/useAsyncGuard'
 import { canWriteDepartment, isAdmin } from '@/lib/roles'
 import {
   feasibilityAdminReviewSchema,
@@ -132,7 +133,7 @@ export function FeasibilityDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const { busy, run: runGuarded } = useAsyncGuard()
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const [approveOpen, setApproveOpen] = useState(false)
   const [rejectOpen, setRejectOpen] = useState(false)
@@ -153,15 +154,17 @@ export function FeasibilityDetailPage() {
 
   useEffect(load, [feasibilityId])
 
+  // Wraps every action below in the same "one at a time" guard (see
+  // useAsyncGuard) so a fast double-click, or two buttons that both
+  // happen to be enabled at once, can't fire the same request twice --
+  // e.g. two "Approve override" submissions racing, or a duplicate
+  // feasibility run.
   async function withBusy(fn: () => Promise<void>) {
-    setBusy(true)
     setError(null)
     try {
-      await fn()
+      await runGuarded(fn)
     } catch (err) {
       setError(getApiErrorMessage(err))
-    } finally {
-      setBusy(false)
     }
   }
 
