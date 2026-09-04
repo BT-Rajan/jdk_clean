@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 class EmailAccountOut(BaseModel):
@@ -56,6 +56,41 @@ class EmailAccountUpdate(BaseModel):
         # or a trailing newline would otherwise be saved verbatim and
         # silently break the connection with no validation error.
         return v.strip() if isinstance(v, str) else v
+
+    @model_validator(mode="after")
+    def _check_encryption_matches_port(self):
+        # 993 (IMAP) and 995 (POP3) are IANA-standard implicit-TLS-only
+        # ports -- no real mail server accepts a plaintext connection on
+        # them, so this combination is never valid, only ever a mistake
+        # that would otherwise sit unnoticed until "Test connection" (or
+        # a live send) fails with a cryptic "socket error: EOF". Reject
+        # it at save time instead, with a message that says exactly
+        # what's wrong -- for both directions, since 143/110 are the
+        # unencrypted counterparts and don't expect an SSL handshake
+        # either.
+        if self.incoming_protocol == "imap":
+            if self.imap_port == 993 and not self.imap_use_ssl:
+                raise ValueError(
+                    "IMAP port 993 is SSL/TLS-only -- set Encryption to SSL/TLS, "
+                    "or use port 143 for an unencrypted connection."
+                )
+            if self.imap_port == 143 and self.imap_use_ssl:
+                raise ValueError(
+                    "IMAP port 143 is not an SSL/TLS port -- set Encryption to "
+                    "None, or use port 993 for SSL/TLS."
+                )
+        else:
+            if self.pop3_port == 995 and not self.pop3_use_ssl:
+                raise ValueError(
+                    "POP3 port 995 is SSL/TLS-only -- set Encryption to SSL/TLS, "
+                    "or use port 110 for an unencrypted connection."
+                )
+            if self.pop3_port == 110 and self.pop3_use_ssl:
+                raise ValueError(
+                    "POP3 port 110 is not an SSL/TLS port -- set Encryption to "
+                    "None, or use port 995 for SSL/TLS."
+                )
+        return self
 
 
 class EmailAccountTestResult(BaseModel):
