@@ -34,6 +34,7 @@ export function TemplateFieldMapperModal({ slot, onClose, onSaved }: TemplateFie
   const [loading, setLoading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [content, setContent] = useState('')
   const editorRef = useRef<HTMLDivElement>(null)
   // Guards against an in-flight fetch from a previously opened slot
   // landing after the admin has already switched to (or closed) another.
@@ -48,7 +49,7 @@ export function TemplateFieldMapperModal({ slot, onClose, onSaved }: TemplateFie
     getDocTemplateHtml(slot.doc_type, slot.language)
       .then((html) => {
         if (requestSlotKey.current !== key) return
-        if (editorRef.current) editorRef.current.innerHTML = html
+        setContent(html)
       })
       .catch((err) => {
         if (requestSlotKey.current !== key) return
@@ -58,6 +59,14 @@ export function TemplateFieldMapperModal({ slot, onClose, onSaved }: TemplateFie
         if (requestSlotKey.current === key) setLoading(false)
       })
   }, [slot])
+
+  // The editor div only mounts once loading flips false (see render
+  // below), so editorRef.current is still null at the moment the fetch
+  // above resolves -- setting innerHTML has to happen here instead,
+  // after the div has actually mounted with the fetched content.
+  useEffect(() => {
+    if (!loading && editorRef.current) editorRef.current.innerHTML = content
+  }, [loading, content])
 
   function insertAtCursor(token: string) {
     const editor = editorRef.current
