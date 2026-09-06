@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DeleteIcon, EditIcon, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
 import { IdDocumentPanel } from '@/components/documents/IdDocumentPanel'
@@ -170,11 +170,23 @@ export function CustomerDetailPage() {
         actions={
           canWrite(user?.role) && !justDeleted ? (
             <>
-              <Button variant="ghost" onClick={() => navigate(`/customers/${customerId}/edit`)}>
-                Edit
+              <Button
+                variant="ghost"
+                size="sm"
+                className="!w-9 !px-0"
+                onClick={() => navigate(`/customers/${customerId}/edit`)}
+                aria-label="Edit"
+              >
+                <EditIcon />
               </Button>
-              <Button variant="danger" onClick={() => setConfirmOpen(true)}>
-                Delete
+              <Button
+                variant="danger"
+                size="sm"
+                className="!w-9 !px-0"
+                onClick={() => setConfirmOpen(true)}
+                aria-label="Delete"
+              >
+                <DeleteIcon />
               </Button>
             </>
           ) : undefined

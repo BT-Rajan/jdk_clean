@@ -8,6 +8,8 @@ import {
   Badge,
   Button,
   ConfirmDialog,
+  DeleteIcon,
+  EditIcon,
   Field,
   GlassCard,
   Modal,
@@ -240,9 +242,25 @@ export function UserDetailPage() {
                   Reset password
                 </Button>
               )}
-              <Button variant="ghost" onClick={() => navigate(`/users/${userId}/edit`)}>Edit</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="!w-9 !px-0"
+                onClick={() => navigate(`/users/${userId}/edit`)}
+                aria-label="Edit"
+              >
+                <EditIcon />
+              </Button>
               {!isSelf && (
-                <Button variant="danger" onClick={() => setConfirmOpen(true)}>Delete</Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={() => setConfirmOpen(true)}
+                  aria-label="Delete"
+                >
+                  <DeleteIcon />
+                </Button>
               )}
             </>
           ) : undefined

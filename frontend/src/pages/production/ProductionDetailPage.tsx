@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DeleteIcon, EditIcon, Field, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
 import {
   deleteProductionBatch,
   getMaterialRequirements,
@@ -167,10 +167,26 @@ export function ProductionDetailPage() {
           !justDeleted ? (
             <>
               {allowWrite && batch.status === 'planned' && (
-                <Button variant="ghost" onClick={() => navigate(`/production/${batchId}/edit`)}>Edit</Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={() => navigate(`/production/${batchId}/edit`)}
+                  aria-label="Edit"
+                >
+                  <EditIcon />
+                </Button>
               )}
               {allowWrite && batch.status === 'planned' && (
-                <Button variant="danger" onClick={() => setConfirmOpen(true)}>Delete</Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={() => setConfirmOpen(true)}
+                  aria-label="Delete"
+                >
+                  <DeleteIcon />
+                </Button>
               )}
             </>
           ) : undefined

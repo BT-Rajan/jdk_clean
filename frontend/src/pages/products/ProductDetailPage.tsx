@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Badge, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Badge, Button, ConfirmDialog, DeleteIcon, EditIcon, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { MultiHistoryTimeline } from '@/components/history/MultiHistoryTimeline'
 import { WhereUsedPanel } from '@/components/master/WhereUsedPanel'
 import { activateProduct, deactivateProduct, deleteProduct, getProduct, restoreProduct } from '@/api/products'
@@ -112,8 +112,24 @@ export function ProductDetailPage() {
               <Button variant="ghost" onClick={handleToggleStatus} isLoading={busy}>
                 {product.status === 'active' ? 'Deactivate' : 'Activate'}
               </Button>
-              <Button variant="ghost" onClick={() => navigate(`/products/${productId}/edit`)}>Edit</Button>
-              <Button variant="danger" onClick={() => setConfirmOpen(true)}>Delete</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="!w-9 !px-0"
+                onClick={() => navigate(`/products/${productId}/edit`)}
+                aria-label="Edit"
+              >
+                <EditIcon />
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                className="!w-9 !px-0"
+                onClick={() => setConfirmOpen(true)}
+                aria-label="Delete"
+              >
+                <DeleteIcon />
+              </Button>
             </>
           ) : undefined
         }

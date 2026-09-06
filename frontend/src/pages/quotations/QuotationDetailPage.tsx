@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DownloadMenu, EmailIcon, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   approveQuotation,
@@ -180,13 +180,29 @@ export function QuotationDetailPage() {
                 <EmailIcon />
               </Button>
               {allowWrite && quotation.status === 'draft' && (
-                <Button variant="ghost" onClick={() => navigate(`/quotations/${quotationId}/edit`)}>Edit</Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={() => navigate(`/quotations/${quotationId}/edit`)}
+                  aria-label="Edit"
+                >
+                  <EditIcon />
+                </Button>
               )}
               {allowWrite && quotation.status === 'accepted' && (
                 <Button onClick={handleConvert} isLoading={busy}>Convert to order</Button>
               )}
               {allowWrite && canDelete && (
-                <Button variant="danger" onClick={() => setConfirmOpen(true)}>Delete</Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={() => setConfirmOpen(true)}
+                  aria-label="Delete"
+                >
+                  <DeleteIcon />
+                </Button>
               )}
             </>
           ) : undefined

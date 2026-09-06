@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DownloadMenu, EmailIcon, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField, TextField } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField, TextField } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewOrder,
@@ -349,10 +349,26 @@ export function OrderDetailPage() {
                 ) : null
               )}
               {allowWrite && order.status === 'draft' && (
-                <Button variant="ghost" onClick={() => navigate(`/orders/${orderId}/edit`)}>Edit</Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={() => navigate(`/orders/${orderId}/edit`)}
+                  aria-label="Edit"
+                >
+                  <EditIcon />
+                </Button>
               )}
               {allowWrite && order.status === 'draft' && (
-                <Button variant="danger" onClick={() => setConfirmOpen(true)}>Delete</Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={() => setConfirmOpen(true)}
+                  aria-label="Delete"
+                >
+                  <DeleteIcon />
+                </Button>
               )}
             </>
           ) : undefined

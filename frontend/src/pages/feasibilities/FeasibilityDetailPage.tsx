@@ -7,6 +7,7 @@ import {
   Alert,
   Button,
   ConfirmDialog,
+  DeleteIcon,
   DownloadMenu,
   Field,
   GlassCard,
@@ -250,7 +251,15 @@ export function FeasibilityDetailPage() {
                 <Button variant="ghost" onClick={handleRevive} isLoading={busy}>Revive &amp; re-check</Button>
               )}
               {allowWrite && f.status !== 'converted' && (
-                <Button variant="danger" onClick={() => setConfirmDeleteOpen(true)}>Delete</Button>
+                <Button
+                  variant="danger"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={() => setConfirmDeleteOpen(true)}
+                  aria-label="Delete"
+                >
+                  <DeleteIcon />
+                </Button>
               )}
             </>
           ) : undefined
