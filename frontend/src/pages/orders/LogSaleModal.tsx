@@ -102,7 +102,7 @@ export function LogSaleModal({ open, onClose, onLogged, defaultDate }: LogSaleMo
         <SelectField label="Customer" error={errors.customer_id?.message} {...register('customer_id')}>
           <option value="">Choose…</option>
           {customers.map((c) => (
-            <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
+            <option key={c.id} value={c.id}>{c.name}{c.code ? ` (${c.code})` : ' (prospective)'}</option>
           ))}
         </SelectField>
 

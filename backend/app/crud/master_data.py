@@ -91,6 +91,14 @@ class CustomerCRUD(BaseCRUD):
     def update(self, db: Session, id: int, data: dict, user_id: int | None = None) -> Customer:
         if "phone" in data:
             self._check_duplicate_phone(db, data["phone"], exclude_id=id)
+        if data.get("code") is not None:
+            # code (civil ID / registration number) is one-directional:
+            # settable only while still NULL (a prospective customer
+            # providing it for the first time), never changed once set --
+            # same lock CustomerUpdate's docstring documents for `name`.
+            existing = db.query(Customer.code).filter(Customer.id == id).scalar()
+            if existing is not None:
+                raise ValidationAppError("This customer's ID/registration number is already on file and can't be changed.")
         return super().update(db, id, data, user_id=user_id)
 
 

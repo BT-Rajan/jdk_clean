@@ -49,8 +49,13 @@ function CustomerEditForm({ id }: { id: number }) {
   const [loading, setLoading] = useState(true)
   const [formError, setFormError] = useState<string | null>(null)
   // Locked after creation -- shown read-only, never submitted for edit.
-  // See lib/validation/customer.ts customerEditSchema.
-  const [locked, setLocked] = useState<{ name: string; code: string; idLabel: string } | null>(null)
+  // See lib/validation/customer.ts customerEditSchema. code is the one
+  // exception: null means this is still a prospective customer who
+  // hasn't provided it yet, and can be filled in once (see
+  // handleCompleteCode) -- but is locked the same way once set.
+  const [locked, setLocked] = useState<{ name: string; code: string | null; idLabel: string } | null>(null)
+  const [newCode, setNewCode] = useState('')
+  const [savingCode, setSavingCode] = useState(false)
   const {
     register,
     handleSubmit,
@@ -91,6 +96,20 @@ function CustomerEditForm({ id }: { id: number }) {
 
   const isIndividual = watch('customer_type') === 'individual'
 
+  async function handleCompleteCode() {
+    if (!newCode.trim()) return
+    setSavingCode(true)
+    setFormError(null)
+    try {
+      const updated = await updateCustomer(id, { code: newCode.trim() })
+      setLocked((prev) => (prev ? { ...prev, code: updated.code } : prev))
+    } catch (err) {
+      setFormError(getApiErrorMessage(err))
+    } finally {
+      setSavingCode(false)
+    }
+  }
+
   async function onSubmit(values: CustomerEditSubmitValues) {
     setFormError(null)
     try {
@@ -112,9 +131,26 @@ function CustomerEditForm({ id }: { id: number }) {
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
           <div className="grid grid-cols-1 gap-6 rounded-xl border border-white/10 bg-white/5 p-5 sm:grid-cols-2">
             <Field label="Name" value={locked?.name} />
-            <Field label={locked?.idLabel ?? 'ID'} value={locked?.code} />
+            {locked && locked.code === null ? (
+              <div className="flex items-end gap-3">
+                <TextField
+                  label={locked.idLabel}
+                  hint="Still prospective -- not provided yet"
+                  value={newCode}
+                  onChange={(e) => setNewCode(e.target.value)}
+                />
+                <Button type="button" size="sm" isLoading={savingCode} onClick={handleCompleteCode}>
+                  Save
+                </Button>
+              </div>
+            ) : (
+              <Field label={locked?.idLabel ?? 'ID'} value={locked?.code} />
+            )}
           </div>
-          <p className="text-xs text-white/40">Name and {locked?.idLabel?.toLowerCase()} are set at creation and can't be changed here.</p>
+          <p className="text-xs text-white/40">
+            Name{locked?.code !== null && ` and ${locked?.idLabel?.toLowerCase()}`} {locked?.code !== null ? 'are' : 'is'} set at
+            creation and can't be changed here.
+          </p>
 
           <RadioGroupField
             label="Business or individual"

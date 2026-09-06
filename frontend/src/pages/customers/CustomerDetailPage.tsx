@@ -166,7 +166,7 @@ export function CustomerDetailPage() {
     <AppLayout>
       <PageHeader
         title={customer.name}
-        subtitle={`${customer.customer_number} · ${customer.code}`}
+        subtitle={customer.code ? `${customer.customer_number} · ${customer.code}` : `${customer.customer_number} · Prospective`}
         actions={
           canWrite(user?.role) && !justDeleted ? (
             <>

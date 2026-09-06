@@ -50,7 +50,7 @@ export async function runGlobalSearch(query: string): Promise<GlobalSearchResult
 
   if (customers.status === 'fulfilled') {
     for (const c of customers.value.items) {
-      results.push({ id: `customer-${c.id}`, group: 'Customers', label: c.name, sublabel: c.code, path: `/customers/${c.id}` })
+      results.push({ id: `customer-${c.id}`, group: 'Customers', label: c.name, sublabel: c.code ?? undefined, path: `/customers/${c.id}` })
     }
   }
   if (suppliers.status === 'fulfilled') {

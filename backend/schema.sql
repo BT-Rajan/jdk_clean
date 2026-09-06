@@ -110,7 +110,11 @@ CREATE TABLE IF NOT EXISTS customers (
     -- `code`) -- asked as the wizard's first question. See
     -- app/models/customer.py CUSTOMER_TYPES.
     customer_type   ENUM('individual','business') NOT NULL DEFAULT 'business',
-    code            VARCHAR(30)  NOT NULL UNIQUE,
+    -- NULL for a prospective customer -- e.g. a feasibility check or
+    -- quotation raised for someone new who hasn't provided this yet.
+    -- UNIQUE still holds (MySQL allows any number of NULLs under it);
+    -- locked once set, same as `name`.
+    code            VARCHAR(30)  NULL UNIQUE,
     name            VARCHAR(150) NOT NULL,
     nature_of_business VARCHAR(150) NULL,
     contact_person  VARCHAR(120) NULL,

@@ -47,8 +47,12 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
         Enum(*CUSTOMER_TYPES, name="customer_type"), nullable=False, default="business"
     )
     # Civil ID for an individual, registration number for a business --
-    # see customer_type above.
-    code: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
+    # see customer_type above. NULL for a prospective customer (raised
+    # for a feasibility check or quotation before they've been formally
+    # onboarded, see onboarding_status below) who hasn't provided this
+    # yet -- can move from NULL to a real value later, but is locked
+    # once set, same as `name` (see schemas/customer.py CustomerUpdate).
+    code: Mapped[str | None] = mapped_column(String(30), unique=True, nullable=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     nature_of_business: Mapped[str | None] = mapped_column(String(150), nullable=True)
     contact_person: Mapped[str | None] = mapped_column(String(120), nullable=True)

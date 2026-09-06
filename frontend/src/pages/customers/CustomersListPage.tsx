@@ -95,7 +95,7 @@ export function CustomersListPage() {
                   <tr key={c.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
                     <td className="px-6 py-4">
                       <Link to={`/customers/${c.id}`} className="font-medium text-gold-300 hover:text-gold-200">
-                        {c.code}
+                        {c.code ?? 'Prospective'}
                       </Link>
                     </td>
                     <td className="px-6 py-4 text-white">{c.name}</td>

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, ConfirmDialog, GlassCard, SelectField, Spinner, TextareaField, TextField } from '@/components/ui'
@@ -269,6 +269,17 @@ function QuotationCreateForm() {
             <p className="mt-1 text-xs text-white/40">
               Only feasibility checks ready for quotation are shown (feasible or exception-approved)
             </p>
+            {!loadingFeasibilities && feasibilities.length === 0 && (
+              <p className="mt-2 rounded-lg border border-gold-400/20 bg-gold-400/5 p-3 text-xs text-gold-100/80">
+                Nothing is waiting here right now because feasibility checks are auto-drafted into a
+                quotation the moment they pass or get an exception approval (Settings -&gt; Sales). If
+                you were expecting one to show up, it's most likely already a draft --{' '}
+                <Link to="/quotations" className="underline hover:text-gold-100">
+                  check the Quotations list
+                </Link>{' '}
+                for a recent draft on that customer before creating a new one by hand.
+              </p>
+            )}
           </div>
 
           {selectedFeasibility && (
@@ -299,7 +310,7 @@ function QuotationCreateForm() {
             <SelectField label="Customer" error={errors.customer_id?.message} {...register('customer_id')}>
               <option value="">Choose…</option>
               {customers.map((c) => (
-                <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
+                <option key={c.id} value={c.id}>{c.name}{c.code ? ` (${c.code})` : ' (prospective)'}</option>
               ))}
             </SelectField>
             <TextField label="Quotation date" type="date" min={todayDateInputMin} error={errors.quotation_date?.message} {...register('quotation_date')} />
@@ -485,7 +496,7 @@ function QuotationEditForm({ id }: { id: number }) {
             <SelectField label="Customer" error={errors.customer_id?.message} {...register('customer_id')}>
               <option value="">Choose…</option>
               {customers.map((c) => (
-                <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
+                <option key={c.id} value={c.id}>{c.name}{c.code ? ` (${c.code})` : ' (prospective)'}</option>
               ))}
             </SelectField>
             <TextField label="Quotation date" type="date" min={todayDateInputMin} error={errors.quotation_date?.message} {...register('quotation_date')} />

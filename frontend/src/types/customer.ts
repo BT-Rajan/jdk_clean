@@ -14,7 +14,10 @@ export interface Customer {
    * externally-issued Civil ID / Registration number. */
   customer_number: string
   customer_type: CustomerType
-  code: string
+  /** Civil ID / Registration number -- null for a prospective customer
+   * (raised for a feasibility check or quotation) who hasn't provided
+   * it yet; can be completed later but is locked once set. */
+  code: string | null
   name: string
   nature_of_business: string | null
   contact_person: string | null
@@ -38,7 +41,8 @@ export interface Customer {
 
 export interface CustomerPayload {
   customer_type: CustomerType
-  code: string
+  /** Omit to create a prospective customer with no ID on file yet. */
+  code?: string | null
   name: string
   nature_of_business?: string | null
   contact_person?: string | null

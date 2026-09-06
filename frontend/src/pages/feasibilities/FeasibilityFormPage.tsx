@@ -7,12 +7,13 @@ import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, TextareaField, TextField } from '@/components/ui'
 import { createFeasibility } from '@/api/feasibilities'
-import { listCustomers } from '@/api/customers'
+import { createCustomer, listCustomers } from '@/api/customers'
 import { listProducts } from '@/api/products'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { useAsyncGuard } from '@/hooks/useAsyncGuard'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { feasibilitySchema, todayDateInputMin, type FeasibilityFormValues, type FeasibilitySubmitValues } from '@/lib/validation'
+import type { Customer, CustomerType } from '@/types/customer'
 
 function useCustomerOptions() {
   const fetcher = useCallback(() => listCustomers({ page: 1, page_size: 200, status: 'active' }), [])
@@ -42,10 +43,24 @@ export function FeasibilityFormPage() {
   const { options: products } = useProductOptions()
   const { busy: submitting, run: runGuarded } = useAsyncGuard()
 
+  // Prospective customers created inline below, not yet part of the
+  // fetched `customers` page -- merged in so the dropdown can show and
+  // select one immediately without a refetch.
+  const [extraCustomers, setExtraCustomers] = useState<Customer[]>([])
+  const allCustomers = [...extraCustomers, ...customers]
+
+  const [addingCustomer, setAddingCustomer] = useState(false)
+  const [newCustomerName, setNewCustomerName] = useState('')
+  const [newCustomerType, setNewCustomerType] = useState<CustomerType>('individual')
+  const [newCustomerPhone, setNewCustomerPhone] = useState('')
+  const [newCustomerEmail, setNewCustomerEmail] = useState('')
+  const [creatingCustomer, setCreatingCustomer] = useState(false)
+
   const {
     register,
     control,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<FeasibilityFormValues, unknown, FeasibilitySubmitValues>({
     resolver: zodResolver(feasibilitySchema),
@@ -57,6 +72,34 @@ export function FeasibilityFormPage() {
     },
   })
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' })
+
+  async function handleAddProspectiveCustomer() {
+    if (!newCustomerName.trim()) return
+    setCreatingCustomer(true)
+    setFormError(null)
+    try {
+      // code (Civil ID / Registration number) is deliberately omitted --
+      // this customer isn't formally onboarded yet, see
+      // backend/app/models/customer.py. Can be filled in later from
+      // their detail page once they provide it.
+      const created = await createCustomer({
+        customer_type: newCustomerType,
+        name: newCustomerName.trim(),
+        phone: newCustomerPhone.trim() || null,
+        email: newCustomerEmail.trim() || null,
+      })
+      setExtraCustomers((prev) => [created, ...prev])
+      setValue('customer_id', created.id)
+      setAddingCustomer(false)
+      setNewCustomerName('')
+      setNewCustomerPhone('')
+      setNewCustomerEmail('')
+    } catch (err) {
+      setFormError(getApiErrorMessage(err))
+    } finally {
+      setCreatingCustomer(false)
+    }
+  }
 
   async function onSubmit(values: FeasibilitySubmitValues) {
     setFormError(null)
@@ -79,12 +122,77 @@ export function FeasibilityFormPage() {
       <Alert variant="error">{formError}</Alert>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-          <SelectField label="Customer" error={errors.customer_id?.message} {...register('customer_id')}>
-            <option value="">Choose…</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>{c.code} — {c.name}</option>
-            ))}
-          </SelectField>
+          <div>
+            {addingCustomer ? (
+              <div className="rounded-xl border border-gold-400/20 bg-gold-400/5 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <h3 className="text-sm font-medium text-gold-200">New / prospective customer</h3>
+                  <button
+                    type="button"
+                    className="text-xs text-white/50 underline hover:text-white"
+                    onClick={() => setAddingCustomer(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <div className="flex flex-col gap-3">
+                  <SelectField
+                    label="Business or individual"
+                    value={newCustomerType}
+                    onChange={(e) => setNewCustomerType(e.target.value as CustomerType)}
+                  >
+                    <option value="individual">Individual</option>
+                    <option value="business">Business</option>
+                  </SelectField>
+                  <TextField
+                    label="Name"
+                    value={newCustomerName}
+                    onChange={(e) => setNewCustomerName(e.target.value)}
+                  />
+                  <TextField
+                    label="Phone (optional)"
+                    value={newCustomerPhone}
+                    onChange={(e) => setNewCustomerPhone(e.target.value)}
+                  />
+                  <TextField
+                    label="Email (optional)"
+                    type="email"
+                    value={newCustomerEmail}
+                    onChange={(e) => setNewCustomerEmail(e.target.value)}
+                  />
+                  <p className="text-xs text-white/40">
+                    No Civil ID / Registration number needed yet -- add it from the customer's own page once they
+                    provide one.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    isLoading={creatingCustomer}
+                    disabled={!newCustomerName.trim()}
+                    onClick={handleAddProspectiveCustomer}
+                  >
+                    Add customer
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <SelectField label="Customer" error={errors.customer_id?.message} {...register('customer_id')}>
+                  <option value="">Choose…</option>
+                  {allCustomers.map((c) => (
+                    <option key={c.id} value={c.id}>{c.name}{c.code ? ` (${c.code})` : ' (prospective)'}</option>
+                  ))}
+                </SelectField>
+                <button
+                  type="button"
+                  className="mt-1.5 text-xs text-gold-300 underline hover:text-gold-200"
+                  onClick={() => setAddingCustomer(true)}
+                >
+                  + New / prospective customer not in the system
+                </button>
+              </>
+            )}
+          </div>
           <TextField
             label="Required by"
             type="date"
