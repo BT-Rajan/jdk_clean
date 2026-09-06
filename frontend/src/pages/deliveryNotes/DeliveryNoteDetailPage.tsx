@@ -151,6 +151,8 @@ export function DeliveryNoteDetailPage() {
             <>
               <DownloadMenu
                 label="Download"
+                iconOnly
+                size="sm"
                 options={[
                   { key: 'pdf', label: 'PDF', onSelect: handleDownload },
                   { key: 'word-en', label: 'Word (EN)', onSelect: () => handleDownloadDocx('en') },

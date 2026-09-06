@@ -4,6 +4,7 @@ import { cn } from '@/lib/cn'
 import { Button } from './Button'
 import type { ButtonProps } from './Button'
 import { Spinner } from './Spinner'
+import { DownloadIcon } from './icons/DownloadIcon'
 
 export interface DownloadMenuOption {
   /** Unique key for React list rendering. */
@@ -16,7 +17,7 @@ export interface DownloadMenuOption {
 }
 
 export interface DownloadMenuProps {
-  /** Label on the closed button, e.g. "Download". */
+  /** Label on the closed button, e.g. "Download". Also used as the aria-label when iconOnly. */
   label?: string
   options: DownloadMenuOption[]
   variant?: ButtonProps['variant']
@@ -24,6 +25,8 @@ export interface DownloadMenuProps {
   /** External busy flag (e.g. a shared page-level `busy` state) shown as a spinner on the trigger. */
   isLoading?: boolean
   className?: string
+  /** Render just the download icon (no text label, no chevron) instead of a labeled button. */
+  iconOnly?: boolean
 }
 
 /**
@@ -39,6 +42,7 @@ export function DownloadMenu({
   size = 'md',
   isLoading = false,
   className,
+  iconOnly = false,
 }: DownloadMenuProps) {
   const [open, setOpen] = useState(false)
   const [pendingKey, setPendingKey] = useState<string | null>(null)
@@ -81,22 +85,30 @@ export function DownloadMenu({
         type="button"
         variant={variant}
         size={size}
+        className={iconOnly ? '!w-9 !px-0' : undefined}
         isLoading={isLoading && !pendingKey}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={iconOnly ? label : undefined}
         onClick={() => setOpen((v) => !v)}
       >
-        {label}
-        <svg
-          width="10"
-          height="10"
-          viewBox="0 0 10 6"
-          fill="none"
-          className={cn('transition-transform duration-150', open && 'rotate-180')}
-          aria-hidden="true"
-        >
-          <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        {iconOnly ? (
+          <DownloadIcon />
+        ) : (
+          <>
+            {label}
+            <svg
+              width="10"
+              height="10"
+              viewBox="0 0 10 6"
+              fill="none"
+              className={cn('transition-transform duration-150', open && 'rotate-180')}
+              aria-hidden="true"
+            >
+              <path d="M1 1L5 5L9 1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </>
+        )}
       </Button>
 
       <AnimatePresence>

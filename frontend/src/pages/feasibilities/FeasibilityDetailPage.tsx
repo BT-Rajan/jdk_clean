@@ -233,6 +233,8 @@ export function FeasibilityDetailPage() {
               )}
               <DownloadMenu
                 label="Download Word"
+                iconOnly
+                size="sm"
                 options={[
                   { key: 'word-en', label: 'Word (EN)', onSelect: () => handleDownloadDocx('en') },
                   { key: 'word-ar', label: 'Word (AR)', onSelect: () => handleDownloadDocx('ar') },
