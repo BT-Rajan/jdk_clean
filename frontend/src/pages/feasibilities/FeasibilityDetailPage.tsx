@@ -7,6 +7,7 @@ import {
   Alert,
   Button,
   ConfirmDialog,
+  DownloadMenu,
   Field,
   GlassCard,
   Modal,
@@ -229,8 +230,13 @@ export function FeasibilityDetailPage() {
               {f.checked_at && (
                 <Button variant="ghost" onClick={() => setStageResultsOpen(true)}>View check results</Button>
               )}
-              <Button variant="ghost" onClick={() => handleDownloadDocx('en')} isLoading={busy}>Word (EN)</Button>
-              <Button variant="ghost" onClick={() => handleDownloadDocx('ar')} isLoading={busy}>Word (AR)</Button>
+              <DownloadMenu
+                label="Download Word"
+                options={[
+                  { key: 'word-en', label: 'Word (EN)', onSelect: () => handleDownloadDocx('en') },
+                  { key: 'word-ar', label: 'Word (AR)', onSelect: () => handleDownloadDocx('ar') },
+                ]}
+              />
               {allowWrite && f.status === 'exception_pending' && !f.admin_review_required && (
                 <>
                   <Button variant="ghost" onClick={() => setRejectOpen(true)}>Reject</Button>

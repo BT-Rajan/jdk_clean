@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DownloadMenu, Field, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   deleteDeliveryNote,
@@ -149,9 +149,14 @@ export function DeliveryNoteDetailPage() {
         actions={
           !justDeleted ? (
             <>
-              <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
-              <Button variant="ghost" onClick={() => handleDownloadDocx('en')} isLoading={busy}>Word (EN)</Button>
-              <Button variant="ghost" onClick={() => handleDownloadDocx('ar')} isLoading={busy}>Word (AR)</Button>
+              <DownloadMenu
+                label="Download"
+                options={[
+                  { key: 'pdf', label: 'PDF', onSelect: handleDownload },
+                  { key: 'word-en', label: 'Word (EN)', onSelect: () => handleDownloadDocx('en') },
+                  { key: 'word-ar', label: 'Word (AR)', onSelect: () => handleDownloadDocx('ar') },
+                ]}
+              />
               <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
               {allowWrite && isDraft && (
                 <Button variant="danger" onClick={() => setConfirmOpen(true)}>Delete</Button>

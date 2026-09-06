@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField, TextField } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DownloadMenu, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField, TextField } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewOrder,
@@ -318,9 +318,14 @@ export function OrderDetailPage() {
         actions={
           !justDeleted ? (
             <>
-              <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
-              <Button variant="ghost" onClick={() => handleDownloadDocx('en')} isLoading={busy}>Word (EN)</Button>
-              <Button variant="ghost" onClick={() => handleDownloadDocx('ar')} isLoading={busy}>Word (AR)</Button>
+              <DownloadMenu
+                label="Download"
+                options={[
+                  { key: 'pdf', label: 'PDF', onSelect: handleDownload },
+                  { key: 'word-en', label: 'Word (EN)', onSelect: () => handleDownloadDocx('en') },
+                  { key: 'word-ar', label: 'Word (AR)', onSelect: () => handleDownloadDocx('ar') },
+                ]}
+              />
               <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
               {allowWrite && <Button variant="ghost" onClick={() => setPaymentEmailOpen(true)}>Send payment request</Button>}
               {allowWrite && order.status === 'ready_to_ship' && (
