@@ -128,8 +128,14 @@ class FeasibilityOut(BaseModel):
         for line, src in zip(data.lines, obj.lines):
             line.product_code = src.product.code if src.product else None
             line.product_name = src.product.name if src.product else None
-            line.shortfalls = json.loads(src.shortfall_json) if src.shortfall_json else []
+            line.shortfalls = (
+                [ShortfallItem.model_validate(item) for item in json.loads(src.shortfall_json)]
+                if src.shortfall_json
+                else []
+            )
             line.capacity_shortfall = (
-                json.loads(src.capacity_shortfall_json) if src.capacity_shortfall_json else None
+                CapacityShortfall.model_validate(json.loads(src.capacity_shortfall_json))
+                if src.capacity_shortfall_json
+                else None
             )
         return data
