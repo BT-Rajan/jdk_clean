@@ -18,6 +18,8 @@ import {
   splitOrder,
   updateOrderStatus,
 } from '@/api/orders'
+import { createDeliveryNote, listDeliveryNotes } from '@/api/deliveryNotes'
+import { todayDateInputMin } from '@/lib/validation'
 import { PaymentsPanel } from './PaymentsPanel'
 import { PaymentPlansPanel } from './PaymentPlansPanel'
 import type { Order } from '@/types/order'
@@ -170,6 +172,11 @@ export function OrderDetailPage() {
   const [adminReviewOpen, setAdminReviewOpen] = useState(false)
   const [splitOpen, setSplitOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
+  // null = none yet (or not checked); drives whether the header offers
+  // "Create delivery note" or "View delivery note" -- only one
+  // non-cancelled note is ever allowed per order (see
+  // delivery_note_service.create_delivery_note).
+  const [deliveryNoteId, setDeliveryNoteId] = useState<number | null>(null)
 
   function load() {
     setLoading(true)
@@ -180,6 +187,15 @@ export function OrderDetailPage() {
   }
 
   useEffect(load, [orderId])
+
+  useEffect(() => {
+    listDeliveryNotes({ order_id: orderId, page: 1, page_size: 5 })
+      .then((result) => {
+        const active = result.items.find((n) => n.status !== 'cancelled')
+        setDeliveryNoteId(active?.id ?? null)
+      })
+      .catch(() => setDeliveryNoteId(null))
+  }, [orderId])
 
   async function handleStatusChange(status: (typeof ORDER_TRANSITIONS)['draft'][number], reason?: string) {
     setBusy(true)
@@ -261,6 +277,19 @@ export function OrderDetailPage() {
     }
   }
 
+  async function handleCreateDeliveryNote() {
+    setBusy(true)
+    setError(null)
+    try {
+      const note = await createDeliveryNote({ order_id: orderId, delivery_date: todayDateInputMin })
+      navigate(`/delivery-notes/${note.id}`)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -296,6 +325,15 @@ export function OrderDetailPage() {
               {allowWrite && <Button variant="ghost" onClick={() => setPaymentEmailOpen(true)}>Send payment request</Button>}
               {allowWrite && order.status === 'ready_to_ship' && (
                 <Button variant="ghost" onClick={() => setSplitOpen(true)}>Split order</Button>
+              )}
+              {order.status === 'ready_to_ship' && (
+                deliveryNoteId ? (
+                  <Button variant="ghost" onClick={() => navigate(`/delivery-notes/${deliveryNoteId}`)}>
+                    View delivery note
+                  </Button>
+                ) : allowWrite ? (
+                  <Button onClick={handleCreateDeliveryNote} isLoading={busy}>Create delivery note</Button>
+                ) : null
               )}
               {allowWrite && order.status === 'draft' && (
                 <Button variant="ghost" onClick={() => navigate(`/orders/${orderId}/edit`)}>Edit</Button>

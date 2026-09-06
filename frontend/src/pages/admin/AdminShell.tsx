@@ -119,7 +119,7 @@ export function AdminShell() {
   return (
     <AppLayout>
       <PageContainer>
-        <h1 className="font-display text-2xl font-medium text-white">Admin</h1>
+        <h1 className="font-display text-2xl font-medium text-white">Settings</h1>
         <p className="mt-2 text-sm text-white/50">
           Company configuration (including factory setup), communication channels, and the org chart -- all in one
           place. Master data and Roles &amp; Permissions live one click away, under Master Data.

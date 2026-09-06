@@ -112,6 +112,11 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navEntries: NavEntry[] = [
     { to: '/dashboard', label: 'Dashboard' },
+    // Admin-only, and deliberately a top-level entry rather than buried
+    // under Settings -- Master Data (products, raw materials, BOM,
+    // suppliers' shared reference data, etc.) is reached far more often
+    // by an admin than anything else in that menu.
+    ...(isAdmin(user?.role) ? [{ to: '/master-data', label: 'Master Data' } satisfies NavLeaf] : []),
     {
       label: 'Sales',
       items: [
@@ -155,7 +160,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     ...(isAdmin(user?.role)
       ? [
           {
-            label: 'Admin',
+            label: 'Settings',
             items: [
               { to: '/users', label: 'Users' },
               { to: '/departments', label: 'Departments' },
@@ -241,12 +246,13 @@ export function AppLayout({ children }: AppLayoutProps) {
     { id: 'action:logout', label: 'Sign out', keywords: 'logout', onSelect: handleLogout },
     ...(isAdmin(user?.role)
       ? [
-          { id: 'admin:workflow-automation', label: 'Workflow Automation', hint: 'Admin', onSelect: () => navigate('/admin?section=workflow-automation') },
-          { id: 'admin:approvals', label: 'Approvals', hint: 'Admin', onSelect: () => navigate('/admin?section=approvals') },
-          { id: 'admin:master-data', label: 'Master Data', hint: 'Admin', onSelect: () => navigate('/master-data') },
+          { id: 'admin:workflow-automation', label: 'Workflow Automation', hint: 'Settings', onSelect: () => navigate('/admin?section=workflow-automation') },
+          { id: 'admin:approvals', label: 'Approvals', hint: 'Settings', onSelect: () => navigate('/admin?section=approvals') },
+          // Master Data has its own top-level nav entry (see navEntries
+          // above) -- not duplicated here.
           // Users, Departments, Roles & Permissions, Company Settings,
           // Communication, Templates, Org Chart, and AI Assistant are
-          // covered by the Admin nav dropdown's own entries (see
+          // covered by the Settings nav dropdown's own entries (see
           // navEntries above) -- not duplicated here.
         ]
       : []),

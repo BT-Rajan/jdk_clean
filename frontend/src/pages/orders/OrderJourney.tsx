@@ -176,10 +176,12 @@ export function OrderJourney({ orderId }: OrderJourneyProps) {
                 <div className="space-y-3">
                   {delivery_notes.map((d) => (
                     <div key={d.id}>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-white">{d.delivery_note_number}</span>
+                      <Link to={`/delivery-notes/${d.id}`} className="group flex flex-wrap items-center gap-2">
+                        <span className="font-medium text-gold-300 group-hover:text-gold-200">
+                          {d.delivery_note_number}
+                        </span>
                         <StatusBadge status={d.status} />
-                      </div>
+                      </Link>
                       <p className="mt-1 text-sm text-white/40">
                         Delivery date {formatDate(d.delivery_date)} · recorded {formatDateTime(d.created_at)}
                       </p>
