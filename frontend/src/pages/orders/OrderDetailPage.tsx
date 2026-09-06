@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DownloadMenu, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField, TextField } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DownloadMenu, EmailIcon, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField, TextField } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewOrder,
@@ -326,7 +326,15 @@ export function OrderDetailPage() {
                   { key: 'word-ar', label: 'Word (AR)', onSelect: () => handleDownloadDocx('ar') },
                 ]}
               />
-              <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="!w-9 !px-0"
+                onClick={() => setEmailOpen(true)}
+                aria-label="Send email"
+              >
+                <EmailIcon />
+              </Button>
               {allowWrite && <Button variant="ghost" onClick={() => setPaymentEmailOpen(true)}>Send payment request</Button>}
               {allowWrite && order.status === 'ready_to_ship' && (
                 <Button variant="ghost" onClick={() => setSplitOpen(true)}>Split order</Button>

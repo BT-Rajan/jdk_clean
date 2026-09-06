@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DownloadMenu, Field, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DownloadMenu, EmailIcon, Field, GlassCard, PageHeader, Spinner, StatusBadge, TextField } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   deleteDeliveryNote,
@@ -157,7 +157,15 @@ export function DeliveryNoteDetailPage() {
                   { key: 'word-ar', label: 'Word (AR)', onSelect: () => handleDownloadDocx('ar') },
                 ]}
               />
-              <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="!w-9 !px-0"
+                onClick={() => setEmailOpen(true)}
+                aria-label="Send email"
+              >
+                <EmailIcon />
+              </Button>
               {allowWrite && isDraft && (
                 <Button variant="danger" onClick={() => setConfirmOpen(true)}>Delete</Button>
               )}

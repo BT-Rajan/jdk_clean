@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextField, TextareaField } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, EmailIcon, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextField, TextareaField } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewPurchaseOrder,
@@ -259,7 +259,15 @@ export function PurchaseOrderDetailPage() {
           !justDeleted ? (
             <>
               <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
-              <Button variant="ghost" onClick={() => setEmailOpen(true)}>Send email</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="!w-9 !px-0"
+                onClick={() => setEmailOpen(true)}
+                aria-label="Send email"
+              >
+                <EmailIcon />
+              </Button>
               {allowWrite && po.status === 'draft' && (
                 <Button variant="ghost" onClick={() => navigate(`/purchase-orders/${poId}/edit`)}>Edit</Button>
               )}

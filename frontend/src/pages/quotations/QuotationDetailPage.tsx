@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DownloadMenu, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DownloadMenu, EmailIcon, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   approveQuotation,
@@ -169,7 +169,16 @@ export function QuotationDetailPage() {
                   { key: 'word-ar', label: 'Word (AR)', onSelect: () => handleDownloadDocx('ar') },
                 ]}
               />
-              <Button variant="ghost" onClick={handleOpenEmail} isLoading={emailPreviewLoading}>Send email</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="!w-9 !px-0"
+                onClick={handleOpenEmail}
+                isLoading={emailPreviewLoading}
+                aria-label="Send email"
+              >
+                <EmailIcon />
+              </Button>
               {allowWrite && quotation.status === 'draft' && (
                 <Button variant="ghost" onClick={() => navigate(`/quotations/${quotationId}/edit`)}>Edit</Button>
               )}
