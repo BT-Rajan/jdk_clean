@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DeleteIcon, EditIcon, EmailIcon, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextField, TextareaField } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadIcon, EditIcon, EmailIcon, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextField, TextareaField, ThumbsUpIcon } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewPurchaseOrder,
@@ -258,7 +258,16 @@ export function PurchaseOrderDetailPage() {
         actions={
           !justDeleted ? (
             <>
-              <Button variant="ghost" onClick={handleDownload} isLoading={busy}>Download PDF</Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="!w-9 !px-0"
+                onClick={handleDownload}
+                isLoading={busy}
+                aria-label="Download PDF"
+              >
+                <DownloadIcon />
+              </Button>
               <Button
                 variant="ghost"
                 size="sm"
@@ -326,8 +335,15 @@ export function PurchaseOrderDetailPage() {
             </span>
           )}
           {allowAdmin && po.status === 'draft' && !po.approved_at && (
-            <Button variant="ghost" size="sm" isLoading={busy} onClick={handleApprove}>
-              Approve
+            <Button
+              variant="ghost"
+              size="sm"
+              className="!w-9 !px-0"
+              isLoading={busy}
+              onClick={handleApprove}
+              aria-label="Approve"
+            >
+              <ThumbsUpIcon className="text-emerald-300" />
             </Button>
           )}
           {allowWrite && !justDeleted && nextStatuses.length > 0 && (

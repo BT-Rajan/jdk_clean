@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, PageHeader, Spinner, StatusBadge, ThumbsUpIcon } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   approveQuotation,
@@ -251,8 +251,15 @@ export function QuotationDetailPage() {
             </span>
           )}
           {allowAdmin && quotation.status === 'draft' && !quotation.approved_at && (
-            <Button variant="ghost" size="sm" isLoading={busy} onClick={handleApprove}>
-              Approve
+            <Button
+              variant="ghost"
+              size="sm"
+              className="!w-9 !px-0"
+              isLoading={busy}
+              onClick={handleApprove}
+              aria-label="Approve"
+            >
+              <ThumbsUpIcon className="text-emerald-300" />
             </Button>
           )}
           {quotation.converted_order_id && (

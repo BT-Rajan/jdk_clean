@@ -5,8 +5,10 @@ import { Link, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
   Alert,
+  ApprovalMenu,
   Button,
   ConfirmDialog,
+  CrossIcon,
   DeleteIcon,
   DownloadMenu,
   Field,
@@ -242,7 +244,15 @@ export function FeasibilityDetailPage() {
               />
               {allowWrite && f.status === 'exception_pending' && !f.admin_review_required && (
                 <>
-                  <Button variant="ghost" onClick={() => setRejectOpen(true)}>Reject</Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    className="!w-9 !px-0"
+                    onClick={() => setRejectOpen(true)}
+                    aria-label="Reject"
+                  >
+                    <CrossIcon />
+                  </Button>
                   <Button onClick={() => setApproveOpen(true)}>Send to admin for approval</Button>
                 </>
               )}
@@ -284,8 +294,12 @@ export function FeasibilityDetailPage() {
           </span>
           {allowAdmin && (
             <div className="flex gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setAdminRejectOverrideOpen(true)}>Reject</Button>
-              <Button size="sm" onClick={() => setAdminApproveOverrideOpen(true)}>Approve override</Button>
+              <ApprovalMenu
+                ariaLabel="Approve or reject override"
+                approveLabel="Approve override"
+                onApprove={() => setAdminApproveOverrideOpen(true)}
+                onReject={() => setAdminRejectOverrideOpen(true)}
+              />
             </div>
           )}
         </div>

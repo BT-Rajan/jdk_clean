@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField, TextField } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField, TextField, ThumbsUpIcon } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewOrder,
@@ -429,8 +429,15 @@ export function OrderDetailPage() {
             </Link>
           )}
           {allowAdmin && order.status === 'draft' && !order.approved_at && (
-            <Button variant="ghost" size="sm" isLoading={busy} onClick={handleApprove}>
-              Approve
+            <Button
+              variant="ghost"
+              size="sm"
+              className="!w-9 !px-0"
+              isLoading={busy}
+              onClick={handleApprove}
+              aria-label="Approve"
+            >
+              <ThumbsUpIcon className="text-emerald-300" />
             </Button>
           )}
           {allowWrite && nextStatuses.length > 0 && !justDeleted && (

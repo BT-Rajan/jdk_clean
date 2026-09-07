@@ -1,4 +1,4 @@
-import { Button, Modal } from '@/components/ui'
+import { ApprovalMenu, Button, CrossIcon, Modal } from '@/components/ui'
 import { computeFeasibilityStages } from '@/lib/feasibilityStages'
 import type { StageStatus } from '@/lib/feasibilityStages'
 import type { Feasibility } from '@/types/feasibility'
@@ -124,7 +124,15 @@ export function FeasibilityStageResultsModal({
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           <span>This check came up short. Reject it, or send it to admin for approval to proceed anyway.</span>
           <div className="flex shrink-0 gap-2">
-            <Button variant="ghost" size="sm" onClick={onReject}>Reject</Button>
+            <Button
+              variant="danger"
+              size="sm"
+              className="!w-9 !px-0"
+              onClick={onReject}
+              aria-label="Reject"
+            >
+              <CrossIcon />
+            </Button>
             <Button size="sm" onClick={onSendForApproval}>Send to admin for approval</Button>
           </div>
         </div>
@@ -134,8 +142,12 @@ export function FeasibilityStageResultsModal({
         <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           <span>Sales requested an override on this check — your approval is required before it can be quoted.</span>
           <div className="flex shrink-0 gap-2">
-            <Button variant="ghost" size="sm" onClick={onAdminRejectOverride}>Reject</Button>
-            <Button size="sm" onClick={onAdminApproveOverride}>Approve override</Button>
+            <ApprovalMenu
+              ariaLabel="Approve or reject override"
+              approveLabel="Approve override"
+              onApprove={onAdminApproveOverride}
+              onReject={onAdminRejectOverride}
+            />
           </div>
         </div>
       )}
