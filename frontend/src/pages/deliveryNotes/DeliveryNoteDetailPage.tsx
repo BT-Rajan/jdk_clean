@@ -160,7 +160,7 @@ export function DeliveryNoteDetailPage() {
                 ]}
               />
               <Button
-                variant="ghost"
+                variant="primary"
                 size="sm"
                 className="!w-9 !px-0"
                 onClick={() => setEmailOpen(true)}

@@ -75,7 +75,7 @@ export function ApprovalMenu({
     <div ref={rootRef} className={cn('relative inline-block', className)}>
       <Button
         type="button"
-        variant="ghost"
+        variant="primary"
         size={size}
         className="!w-9 !px-0"
         isLoading={isLoading && !pendingKey}

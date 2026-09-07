@@ -38,7 +38,7 @@ export interface DownloadMenuProps {
 export function DownloadMenu({
   label = 'Download',
   options,
-  variant = 'ghost',
+  variant = 'primary',
   size = 'md',
   isLoading = false,
   className,

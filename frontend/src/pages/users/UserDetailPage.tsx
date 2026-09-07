@@ -243,7 +243,7 @@ export function UserDetailPage() {
                 </Button>
               )}
               <Button
-                variant="ghost"
+                variant="primary"
                 size="sm"
                 className="!w-9 !px-0"
                 onClick={() => navigate(`/users/${userId}/edit`)}

@@ -171,7 +171,7 @@ export function CustomerDetailPage() {
           canWrite(user?.role) && !justDeleted ? (
             <>
               <Button
-                variant="ghost"
+                variant="primary"
                 size="sm"
                 className="!w-9 !px-0"
                 onClick={() => navigate(`/customers/${customerId}/edit`)}

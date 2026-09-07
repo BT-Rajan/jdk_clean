@@ -121,7 +121,7 @@ export function SupplierDetailPage() {
           canWrite(user?.role) && !justDeleted ? (
             <>
               <Button
-                variant="ghost"
+                variant="primary"
                 size="sm"
                 className="!w-9 !px-0"
                 onClick={() => navigate(`/suppliers/${supplierId}/edit`)}

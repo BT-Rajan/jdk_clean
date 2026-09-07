@@ -172,7 +172,7 @@ export function QuotationDetailPage() {
                 ]}
               />
               <Button
-                variant="ghost"
+                variant="primary"
                 size="sm"
                 className="!w-9 !px-0"
                 onClick={handleOpenEmail}
@@ -183,7 +183,7 @@ export function QuotationDetailPage() {
               </Button>
               {allowWrite && quotation.status === 'draft' && (
                 <Button
-                  variant="ghost"
+                  variant="primary"
                   size="sm"
                   className="!w-9 !px-0"
                   onClick={() => navigate(`/quotations/${quotationId}/edit`)}
@@ -252,14 +252,14 @@ export function QuotationDetailPage() {
           )}
           {allowAdmin && quotation.status === 'draft' && !quotation.approved_at && (
             <Button
-              variant="ghost"
+              variant="primary"
               size="sm"
               className="!w-9 !px-0"
               isLoading={busy}
               onClick={handleApprove}
               aria-label="Approve"
             >
-              <ThumbsUpIcon className="text-emerald-300" />
+              <ThumbsUpIcon />
             </Button>
           )}
           {quotation.converted_order_id && (

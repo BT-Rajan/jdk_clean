@@ -329,7 +329,7 @@ export function OrderDetailPage() {
                 ]}
               />
               <Button
-                variant="ghost"
+                variant="primary"
                 size="sm"
                 className="!w-9 !px-0"
                 onClick={() => setEmailOpen(true)}
@@ -352,7 +352,7 @@ export function OrderDetailPage() {
               )}
               {allowWrite && order.status === 'draft' && (
                 <Button
-                  variant="ghost"
+                  variant="primary"
                   size="sm"
                   className="!w-9 !px-0"
                   onClick={() => navigate(`/orders/${orderId}/edit`)}
@@ -430,14 +430,14 @@ export function OrderDetailPage() {
           )}
           {allowAdmin && order.status === 'draft' && !order.approved_at && (
             <Button
-              variant="ghost"
+              variant="primary"
               size="sm"
               className="!w-9 !px-0"
               isLoading={busy}
               onClick={handleApprove}
               aria-label="Approve"
             >
-              <ThumbsUpIcon className="text-emerald-300" />
+              <ThumbsUpIcon />
             </Button>
           )}
           {allowWrite && nextStatuses.length > 0 && !justDeleted && (

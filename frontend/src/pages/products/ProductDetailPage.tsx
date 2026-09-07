@@ -113,7 +113,7 @@ export function ProductDetailPage() {
                 {product.status === 'active' ? 'Deactivate' : 'Activate'}
               </Button>
               <Button
-                variant="ghost"
+                variant="primary"
                 size="sm"
                 className="!w-9 !px-0"
                 onClick={() => navigate(`/products/${productId}/edit`)}

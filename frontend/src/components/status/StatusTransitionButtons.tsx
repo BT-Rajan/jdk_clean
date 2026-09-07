@@ -3,7 +3,6 @@ import { Button, Modal, TextareaField } from '@/components/ui'
 import { TickIcon } from '@/components/ui/icons/TickIcon'
 import { CrossIcon } from '@/components/ui/icons/CrossIcon'
 import { QuestionMarkIcon } from '@/components/ui/icons/QuestionMarkIcon'
-import { cn } from '@/lib/cn'
 
 interface StatusTransitionButtonsProps<S extends string> {
   /** Statuses reachable from the current one -- e.g. ORDER_TRANSITIONS[order.status]. */
@@ -22,10 +21,10 @@ interface StatusTransitionButtonsProps<S extends string> {
  * modules with the same universal symbol, unlike the rest of each
  * entity's statuses (e.g. "ready to ship", "in production") which don't
  * have an obvious single icon and stay as text. */
-const STATUS_ICONS: Partial<Record<string, { icon: typeof TickIcon; variant: 'ghost' | 'danger'; iconClassName?: string }>> = {
-  accepted: { icon: TickIcon, variant: 'ghost', iconClassName: 'text-emerald-300' },
+const STATUS_ICONS: Partial<Record<string, { icon: typeof TickIcon; variant: 'primary' | 'danger' }>> = {
+  accepted: { icon: TickIcon, variant: 'primary' },
   rejected: { icon: CrossIcon, variant: 'danger' },
-  pending: { icon: QuestionMarkIcon, variant: 'ghost', iconClassName: 'text-white/60' },
+  pending: { icon: QuestionMarkIcon, variant: 'primary' },
 }
 
 /** The status-change button row used across every module's detail page
@@ -89,7 +88,7 @@ export function StatusTransitionButtons<S extends string>({
                 onClick={() => handleClick(s)}
                 aria-label={label}
               >
-                <Icon className={cn('h-4 w-4', iconConfig.iconClassName)} />
+                <Icon className="h-4 w-4" />
               </Button>
             )
           }

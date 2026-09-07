@@ -168,7 +168,7 @@ export function ProductionDetailPage() {
             <>
               {allowWrite && batch.status === 'planned' && (
                 <Button
-                  variant="ghost"
+                  variant="primary"
                   size="sm"
                   className="!w-9 !px-0"
                   onClick={() => navigate(`/production/${batchId}/edit`)}

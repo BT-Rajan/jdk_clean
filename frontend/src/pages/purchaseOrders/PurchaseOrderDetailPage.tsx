@@ -259,7 +259,7 @@ export function PurchaseOrderDetailPage() {
           !justDeleted ? (
             <>
               <Button
-                variant="ghost"
+                variant="primary"
                 size="sm"
                 className="!w-9 !px-0"
                 onClick={handleDownload}
@@ -269,7 +269,7 @@ export function PurchaseOrderDetailPage() {
                 <DownloadIcon />
               </Button>
               <Button
-                variant="ghost"
+                variant="primary"
                 size="sm"
                 className="!w-9 !px-0"
                 onClick={() => setEmailOpen(true)}
@@ -279,7 +279,7 @@ export function PurchaseOrderDetailPage() {
               </Button>
               {allowWrite && po.status === 'draft' && (
                 <Button
-                  variant="ghost"
+                  variant="primary"
                   size="sm"
                   className="!w-9 !px-0"
                   onClick={() => navigate(`/purchase-orders/${poId}/edit`)}
@@ -336,14 +336,14 @@ export function PurchaseOrderDetailPage() {
           )}
           {allowAdmin && po.status === 'draft' && !po.approved_at && (
             <Button
-              variant="ghost"
+              variant="primary"
               size="sm"
               className="!w-9 !px-0"
               isLoading={busy}
               onClick={handleApprove}
               aria-label="Approve"
             >
-              <ThumbsUpIcon className="text-emerald-300" />
+              <ThumbsUpIcon />
             </Button>
           )}
           {allowWrite && !justDeleted && nextStatuses.length > 0 && (
