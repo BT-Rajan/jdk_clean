@@ -6,15 +6,30 @@ import { listRawMaterials } from '@/api/rawMaterials'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { generateId } from '@/lib/id'
-import { clampNonNegative } from '@/lib/number'
+import { clampNonNegative, clampNonNegativeString } from '@/lib/number'
 import type { BomExplosionResult, BomLineInput, ComponentType } from '@/types/bom'
 
-interface EditableLine extends BomLineInput {
+/** quantity/scrap_percent are kept as raw strings in edit state (like
+ * explodeQty below) instead of BomLineInput's numbers, so the field can
+ * be blank mid-edit instead of collapsing to "0" and trapping the
+ * cursor -- converted back to numbers only when building the save/add
+ * payload. */
+interface EditableLine extends Omit<BomLineInput, 'quantity' | 'scrap_percent'> {
   key: string
   /** Set once the line has been persisted to the backend (either loaded
    * from the existing BOM or added via the granular endpoint). Lines
    * without an id only exist client-side and are removed locally. */
   id?: number
+  quantity: string
+  scrap_percent: string
+}
+
+/** Same guarantee as clampNonNegativeString, additionally capped at 100
+ * for percent fields -- still leaves '' alone so the field can be
+ * cleared mid-edit. */
+function clampPercentString(value: string): string {
+  if (value === '') return value
+  return String(Math.min(100, clampNonNegative(Number(value))))
 }
 
 function emptyLine(): EditableLine {
@@ -22,9 +37,9 @@ function emptyLine(): EditableLine {
     key: generateId(),
     component_type: 'raw_material',
     component_id: 0,
-    quantity: 1,
+    quantity: '1',
     unit: '',
-    scrap_percent: 0,
+    scrap_percent: '0',
   }
 }
 
@@ -67,9 +82,9 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
             id: l.id,
             component_type: l.component_type,
             component_id: l.component_id,
-            quantity: l.quantity,
+            quantity: String(l.quantity),
             unit: l.unit,
-            scrap_percent: l.scrap_percent,
+            scrap_percent: String(l.scrap_percent),
           })),
         )
       })
@@ -128,7 +143,11 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
     setError(null)
     setNotice(null)
     try {
-      const payload: BomLineInput[] = lines.map(({ key: _key, id: _id, ...line }) => line)
+      const payload: BomLineInput[] = lines.map(({ key: _key, id: _id, quantity, scrap_percent, ...line }) => ({
+        ...line,
+        quantity: Number(quantity) || 0,
+        scrap_percent: Number(scrap_percent) || 0,
+      }))
       const saved = await replaceBom(productId, payload)
       setLines(
         saved.map((l) => ({
@@ -136,9 +155,9 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
           id: l.id,
           component_type: l.component_type,
           component_id: l.component_id,
-          quantity: l.quantity,
+          quantity: String(l.quantity),
           unit: l.unit,
-          scrap_percent: l.scrap_percent,
+          scrap_percent: String(l.scrap_percent),
         })),
       )
       setNotice('Bill of materials saved.')
@@ -153,7 +172,8 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
     setAdding(true)
     setError(null)
     try {
-      const { key: _key, id: _id, ...payload } = newLine
+      const { key: _key, id: _id, quantity, scrap_percent, ...rest } = newLine
+      const payload: BomLineInput = { ...rest, quantity: Number(quantity) || 0, scrap_percent: Number(scrap_percent) || 0 }
       const created = await addBomLine(productId, payload)
       setLines((prev) => [
         ...prev,
@@ -162,9 +182,9 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
           id: created.id,
           component_type: created.component_type,
           component_id: created.component_id,
-          quantity: created.quantity,
+          quantity: String(created.quantity),
           unit: created.unit,
-          scrap_percent: created.scrap_percent,
+          scrap_percent: String(created.scrap_percent),
         },
       ])
       setNewLine(emptyLine())
@@ -267,7 +287,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                     min="0"
                     value={line.quantity}
                     disabled={!canEdit}
-                    onChange={(e) => updateLine(line.key, { quantity: clampNonNegative(Number(e.target.value)) })}
+                    onChange={(e) => updateLine(line.key, { quantity: clampNonNegativeString(e.target.value) })}
                   />
                 </div>
                 <div className="sm:col-span-2">
@@ -282,9 +302,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                     max="100"
                     value={line.scrap_percent}
                     disabled={!canEdit}
-                    onChange={(e) =>
-                      updateLine(line.key, { scrap_percent: Math.min(100, clampNonNegative(Number(e.target.value))) })
-                    }
+                    onChange={(e) => updateLine(line.key, { scrap_percent: clampPercentString(e.target.value) })}
                   />
                 </div>
                 {canEdit && (
@@ -353,9 +371,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                   step="0.0001"
                   min="0"
                   value={newLine.quantity}
-                  onChange={(e) =>
-                    setNewLine((prev) => ({ ...prev, quantity: clampNonNegative(Number(e.target.value)) }))
-                  }
+                  onChange={(e) => setNewLine((prev) => ({ ...prev, quantity: clampNonNegativeString(e.target.value) }))}
                 />
               </div>
               <div className="sm:col-span-2">
@@ -369,12 +385,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
                   min="0"
                   max="100"
                   value={newLine.scrap_percent}
-                  onChange={(e) =>
-                    setNewLine((prev) => ({
-                      ...prev,
-                      scrap_percent: Math.min(100, clampNonNegative(Number(e.target.value))),
-                    }))
-                  }
+                  onChange={(e) => setNewLine((prev) => ({ ...prev, scrap_percent: clampPercentString(e.target.value) }))}
                 />
               </div>
               <div className="sm:col-span-1">
