@@ -5,22 +5,27 @@ import { listRawMaterials } from '@/api/rawMaterials'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { generateId } from '@/lib/id'
-import { clampNonNegative } from '@/lib/number'
+import { clampNonNegativeString } from '@/lib/number'
 import type { PackagingLineInput } from '@/types/packaging'
 
-interface EditableLine extends PackagingLineInput {
+/** quantity_per_unit is kept as a raw string in edit state instead of
+ * PackagingLineInput's number, so the field can be blank mid-edit
+ * instead of collapsing to "0" and trapping the cursor -- converted
+ * back to a number only when building the save/add payload. */
+interface EditableLine extends Omit<PackagingLineInput, 'quantity_per_unit'> {
   key: string
   /** Set once the line has been persisted to the backend (either loaded
    * from the existing packaging list or added via the granular endpoint).
    * Lines without an id only exist client-side and are removed locally. */
   id?: number
+  quantity_per_unit: string
 }
 
 function emptyLine(): EditableLine {
   return {
     key: generateId(),
     packaging_material_id: 0,
-    quantity_per_unit: 1,
+    quantity_per_unit: '1',
     unit: '',
   }
 }
@@ -56,7 +61,7 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
             key: generateId(),
             id: l.id,
             packaging_material_id: l.packaging_material_id,
-            quantity_per_unit: l.quantity_per_unit,
+            quantity_per_unit: String(l.quantity_per_unit),
             unit: l.unit,
           })),
         )
@@ -100,14 +105,17 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
     setError(null)
     setNotice(null)
     try {
-      const payload: PackagingLineInput[] = lines.map(({ key: _key, id: _id, ...line }) => line)
+      const payload: PackagingLineInput[] = lines.map(({ key: _key, id: _id, quantity_per_unit, ...line }) => ({
+        ...line,
+        quantity_per_unit: Number(quantity_per_unit) || 0,
+      }))
       const saved = await replacePackaging(productId, payload)
       setLines(
         saved.map((l) => ({
           key: generateId(),
           id: l.id,
           packaging_material_id: l.packaging_material_id,
-          quantity_per_unit: l.quantity_per_unit,
+          quantity_per_unit: String(l.quantity_per_unit),
           unit: l.unit,
         })),
       )
@@ -123,7 +131,8 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
     setAdding(true)
     setError(null)
     try {
-      const { key: _key, id: _id, ...payload } = newLine
+      const { key: _key, id: _id, quantity_per_unit, ...rest } = newLine
+      const payload: PackagingLineInput = { ...rest, quantity_per_unit: Number(quantity_per_unit) || 0 }
       const created = await addPackagingLine(productId, payload)
       setLines((prev) => [
         ...prev,
@@ -131,7 +140,7 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
           key: generateId(),
           id: created.id,
           packaging_material_id: created.packaging_material_id,
-          quantity_per_unit: created.quantity_per_unit,
+          quantity_per_unit: String(created.quantity_per_unit),
           unit: created.unit,
         },
       ])
@@ -201,7 +210,7 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
                     value={line.quantity_per_unit}
                     disabled={!canEdit}
                     onChange={(e) =>
-                      updateLine(line.key, { quantity_per_unit: clampNonNegative(Number(e.target.value)) })
+                      updateLine(line.key, { quantity_per_unit: clampNonNegativeString(e.target.value) })
                     }
                   />
                 </div>
@@ -256,7 +265,7 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
                   min="0"
                   value={newLine.quantity_per_unit}
                   onChange={(e) =>
-                    setNewLine((prev) => ({ ...prev, quantity_per_unit: clampNonNegative(Number(e.target.value)) }))
+                    setNewLine((prev) => ({ ...prev, quantity_per_unit: clampNonNegativeString(e.target.value) }))
                   }
                 />
               </div>
