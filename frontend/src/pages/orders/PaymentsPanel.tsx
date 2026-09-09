@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Alert, Button, ConfirmDialog, GlassCard, Modal, Spinner, TextField, TextareaField } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, GlassCard, KdIcon, Modal, Spinner, TextField, TextareaField } from '@/components/ui'
 import { createPayment, deletePayment, listPayments } from '@/api/payments'
 import type { Payment } from '@/types/payment'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -122,7 +122,16 @@ export function PaymentsPanel({
             </p>
           )}
         </div>
-        {allowWrite && <Button size="sm" onClick={() => setRecordOpen(true)}>Record payment</Button>}
+        {allowWrite && (
+          <Button
+            size="sm"
+            className="!w-9 !px-0"
+            onClick={() => setRecordOpen(true)}
+            aria-label="Record payment"
+          >
+            <KdIcon />
+          </Button>
+        )}
       </div>
 
       <Alert variant="error">{error}</Alert>

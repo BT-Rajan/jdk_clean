@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextareaField, TextField, ThumbsUpIcon } from '@/components/ui'
+import { Alert, BanknoteIcon, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, Modal, MovingCartIcon, PageHeader, Spinner, StatusBadge, TextareaField, TextField, ThumbsUpIcon, TornPaperIcon } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewOrder,
@@ -337,9 +337,27 @@ export function OrderDetailPage() {
               >
                 <EmailIcon />
               </Button>
-              {allowWrite && <Button variant="ghost" onClick={() => setPaymentEmailOpen(true)}>Send payment request</Button>}
+              {allowWrite && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={() => setPaymentEmailOpen(true)}
+                  aria-label="Send payment request"
+                >
+                  <BanknoteIcon />
+                </Button>
+              )}
               {allowWrite && order.status === 'ready_to_ship' && (
-                <Button variant="ghost" onClick={() => setSplitOpen(true)}>Split order</Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={() => setSplitOpen(true)}
+                  aria-label="Split order"
+                >
+                  <TornPaperIcon />
+                </Button>
               )}
               {order.status === 'ready_to_ship' && (
                 deliveryNoteId ? (
@@ -347,7 +365,16 @@ export function OrderDetailPage() {
                     View delivery note
                   </Button>
                 ) : allowWrite ? (
-                  <Button onClick={handleCreateDeliveryNote} isLoading={busy}>Create delivery note</Button>
+                  <Button
+                    variant="primary"
+                    size="sm"
+                    className="!w-9 !px-0"
+                    onClick={handleCreateDeliveryNote}
+                    isLoading={busy}
+                    aria-label="Create delivery note"
+                  >
+                    <MovingCartIcon />
+                  </Button>
                 ) : null
               )}
               {allowWrite && order.status === 'draft' && (

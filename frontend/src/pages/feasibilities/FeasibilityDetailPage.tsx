@@ -10,6 +10,7 @@ import {
   ConfirmDialog,
   CrossIcon,
   DeleteIcon,
+  DoubleTickIcon,
   DownloadMenu,
   Field,
   GlassCard,
@@ -18,6 +19,7 @@ import {
   Spinner,
   StatusBadge,
   TextareaField,
+  ViewIcon,
 } from '@/components/ui'
 import {
   adminDecideFeasibilityOverride,
@@ -231,7 +233,15 @@ export function FeasibilityDetailPage() {
                 <Button onClick={handleRun} isLoading={busy}>Run check</Button>
               )}
               {f.checked_at && (
-                <Button variant="ghost" onClick={() => setStageResultsOpen(true)}>View check results</Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={() => setStageResultsOpen(true)}
+                  aria-label="View check results"
+                >
+                  <ViewIcon />
+                </Button>
               )}
               <DownloadMenu
                 label="Download Word"
@@ -260,7 +270,16 @@ export function FeasibilityDetailPage() {
                 <Button variant="ghost" onClick={() => setCloseOpen(true)}>Close without quotation</Button>
               )}
               {allowWrite && (f.status === 'converted' || f.status === 'closed' || f.status === 'exception_rejected' || f.status === 'expired') && (
-                <Button variant="ghost" onClick={handleRevive} isLoading={busy}>Revive &amp; re-check</Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={handleRevive}
+                  isLoading={busy}
+                  aria-label="Revive & re-check"
+                >
+                  <DoubleTickIcon />
+                </Button>
               )}
               {allowWrite && f.status !== 'converted' && (
                 <Button
