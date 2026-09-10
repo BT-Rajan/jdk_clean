@@ -18,9 +18,23 @@ class BomLineOut(BaseModel):
     component_id: int
     component_code: str | None = None
     component_name: str | None = None
+    # Set only for component_type == 'raw_material' -- the Raw Material
+    # Master's own classification (raw_material/packaging/consumable),
+    # so the BOM table can show it without duplicating it as BOM data.
+    component_material_type: str | None = None
+    # Live stock snapshot for the component (raw materials only) -- read
+    # straight from inventory, never stored here. None for a product
+    # (sub-assembly) component, which has no meaningful single "on hand"
+    # figure the same way (see inventory_service.get_stock's item_type).
+    component_on_hand: float | None = None
     quantity: float
     unit: str
     scrap_percent: float
+    # quantity inflated by scrap_percent -- the actual amount this line
+    # consumes per output_quantity batch. Computed once here (see
+    # bom_service._resolve_labels) so every caller (this table, Production,
+    # MRP) reads the identical figure instead of each recomputing it.
+    effective_quantity: float
     created_at: datetime
     updated_at: datetime
 
@@ -63,3 +77,31 @@ class BomExplosionResult(BaseModel):
     product_id: int
     quantity_requested: float
     requirements: list[RequirementLine]
+
+
+BOM_HEADER_STATUS_PATTERN = "^(active|inactive)$"
+
+
+class BomHeaderCreate(BaseModel):
+    output_quantity: float = Field(default=1, gt=0)
+    notes: str | None = Field(default=None, max_length=500)
+
+
+class BomHeaderUpdate(BaseModel):
+    output_quantity: float | None = Field(default=None, gt=0)
+    status: str | None = Field(default=None, pattern=BOM_HEADER_STATUS_PATTERN)
+    notes: str | None = Field(default=None, max_length=500)
+
+
+class BomHeaderOut(BaseModel):
+    id: int
+    bom_number: str
+    product_id: int
+    output_quantity: float
+    status: str
+    notes: str | None
+    component_count: int
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}

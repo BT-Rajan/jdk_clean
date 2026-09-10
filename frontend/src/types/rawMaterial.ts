@@ -4,6 +4,12 @@ import type { ActiveStatus } from './customer'
 export type RawMaterialType = 'raw_material' | 'packaging' | 'consumable'
 export type RawMaterialStatus = ActiveStatus | 'blocked'
 
+export const RAW_MATERIAL_TYPE_LABELS: Record<RawMaterialType, string> = {
+  raw_material: 'Raw material',
+  packaging: 'Packaging',
+  consumable: 'Consumable',
+}
+
 export interface RawMaterial {
   id: number
   code: string

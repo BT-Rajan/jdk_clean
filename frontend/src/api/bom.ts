@@ -1,4 +1,11 @@
-import type { BomExplosionResult, BomLine, BomLineInput } from '@/types/bom'
+import type {
+  BomExplosionResult,
+  BomHeader,
+  BomHeaderCreateInput,
+  BomHeaderUpdateInput,
+  BomLine,
+  BomLineInput,
+} from '@/types/bom'
 import { apiClient } from './client'
 
 export async function getBom(productId: number): Promise<BomLine[]> {
@@ -24,5 +31,20 @@ export async function explodeBom(productId: number, quantity: number): Promise<B
   const { data } = await apiClient.get<BomExplosionResult>(`/api/products/${productId}/bom/explode`, {
     params: { quantity },
   })
+  return data
+}
+
+export async function getBomHeader(productId: number): Promise<BomHeader> {
+  const { data } = await apiClient.get<BomHeader>(`/api/products/${productId}/bom/header`)
+  return data
+}
+
+export async function createBomHeader(productId: number, payload: BomHeaderCreateInput): Promise<BomHeader> {
+  const { data } = await apiClient.post<BomHeader>(`/api/products/${productId}/bom/header`, payload)
+  return data
+}
+
+export async function updateBomHeader(productId: number, payload: BomHeaderUpdateInput): Promise<BomHeader> {
+  const { data } = await apiClient.put<BomHeader>(`/api/products/${productId}/bom/header`, payload)
   return data
 }

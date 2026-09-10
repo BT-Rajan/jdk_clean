@@ -3,10 +3,15 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_role
 from app.core.database import get_db
+from app.core.exceptions import NotFoundError
+from app.models.bom import Bom
 from app.models.raw_material import RawMaterial
 from app.models.user import User
 from app.schemas.bom import (
     BomExplosionResult,
+    BomHeaderCreate,
+    BomHeaderOut,
+    BomHeaderUpdate,
     BomLineIn,
     BomLineOut,
     BomReplace,
@@ -22,6 +27,56 @@ router = APIRouter(prefix="/api/products/{product_id}/bom", tags=["bom"])
 # than every other master-data module.
 read_guard = require_role("admin")
 write_guard = require_role("admin")
+
+
+def _header_to_out(db: Session, header: Bom) -> BomHeaderOut:
+    return BomHeaderOut(
+        id=header.id,
+        bom_number=header.bom_number,
+        product_id=header.product_id,
+        output_quantity=header.output_quantity,
+        status=header.status,
+        notes=header.notes,
+        component_count=bom_service.component_count(db, header.product_id),
+        created_at=header.created_at,
+        updated_at=header.updated_at,
+    )
+
+
+@router.get("/header", response_model=BomHeaderOut)
+def get_bom_header(
+    product_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    header = bom_service.get_bom_header(db, product_id)
+    if header is None:
+        raise NotFoundError("BOM")
+    return _header_to_out(db, header)
+
+
+@router.post("/header", response_model=BomHeaderOut, status_code=201)
+def create_bom_header(
+    product_id: int,
+    payload: BomHeaderCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    header = bom_service.create_bom_header(db, product_id, payload.model_dump(), user_id=user.id)
+    return _header_to_out(db, header)
+
+
+@router.put("/header", response_model=BomHeaderOut)
+def update_bom_header(
+    product_id: int,
+    payload: BomHeaderUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    header = bom_service.update_bom_header(
+        db, product_id, payload.model_dump(exclude_unset=True), user_id=user.id
+    )
+    return _header_to_out(db, header)
 
 
 @router.get("", response_model=list[BomLineOut])

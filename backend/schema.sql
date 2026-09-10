@@ -384,6 +384,33 @@ CREATE TABLE IF NOT EXISTS products (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- BOM header -- at most one per product (product_id UNIQUE). Owns only
+-- what a BOM itself is responsible for: identity, the batch size its
+-- lines' quantities are expressed against, whether it's the currently
+-- active recipe, and notes. Everything about the product itself stays
+-- on `products`; this never duplicates it. See app/models/bom.py.
+-- ============================================================
+CREATE TABLE IF NOT EXISTS boms (
+    id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    bom_number          VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. BOM-00001)
+    product_id          BIGINT UNSIGNED NOT NULL UNIQUE,
+    -- The batch size every bom_lines.quantity for this product is
+    -- expressed against (e.g. 20 against output_quantity=100 means "20
+    -- per 100 units produced"). Default 1 makes a line's quantity mean
+    -- "per unit" directly -- see bom_service.explode_requirements.
+    output_quantity     DECIMAL(14,4) NOT NULL DEFAULT 1,
+    status              ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    notes               VARCHAR(500) NULL,
+    deleted_at          DATETIME NULL,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by          BIGINT UNSIGNED NULL,
+    updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by          BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_bom_header_product FOREIGN KEY (product_id) REFERENCES products(id),
+    INDEX idx_bom_header_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
 -- BOM (Bill of Materials) - MULTI-LEVEL
 -- A product's BOM line points to either a raw_material OR another
 -- product (a sub-assembly), enabling arbitrary assembly depth.
@@ -1203,6 +1230,7 @@ INSERT IGNORE INTO number_series (doc_type, prefix, next_number, padding) VALUES
     ('DEAL', 'DEAL', 1, 5),
     ('SUPPLIER_RETURN', 'SRN', 1, 5),
     ('CUSTOMER', 'CUST', 1, 5),
-    ('SUPPLIER', 'SUP', 1, 5);
+    ('SUPPLIER', 'SUP', 1, 5),
+    ('BOM', 'BOM', 1, 5);
 
 SET FOREIGN_KEY_CHECKS = 1;

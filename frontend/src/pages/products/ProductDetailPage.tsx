@@ -25,6 +25,7 @@ import { getMachine } from '@/api/machines'
 import type { Product } from '@/types/product'
 import type { StockLevel } from '@/types/inventory'
 import type { Machine } from '@/types/machine'
+import type { BomHeader } from '@/types/bom'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite, isAdmin } from '@/lib/roles'
@@ -61,6 +62,7 @@ export function ProductDetailPage() {
   const [machine, setMachine] = useState<Machine | null>(null)
   const [stock, setStock] = useState<StockLevel | null>(null)
   const [componentCount, setComponentCount] = useState<number | null>(null)
+  const [bomHeader, setBomHeader] = useState<BomHeader | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -85,7 +87,10 @@ export function ProductDetailPage() {
       .catch(() => {})
   }, [productId])
 
-  const handleBomChange = useCallback((count: number) => setComponentCount(count), [])
+  const handleBomChange = useCallback((header: BomHeader | null, count: number) => {
+    setBomHeader(header)
+    setComponentCount(count)
+  }, [])
 
   async function handleDelete() {
     setBusy(true)
@@ -224,8 +229,8 @@ export function ProductDetailPage() {
             }
           />
           <Field label="Reorder point" value={`${product.reorder_point} ${product.unit}`} />
+          <Field label="BOM status" value={bomHeader ? <StatusBadge status={bomHeader.status} /> : '—'} />
           <Field label="Components" value={componentCount != null ? componentCount : '—'} />
-          <Field label="Production hrs/unit" value={product.production_hours_per_unit ?? '—'} />
           <Field label="Selling price" value={formatCurrency(product.selling_price)} />
         </dl>
       </GlassCard>
@@ -252,6 +257,27 @@ export function ProductDetailPage() {
             </div>
           )}
         </GlassCard>
+
+        {isAdmin(user?.role) && (
+          <GlassCard className="mt-6 p-8">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="font-display text-base font-medium text-white">Bill of materials</h2>
+              <Button variant="ghost" size="sm" onClick={() => setActiveTab('bom')}>
+                View BOM →
+              </Button>
+            </div>
+            {bomHeader ? (
+              <dl className="grid grid-cols-2 gap-6 sm:grid-cols-4">
+                <Field label="Status" value={<StatusBadge status={bomHeader.status} />} />
+                <Field label="Batch size" value={`${bomHeader.output_quantity} ${product.unit}`} />
+                <Field label="Components" value={componentCount ?? bomHeader.component_count} />
+                <Field label="BOM number" value={bomHeader.bom_number} />
+              </dl>
+            ) : (
+              <p className="text-sm text-white/40">No BOM defined for this product yet.</p>
+            )}
+          </GlassCard>
+        )}
       </TabPanel>
 
       <TabPanel id="stock-production" activeId={activeTab}>
