@@ -10,7 +10,10 @@ function parseTags(v: string | undefined): string[] | undefined {
 }
 
 // One "key: value" pair per line -> {key: value}; blank -> undefined.
-function parseProperties(v: string | undefined): Record<string, string> | undefined {
+// Exported for reuse by lib/validation/rawMaterial.ts -- raw materials'
+// `properties` field is the identical free-form JSON spec approach (see
+// backend/app/models/raw_material.py), so this doesn't need a second copy.
+export function parseProperties(v: string | undefined): Record<string, string> | undefined {
   if (!v || !v.trim()) return undefined
   const entries = v
     .split('\n')

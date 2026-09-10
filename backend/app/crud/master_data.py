@@ -143,7 +143,32 @@ class RawMaterialCRUD(BaseCRUD):
     table_name = "raw_materials"
     searchable_fields = ["name", "code"]
     sortable_fields = ["name", "code", "created_at"]
-    filterable_fields = ["status"]
+    filterable_fields = ["status", "material_type", "category"]
+
+    def _check_stock_thresholds(self, data: dict, existing: RawMaterial | None) -> None:
+        # RawMaterialUpdate only cross-checks fields present in the same
+        # payload (see its docstring) -- a payload that only raises
+        # maximum_stock, or only lowers safety_stock, needs the *existing*
+        # row's other values to actually validate against, which only
+        # this layer (with `existing` in hand) can do.
+        maximum_stock = data.get("maximum_stock", getattr(existing, "maximum_stock", 0) if existing else 0)
+        if not maximum_stock or float(maximum_stock) <= 0:
+            return
+        safety_stock = data.get("safety_stock", getattr(existing, "safety_stock", 0) if existing else 0)
+        reorder_point = data.get("reorder_point", getattr(existing, "reorder_point", 0) if existing else 0)
+        if safety_stock is not None and float(safety_stock) > float(maximum_stock):
+            raise ValidationAppError("Safety stock cannot exceed maximum stock.")
+        if reorder_point is not None and float(reorder_point) > float(maximum_stock):
+            raise ValidationAppError("Reorder point cannot exceed maximum stock.")
+
+    def create(self, db: Session, data: dict, user_id: int | None = None) -> RawMaterial:
+        self._check_stock_thresholds(data, None)
+        return super().create(db, data, user_id=user_id)
+
+    def update(self, db: Session, id: int, data: dict, user_id: int | None = None) -> RawMaterial:
+        existing = self.read_one(db, id)
+        self._check_stock_thresholds(data, existing)
+        return super().update(db, id, data, user_id=user_id)
 
 
 class ProductCRUD(BaseCRUD):

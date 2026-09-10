@@ -211,11 +211,37 @@ CREATE TABLE IF NOT EXISTS raw_materials (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     code            VARCHAR(30)  NOT NULL UNIQUE,
     name            VARCHAR(150) NOT NULL,
+    -- Classification + descriptive identity. properties is a JSON
+    -- key/value bag for structured spec attributes (grade, thickness,
+    -- colour, etc.) instead of fixed columns per attribute -- same
+    -- approach as products.properties. None of these are read by any
+    -- business logic. See app/models/raw_material.py.
+    material_type   ENUM('raw_material','packaging','consumable') NOT NULL DEFAULT 'raw_material',
+    category        VARCHAR(100) NULL,
+    description     TEXT NULL,
+    properties      JSON NULL,
+    manufacturer    VARCHAR(150) NULL,
+    manufacturer_part_number VARCHAR(100) NULL,
     unit            VARCHAR(20)  NOT NULL,          -- kg, ltr, pcs, etc.
+    -- Stock control thresholds -- on-hand/available/reserved themselves
+    -- live in raw_material_inventory (see below), never duplicated here.
     reorder_point   DECIMAL(14,4) NOT NULL DEFAULT 0,
+    safety_stock    DECIMAL(14,4) NOT NULL DEFAULT 0,
+    maximum_stock   DECIMAL(14,4) NOT NULL DEFAULT 0,
+    storage_location VARCHAR(100) NULL,
     default_supplier_id BIGINT UNSIGNED NULL,
+    -- Baseline/fallback cost -- kept for compatibility (purchase order
+    -- line defaulting, inventory valuation). Supplier-specific pricing
+    -- lives on supplier_materials.purchase_price instead; this is not a
+    -- second source of truth for what a given supplier charges.
     unit_cost       DECIMAL(14,4) NOT NULL DEFAULT 0,
-    status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
+    -- Lightweight QC -- not a QMS: just enough for receiving to know
+    -- whether this material needs inspecting or a certificate, and what
+    -- "acceptable" means in free text.
+    inspection_required TINYINT(1) NOT NULL DEFAULT 0,
+    certificate_required TINYINT(1) NOT NULL DEFAULT 0,
+    qc_notes        TEXT NULL,
+    status          ENUM('active','inactive','blocked') NOT NULL DEFAULT 'active',
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -226,17 +252,28 @@ CREATE TABLE IF NOT EXISTS raw_materials (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
--- SUPPLIER MATERIALS (which raw materials a supplier can supply, and
--- how much of each -- a supplier commonly supplies several different
+-- SUPPLIER MATERIALS (which raw materials a supplier can supply, and on
+-- what terms -- a supplier commonly supplies several different
 -- materials, so this is a proper line-item table rather than a single
--- FK, mirroring bom_lines' shape)
+-- FK, mirroring bom_lines' shape). Supplier-specific purchase price
+-- belongs here, not on raw_materials -- see that table's unit_cost.
 -- ============================================================
 CREATE TABLE IF NOT EXISTS supplier_materials (
     id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     supplier_id         BIGINT UNSIGNED NOT NULL,
     raw_material_id     BIGINT UNSIGNED NOT NULL,
+    supplier_material_code VARCHAR(60) NULL,
+    purchase_price      DECIMAL(14,4) NOT NULL DEFAULT 0,
+    currency            VARCHAR(3) NOT NULL DEFAULT 'KWD',
     max_supply_quantity DECIMAL(14,4) NOT NULL,
     lead_time_days      SMALLINT UNSIGNED NULL,
+    moq                 DECIMAL(14,4) NOT NULL DEFAULT 0,
+    -- At most one active row per raw_material_id may be preferred --
+    -- enforced in supplier_material_service, not the DB.
+    is_preferred        TINYINT(1) NOT NULL DEFAULT 0,
+    -- Whether this relationship is currently usable, independent of
+    -- deleted_at (a temporary pause vs. severing the relationship).
+    status              ENUM('active','inactive') NOT NULL DEFAULT 'active',
     -- Both auto-captured -- see app/models/supplier_material.py.
     onboarded_at        DATE NOT NULL,
     last_transaction_at DATE NULL,
@@ -250,6 +287,30 @@ CREATE TABLE IF NOT EXISTS supplier_materials (
     INDEX idx_sm_supplier (supplier_id),
     INDEX idx_sm_material (raw_material_id),
     INDEX idx_sm_deleted_at (deleted_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- RAW MATERIAL ALTERNATIVES (approved substitutes -- directed: material
+-- A allowing B as a substitute doesn't imply the reverse)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS raw_material_alternatives (
+    id                      BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    raw_material_id         BIGINT UNSIGNED NOT NULL,
+    alternative_material_id BIGINT UNSIGNED NOT NULL,
+    priority                SMALLINT UNSIGNED NOT NULL DEFAULT 1,
+    status                  ENUM('approved','blocked') NOT NULL DEFAULT 'approved',
+    conversion_ratio        DECIMAL(14,6) NOT NULL DEFAULT 1,   -- units of alternative per 1 unit of the primary material
+    notes                   VARCHAR(255) NULL,
+    deleted_at              DATETIME NULL,
+    created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by              BIGINT UNSIGNED NULL,
+    updated_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by              BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_rma_material FOREIGN KEY (raw_material_id) REFERENCES raw_materials(id),
+    CONSTRAINT fk_rma_alternative FOREIGN KEY (alternative_material_id) REFERENCES raw_materials(id),
+    INDEX idx_rma_material (raw_material_id),
+    INDEX idx_rma_alternative (alternative_material_id),
+    INDEX idx_rma_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
