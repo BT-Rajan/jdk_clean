@@ -176,7 +176,7 @@ class ProductCRUD(BaseCRUD):
     table_name = "products"
     searchable_fields = ["name", "code"]
     sortable_fields = ["name", "code", "created_at"]
-    filterable_fields = ["status", "product_type"]
+    filterable_fields = ["status", "product_type", "category"]
 
     def _sync_hours_per_unit(self, data: dict, existing: Product | None = None) -> dict:
         """batch_size + batch_production_hours are how the form captures

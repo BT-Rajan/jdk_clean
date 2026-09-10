@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { Alert, Button, GlassCard, SelectField, Spinner, TextField, TextareaField } from '@/components/ui'
+import { Alert, Button, FormSectionHeading, GlassCard, SelectField, Spinner, TextField, TextareaField } from '@/components/ui'
 import { createProduct, getProduct, updateProduct } from '@/api/products'
 import { listMachines } from '@/api/machines'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
@@ -42,6 +42,27 @@ function FormShell({ title, children }: { title: string; children: ReactNode }) 
   )
 }
 
+const DEFAULT_VALUES = {
+  code: '',
+  name: '',
+  unit: '',
+  category: '',
+  description: '',
+  product_type: 'finished_good' as const,
+  selling_price: 0,
+  batch_size: undefined,
+  batch_production_hours: undefined,
+  machine_id: undefined,
+  production_hours_per_unit: undefined,
+  workers_required: undefined,
+  status: 'active' as const,
+  tags: '',
+  properties: '',
+  reorder_point: 0,
+  inspection_required: false,
+  qc_notes: '',
+}
+
 function ProductCreateForm() {
   const navigate = useNavigate()
   const [formError, setFormError] = useState<string | null>(null)
@@ -52,7 +73,7 @@ function ProductCreateForm() {
     formState: { errors, isSubmitting },
   } = useForm<ProductFormValues, unknown, ProductSubmitValues>({
     resolver: zodResolver(productSchema),
-    defaultValues: { code: '', name: '', unit: '', product_type: 'finished_good', selling_price: 0, batch_size: undefined, batch_production_hours: undefined, machine_id: undefined, production_hours_per_unit: undefined, workers_required: undefined, status: 'active', tags: '', properties: '', reorder_point: 0 },
+    defaultValues: DEFAULT_VALUES,
   })
 
   async function onSubmit(values: ProductSubmitValues) {
@@ -69,17 +90,22 @@ function ProductCreateForm() {
     <FormShell title="New product">
       <Alert variant="error">{formError}</Alert>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+        <FormSectionHeading>Identity</FormSectionHeading>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <TextField label="Code" error={errors.code?.message} {...register('code')} />
           <TextField label="Name" error={errors.name?.message} {...register('name')} />
         </div>
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
           <TextField label="Unit" placeholder="pcs, kg…" error={errors.unit?.message} {...register('unit')} />
           <SelectField label="Product type" {...register('product_type')}>
             <option value="finished_good">Finished good</option>
             <option value="sub_assembly">Sub-assembly</option>
           </SelectField>
+          <TextField label="Category" error={errors.category?.message} {...register('category')} />
         </div>
+        <TextareaField label="Description" rows={3} error={errors.description?.message} {...register('description')} />
+
+        <FormSectionHeading>Commercial</FormSectionHeading>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <TextField label="Selling price" type="number" step="0.01" error={errors.selling_price?.message} {...register('selling_price')} />
           <SelectField label="Status" {...register('status')}>
@@ -87,6 +113,19 @@ function ProductCreateForm() {
             <option value="inactive">Inactive</option>
           </SelectField>
         </div>
+        <TextField
+          label="Reorder point"
+          type="number"
+          step="0.01"
+          error={errors.reorder_point?.message}
+          {...register('reorder_point')}
+        />
+        <p className="text-xs text-white/40">
+          When on-hand finished-goods stock drops to or below this, the product shows up under Inventory → Finished
+          goods → Low stock.
+        </p>
+
+        <FormSectionHeading>Production</FormSectionHeading>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <TextField
             label="Batch size (units)"
@@ -136,17 +175,8 @@ function ProductCreateForm() {
           Leave blank to skip the availability check for this product. Workers required draws on the shared factory
           labor pool (Settings → Factory setup).
         </p>
-        <TextField
-          label="Reorder point"
-          type="number"
-          step="0.01"
-          error={errors.reorder_point?.message}
-          {...register('reorder_point')}
-        />
-        <p className="text-xs text-white/40">
-          When on-hand finished-goods stock drops to or below this, the product shows up under Inventory → Finished
-          goods → Low stock.
-        </p>
+
+        <FormSectionHeading>Specifications</FormSectionHeading>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <TextField
             label="Tags"
@@ -166,6 +196,19 @@ function ProductCreateForm() {
           Tags and properties are descriptive only — not used by feasibility, BOM, or capacity calculations. Tags:
           comma-separated. Properties: one "key: value" pair per line.
         </p>
+
+        <FormSectionHeading>Quality control</FormSectionHeading>
+        <label className="flex items-center gap-3 text-sm text-white/70">
+          <input type="checkbox" className="h-4 w-4 rounded border-white/20 bg-transparent" {...register('inspection_required')} />
+          Inspection required
+        </label>
+        <TextareaField
+          label="Acceptance specification / notes"
+          rows={2}
+          error={errors.qc_notes?.message}
+          {...register('qc_notes')}
+        />
+
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
           <Button type="submit" isLoading={isSubmitting}>Create product</Button>
@@ -195,6 +238,8 @@ function ProductEditForm({ id }: { id: number }) {
         reset({
           name: product.name,
           unit: product.unit,
+          category: product.category ?? '',
+          description: product.description ?? '',
           product_type: product.product_type,
           selling_price: product.selling_price,
           batch_size: product.batch_size ?? undefined,
@@ -206,6 +251,8 @@ function ProductEditForm({ id }: { id: number }) {
           tags: tagsToInput(product.tags),
           properties: propertiesToInput(product.properties),
           reorder_point: product.reorder_point,
+          inspection_required: product.inspection_required,
+          qc_notes: product.qc_notes ?? '',
         })
       })
       .catch((err) => setFormError(getApiErrorMessage(err)))
@@ -231,14 +278,19 @@ function ProductEditForm({ id }: { id: number }) {
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+          <FormSectionHeading>Identity</FormSectionHeading>
           <TextField label="Name" error={errors.name?.message} {...register('name')} />
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             <TextField label="Unit" error={errors.unit?.message} {...register('unit')} />
             <SelectField label="Product type" {...register('product_type')}>
               <option value="finished_good">Finished good</option>
               <option value="sub_assembly">Sub-assembly</option>
             </SelectField>
+            <TextField label="Category" error={errors.category?.message} {...register('category')} />
           </div>
+          <TextareaField label="Description" rows={3} error={errors.description?.message} {...register('description')} />
+
+          <FormSectionHeading>Commercial</FormSectionHeading>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <TextField label="Selling price" type="number" step="0.01" error={errors.selling_price?.message} {...register('selling_price')} />
             <SelectField label="Status" {...register('status')}>
@@ -246,6 +298,15 @@ function ProductEditForm({ id }: { id: number }) {
               <option value="inactive">Inactive</option>
             </SelectField>
           </div>
+          <TextField
+            label="Reorder point"
+            type="number"
+            step="0.01"
+            error={errors.reorder_point?.message}
+            {...register('reorder_point')}
+          />
+
+          <FormSectionHeading>Production</FormSectionHeading>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <TextField
               label="Batch size (units)"
@@ -288,13 +349,8 @@ function ProductEditForm({ id }: { id: number }) {
             error={errors.workers_required?.message}
             {...register('workers_required')}
           />
-          <TextField
-            label="Reorder point"
-            type="number"
-            step="0.01"
-            error={errors.reorder_point?.message}
-            {...register('reorder_point')}
-          />
+
+          <FormSectionHeading>Specifications</FormSectionHeading>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <TextField
               label="Tags"
@@ -314,6 +370,19 @@ function ProductEditForm({ id }: { id: number }) {
             Tags and properties are descriptive only — not used by feasibility, BOM, or capacity calculations. Tags:
             comma-separated. Properties: one "key: value" pair per line.
           </p>
+
+          <FormSectionHeading>Quality control</FormSectionHeading>
+          <label className="flex items-center gap-3 text-sm text-white/70">
+            <input type="checkbox" className="h-4 w-4 rounded border-white/20 bg-transparent" {...register('inspection_required')} />
+            Inspection required
+          </label>
+          <TextareaField
+            label="Acceptance specification / notes"
+            rows={2}
+            error={errors.qc_notes?.message}
+            {...register('qc_notes')}
+          />
+
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
             <Button type="submit" isLoading={isSubmitting}>Save changes</Button>

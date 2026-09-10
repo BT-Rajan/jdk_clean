@@ -42,6 +42,8 @@ export const productSchema = z.object({
   code: z.string().trim().min(1, 'Code is required').max(30),
   name: z.string().trim().min(1, 'Name is required').max(150),
   unit: z.string().trim().min(1, 'Unit is required').max(20),
+  category: z.string().trim().max(100).optional().or(z.literal('').transform(() => undefined)),
+  description: z.string().optional().or(z.literal('').transform(() => undefined)),
   product_type: z.enum(['finished_good', 'sub_assembly']),
   selling_price: z.coerce.number().min(0, 'Must be 0 or more'),
   batch_size: z.coerce.number().positive('Must be greater than 0').optional().or(z.literal('').transform(() => undefined)),
@@ -53,6 +55,8 @@ export const productSchema = z.object({
   tags: z.string().optional().transform(parseTags),
   properties: z.string().optional().transform(parseProperties),
   reorder_point: z.coerce.number().min(0, 'Must be 0 or more').optional().or(z.literal('').transform(() => undefined)),
+  inspection_required: z.boolean(),
+  qc_notes: z.string().optional().or(z.literal('').transform(() => undefined)),
 })
 
 export type ProductFormValues = z.input<typeof productSchema>
