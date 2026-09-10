@@ -4,6 +4,7 @@ import type {
   MaterialRequirement,
   ProductionBatch,
   ProductionBatchPayload,
+  ReadinessResult,
   SettableProductionStatus,
 } from '@/types/production'
 import { apiClient } from './client'
@@ -11,6 +12,9 @@ import { apiClient } from './client'
 export interface ProductionListParams extends ListQueryParams {
   product_id?: number
   order_id?: number
+  /** Only ever matches 'planned' batches -- see
+   * production_service._list_planned_by_readiness. */
+  readiness?: 'ready' | 'blocked'
 }
 
 export async function listProductionBatches(
@@ -79,6 +83,16 @@ export async function getMaterialRequirements(batchId: number): Promise<Material
   const { data } = await apiClient.get<MaterialRequirement[]>(
     `/api/production-schedules/${batchId}/material-requirements`,
   )
+  return data
+}
+
+/** The full "can we make this batch now" breakdown -- materials (with
+ * shortages/approved alternatives/procurement info), machine and worker
+ * capacity -- for the Readiness section and the material-substitution
+ * picker on completion. The one place this is computed; see
+ * backend/app/services/production_readiness_service.py. */
+export async function getProductionReadiness(batchId: number): Promise<ReadinessResult> {
+  const { data } = await apiClient.get<ReadinessResult>(`/api/production-schedules/${batchId}/readiness`)
   return data
 }
 

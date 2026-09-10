@@ -7,8 +7,15 @@ from app.core.validators import not_in_past
 
 
 class ProductionMaterialActual(BaseModel):
+    # The material actually consumed -- ordinarily the BOM's own
+    # material, but when substituted_for_raw_material_id is set, this is
+    # an approved alternative (see raw_material_alternatives) used in
+    # its place. The BOM itself is never changed by this -- only the
+    # batch's actual consumption record. See
+    # production_service._complete_batch.
     raw_material_id: int = Field(gt=0)
     quantity_used: float = Field(ge=0)
+    substituted_for_raw_material_id: int | None = Field(default=None, gt=0)
 
 
 class ProductionScheduleCreate(BaseModel):
@@ -118,6 +125,12 @@ class ProductionScheduleOut(BaseModel):
     # and fail before from_model ever gets to parse it. Same reason
     # FeasibilityLineOut's `shortfalls` isn't named shortfall_json.
     material_discrepancy_findings: list[dict] | None = None
+    # "Can this batch start right now" -- one of production_readiness's
+    # READINESS_STATUSES, or None when the batch isn't 'planned' (the
+    # question is moot once it's started/completed/cancelled). Populated
+    # by the list/get endpoints via production_readiness_service.quick_status,
+    # not stored -- see production_readiness_service for why.
+    readiness_status: str | None = None
     created_at: datetime
     updated_at: datetime
 

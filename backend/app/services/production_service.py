@@ -10,7 +10,15 @@ from app.models.order import Order
 from app.models.product import Product
 from app.models.production_schedule import ALLOWED_TRANSITIONS, ProductionSchedule
 from app.models.raw_material import RawMaterial
-from app.services import audit_service, bom_service, deal_service, inventory_service, number_series_service
+from app.services import (
+    audit_service,
+    bom_service,
+    deal_service,
+    inventory_service,
+    number_series_service,
+    production_readiness_service,
+    raw_material_alternative_service,
+)
 
 TABLE_NAME = "production_schedules"
 
@@ -51,6 +59,7 @@ def list_batches(
     product_id: int | None = None,
     order_id: int | None = None,
     sort: str | None = None,
+    readiness: str | None = None,
 ) -> dict:
     query = _base_query(db)
 
@@ -63,7 +72,40 @@ def list_batches(
     if search:
         query = query.filter(ProductionSchedule.batch_number.ilike(f"%{search}%"))
 
+    if readiness:
+        # Readiness isn't a stored column (see production_readiness_service)
+        # and only ever applies to 'planned' batches -- filtering by it means
+        # recomputing per candidate instead of pushing into SQL, scoped to
+        # 'planned' rows so the candidate set stays to whatever's actually
+        # still awaiting a start decision rather than the whole table.
+        return _list_planned_by_readiness(db, query, readiness, sort, page, page_size)
+
     return sort_and_paginate(query, ProductionSchedule, _SORTABLE_FIELDS, sort, page, page_size)
+
+
+def _list_planned_by_readiness(
+    db: Session, query, readiness: str, sort: str | None, page: int, page_size: int
+) -> dict:
+    query = query.filter(ProductionSchedule.status == "planned")
+    candidates = sort_and_paginate(query, ProductionSchedule, _SORTABLE_FIELDS, sort, page=1, page_size=10_000)["items"]
+
+    wanted = readiness.strip().upper()
+    if wanted == "READY":
+        matched = [b for b in candidates if production_readiness_service.quick_status(db, b) == "READY"]
+    else:  # "BLOCKED" -- anything checked and not READY
+        matched = [b for b in candidates if production_readiness_service.quick_status(db, b) not in (None, "READY")]
+
+    page = max(page, 1)
+    page_size = min(max(page_size, 1), 200)
+    start = (page - 1) * page_size
+    total = len(matched)
+    return {
+        "items": matched[start : start + page_size],
+        "total": total,
+        "page": page,
+        "page_size": page_size,
+        "total_pages": (total + page_size - 1) // page_size if page_size else 0,
+    }
 
 
 def _validate_product(db: Session, product_id: int) -> Product:
@@ -262,22 +304,43 @@ def _complete_batch(
     db: Session,
     batch: ProductionSchedule,
     produced_quantity: float,
-    actual_materials: dict[int, float] | None,
+    actual_materials: list[dict] | None,
     user_id: int | None,
 ) -> None:
+    """actual_materials: [{"raw_material_id":, "quantity_used":,
+    "substituted_for_raw_material_id": optional}]. raw_material_id is
+    whatever was *actually* consumed -- ordinarily the BOM's own
+    material, but when substituted_for_raw_material_id is set, it names
+    an approved alternative (see raw_material_alternative_service) used
+    in place of that BOM material instead. The BOM itself is never
+    touched by this -- only this batch's actual consumption record and
+    the resulting stock movement (see the substitution note below) show
+    what was really used.
+    """
     detailed = bom_service.explode_requirements_detailed(db, batch.product_id, produced_quantity)
-    actual_materials = actual_materials or {}
+    actual_materials = actual_materials or []
 
-    # What actually gets deducted from stock: the entered actual figure
-    # for a material, or the BOM's own scrap-inflated planned figure for
-    # any material nobody entered a number for -- same "no actual data,
-    # trust the formula" default as before this feature existed, so a
-    # completion with no actual_materials given behaves identically to
-    # the old behavior.
-    consumption: dict[int, float] = {
-        raw_material_id: actual_materials.get(raw_material_id, req["scrap_inflated_required"])
-        for raw_material_id, req in detailed.items()
-    }
+    # Each entry fulfills exactly one BOM-required material (itself,
+    # unless substituted_for_raw_material_id says otherwise) -- collect
+    # what's actually consumed per material, and which BOM requirements
+    # were explicitly addressed so they don't *also* fall through to
+    # their BOM default below.
+    consumption: dict[int, float] = {}
+    entries_by_bom_id: dict[int, dict] = {}
+    for entry in actual_materials:
+        actual_id = entry["raw_material_id"]
+        bom_id = entry.get("substituted_for_raw_material_id") or actual_id
+        consumption[actual_id] = consumption.get(actual_id, 0.0) + float(entry["quantity_used"])
+        entries_by_bom_id[bom_id] = entry
+
+    # What gets deducted for any BOM-required material nobody explicitly
+    # reported on: its own scrap-inflated planned figure -- same "no
+    # actual data, trust the formula" default as before this feature
+    # existed, so a completion with no actual_materials given behaves
+    # identically to the old behavior.
+    for raw_material_id, req in detailed.items():
+        if raw_material_id not in entries_by_bom_id:
+            consumption[raw_material_id] = consumption.get(raw_material_id, 0.0) + req["scrap_inflated_required"]
 
     # Check every required material is available before touching any stock.
     # adjust_stock() commits per call, so issuing materials one at a time
@@ -313,28 +376,48 @@ def _complete_batch(
     #    a material discrepancy (the numbers don't add up: either the
     #    output is overstated, the usage is understated, or material
     #    went somewhere the record doesn't show).
-    # Only materials someone actually entered an actual figure for are
-    # checked -- one left at the BOM default trivially matches it.
+    # Only BOM requirements someone actually entered an actual figure
+    # for are checked -- one left at the BOM default trivially matches
+    # it. When the actual material differs from the BOM's own (an
+    # approved alternative was used instead), the BOM's net/planned
+    # figures are scaled by that alternative's conversion_ratio first,
+    # so "how much of B should replace A" is compared like-for-like
+    # rather than against A's own raw numbers.
     findings: list[dict] = []
     materials_for_findings: dict[int, RawMaterial] = {}
-    if actual_materials:
+    if entries_by_bom_id:
+        lookup_ids = set(entries_by_bom_id.keys()) | {e["raw_material_id"] for e in entries_by_bom_id.values()}
         materials_for_findings = {
-            m.id: m
-            for m in db.query(RawMaterial).filter(RawMaterial.id.in_(actual_materials.keys())).all()
+            m.id: m for m in db.query(RawMaterial).filter(RawMaterial.id.in_(lookup_ids)).all()
         }
-    for raw_material_id, actual_qty in actual_materials.items():
-        req = detailed.get(raw_material_id)
+    for bom_material_id, entry in entries_by_bom_id.items():
+        req = detailed.get(bom_material_id)
         if req is None:
             continue
-        net_required = req["net_required"]
-        planned_required = req["scrap_inflated_required"]
-        material = materials_for_findings.get(raw_material_id)
-        label = material.name if material else f"#{raw_material_id}"
+        actual_material_id = entry["raw_material_id"]
+        actual_qty = float(entry["quantity_used"])
+
+        conversion_ratio = 1.0
+        if actual_material_id != bom_material_id:
+            approved_alt = next(
+                (
+                    a
+                    for a in raw_material_alternative_service.get_alternatives(db, bom_material_id)
+                    if a.alternative_material_id == actual_material_id and a.status == "approved"
+                ),
+                None,
+            )
+            conversion_ratio = float(approved_alt.conversion_ratio) if approved_alt else 1.0
+
+        net_required = req["net_required"] * conversion_ratio
+        planned_required = req["scrap_inflated_required"] * conversion_ratio
+        material = materials_for_findings.get(actual_material_id)
+        label = material.name if material else f"#{actual_material_id}"
         unit = material.unit if material else ""
         if net_required > 0 and actual_qty < net_required:
             findings.append(
                 {
-                    "raw_material_id": raw_material_id,
+                    "raw_material_id": actual_material_id,
                     "material": label,
                     "unit": unit,
                     "type": "discrepancy",
@@ -353,7 +436,7 @@ def _complete_batch(
             )
             findings.append(
                 {
-                    "raw_material_id": raw_material_id,
+                    "raw_material_id": actual_material_id,
                     "material": label,
                     "unit": unit,
                     "type": "scrap_allowance_breach",
@@ -370,6 +453,21 @@ def _complete_batch(
             )
 
     for raw_material_id, quantity_used in consumption.items():
+        # Substitution is recorded on the movement itself -- the
+        # permanent, queryable record of "this batch actually consumed
+        # this material" -- rather than a new column, since
+        # stock_movements already is that ledger (filterable by
+        # reference_type/reference_id=this batch).
+        note = f"Consumed by batch {batch.batch_number}"
+        substituted_bom_id = next(
+            (bid for bid, e in entries_by_bom_id.items() if e["raw_material_id"] == raw_material_id and bid != raw_material_id),
+            None,
+        )
+        if substituted_bom_id is not None:
+            bom_material = materials_for_findings.get(substituted_bom_id) or db.query(RawMaterial).filter(
+                RawMaterial.id == substituted_bom_id
+            ).first()
+            note += f" (approved alternative for {bom_material.code if bom_material else f'#{substituted_bom_id}'})"
         inventory_service.adjust_stock(
             db,
             item_type="raw_material",
@@ -378,7 +476,7 @@ def _complete_batch(
             movement_type="issue",
             reference_type="production_schedule",
             reference_id=batch.id,
-            notes=f"Consumed by batch {batch.batch_number}",
+            notes=note,
             user_id=user_id,
         )
 
@@ -414,7 +512,7 @@ def change_status(
     batch_id: int,
     new_status: str,
     produced_quantity: float | None = None,
-    actual_materials: dict[int, float] | None = None,
+    actual_materials: list[dict] | None = None,
     reason: str | None = None,
     user_id: int | None = None,
 ) -> ProductionSchedule:
@@ -422,6 +520,14 @@ def change_status(
     assert_transition_allowed(ALLOWED_TRANSITIONS, batch.status, new_status, "production batch")
 
     if new_status == "in_progress":
+        # The start gate: a fresh backend readiness check, never a
+        # frontend-only one -- if anything has changed since the batch
+        # was planned (stock consumed elsewhere, the BOM deactivated, a
+        # machine slot double-booked), this is what actually stops the
+        # start, with the exact reason surfaced in the error.
+        readiness = production_readiness_service.check_batch_readiness(db, batch_id)
+        if readiness["status"] != "READY":
+            raise ConflictError(f"Cannot start production: {readiness['summary']}")
         _start_batch(db, batch, user_id)
     elif new_status == "completed":
         if not produced_quantity:
