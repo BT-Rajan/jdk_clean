@@ -339,6 +339,10 @@ CREATE TABLE IF NOT EXISTS products (
     code            VARCHAR(30)  NOT NULL UNIQUE,
     name            VARCHAR(150) NOT NULL,
     unit            VARCHAR(20)  NOT NULL,
+    -- Identity fields mirroring raw_materials' own (see
+    -- app/models/raw_material.py) -- descriptive only.
+    category        VARCHAR(100) NULL,
+    description     TEXT NULL,
     product_type    ENUM('finished_good','sub_assembly') NOT NULL DEFAULT 'finished_good',
     selling_price   DECIMAL(14,2) NOT NULL DEFAULT 0,
     -- How production time is actually entered: as one batch (e.g. "500
@@ -366,6 +370,9 @@ CREATE TABLE IF NOT EXISTS products (
     -- Finished-goods equivalent of raw_materials.reorder_point -- see
     -- app/models/product.py and inventory_service.get_finished_goods_stock.
     reorder_point   DECIMAL(14,4) NOT NULL DEFAULT 0,
+    -- Lightweight QC, mirroring raw_materials.inspection_required/qc_notes.
+    inspection_required TINYINT(1) NOT NULL DEFAULT 0,
+    qc_notes        TEXT NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,

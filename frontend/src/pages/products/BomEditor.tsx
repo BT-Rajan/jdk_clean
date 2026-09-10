@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Alert, Button, GlassCard, SelectField, Spinner, TextField } from '@/components/ui'
+import { Alert, Badge, Button, GlassCard, SelectField, Spinner, TextField } from '@/components/ui'
 import { addBomLine, deleteBomLine, explodeBom, getBom, replaceBom } from '@/api/bom'
 import { listProducts } from '@/api/products'
 import { listRawMaterials } from '@/api/rawMaterials'
@@ -46,9 +46,13 @@ function emptyLine(): EditableLine {
 interface BomEditorProps {
   productId: number
   canEdit: boolean
+  /** Reports the current component count after every load/save/add/remove
+   * -- lets the Overview tab's summary strip show "N components" without
+   * fetching the BOM a second time. */
+  onChange?: (componentCount: number) => void
 }
 
-export function BomEditor({ productId, canEdit }: BomEditorProps) {
+export function BomEditor({ productId, canEdit, onChange }: BomEditorProps) {
   const [lines, setLines] = useState<EditableLine[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -93,6 +97,7 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
   }
 
   useEffect(load, [productId])
+  useEffect(() => onChange?.(lines.length), [lines, onChange])
 
   function componentOptions(type: ComponentType) {
     return type === 'raw_material' ? rawMaterials : products
@@ -229,6 +234,10 @@ export function BomEditor({ productId, canEdit }: BomEditorProps) {
       <GlassCard className="p-6">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="font-display text-lg font-medium text-white">Bill of materials</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-white/40">{lines.length} component{lines.length === 1 ? '' : 's'}</span>
+            <Badge tone={lines.length > 0 ? 'success' : 'danger'}>{lines.length > 0 ? 'Defined' : 'Missing'}</Badge>
+          </div>
         </div>
         <p className="mb-4 text-xs text-white/40">
           A line's Unit always matches whatever unit its component is itself stocked/produced in -- there's no

@@ -1,4 +1,4 @@
-from sqlalchemy import DECIMAL, JSON, Enum, ForeignKey, SmallInteger, String
+from sqlalchemy import DECIMAL, JSON, Boolean, Enum, ForeignKey, SmallInteger, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -14,6 +14,12 @@ class Product(Base, TimestampMixin, SoftDeleteMixin):
     code: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     unit: Mapped[str] = mapped_column(String(20), nullable=False)
+    # Identity fields mirroring raw_materials' own (see
+    # app/models/raw_material.py) -- same free-text classification/
+    # description pair, for the same reason: not read by any business
+    # logic, purely how the product is described on its detail page.
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     product_type: Mapped[str] = mapped_column(
         Enum("finished_good", "sub_assembly", name="product_type"),
         nullable=False,
@@ -55,5 +61,11 @@ class Product(Base, TimestampMixin, SoftDeleteMixin):
     # (quantity_on_hand <= reorder_point) the same way raw materials
     # already are. Default 0 means "never flag" until explicitly set.
     reorder_point: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
+
+    # Lightweight QC, mirroring raw_materials.inspection_required/qc_notes
+    # -- not a QMS, just whether finished units need inspecting before
+    # shipping and what "acceptable" means in free text.
+    inspection_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    qc_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     machine: Mapped[Machine | None] = relationship(lazy="joined")

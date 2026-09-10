@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { Alert, Button, GlassCard, SelectField, Spinner, TextField, TextareaField } from '@/components/ui'
+import { Alert, Button, FormSectionHeading, GlassCard, SelectField, Spinner, TextField, TextareaField } from '@/components/ui'
 import { createRawMaterial, getRawMaterial, updateRawMaterial } from '@/api/rawMaterials'
 import { listSuppliers } from '@/api/suppliers'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
@@ -39,10 +39,6 @@ function FormShell({ title, children }: { title: string; children: ReactNode }) 
 function useSupplierOptions() {
   const fetcher = useCallback(() => listSuppliers({ page: 1, page_size: 200, status: 'active' }), [])
   return useSelectOptions(fetcher)
-}
-
-function SectionHeading({ children }: { children: ReactNode }) {
-  return <h2 className="mb-1 border-t border-white/10 pt-6 font-display text-sm font-medium text-white/70 first:mt-0 first:border-0 first:pt-0">{children}</h2>
 }
 
 const DEFAULT_VALUES = {
@@ -97,7 +93,7 @@ function RawMaterialCreateForm() {
     <FormShell title="New raw material">
       <Alert variant="error">{formError}</Alert>
       <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
-        <SectionHeading>Identity</SectionHeading>
+        <FormSectionHeading>Identity</FormSectionHeading>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <TextField label="Code" error={errors.code?.message} {...register('code')} />
           <TextField label="Name" error={errors.name?.message} {...register('name')} />
@@ -128,7 +124,7 @@ function RawMaterialCreateForm() {
           {...register('properties')}
         />
 
-        <SectionHeading>Stock control</SectionHeading>
+        <FormSectionHeading>Stock control</FormSectionHeading>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
           <TextField label="Reorder point" type="number" step="0.01" error={errors.reorder_point?.message} {...register('reorder_point')} />
           <TextField label="Safety stock" type="number" step="0.01" error={errors.safety_stock?.message} {...register('safety_stock')} />
@@ -136,7 +132,7 @@ function RawMaterialCreateForm() {
         </div>
         <TextField label="Storage location" error={errors.storage_location?.message} {...register('storage_location')} />
 
-        <SectionHeading>Purchase information</SectionHeading>
+        <FormSectionHeading>Purchase information</FormSectionHeading>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <TextField label="Baseline unit cost" type="number" step="0.01" error={errors.unit_cost?.message} {...register('unit_cost')} />
           <SelectField label="Default supplier" {...register('default_supplier_id')}>
@@ -150,7 +146,7 @@ function RawMaterialCreateForm() {
           Supplier-specific pricing is set on the Procurement tab after creating this material.
         </p>
 
-        <SectionHeading>Quality control</SectionHeading>
+        <FormSectionHeading>Quality control</FormSectionHeading>
         <div className="flex flex-wrap gap-6">
           <label className="flex items-center gap-3 text-sm text-white/70">
             <input type="checkbox" className="h-4 w-4 rounded border-white/20 bg-transparent" {...register('inspection_required')} />
@@ -168,7 +164,7 @@ function RawMaterialCreateForm() {
           {...register('qc_notes')}
         />
 
-        <SectionHeading>Status</SectionHeading>
+        <FormSectionHeading>Status</FormSectionHeading>
         <SelectField label="Status" {...register('status')}>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
@@ -245,7 +241,7 @@ function RawMaterialEditForm({ id }: { id: number }) {
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
-          <SectionHeading>Identity</SectionHeading>
+          <FormSectionHeading>Identity</FormSectionHeading>
           <TextField label="Name" error={errors.name?.message} {...register('name')} />
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             <TextField label="Unit" placeholder="pcs, kg…" error={errors.unit?.message} {...register('unit')} />
@@ -273,7 +269,7 @@ function RawMaterialEditForm({ id }: { id: number }) {
             {...register('properties')}
           />
 
-          <SectionHeading>Stock control</SectionHeading>
+          <FormSectionHeading>Stock control</FormSectionHeading>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             <TextField label="Reorder point" type="number" step="0.01" error={errors.reorder_point?.message} {...register('reorder_point')} />
             <TextField label="Safety stock" type="number" step="0.01" error={errors.safety_stock?.message} {...register('safety_stock')} />
@@ -281,7 +277,7 @@ function RawMaterialEditForm({ id }: { id: number }) {
           </div>
           <TextField label="Storage location" error={errors.storage_location?.message} {...register('storage_location')} />
 
-          <SectionHeading>Purchase information</SectionHeading>
+          <FormSectionHeading>Purchase information</FormSectionHeading>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <TextField label="Baseline unit cost" type="number" step="0.01" error={errors.unit_cost?.message} {...register('unit_cost')} />
             <SelectField label="Default supplier" {...register('default_supplier_id')}>
@@ -292,7 +288,7 @@ function RawMaterialEditForm({ id }: { id: number }) {
             </SelectField>
           </div>
 
-          <SectionHeading>Quality control</SectionHeading>
+          <FormSectionHeading>Quality control</FormSectionHeading>
           <div className="flex flex-wrap gap-6">
             <label className="flex items-center gap-3 text-sm text-white/70">
               <input type="checkbox" className="h-4 w-4 rounded border-white/20 bg-transparent" {...register('inspection_required')} />
@@ -310,7 +306,7 @@ function RawMaterialEditForm({ id }: { id: number }) {
             {...register('qc_notes')}
           />
 
-          <SectionHeading>Status</SectionHeading>
+          <FormSectionHeading>Status</FormSectionHeading>
           <SelectField label="Status" {...register('status')}>
             <option value="active">Active</option>
             <option value="inactive">Inactive</option>
