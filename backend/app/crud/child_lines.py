@@ -49,6 +49,14 @@ class ChildLineCRUD(Generic[ModelType]):
       _resolve_labels(db, lines)           - attach any dynamic display
           attributes the response schema reads (e.g. component_code).
           No-op by default.
+
+    update_line patches one existing line in place (unlike replace_lines,
+    which always soft-deletes-and-reinserts every line): it does not run
+    _validate_line, since a partial patch generally isn't the full line
+    shape that validator expects (e.g. it may omit the FK the validator
+    checks) -- callers needing domain validation on an update should do
+    it themselves before calling in, the same way callers already build
+    `data` themselves.
     """
 
     model: type[ModelType]
@@ -126,6 +134,30 @@ class ChildLineCRUD(Generic[ModelType]):
         # Keyed by parent_id (not row.id) -- see module docstring.
         audit_service.log_create(db, self.table_name, parent_id, user_id)
         db.commit()
+        self._resolve_labels(db, [row])
+        return row
+
+    def update_line(
+        self, db: Session, parent_id: int, line_id: int, data: dict, user_id: int | None = None
+    ) -> ModelType:
+        row = (
+            db.query(self.model)
+            .filter(
+                self.model.id == line_id,
+                getattr(self.model, self.parent_field) == parent_id,
+                self.model.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if row is None:
+            raise NotFoundError("Line")
+        for field, value in data.items():
+            setattr(row, field, value)
+        db.flush()
+        # Keyed by parent_id (not row.id) -- see module docstring.
+        audit_service.log_update(db, self.table_name, parent_id, {"line": (line_id, "updated")}, user_id)
+        db.commit()
+        db.refresh(row)
         self._resolve_labels(db, [row])
         return row
 

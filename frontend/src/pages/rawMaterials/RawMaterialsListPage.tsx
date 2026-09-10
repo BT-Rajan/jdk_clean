@@ -63,6 +63,7 @@ export function RawMaterialsListPage() {
           <option value="">All statuses</option>
           <option value="active">Active</option>
           <option value="inactive">Inactive</option>
+          <option value="blocked">Blocked</option>
         </SelectField>
       </div>
 
