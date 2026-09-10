@@ -22,6 +22,7 @@ import { WhereUsedPanel } from '@/components/master/WhereUsedPanel'
 import { deleteRawMaterial, getRawMaterial, restoreRawMaterial } from '@/api/rawMaterials'
 import { getStock } from '@/api/inventory'
 import { getSupplier } from '@/api/suppliers'
+import { RAW_MATERIAL_TYPE_LABELS } from '@/types/rawMaterial'
 import type { RawMaterial } from '@/types/rawMaterial'
 import type { StockLevel } from '@/types/inventory'
 import type { SupplierMaterial } from '@/types/supplierMaterial'
@@ -31,12 +32,6 @@ import { canWrite } from '@/lib/roles'
 import { formatCurrency } from '@/lib/currency'
 import { MaterialSuppliersPanel } from './MaterialSuppliersPanel'
 import { MaterialAlternativesPanel } from './MaterialAlternativesPanel'
-
-const MATERIAL_TYPE_LABELS: Record<string, string> = {
-  raw_material: 'Raw material',
-  packaging: 'Packaging',
-  consumable: 'Consumable',
-}
 
 const TABS: TabItem[] = [
   { id: 'overview', label: 'Overview' },
@@ -191,7 +186,7 @@ export function RawMaterialDetailPage() {
       <GlassCard className="mb-6 p-6">
         <div className="flex flex-wrap items-center gap-2">
           <StatusBadge status={material.status} />
-          <Badge tone="info">{MATERIAL_TYPE_LABELS[material.material_type] ?? material.material_type}</Badge>
+          <Badge tone="info">{RAW_MATERIAL_TYPE_LABELS[material.material_type] ?? material.material_type}</Badge>
           {material.category && <Badge tone="neutral">{material.category}</Badge>}
         </div>
         <dl className="mt-5 grid grid-cols-2 gap-6 sm:grid-cols-4 lg:grid-cols-7">
@@ -231,7 +226,7 @@ export function RawMaterialDetailPage() {
         <GlassCard className="p-8">
           <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <Field label="Unit" value={material.unit} />
-            <Field label="Material type" value={MATERIAL_TYPE_LABELS[material.material_type] ?? material.material_type} />
+            <Field label="Material type" value={RAW_MATERIAL_TYPE_LABELS[material.material_type] ?? material.material_type} />
             <Field label="Category" value={material.category} />
             <Field label="Manufacturer / brand" value={material.manufacturer} />
             <Field label="Manufacturer part number" value={material.manufacturer_part_number} />
