@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
   Alert,
+  Badge,
   Button,
   EmptyState,
   GlassCard,
@@ -23,10 +24,14 @@ export function ProductionListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const [logOpen, setLogOpen] = useState(false)
+  // Only ever matches 'planned' batches -- see
+  // production_service._list_planned_by_readiness. A small filter, not a
+  // dashboard: just READY / BLOCKED, same two states the row indicator shows.
+  const [readinessFilter, setReadinessFilter] = useState<'' | 'ready' | 'blocked'>('')
   const fetcher = useCallback(
     (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) =>
-      listProductionBatches(params),
-    [],
+      listProductionBatches({ ...params, readiness: readinessFilter || undefined }),
+    [readinessFilter],
   )
   const {
     items,
@@ -60,6 +65,17 @@ export function ProductionListPage() {
               <option value="cancelled">Cancelled</option>
             </SelectField>
           </div>
+          <div className="w-44">
+            <SelectField
+              label="Readiness"
+              value={readinessFilter}
+              onChange={(e) => setReadinessFilter(e.target.value as '' | 'ready' | 'blocked')}
+            >
+              <option value="">Any (planned only)</option>
+              <option value="ready">Ready</option>
+              <option value="blocked">Blocked</option>
+            </SelectField>
+          </div>
           {canWrite(user?.role) && (
             <div className="flex gap-3">
               <Button variant="ghost" onClick={() => navigate('/production/new')}>New batch</Button>
@@ -91,6 +107,7 @@ export function ProductionListPage() {
                   <SortableHeader label="Scheduled start" field="scheduled_start" sort={sort} onSort={toggleSort} />
                   <th className="px-6 py-4 font-medium">Quantity</th>
                   <SortableHeader label="Status" field="status" sort={sort} onSort={toggleSort} />
+                  <th className="px-6 py-4 font-medium">Readiness</th>
                 </tr>
               </thead>
               <tbody>
@@ -113,6 +130,15 @@ export function ProductionListPage() {
                     </td>
                     <td className="px-6 py-4">
                       <StatusBadge status={b.status} />
+                    </td>
+                    <td className="px-6 py-4">
+                      {b.readiness_status === 'READY' ? (
+                        <Badge tone="success">Ready</Badge>
+                      ) : b.readiness_status ? (
+                        <Badge tone="danger">Blocked</Badge>
+                      ) : (
+                        <span className="text-white/30">—</span>
+                      )}
                     </td>
                   </tr>
                 ))}

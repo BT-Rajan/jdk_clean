@@ -49,6 +49,31 @@ def daily_booked_hours(
     return daily
 
 
+def capacity_available_in_window(
+    daily_capacity: float,
+    daily_booked: dict[date, float],
+    start: date,
+    end: date,
+    working_days: set[int] | None = None,
+) -> float:
+    """Total free capacity across a *fixed* date range [start, end]
+    (inclusive), net of whatever's already booked each day -- the
+    complement of find_vacant_slot_completion's open-ended forward scan:
+    that one answers "when is enough capacity available", this one
+    answers "is enough capacity available in the window we already
+    picked" (production_readiness_service's machine/worker check for an
+    already-scheduled batch, where scheduled_start/scheduled_end are
+    fixed, not something to solve for).
+    """
+    total = 0.0
+    d = start
+    while d <= end:
+        if working_days is None or d.weekday() in working_days:
+            total += max(daily_capacity - daily_booked.get(d, 0.0), 0.0)
+        d += timedelta(days=1)
+    return total
+
+
 def find_vacant_slot_completion(
     daily_capacity: float,
     daily_booked: dict[date, float],

@@ -5,6 +5,7 @@ from app.api.common import PagedResponse
 from app.core.database import get_db
 from app.core.permissions import require_page_access
 from app.models.user import User
+from app.schemas.production_readiness import ReadinessResult
 from app.schemas.production_schedule import (
     MaterialRequirementOut,
     ProductionQuickLog,
@@ -13,11 +14,19 @@ from app.schemas.production_schedule import (
     ProductionScheduleStatusUpdate,
     ProductionScheduleUpdate,
 )
-from app.services import audit_service, production_service
+from app.services import audit_service, production_readiness_service, production_service
 
 router = APIRouter(prefix="/api/production-schedules", tags=["production"])
 read_guard = require_page_access("production", "read")
 write_guard = require_page_access("production", "write")
+
+
+def _with_readiness(db: Session, batch, out: ProductionScheduleOut) -> ProductionScheduleOut:
+    """Attaches the small READY/other-status indicator to an already-built
+    ProductionScheduleOut -- None for anything not 'planned', since "can it
+    start" is moot once a batch has started, finished, or been cancelled."""
+    out.readiness_status = production_readiness_service.quick_status(db, batch)
+    return out
 
 
 @router.get("", response_model=PagedResponse)
@@ -29,6 +38,11 @@ def list_batches(
     product_id: int | None = Query(None),
     order_id: int | None = Query(None),
     sort: str | None = Query(None),
+    # READY or BLOCKED -- only ever matches 'planned' batches (see
+    # production_service._list_planned_by_readiness). Not a full dashboard
+    # filter set: NOT_CHECKED just means "not planned", already reachable
+    # via the existing `status` filter.
+    readiness: str | None = Query(None, pattern="^(?i:ready|blocked)$"),
     db: Session = Depends(get_db),
     _: User = Depends(read_guard),
 ):
@@ -41,8 +55,9 @@ def list_batches(
         product_id=product_id,
         order_id=order_id,
         sort=sort,
+        readiness=readiness,
     )
-    result["items"] = [ProductionScheduleOut.from_model(b) for b in result["items"]]
+    result["items"] = [_with_readiness(db, b, ProductionScheduleOut.from_model(b)) for b in result["items"]]
     return result
 
 
@@ -52,7 +67,22 @@ def get_batch(
     db: Session = Depends(get_db),
     _: User = Depends(read_guard),
 ):
-    return ProductionScheduleOut.from_model(production_service.get_batch(db, batch_id))
+    batch = production_service.get_batch(db, batch_id)
+    return _with_readiness(db, batch, ProductionScheduleOut.from_model(batch))
+
+
+@router.get("/{batch_id}/readiness", response_model=ReadinessResult)
+def get_batch_readiness(
+    batch_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    """The full "can we make this batch now" breakdown -- materials with
+    shortages/alternatives/procurement info, machine and worker capacity --
+    for the production detail page's Readiness section. See
+    production_readiness_service.check_batch_readiness."""
+    production_service.get_batch(db, batch_id)  # 404s if missing/deleted
+    return production_readiness_service.check_batch_readiness(db, batch_id)
 
 
 @router.get("/{batch_id}/history")
@@ -123,9 +153,7 @@ def update_status(
     user: User = Depends(write_guard),
 ):
     actual_materials = (
-        {m.raw_material_id: m.quantity_used for m in payload.actual_materials}
-        if payload.actual_materials
-        else None
+        [m.model_dump() for m in payload.actual_materials] if payload.actual_materials else None
     )
     batch = production_service.change_status(
         db,
