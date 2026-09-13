@@ -1,0 +1,5 @@
+# Test-only dependencies -- never installed in production, kept out of
+# requirements.txt on purpose so the app's own runtime dependency set is
+# untouched by adding a test suite. Install alongside requirements.txt:
+#   pip install -r requirements.txt -r requirements-dev.txt
+pytest==8.4.2
