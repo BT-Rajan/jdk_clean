@@ -33,3 +33,22 @@ export function isNotFutureDate(value: string | undefined): boolean {
 }
 
 export const NOT_FUTURE_DATE_MESSAGE = 'Date cannot be in the future'
+
+/** Adds `days` calendar days to an ISO date string ("2026-07-29"),
+ * returning an ISO date string. Used for quotations' valid_until, which
+ * the backend always derives as quotation_date + 7 days (see
+ * backend/app/services/quotation_service.py's QUOTATION_VALIDITY_DAYS) --
+ * this mirrors that on the client purely for display, since the server
+ * value is what's actually authoritative. Returns '' for an unparseable
+ * input rather than throwing, so a form mid-edit never crashes on a
+ * momentarily-empty date field. */
+export function addDaysISODate(isoDate: string, days: number): string {
+  if (!isoDate) return ''
+  const d = new Date(`${isoDate}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return ''
+  d.setDate(d.getDate() + days)
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}

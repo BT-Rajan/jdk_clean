@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
@@ -36,6 +36,21 @@ TABLE_NAME = "quotations"
 # in the ledger, so it has to be found by scanning for it explicitly. See
 # check_material_conflicts.
 _OPEN_QUOTATION_STATUSES = ("draft", "sent")
+
+# Every quotation is valid for exactly 7 calendar days from its own
+# quotation_date -- not 7*24 hours from creation time, so a quotation
+# dated today is still valid through the whole of day 7, expiring only
+# once escalate_expired_quotations finds it still 'sent' after that
+# date has passed (see that function). There is currently no business
+# feature letting Sales pick a different validity window -- valid_until
+# is always server-derived from quotation_date, in both create_quotation
+# and update_quotation, so it can never be left blank or set
+# independently of the quotation's own date.
+QUOTATION_VALIDITY_DAYS = 7
+
+
+def _compute_valid_until(quotation_date: date) -> date:
+    return quotation_date + timedelta(days=QUOTATION_VALIDITY_DAYS)
 
 
 def _explode_lines_requirement(db: Session, lines: list) -> dict[int, float]:
@@ -214,6 +229,12 @@ def create_quotation(db: Session, data: dict, user_id: int | None = None) -> Quo
     if customer is None:
         raise ValidationAppError(f"Customer {data['customer_id']} not found.")
 
+    # valid_until is always server-derived from quotation_date -- see
+    # QUOTATION_VALIDITY_DAYS above. Whatever the caller sent (blank or
+    # otherwise) is replaced here, so a quotation can never be created
+    # with no expiry date or with a validity window that isn't 7 days.
+    data["valid_until"] = _compute_valid_until(data["quotation_date"])
+
     # Sales must explicitly acknowledge (material_conflict_acknowledged)
     # before a quotation whose material needs overlap another still-open
     # quotation/order can be created at all -- this is the server-side
@@ -302,6 +323,18 @@ def update_quotation(db: Session, quotation_id: int, data: dict, user_id: int | 
         )
         if customer is None:
             raise ValidationAppError(f"Customer {data['customer_id']} not found.")
+
+    # valid_until stays server-derived on update too -- no business
+    # feature exists for Sales to set it independently (see
+    # QUOTATION_VALIDITY_DAYS / _compute_valid_until in create_quotation).
+    # If quotation_date is being changed, recompute valid_until from the
+    # new date; otherwise drop any valid_until the caller sent so it can
+    # never drift from quotation_date + 7 days on an edit that doesn't
+    # touch the date at all.
+    if data.get("quotation_date") is not None:
+        data["valid_until"] = _compute_valid_until(data["quotation_date"])
+    else:
+        data.pop("valid_until", None)
 
     lines = data.pop("lines", None)
     discount_percent_update = data.pop("discount_percent", None)

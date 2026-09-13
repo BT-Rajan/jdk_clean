@@ -35,6 +35,10 @@ class QuotationCreate(BaseModel):
     # generated from -- optional for UI form submission, required in workflows.
     feasibility_id: int | None = None
     quotation_date: date
+    # Accepted on the wire for backward compatibility, but never trusted:
+    # quotation_service.create_quotation always overwrites this with
+    # quotation_date + 7 calendar days. Whatever the client sends here
+    # (including blank) is ignored.
     valid_until: date | None = None
     notes: str | None = None
     # Percentage, e.g. 0 or 5. Defaults to 0 when not given.
@@ -68,6 +72,10 @@ class QuotationUpdate(BaseModel):
 
     customer_id: int | None = None
     quotation_date: date | None = None
+    # Same as QuotationCreate.valid_until: accepted for backward
+    # compatibility but never trusted. quotation_service.update_quotation
+    # recomputes it from quotation_date whenever the date changes, and
+    # otherwise drops whatever value was sent.
     valid_until: date | None = None
     notes: str | None = None
     discount_percent: float | None = Field(default=None, ge=0, le=100)

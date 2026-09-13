@@ -47,6 +47,10 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
     # from its feasibility check if it has one, otherwise newly minted.
     deal_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("deals.id"), nullable=True)
     quotation_date: Mapped[date] = mapped_column(DATE, nullable=False)
+    # Always server-derived as quotation_date + 7 calendar days (see
+    # quotation_service.QUOTATION_VALIDITY_DAYS / _compute_valid_until) --
+    # still nullable at the column level so pre-existing rows created
+    # before this rule existed remain valid without a backfill.
     valid_until: Mapped[date | None] = mapped_column(DATE, nullable=True)
     status: Mapped[str] = mapped_column(
         Enum(*QUOTATION_STATUSES, name="quotation_status"), nullable=False, default="draft"

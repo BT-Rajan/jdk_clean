@@ -18,11 +18,20 @@ import { formatCurrency } from '@/lib/currency'
 import type { Feasibility } from '@/types/feasibility'
 import type { MaterialConflict } from '@/types/quotation'
 import {
+  addDaysISODate,
   quotationSchema,
   todayDateInputMin,
   type QuotationFormValues,
   type QuotationSubmitValues,
 } from '@/lib/validation'
+
+// Mirrors backend/app/services/quotation_service.py's
+// QUOTATION_VALIDITY_DAYS -- every quotation is valid for exactly this
+// many calendar days from its own quotation_date. The backend is what
+// actually enforces this (it recomputes valid_until server-side
+// regardless of what the form sends); this constant only drives the
+// read-only preview shown here.
+const QUOTATION_VALIDITY_DAYS = 7
 
 export function QuotationFormPage() {
   const { id } = useParams()
@@ -147,12 +156,20 @@ function QuotationCreateForm() {
       customer_id: 0,
       feasibility_id: undefined,
       quotation_date: todayDateInputMin,
-      valid_until: '',
+      valid_until: addDaysISODate(todayDateInputMin, QUOTATION_VALIDITY_DAYS),
       notes: '',
       lines: [{ product_id: 0, quantity: 1, unit_price: 0 }],
       language: 'en',
     },
   })
+
+  // Valid until is always quotation_date + 7 days -- server-enforced
+  // (see quotation_service.create_quotation), this just keeps the
+  // read-only preview in sync as the quotation date changes.
+  const watchedQuotationDate = watch('quotation_date')
+  useEffect(() => {
+    setValue('valid_until', addDaysISODate(watchedQuotationDate, QUOTATION_VALIDITY_DAYS))
+  }, [watchedQuotationDate, setValue])
 
   useEffect(() => {
     setLoadingFeasibilities(true)
@@ -314,7 +331,14 @@ function QuotationCreateForm() {
               ))}
             </SelectField>
             <TextField label="Quotation date" type="date" min={todayDateInputMin} error={errors.quotation_date?.message} {...register('quotation_date')} />
-            <TextField label="Valid until" type="date" min={todayDateInputMin} error={errors.valid_until?.message} {...register('valid_until')} />
+            <TextField
+              label="Valid until"
+              type="date"
+              hint={`Always ${QUOTATION_VALIDITY_DAYS} days from the quotation date.`}
+              error={errors.valid_until?.message}
+              {...register('valid_until')}
+              disabled
+            />
           </div>
 
           <div className="max-w-xs">
@@ -405,6 +429,7 @@ function QuotationEditForm({ id }: { id: number }) {
     watch,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<QuotationFormValues, unknown, QuotationSubmitValues>({
     resolver: zodResolver(quotationSchema),
@@ -429,6 +454,16 @@ function QuotationEditForm({ id }: { id: number }) {
       .catch((err) => setFormError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
   }, [id, reset])
+
+  // Same as the create form: valid_until is server-enforced as
+  // quotation_date + 7 days (quotation_service.update_quotation
+  // recomputes it whenever quotation_date changes), this just keeps the
+  // read-only preview in sync if the quotation date is edited.
+  const watchedQuotationDate = watch('quotation_date')
+  useEffect(() => {
+    if (!watchedQuotationDate) return
+    setValue('valid_until', addDaysISODate(watchedQuotationDate, QUOTATION_VALIDITY_DAYS))
+  }, [watchedQuotationDate, setValue])
 
   // Same live pre-check as the create form, excluding this quotation's
   // own current lines from "other open quotations" so it doesn't flag
@@ -500,7 +535,14 @@ function QuotationEditForm({ id }: { id: number }) {
               ))}
             </SelectField>
             <TextField label="Quotation date" type="date" min={todayDateInputMin} error={errors.quotation_date?.message} {...register('quotation_date')} />
-            <TextField label="Valid until" type="date" min={todayDateInputMin} error={errors.valid_until?.message} {...register('valid_until')} />
+            <TextField
+              label="Valid until"
+              type="date"
+              hint={`Always ${QUOTATION_VALIDITY_DAYS} days from the quotation date.`}
+              error={errors.valid_until?.message}
+              {...register('valid_until')}
+              disabled
+            />
             <TextField label="Feasibility ID" type="number" {...register('feasibility_id')} disabled />
           </div>
 
