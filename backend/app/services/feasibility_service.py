@@ -19,7 +19,7 @@ from app.models.machine import Machine
 from app.models.product import Product
 from app.models.production_schedule import ProductionSchedule
 from app.models.raw_material import RawMaterial
-from app.services import audit_service, bom_service, capacity_service, deal_service, inventory_service, number_series_service, raw_material_alternative_service, settings_service
+from app.services import audit_service, bom_service, capacity_service, deal_service, inventory_service, mrp_service, number_series_service, raw_material_alternative_service, settings_service
 
 TABLE_NAME = "feasibility_checks"
 
@@ -179,6 +179,7 @@ def _check_capacity(
     required_by_date: date | None,
     today: date,
     working_days: set[int],
+    earliest_start: date | None = None,
 ) -> tuple[bool | None, dict | None, date | None]:
     """Machine-availability + time-required (+ labor) estimate for one
     line: scans forward for the first vacant slot -- on the product's
@@ -191,7 +192,13 @@ def _check_capacity(
     today itself is never counted (whatever capacity exists today is
     already spoken for), and weekends/off-days per `working_days` are
     skipped entirely -- so the estimate always reflects a day the
-    factory can actually start fresh work on.
+    factory can actually start fresh work on. When `earliest_start` is
+    given (a raw material's projected procurement-availability date)
+    and it falls later than that, the scan starts there instead --
+    production obviously can't begin before the material it needs is
+    actually on hand. find_vacant_slot_completion still applies the
+    usual working-day skip from that point forward exactly as it always
+    has, so this never needs its own weekend/holiday handling.
 
     Returns (capacity_ok, shortfall_dict, estimated_ready_date):
     - estimated_ready_date is the projected completion date, always
@@ -211,6 +218,8 @@ def _check_capacity(
         return None, None, None
 
     scan_start = settings_service.next_working_day(today, working_days)
+    if earliest_start is not None and earliest_start > scan_start:
+        scan_start = earliest_start
     required_hours = round(float(quantity) * float(product.production_hours_per_unit), 4)
 
     # Machine slot: only this machine's own bookings compete for its time.
@@ -365,6 +374,16 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
         requirements = bom_service.explode_requirements(db, line.product_id, quantity_to_produce)
         shortfalls: list[dict] = []
         alternative_coverage: list[dict] = []
+        # Tracks Step 4/5's procurement projection across every material
+        # on this line: the latest (slowest) projected availability date
+        # among all remaining shortfalls -- production can't start
+        # before the last one arrives -- and whether any of them
+        # couldn't be projected at all (no suppliers, insufficient
+        # supplier capacity, or a used supplier with no recorded lead
+        # time), which makes the whole line's ready date unprojectable
+        # regardless of how reliable the others were.
+        line_material_available_date: date | None = None
+        line_procurement_unprojectable = False
         for raw_material_id, required_qty in requirements.items():
             stock = inventory_service.get_stock(db, "raw_material", raw_material_id)
             available = stock["quantity_available"]
@@ -421,6 +440,37 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
                 # reported shortfall is the post-alternative amount, not
                 # the material's own raw shortfall, since that's the
                 # figure that actually still blocks this line.
+                #
+                # This doesn't stay an unqualified "unknown" blocker,
+                # though: reuse MRP's own supplier-selection logic
+                # (fastest lead time first, same tie-break) to see
+                # whether a reliable procurement date can be projected
+                # for exactly this remaining amount -- never the
+                # material's full own-stock shortfall, which would
+                # overstate what's actually still needed after
+                # alternatives. Never creates a purchase order or
+                # reserves supplier stock; it only asks the same
+                # question MRP already answers, for this one material.
+                suggestions, uncovered = mrp_service.suggest_purchases(db, raw_material_id, remaining_shortfall)
+                date_known = uncovered <= 0 and bool(suggestions) and all(
+                    s["lead_time_days"] is not None for s in suggestions
+                )
+                expected_available_date = None
+                if date_known:
+                    material_lead_days = max(s["lead_time_days"] for s in suggestions)
+                    expected_available_date = today + timedelta(days=material_lead_days)
+                    if line_material_available_date is None or expected_available_date > line_material_available_date:
+                        line_material_available_date = expected_available_date
+                else:
+                    # No fabricated date: either nobody supplies this
+                    # material at all, known suppliers can't cover the
+                    # full remaining amount between them, or at least one
+                    # supplier actually needed to cover it has no
+                    # recorded lead time. Any of those makes the whole
+                    # line's ready date unprojectable, not just this one
+                    # material's.
+                    line_procurement_unprojectable = True
+
                 shortfalls.append(
                     {
                         "raw_material_id": raw_material_id,
@@ -430,6 +480,13 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
                         "required": required_qty,
                         "on_hand": available,
                         "shortfall": remaining_shortfall,
+                        "procurement": {
+                            "date_known": date_known,
+                            "expected_available_date": (
+                                expected_available_date.isoformat() if expected_available_date else None
+                            ),
+                            "suppliers": suggestions,
+                        },
                     }
                 )
 
@@ -438,14 +495,37 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
         line.alternative_coverage_json = json.dumps(alternative_coverage) if alternative_coverage else None
 
         if shortfalls:
-            # Raw materials are short -- production can't be scheduled off
-            # a supply that doesn't exist yet, so there's nothing honest to
-            # tell Sales about a finish date until Procurement resolves the
-            # shortfall (see the MRP report / purchase-order flow). Machine
-            # time genuinely isn't evaluable in that state.
-            line.capacity_ok = None
-            line.capacity_shortfall_json = None
-            line.estimated_ready_date = None
+            if line_procurement_unprojectable:
+                # At least one remaining shortfall has no reliable
+                # procurement date -- nothing honest to tell Sales about
+                # a finish date, and machine time genuinely isn't
+                # evaluable off a supply date we don't actually have.
+                line.capacity_ok = None
+                line.capacity_shortfall_json = None
+                line.estimated_ready_date = None
+            else:
+                # Every remaining shortfall has a reliable projected
+                # date -- production still can't start before the
+                # slowest one of those arrives, so the existing capacity
+                # scan is composed with that as its floor rather than
+                # "tomorrow". Still the same scan, same working-day
+                # skipping, same booked-hours logic as the fully-in-stock
+                # case below -- just told not to look for a slot earlier
+                # than the material actually allows.
+                capacity_ok, capacity_shortfall, estimated_ready_date = _check_capacity(
+                    db,
+                    line.product,
+                    quantity_to_produce,
+                    feasibility.required_by_date,
+                    today,
+                    working_days,
+                    earliest_start=line_material_available_date,
+                )
+                line.capacity_ok = capacity_ok
+                line.capacity_shortfall_json = json.dumps(capacity_shortfall) if capacity_shortfall else None
+                line.estimated_ready_date = estimated_ready_date
+                if capacity_ok is False:
+                    all_feasible = False
         else:
             capacity_ok, capacity_shortfall, estimated_ready_date = _check_capacity(
                 db, line.product, quantity_to_produce, feasibility.required_by_date, today, working_days

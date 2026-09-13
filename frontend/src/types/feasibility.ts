@@ -17,6 +17,26 @@ export interface FeasibilityLineInput {
   quantity: number
 }
 
+export interface SupplierSuggestion {
+  supplier_id: number
+  supplier_code: string
+  supplier_name: string
+  /** Portion of this material's remaining shortfall this supplier would
+   * cover -- not the material's total requirement. */
+  quantity: number
+  lead_time_days: number | null
+  mode_of_supply: string | null
+}
+
+export interface ProcurementProjection {
+  /** False when no supplier covers the full remaining shortfall, or a
+   * supplier actually needed to cover it has no recorded lead time --
+   * expected_available_date is null rather than a fabricated guess. */
+  date_known: boolean
+  expected_available_date: string | null
+  suppliers: SupplierSuggestion[]
+}
+
 export interface ShortfallItem {
   raw_material_id: number
   code: string
@@ -25,6 +45,10 @@ export interface ShortfallItem {
   required: number
   on_hand: number
   shortfall: number
+  /** Present once run_check has looked for a supplier for this
+   * remaining shortfall -- absent on shortfalls computed before this
+   * existed. */
+  procurement?: ProcurementProjection | null
 }
 
 export interface AlternativeUsed {

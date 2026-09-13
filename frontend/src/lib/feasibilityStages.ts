@@ -123,15 +123,28 @@ export function computeFeasibilityStages(f: Feasibility): FeasibilityStage[] {
         }
 
   if (materialsStage.status === 'fail') {
-    return [
-      stockStage,
-      materialsStage,
-      skippedStage(
-        'capacity',
-        'Production line (manpower & slot)',
-        'Not evaluated -- resolve the material shortfall first.',
-      ),
-    ]
+    // A genuine (still-blocking) shortfall doesn't automatically mean
+    // capacity is unevaluated anymore -- if every such line still got a
+    // procurement-based capacity check (run_check composes one whenever
+    // every remaining shortfall has a reliable projected date), fall
+    // through to the normal capacity-stage logic below instead of
+    // hiding real ready-date/capacity information behind "skipped".
+    // Only genuinely unprojectable lines (no capacity result at all)
+    // still short-circuit here.
+    const unprojectableLines = materialShortfallLines.filter(
+      (l) => l.capacity_ok === null && !l.estimated_ready_date,
+    )
+    if (unprojectableLines.length > 0) {
+      return [
+        stockStage,
+        materialsStage,
+        skippedStage(
+          'capacity',
+          'Production line (manpower & slot)',
+          'Not evaluated -- resolve the material shortfall first.',
+        ),
+      ]
+    }
   }
 
   // Stage 3 -- production line: manpower + production line slot

@@ -10,6 +10,28 @@ class FeasibilityLineIn(BaseModel):
     quantity: float = Field(gt=0)
 
 
+class SupplierSuggestion(BaseModel):
+    supplier_id: int
+    supplier_code: str
+    supplier_name: str
+    # Portion of this material's remaining shortfall this supplier would
+    # cover -- not the material's total requirement or its own-stock
+    # shortfall, just what's genuinely still needed after alternatives.
+    quantity: float
+    lead_time_days: int | None
+    mode_of_supply: str | None = None
+
+
+class ProcurementProjection(BaseModel):
+    # False when no supplier could be found for the full remaining
+    # shortfall, or a supplier actually needed to cover it has no
+    # recorded lead time -- in either case expected_available_date is
+    # None rather than a fabricated guess.
+    date_known: bool
+    expected_available_date: date | None
+    suppliers: list[SupplierSuggestion] = []
+
+
 class ShortfallItem(BaseModel):
     raw_material_id: int
     code: str
@@ -18,6 +40,9 @@ class ShortfallItem(BaseModel):
     required: float
     on_hand: float
     shortfall: float
+    # Present once run_check has looked for a supplier -- absent (None)
+    # only for shortfalls computed before this pass existed.
+    procurement: ProcurementProjection | None = None
 
 
 class CapacityShortfall(BaseModel):
@@ -79,7 +104,11 @@ class FeasibilityLineOut(BaseModel):
     capacity_shortfall: CapacityShortfall | None = None
     # When the remainder (after stock) can actually be supplied -- today
     # if fully covered by stock, otherwise the capacity scan's projected
-    # date. None if raw materials are short or it isn't evaluable.
+    # date. Also populated when materials are short but every remaining
+    # shortfall has a reliable projected procurement date (see each
+    # shortfall's `procurement`) -- None only when at least one
+    # shortfall's date can't be reliably projected, or capacity itself
+    # isn't evaluable.
     estimated_ready_date: date | None = None
 
     model_config = {"from_attributes": True}

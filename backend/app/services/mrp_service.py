@@ -86,10 +86,19 @@ def _raw_material_requirements(db: Session, product_qty: dict[int, float]) -> di
     return totals
 
 
-def _suggest_purchases(db: Session, raw_material_id: int, shortfall: float) -> tuple[list[dict], float]:
+def suggest_purchases(db: Session, raw_material_id: int, shortfall: float) -> tuple[list[dict], float]:
     """Greedily allocates the shortfall across known suppliers of this
     material, fastest lead time first, respecting each supplier's
-    max_supply_quantity. Returns (suggestions, uncovered_quantity)."""
+    max_supply_quantity. Returns (suggestions, uncovered_quantity).
+
+    Public (not the module-private helper it used to be) because
+    feasibility_service reuses this exact selection -- same supplier
+    data, same fastest-lead-time-first ordering, same tie-break -- to
+    project a material-availability date for a genuine shortfall. One
+    supplier-selection algorithm, two callers, so MRP's purchase
+    suggestions and feasibility's projected dates can never disagree
+    about which supplier would actually be used.
+    """
     supplier_lines = (
         db.query(SupplierMaterial)
         .join(Supplier, SupplierMaterial.supplier_id == Supplier.id)
@@ -154,7 +163,7 @@ def compute_requirements(db: Session) -> list[dict]:
             continue
 
         material = materials.get(raw_material_id)
-        suggestions, uncovered = _suggest_purchases(db, raw_material_id, shortfall)
+        suggestions, uncovered = suggest_purchases(db, raw_material_id, shortfall)
 
         results.append(
             {

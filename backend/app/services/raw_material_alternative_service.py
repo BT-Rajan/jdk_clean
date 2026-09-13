@@ -102,7 +102,7 @@ def allocate_alternative_coverage(
     (lowest priority number first, same ordering
     get_approved_alternatives_with_stock already returns them in) --
     same greedy, priority/rank-ordered allocation shape mrp_service.
-    _suggest_purchases already uses for supplier lead time, just applied
+    suggest_purchases already uses for supplier lead time, just applied
     to on-hand alternative stock instead of purchasing.
 
     This is read-only: it never touches inventory, never reserves

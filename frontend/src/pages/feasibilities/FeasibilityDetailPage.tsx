@@ -416,7 +416,16 @@ export function FeasibilityDetailPage() {
                           <p className="text-white/60">
                             {Math.round((line.quantity - (line.covered_by_stock ?? 0)) * 10000) / 10000} to produce
                             {line.estimated_ready_date ? (
-                              <> — supplied by {formatDate(line.estimated_ready_date)}</>
+                              <>
+                                {' '}
+                                — {line.shortfalls.length > 0 ? 'earliest production-ready date' : 'supplied by'}{' '}
+                                {formatDate(line.estimated_ready_date)}
+                              </>
+                            ) : line.shortfalls.some((s) => s.procurement && !s.procurement.date_known) ? (
+                              <span className="text-amber-300">
+                                {' '}
+                                — material shortage with no reliable procurement lead-time data
+                              </span>
                             ) : line.shortfalls.length > 0 ? (
                               <span className="text-amber-300"> — date unknown until material shortfall is resolved</span>
                             ) : line.bom_missing ? (
@@ -453,6 +462,21 @@ export function FeasibilityDetailPage() {
                               {line.shortfalls.map((s) => (
                                 <li key={s.raw_material_id}>
                                   {s.code} — short {s.shortfall} {s.unit} (need {s.required}, have {s.on_hand})
+                                  {s.procurement &&
+                                    (s.procurement.date_known ? (
+                                      <div className="pl-3 text-sky-300">
+                                        {s.procurement.suppliers.map((sup, i) => (
+                                          <span key={sup.supplier_id}>
+                                            {i > 0 && ', '}
+                                            {sup.supplier_code} ({sup.lead_time_days}d lead, {sup.quantity} {s.unit})
+                                          </span>
+                                        ))}
+                                        {' — expected '}
+                                        {formatDate(s.procurement.expected_available_date)}
+                                      </div>
+                                    ) : (
+                                      <div className="pl-3 text-red-300">No reliable procurement lead-time data</div>
+                                    ))}
                                 </li>
                               ))}
                             </ul>
