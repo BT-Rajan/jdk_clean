@@ -38,6 +38,29 @@ class CapacityShortfall(BaseModel):
     workers_available: bool | None = None
 
 
+class AlternativeUsed(BaseModel):
+    raw_material_id: int
+    code: str
+    name: str
+    unit: str
+    priority: int
+    conversion_ratio: float
+    available: float
+    quantity_used: float
+    quantity_covered: float
+
+
+class AlternativeCoverageItem(BaseModel):
+    raw_material_id: int
+    code: str
+    name: str
+    unit: str
+    original_shortfall: float
+    covered_by_alternatives: float
+    remaining_shortfall: float
+    alternatives_used: list[AlternativeUsed] = []
+
+
 class FeasibilityLineOut(BaseModel):
     id: int
     product_id: int
@@ -48,6 +71,10 @@ class FeasibilityLineOut(BaseModel):
     bom_missing: bool | None
     is_feasible: bool | None
     shortfalls: list[ShortfallItem] = []
+    # Materials whose own-stock shortfall was fully or partially covered
+    # by an approved alternative -- present even when the line is
+    # otherwise feasible, so the use of an alternative is never hidden.
+    alternative_coverage: list[AlternativeCoverageItem] = []
     capacity_ok: bool | None
     capacity_shortfall: CapacityShortfall | None = None
     # When the remainder (after stock) can actually be supplied -- today
@@ -131,6 +158,11 @@ class FeasibilityOut(BaseModel):
             line.shortfalls = (
                 [ShortfallItem.model_validate(item) for item in json.loads(src.shortfall_json)]
                 if src.shortfall_json
+                else []
+            )
+            line.alternative_coverage = (
+                [AlternativeCoverageItem.model_validate(item) for item in json.loads(src.alternative_coverage_json)]
+                if src.alternative_coverage_json
                 else []
             )
             line.capacity_shortfall = (

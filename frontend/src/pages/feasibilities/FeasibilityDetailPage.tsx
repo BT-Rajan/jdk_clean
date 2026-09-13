@@ -432,29 +432,56 @@ export function FeasibilityDetailPage() {
                   <td className="px-6 py-4">
                     {line.is_feasible === null ? (
                       <span className="text-white/40">Not yet run</span>
-                    ) : line.is_feasible ? (
-                      <StatusBadge status="feasible" />
-                    ) : line.bom_missing ? (
-                      <div>
-                        <StatusBadge status="rejected" />
-                        <p className="mt-2 text-xs text-amber-300">
-                          No BOM (formula) set up for this product — feasibility can't be verified.{' '}
-                          <Link to={`/products/${line.product_id}`} className="underline hover:text-amber-200">
-                            Set it up
-                          </Link>
-                        </p>
-                      </div>
                     ) : (
-                      <div>
-                        <StatusBadge status="rejected" />
-                        <ul className="mt-2 space-y-1 text-xs text-white/60">
-                          {line.shortfalls.map((s) => (
-                            <li key={s.raw_material_id}>
-                              {s.code} — short {s.shortfall} {s.unit} (need {s.required}, have {s.on_hand})
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
+                      <>
+                        {line.is_feasible ? (
+                          <StatusBadge status="feasible" />
+                        ) : line.bom_missing ? (
+                          <div>
+                            <StatusBadge status="rejected" />
+                            <p className="mt-2 text-xs text-amber-300">
+                              No BOM (formula) set up for this product — feasibility can't be verified.{' '}
+                              <Link to={`/products/${line.product_id}`} className="underline hover:text-amber-200">
+                                Set it up
+                              </Link>
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <StatusBadge status="rejected" />
+                            <ul className="mt-2 space-y-1 text-xs text-white/60">
+                              {line.shortfalls.map((s) => (
+                                <li key={s.raw_material_id}>
+                                  {s.code} — short {s.shortfall} {s.unit} (need {s.required}, have {s.on_hand})
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {line.alternative_coverage.length > 0 && (
+                          <ul className="mt-2 space-y-1 text-xs text-sky-300">
+                            {line.alternative_coverage.map((c) => (
+                              <li key={c.raw_material_id}>
+                                {c.code} shortage ({c.original_shortfall} {c.unit}):{' '}
+                                {c.alternatives_used.map((a, i) => (
+                                  <span key={a.raw_material_id}>
+                                    {i > 0 && ', '}
+                                    {a.quantity_covered} {c.unit} via approved alt {a.code} ({a.available} {a.unit} available)
+                                  </span>
+                                ))}
+                                {c.remaining_shortfall > 0 ? (
+                                  <span className="text-amber-300">
+                                    {' '}
+                                    — {c.remaining_shortfall} {c.unit} still short after alternatives
+                                  </span>
+                                ) : (
+                                  <span className="text-emerald-300"> — fully covered</span>
+                                )}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
                     )}
                   </td>
                   <td className="px-6 py-4">

@@ -148,6 +148,15 @@ class FeasibilityLine(Base):
     # Sales sees as "when can the remainder be supplied" regardless of
     # whether a required_by_date was given on the check.
     estimated_ready_date: Mapped[date | None] = mapped_column(DATE, nullable=True)
+    # JSON list of {raw_material_id, code, name, unit, original_shortfall,
+    # covered_by_alternatives, remaining_shortfall, alternatives_used} for
+    # materials whose own-stock shortfall was fully or partially covered
+    # by an approved alternative at check time. NULL when nothing needed
+    # alternative coverage. Purely informational -- never a BOM/inventory
+    # write. A fully-covered material here is excluded from
+    # shortfall_json; a partially-covered one still appears there for
+    # the remaining, genuinely-uncovered amount.
+    alternative_coverage_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     feasibility: Mapped[FeasibilityCheck] = relationship(back_populates="lines")
     product: Mapped[Product] = relationship(lazy="joined")

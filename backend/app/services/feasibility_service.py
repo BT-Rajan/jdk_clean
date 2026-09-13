@@ -19,7 +19,7 @@ from app.models.machine import Machine
 from app.models.product import Product
 from app.models.production_schedule import ProductionSchedule
 from app.models.raw_material import RawMaterial
-from app.services import audit_service, bom_service, capacity_service, deal_service, inventory_service, number_series_service, settings_service
+from app.services import audit_service, bom_service, capacity_service, deal_service, inventory_service, number_series_service, raw_material_alternative_service, settings_service
 
 TABLE_NAME = "feasibility_checks"
 
@@ -364,11 +364,63 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
         line.bom_missing = None
         requirements = bom_service.explode_requirements(db, line.product_id, quantity_to_produce)
         shortfalls: list[dict] = []
+        alternative_coverage: list[dict] = []
         for raw_material_id, required_qty in requirements.items():
             stock = inventory_service.get_stock(db, "raw_material", raw_material_id)
             available = stock["quantity_available"]
-            if available < required_qty:
-                material = db.query(RawMaterial).filter(RawMaterial.id == raw_material_id).first()
+            own_shortfall = round(required_qty - available, 4)
+            if own_shortfall <= 0:
+                # Fully covered by this material's own stock -- normal
+                # availability, nothing to report either as a blocker or
+                # as alternative coverage.
+                continue
+
+            material = db.query(RawMaterial).filter(RawMaterial.id == raw_material_id).first()
+
+            # An approved alternative may cover some or all of this
+            # shortfall -- inspected here, never substituted: the BOM
+            # keeps requiring `raw_material_id` exactly as before, no
+            # inventory is reserved or consumed, and nothing is written
+            # back to the alternative's own stock. This only answers
+            # "is the shortage actually coverable", using the same
+            # approved-alternatives data and stock source of truth
+            # production_readiness_service already uses for the same
+            # question at production-start time (see
+            # raw_material_alternative_service.get_approved_alternatives_with_stock),
+            # so the two checks can never disagree about what's
+            # substitutable.
+            approved_alternatives = raw_material_alternative_service.get_approved_alternatives_with_stock(
+                db, raw_material_id
+            )
+            allocations, remaining_shortfall = raw_material_alternative_service.allocate_alternative_coverage(
+                approved_alternatives, own_shortfall
+            )
+            covered_by_alternatives = round(own_shortfall - remaining_shortfall, 4)
+
+            if allocations:
+                # Recorded whether the shortfall ended up fully or only
+                # partially covered -- "do not hide the use of an
+                # alternative" applies either way, not just when it
+                # fully resolves the line.
+                alternative_coverage.append(
+                    {
+                        "raw_material_id": raw_material_id,
+                        "code": material.code if material else f"#{raw_material_id}",
+                        "name": material.name if material else "Unknown material",
+                        "unit": material.unit if material else "",
+                        "original_shortfall": own_shortfall,
+                        "covered_by_alternatives": covered_by_alternatives,
+                        "remaining_shortfall": remaining_shortfall,
+                        "alternatives_used": allocations,
+                    }
+                )
+
+            if remaining_shortfall > 0:
+                # Still a genuine blocker for whatever no approved
+                # alternative (or not enough of one) could cover -- the
+                # reported shortfall is the post-alternative amount, not
+                # the material's own raw shortfall, since that's the
+                # figure that actually still blocks this line.
                 shortfalls.append(
                     {
                         "raw_material_id": raw_material_id,
@@ -377,12 +429,13 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
                         "unit": material.unit if material else "",
                         "required": required_qty,
                         "on_hand": available,
-                        "shortfall": round(required_qty - available, 4),
+                        "shortfall": remaining_shortfall,
                     }
                 )
 
         line.is_feasible = not shortfalls
         line.shortfall_json = json.dumps(shortfalls) if shortfalls else None
+        line.alternative_coverage_json = json.dumps(alternative_coverage) if alternative_coverage else None
 
         if shortfalls:
             # Raw materials are short -- production can't be scheduled off

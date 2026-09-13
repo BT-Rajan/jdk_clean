@@ -83,27 +83,43 @@ export function computeFeasibilityStages(f: Feasibility): FeasibilityStage[] {
 
   // Stage 2 -- raw materials, including packaging (see doc comment above)
   const materialShortfallLines = linesNeedingProduction.filter((l) => l.is_feasible === false)
+  // Alternative coverage is reported regardless of pass/fail -- a
+  // material fully covered by an approved alternative makes the stage
+  // pass, but "do not hide the use of an alternative" still applies.
+  const alternativeCoverageDetails = linesNeedingProduction.flatMap((l) =>
+    l.alternative_coverage.map(
+      (c) =>
+        `${lineLabel(l)}: ${c.code} short ${c.original_shortfall} ${c.unit} -- ${c.covered_by_alternatives} covered by approved alternative` +
+        (c.remaining_shortfall > 0 ? `, ${c.remaining_shortfall} ${c.unit} still short` : ''),
+    ),
+  )
   const materialsStage: FeasibilityStage =
     materialShortfallLines.length === 0
       ? {
           key: 'materials',
           label: 'Raw materials (incl. packaging)',
           status: 'pass',
-          summary: 'Everything needed to produce the shortfall is in stock.',
-          details: [],
+          summary:
+            alternativeCoverageDetails.length > 0
+              ? 'Covered -- some of it via approved alternatives (see below).'
+              : 'Everything needed to produce the shortfall is in stock.',
+          details: alternativeCoverageDetails,
         }
       : {
           key: 'materials',
           label: 'Raw materials (incl. packaging)',
           status: 'fail',
           summary: "Short on materials -- production line can't be checked until this is resolved.",
-          details: materialShortfallLines.flatMap((l) =>
-            l.bom_missing
-              ? [`${lineLabel(l)}: no formula (BOM) set up for this product`]
-              : l.shortfalls.map(
-                  (s) => `${s.code} — short ${s.shortfall} ${s.unit} (need ${s.required}, have ${s.on_hand})`,
-                ),
-          ),
+          details: [
+            ...materialShortfallLines.flatMap((l) =>
+              l.bom_missing
+                ? [`${lineLabel(l)}: no formula (BOM) set up for this product`]
+                : l.shortfalls.map(
+                    (s) => `${s.code} — short ${s.shortfall} ${s.unit} (need ${s.required}, have ${s.on_hand})`,
+                  ),
+            ),
+            ...alternativeCoverageDetails,
+          ],
         }
 
   if (materialsStage.status === 'fail') {

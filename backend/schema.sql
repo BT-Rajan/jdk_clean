@@ -614,6 +614,15 @@ CREATE TABLE IF NOT EXISTS feasibility_lines (
     -- non-working days per the factory_working_days setting). NULL when
     -- raw materials are short or capacity isn't evaluable.
     estimated_ready_date DATE NULL,
+    -- JSON list of {raw_material_id, code, name, unit, original_shortfall,
+    -- covered_by_alternatives, remaining_shortfall, alternatives_used}
+    -- for materials whose own-stock shortfall was fully or partially
+    -- covered by an approved raw_material_alternatives substitute at
+    -- check time (see feasibility_service.run_check /
+    -- raw_material_alternative_service.get_approved_alternatives_with_stock).
+    -- NULL when no material on this line needed alternative coverage.
+    -- Purely informational: never causes a BOM or inventory write.
+    alternative_coverage_json TEXT NULL,
     CONSTRAINT fk_fl_feasibility FOREIGN KEY (feasibility_id) REFERENCES feasibility_checks(id) ON DELETE CASCADE,
     CONSTRAINT fk_fl_product FOREIGN KEY (product_id) REFERENCES products(id),
     INDEX idx_fl_feasibility (feasibility_id)

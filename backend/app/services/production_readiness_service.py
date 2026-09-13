@@ -7,6 +7,9 @@ services rather than duplicating their math:
   bom_service            - active BOM + scaled component requirements
   inventory_service      - on-hand/reserved/available per material
   raw_material_alternative_service - approved alternatives for a short material
+                             (get_approved_alternatives_with_stock; the same
+                             helper feasibility_service uses, so the two
+                             never disagree about what's substitutable)
   supplier_material_service        - procurement info for a short material
   capacity_service       - machine/worker capacity within the batch's window
 
@@ -33,30 +36,7 @@ BOOKED_PRODUCTION_STATUSES = capacity_service.BOOKED_PRODUCTION_STATUSES
 
 
 def _material_alternatives(db: Session, raw_material_id: int) -> list[dict]:
-    alternatives = [
-        a for a in raw_material_alternative_service.get_alternatives(db, raw_material_id) if a.status == "approved"
-    ]
-    alternatives.sort(key=lambda a: a.priority)
-    results = []
-    for alt in alternatives:
-        material = alt.alternative_material
-        if material is None or material.status != "active":
-            continue
-        stock = inventory_service.get_stock(db, "raw_material", alt.alternative_material_id)
-        results.append(
-            {
-                "raw_material_id": alt.alternative_material_id,
-                "code": material.code,
-                "name": material.name,
-                "unit": material.unit,
-                "conversion_ratio": float(alt.conversion_ratio),
-                "priority": alt.priority,
-                "status": alt.status,
-                "on_hand": stock["quantity_on_hand"],
-                "available": stock["quantity_available"],
-            }
-        )
-    return results
+    return raw_material_alternative_service.get_approved_alternatives_with_stock(db, raw_material_id)
 
 
 def _material_procurement(db: Session, raw_material_id: int) -> dict | None:

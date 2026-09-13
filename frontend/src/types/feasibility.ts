@@ -27,6 +27,29 @@ export interface ShortfallItem {
   shortfall: number
 }
 
+export interface AlternativeUsed {
+  raw_material_id: number
+  code: string
+  name: string
+  unit: string
+  priority: number
+  conversion_ratio: number
+  available: number
+  quantity_used: number
+  quantity_covered: number
+}
+
+export interface AlternativeCoverageItem {
+  raw_material_id: number
+  code: string
+  name: string
+  unit: string
+  original_shortfall: number
+  covered_by_alternatives: number
+  remaining_shortfall: number
+  alternatives_used: AlternativeUsed[]
+}
+
 export interface CapacityShortfall {
   machine: string
   required_hours: number
@@ -60,6 +83,12 @@ export interface FeasibilityLine extends FeasibilityLineInput {
   bom_missing: boolean | null
   is_feasible: boolean | null
   shortfalls: ShortfallItem[]
+  /** Materials whose own-stock shortfall was fully or partially covered
+   * by an approved raw-material alternative -- present even when the
+   * line is otherwise feasible, so the use of an alternative is never
+   * hidden. Never implies the BOM or inventory were changed; this is
+   * calculation-only. */
+  alternative_coverage: AlternativeCoverageItem[]
   capacity_ok: boolean | null
   capacity_shortfall: CapacityShortfall | null
   /** When the remainder (after stock) can actually be supplied -- today
