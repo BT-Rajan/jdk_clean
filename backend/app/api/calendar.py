@@ -1,7 +1,6 @@
 from datetime import date
 
 from fastapi import APIRouter, Depends, Query
-from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
@@ -30,22 +29,6 @@ def list_events(
 ):
     events = calendar_service.list_events_for_month(db, user, year, month)
     return [CalendarEventOut.from_model(e, user.id) for e in events]
-
-
-@router.get("/events.ics")
-def export_ics(
-    year: int = Query(..., ge=1970, le=2100),
-    month: int = Query(..., ge=1, le=12),
-    db: Session = Depends(get_db),
-    user: User = Depends(get_current_user),
-):
-    events = calendar_service.list_events_for_month(db, user, year, month)
-    ics_text = calendar_service.build_ics(events)
-    return Response(
-        content=ics_text,
-        media_type="text/calendar",
-        headers={"Content-Disposition": f"attachment; filename=calendar-{year:04d}-{month:02d}.ics"},
-    )
 
 
 @router.get("/mentionable-users", response_model=list[MentionableUserOut])

@@ -1,38 +1,33 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Alert, Button, Modal, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Modal, Spinner, StatusBadge } from '@/components/ui'
 import { getDaySnapshot } from '@/api/calendar'
 import type { DaySnapshot } from '@/types/calendar'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
-import { MAX_BACKDATE_DAYS } from '@/lib/constants'
-import { toISODate } from '@/lib/calendarGrid'
 
 interface DayActionsModalProps {
   open: boolean
   /** ISO date (YYYY-MM-DD) of the day that was clicked. */
   date: string
   onClose: () => void
-  onPickProduction: () => void
-  onPickSale: () => void
-  /** Called when a snapshot row is clicked to go to its own detail page
-   * -- production/completed batches and shipped orders can't be edited
-   * or undone from here (both are deliberately terminal states once
-   * they've happened, everywhere else in the app too); fixing a mistake
-   * means going to that record's own page, same as everywhere else. */
+  /** Called when a snapshot row -- or one of the "log a transaction"
+   * links -- is clicked to go to its own page -- production/completed
+   * batches and shipped orders can't be edited or undone from here
+   * (both are deliberately terminal states once they've happened,
+   * everywhere else in the app too); fixing a mistake means going to
+   * that record's own page, same as everywhere else. */
   onNavigate: () => void
 }
 
 /** Opens the moment a day is clicked in the calendar: a snapshot of
- * what's already logged for that day (production, sales), plus the
- * option to log one of those transaction types against it -- disabled
- * outside the allowed backdate window (see backend's
- * core/workflow.MAX_BACKDATE_DAYS). Choosing an action here hands off to
- * the same LogProductionModal/LogSaleModal the Production/Orders list
- * pages use, just pre-dated to this day. Each snapshot row links to its
- * own detail page for anything beyond viewing (see onNavigate above). */
-export function DayActionsModal({ open, date, onClose, onPickProduction, onPickSale, onNavigate }: DayActionsModalProps) {
+ * what's already logged for that day (production, sales), plus links
+ * straight to the actual Production, Orders, and Inventory pages to log
+ * a new one -- no separate quick-log modal here, same as every other
+ * create flow in the app. Each snapshot row links to its own detail
+ * page for anything beyond viewing (see onNavigate above). */
+export function DayActionsModal({ open, date, onClose, onNavigate }: DayActionsModalProps) {
   const [snapshot, setSnapshot] = useState<DaySnapshot | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -59,7 +54,6 @@ export function DayActionsModal({ open, date, onClose, onPickProduction, onPickS
     }
   }, [open, date])
 
-  const canLog = snapshot?.can_log ?? false
   const hasActivity = !!snapshot && (snapshot.production.length > 0 || snapshot.sales.length > 0)
 
   return (
@@ -115,20 +109,28 @@ export function DayActionsModal({ open, date, onClose, onPickProduction, onPickS
 
         <div>
           <p className="mb-2 text-xs font-medium tracking-wide text-white/50 uppercase">Log a transaction</p>
-          {!loading && !canLog && (
-            <p className="mb-3 text-xs text-amber-300">
-              {date > toISODate(new Date())
-                ? 'Production and sales cannot be logged for a future date.'
-                : `Production and sales can only be logged for today or up to ${MAX_BACKDATE_DAYS} days back.`}
-            </p>
-          )}
           <div className="flex gap-3">
-            <Button className="flex-1" variant="ghost" disabled={loading || !canLog} onClick={onPickProduction}>
+            <Link
+              to="/production/new"
+              onClick={onNavigate}
+              className="glass-inset flex h-9 flex-1 items-center justify-center rounded-xl px-4 text-xs font-medium tracking-wide text-gold-100 transition-colors hover:bg-white/10"
+            >
               Log production
-            </Button>
-            <Button className="flex-1" disabled={loading || !canLog} onClick={onPickSale}>
+            </Link>
+            <Link
+              to="/orders/new"
+              onClick={onNavigate}
+              className="flex h-9 flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-gold-300 to-gold-600 px-4 text-xs font-medium tracking-wide text-ink-950 shadow-glow-gold transition-colors hover:from-gold-200 hover:to-gold-500"
+            >
               Log a sale
-            </Button>
+            </Link>
+            <Link
+              to="/inventory/adjust"
+              onClick={onNavigate}
+              className="glass-inset flex h-9 flex-1 items-center justify-center rounded-xl px-4 text-xs font-medium tracking-wide text-gold-100 transition-colors hover:bg-white/10"
+            >
+              Log materials
+            </Link>
           </div>
         </div>
       </div>

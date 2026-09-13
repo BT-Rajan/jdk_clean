@@ -33,20 +33,3 @@ export async function getDaySnapshot(isoDate: string): Promise<DaySnapshot> {
   return data
 }
 
-/** Downloads the ICS-compatible export for a given month and triggers a
- * browser save -- goes through apiClient (not a plain <a href>) since
- * the endpoint requires the bearer token the same as every other call. */
-export async function downloadCalendarIcs(year: number, month: number): Promise<void> {
-  const response = await apiClient.get('/api/calendar/events.ics', {
-    params: { year, month },
-    responseType: 'blob',
-  })
-  const url = URL.createObjectURL(response.data as Blob)
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `calendar-${year}-${String(month).padStart(2, '0')}.ics`
-  document.body.appendChild(link)
-  link.click()
-  link.remove()
-  URL.revokeObjectURL(url)
-}
