@@ -1,4 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+// Both have real .web.js builds (Metro resolves them automatically for
+// the web bundle) -- static imports are fine, the Platform.OS branch
+// below is what actually keeps the native-only code paths off web.
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 /**
  * Backend origin, e.g. "https://api.yourcompany.com". Read from
@@ -60,20 +66,22 @@ interface ApiOptions {
   auth?: boolean; // default true
 }
 
-/** One retry via /api/auth/refresh on a 401, mirroring the web app's
- * axios interceptor (see frontend/src/lib -- refresh once, then bail
- * to logout if that also fails). */
-export async function api<T = any>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { method = 'GET', body, auth = true } = options;
-
+/** Shared auth/refresh plumbing behind both api() (JSON) and apiBlob()
+ * (binary downloads) -- one retry via /api/auth/refresh on a 401,
+ * mirroring the web app's axios interceptor (see frontend/src/lib --
+ * refresh once, then bail to logout if that also fails). Returns the
+ * raw Response so each caller parses the body its own way; still
+ * throws on an unrecoverable 401 since neither caller has anything
+ * useful to do with that response body. */
+async function fetchWithAuth(
+  path: string,
+  init: { method?: string; headers?: Record<string, string>; body?: string },
+  auth: boolean,
+): Promise<Response> {
   async function doFetch(token: string | null): Promise<Response> {
-    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    const headers: Record<string, string> = { ...init.headers };
     if (auth && token) headers.Authorization = `Bearer ${token}`;
-    return fetch(`${API_BASE_URL}${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
+    return fetch(`${API_BASE_URL}${path}`, { ...init, headers });
   }
 
   let res = await doFetch(accessToken);
@@ -90,6 +98,17 @@ export async function api<T = any>(path: string, options: ApiOptions = {}): Prom
     onUnauthorized?.();
     throw new ApiError('Session expired. Please log in again.', 401);
   }
+
+  return res;
+}
+
+export async function api<T = any>(path: string, options: ApiOptions = {}): Promise<T> {
+  const { method = 'GET', body, auth = true } = options;
+  const res = await fetchWithAuth(
+    path,
+    { method, headers: { 'Content-Type': 'application/json' }, body: body !== undefined ? JSON.stringify(body) : undefined },
+    auth,
+  );
 
   let data: any = null;
   const text = await res.text();
@@ -116,6 +135,71 @@ export async function api<T = any>(path: string, options: ApiOptions = {}): Prom
   }
 
   return data as T;
+}
+
+/** Same auth/refresh handling as api(), for endpoints that return a
+ * binary body (e.g. a PDF) instead of JSON. */
+async function apiBlob(path: string): Promise<Blob> {
+  const res = await fetchWithAuth(path, {}, true);
+
+  if (!res.ok) {
+    // Error responses from these endpoints are still the normal JSON
+    // AppError shape, not binary -- try to read it for a real message,
+    // falling back to a generic one if the body isn't JSON after all.
+    let message = `Request failed (${res.status})`;
+    try {
+      const data = await res.json();
+      message = data.error || data.detail || data.message || message;
+    } catch {
+      // non-JSON error body, keep the generic message
+    }
+    throw new ApiError(typeof message === 'string' ? message : JSON.stringify(message), res.status);
+  }
+
+  return res.blob();
+}
+
+/** Downloads a binary file from the API and hands it to the user: on
+ * web, triggers a normal browser "Save As" download; on native, saves
+ * it to the app's cache dir and opens the OS share sheet (there's no
+ * browser download tray to put it in, so sharing -- which includes
+ * "Save to Files"/"Open in..." -- is the native equivalent). */
+export async function downloadAndOpenFile(path: string, filename: string): Promise<void> {
+  const blob = await apiBlob(path);
+
+  if (Platform.OS === 'web') {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    return;
+  }
+
+  const fileUri = `${FileSystem.cacheDirectory}${filename}`;
+  const base64 = await blobToBase64(blob);
+  await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
+
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: filename });
+  }
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = reject;
+    reader.onload = () => {
+      // reader.result is "data:<mime>;base64,<data>" -- FileSystem wants
+      // just the <data> part.
+      const result = reader.result as string;
+      resolve(result.slice(result.indexOf(',') + 1));
+    };
+    reader.readAsDataURL(blob);
+  });
 }
 
 async function tryRefresh(): Promise<boolean> {

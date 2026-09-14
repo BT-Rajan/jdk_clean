@@ -18,6 +18,7 @@ import {
   requestFeasibilityException,
   createQuotation,
   getQuotationForFeasibility,
+  downloadQuotationPdf,
 } from '../api/catalog';
 
 // 'feasible_pending' -- the check passed but nothing has been quoted
@@ -26,7 +27,7 @@ import {
 // instant the check passed, with no confirmation step at all).
 type ResultState =
   | { kind: 'feasible_pending'; feasibilityId: number; customerId: number; productId: number; quantity: number; unitPrice: number }
-  | { kind: 'feasible'; quotationNumber: string; total: number; validUntil: string }
+  | { kind: 'feasible'; quotationId: number; quotationNumber: string; total: number; validUntil: string }
   // nextAvailableDate: the latest (slowest) per-line estimated_ready_date
   // the backend projected -- production can't start before every line's
   // material/capacity is ready, so the slowest one is what actually
@@ -61,6 +62,7 @@ export function QuickQuoteScreen() {
   const [statusLine, setStatusLine] = useState('');
   const [isChecking, setIsChecking] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [result, setResult] = useState<ResultState>(null);
 
   useEffect(() => {
@@ -133,6 +135,7 @@ export function QuickQuoteScreen() {
         if (quotation) {
           setResult({
             kind: 'feasible',
+            quotationId: quotation.id,
             quotationNumber: quotation.quotation_number,
             total: quotation.total_amount,
             validUntil: quotation.valid_until,
@@ -210,6 +213,7 @@ export function QuickQuoteScreen() {
 
       setResult({
         kind: 'feasible',
+        quotationId: quotation.id,
         quotationNumber: quotation.quotation_number,
         total: quotation.total_amount,
         validUntil: quotation.valid_until,
@@ -218,6 +222,18 @@ export function QuickQuoteScreen() {
       setFormError(err?.message ?? t('quickQuote', 'genericError'));
     } finally {
       setIsGenerating(false);
+    }
+  }
+
+  async function handleDownloadPdf(quotationId: number, quotationNumber: string) {
+    setFormError(null);
+    setIsDownloadingPdf(true);
+    try {
+      await downloadQuotationPdf(quotationId, quotationNumber);
+    } catch (err: any) {
+      setFormError(err?.message ?? t('quickQuote', 'downloadPdfError'));
+    } finally {
+      setIsDownloadingPdf(false);
     }
   }
 
@@ -280,13 +296,22 @@ export function QuickQuoteScreen() {
           <Text style={[styles.resultTitle, { color: colors.emerald400 }]}>{t('quickQuote', 'yesTitle')}</Text>
           <Text style={styles.resultDetail}>{t('quickQuote', 'yesDetail')}</Text>
 
+          <Alert variant="error">{formError}</Alert>
+
           <View style={styles.summaryBox}>
             <SummaryRow label={t('quickQuote', 'quotationNumberLabel')} value={result.quotationNumber} />
             <SummaryRow label={t('quickQuote', 'totalLabel')} value={result.total.toFixed(2)} />
             <SummaryRow label={t('quickQuote', 'validUntilLabel')} value={result.validUntil} />
           </View>
 
-          <Button variant="ghost" onPress={resetForm} style={{ marginTop: 22, width: '100%' }}>
+          <Button
+            onPress={() => handleDownloadPdf(result.quotationId, result.quotationNumber)}
+            isLoading={isDownloadingPdf}
+            style={{ marginTop: 22, width: '100%' }}
+          >
+            {t('quickQuote', 'downloadPdf')}
+          </Button>
+          <Button variant="ghost" size="sm" onPress={resetForm} style={{ marginTop: 10, width: '100%' }}>
             {t('quickQuote', 'startAnother')}
           </Button>
         </GlassCard>

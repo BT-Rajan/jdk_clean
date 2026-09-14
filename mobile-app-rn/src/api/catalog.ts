@@ -1,4 +1,4 @@
-import { api } from './client';
+import { api, downloadAndOpenFile } from './client';
 
 export interface Product {
   id: number;
@@ -132,4 +132,11 @@ export async function getQuotationForFeasibility(feasibilityId: number): Promise
   query.set('page_size', '1');
   const res = await api<PagedResponse<QuotationOut>>(`/api/quotations?${query.toString()}`);
   return res.items[0] ?? null;
+}
+
+// Same PDF (same admin-configured template, same LibreOffice render) as
+// the web app's Print button and the quotation email attachment -- see
+// backend/app/api/quotations.py's download_quotation_pdf.
+export function downloadQuotationPdf(quotationId: number, quotationNumber: string): Promise<void> {
+  return downloadAndOpenFile(`/api/quotations/${quotationId}/pdf`, `${quotationNumber}.pdf`);
 }
