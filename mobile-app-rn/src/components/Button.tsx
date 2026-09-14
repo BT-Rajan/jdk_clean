@@ -2,7 +2,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View, ViewStyle } from 
 import { LinearGradient } from 'expo-linear-gradient';
 import { colors, fonts, glass, glowGold, radii, whiteAlpha } from '../theme';
 
-type Variant = 'primary' | 'ghost' | 'subtle' | 'danger';
+type Variant = 'primary' | 'ghost' | 'subtle' | 'danger' | 'success';
 type Size = 'md' | 'sm';
 
 interface ButtonProps {
@@ -40,7 +40,7 @@ export function Button({
           style={[
             styles.label,
             { fontSize },
-            variant === 'primary' || variant === 'danger'
+            variant === 'primary' || variant === 'danger' || variant === 'success'
               ? { color: colors.ink950 }
               : variant === 'ghost'
                 ? { color: colors.gold100 }
@@ -53,9 +53,13 @@ export function Button({
     </View>
   );
 
-  if (variant === 'primary' || variant === 'danger') {
+  if (variant === 'primary' || variant === 'danger' || variant === 'success') {
     const gradientColors: [string, string] =
-      variant === 'primary' ? [colors.gold300, colors.gold600] : [colors.red400, colors.red500];
+      variant === 'primary'
+        ? [colors.gold300, colors.gold600]
+        : variant === 'danger'
+          ? [colors.red400, colors.red500]
+          : [colors.emerald400, colors.emerald500];
     return (
       <Pressable onPress={onPress} disabled={isDisabled} style={[{ opacity: isDisabled ? 0.5 : 1 }, style]}>
         <LinearGradient
@@ -77,7 +81,11 @@ export function Button({
       style={[
         styles.base,
         { height, opacity: isDisabled ? 0.5 : 1 },
-        variant === 'ghost' ? glass.inset : undefined,
+        // 'subtle' shares ghost's translucent panel background (it's
+        // just a muted grey CTA -- a plain "Try again" -- rather than a
+        // gold-tinted one) so it still reads as a real button, not
+        // unstyled text floating on the dark background.
+        variant === 'ghost' || variant === 'subtle' ? glass.inset : undefined,
         style,
       ]}
     >
