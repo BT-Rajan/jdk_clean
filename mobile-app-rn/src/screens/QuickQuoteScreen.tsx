@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert as RNAlert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { DateField } from '../components/DateField';
@@ -7,6 +7,8 @@ import { GlassCard } from '../components/GlassCard';
 import { SelectField, SelectOption } from '../components/SelectField';
 import { TextField } from '../components/TextField';
 import { colors, fonts, whiteAlpha } from '../theme';
+import { ApiError } from '../api/client';
+import { useLocale } from '../i18n/LocaleContext';
 import { listCustomers, Customer } from '../api/customers';
 import { listProducts, Product, createFeasibility, runFeasibility, requestFeasibilityException, createQuotation } from '../api/catalog';
 
@@ -27,6 +29,7 @@ function toIsoDate(d: Date): string {
 }
 
 export function QuickQuoteScreen() {
+  const { t } = useLocale();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -48,7 +51,7 @@ export function QuickQuoteScreen() {
         setCustomers(c.items);
         setProducts(p.items);
       } catch (err: any) {
-        setLoadError(err?.message ?? 'Could not load clients/products.');
+        setLoadError(err?.message ?? t('quickQuote', 'genericError'));
       }
     })();
   }, []);
@@ -72,16 +75,16 @@ export function QuickQuoteScreen() {
     setFormError(null);
     const qty = parseFloat(quantity);
 
-    if (!customerId) return setFormError('Please select a client.');
-    if (!productId) return setFormError('Please select a product.');
-    if (!qty || qty <= 0) return setFormError('Enter a valid quantity.');
-    if (!date) return setFormError('Please select an availability date.');
+    if (!customerId) return setFormError(t('quickQuote', 'selectClientError'));
+    if (!productId) return setFormError(t('quickQuote', 'selectProductError'));
+    if (!qty || qty <= 0) return setFormError(t('quickQuote', 'invalidQuantityError'));
+    if (!date) return setFormError(t('quickQuote', 'selectDateError'));
 
     const dateIso = toIsoDate(date);
 
     setIsChecking(true);
     try {
-      setStatusLine('Running feasibility check…');
+      setStatusLine(t('quickQuote', 'runningCheck'));
       const created = await createFeasibility({
         customer_id: Number(customerId),
         required_by_date: dateIso,
@@ -90,16 +93,42 @@ export function QuickQuoteScreen() {
       const checked = await runFeasibility(created.id);
 
       if (checked.status === 'feasible') {
-        setStatusLine('Feasible — generating quotation…');
+        setStatusLine(t('quickQuote', 'generatingQuote'));
         const product = products.find((p) => String(p.id) === productId);
         const unitPrice = product?.selling_price ?? 0;
-
-        const quotation = await createQuotation({
+        const quotationPayload = {
           customer_id: Number(customerId),
           feasibility_id: created.id,
           quotation_date: toIsoDate(new Date()),
           lines: [{ product_id: Number(productId), quantity: qty, unit_price: unitPrice, discount_percent: 0 }],
-        });
+        };
+
+        let quotation;
+        try {
+          quotation = await createQuotation(quotationPayload);
+        } catch (err) {
+          // 409 here specifically means this quotation's material needs
+          // overlap another still-open quotation/order -- the backend
+          // requires an explicit acknowledgment to proceed anyway (see
+          // quotation_service.check_material_conflicts). Any other error
+          // just rethrows to the outer catch below as normal.
+          if (err instanceof ApiError && err.status === 409) {
+            const conflictMessage = err.message;
+            const proceed = await new Promise<boolean>((resolve) => {
+              RNAlert.alert(t('quickQuote', 'materialConflictTitle'), conflictMessage, [
+                { text: t('common', 'cancel'), style: 'cancel', onPress: () => resolve(false) },
+                { text: t('quickQuote', 'proceedAnyway'), onPress: () => resolve(true) },
+              ]);
+            });
+            if (!proceed) {
+              setResult(null);
+              return;
+            }
+            quotation = await createQuotation({ ...quotationPayload, material_conflict_acknowledged: true });
+          } else {
+            throw err;
+          }
+        }
 
         setResult({
           kind: 'feasible',
@@ -108,7 +137,7 @@ export function QuickQuoteScreen() {
           validUntil: quotation.valid_until,
         });
       } else {
-        setStatusLine('Not feasible — notifying admin…');
+        setStatusLine(t('quickQuote', 'notifyingAdmin'));
         await requestFeasibilityException(
           created.id,
           'Requested via mobile Quick Quote — raw material/capacity shortfall on initial check.',
@@ -116,7 +145,7 @@ export function QuickQuoteScreen() {
         setResult({ kind: 'not_feasible' });
       }
     } catch (err: any) {
-      setFormError(err?.message ?? 'Something went wrong.');
+      setFormError(err?.message ?? t('quickQuote', 'genericError'));
     } finally {
       setIsChecking(false);
       setStatusLine('');
@@ -134,24 +163,22 @@ export function QuickQuoteScreen() {
             </Text>
           </View>
           <Text style={[styles.resultTitle, { color: isYes ? colors.emerald400 : colors.red400 }]}>
-            {isYes ? 'Yes — Quotation generated' : 'No — Admin notified'}
+            {isYes ? t('quickQuote', 'yesTitle') : t('quickQuote', 'noTitle')}
           </Text>
           <Text style={styles.resultDetail}>
-            {isYes
-              ? 'Stock and capacity can cover this request.'
-              : "This request can't be fully covered right now. Admin has been alerted to review it."}
+            {isYes ? t('quickQuote', 'yesDetail') : t('quickQuote', 'noDetail')}
           </Text>
 
           {isYes && result.kind === 'feasible' && (
             <View style={styles.summaryBox}>
-              <SummaryRow label="Quotation #" value={result.quotationNumber} />
-              <SummaryRow label="Total" value={result.total.toFixed(2)} />
-              <SummaryRow label="Valid until" value={result.validUntil} />
+              <SummaryRow label={t('quickQuote', 'quotationNumberLabel')} value={result.quotationNumber} />
+              <SummaryRow label={t('quickQuote', 'totalLabel')} value={result.total.toFixed(2)} />
+              <SummaryRow label={t('quickQuote', 'validUntilLabel')} value={result.validUntil} />
             </View>
           )}
 
           <Button variant="ghost" onPress={resetForm} style={{ marginTop: 22, width: '100%' }}>
-            Start another check
+            {t('quickQuote', 'startAnother')}
           </Button>
         </GlassCard>
       </ScrollView>
@@ -165,37 +192,37 @@ export function QuickQuoteScreen() {
 
         <View style={{ gap: 18 }}>
           <SelectField
-            label="Client"
+            label={t('quickQuote', 'clientLabel')}
             value={customerId}
             onChange={setCustomerId}
             options={customerOptions}
-            placeholder={customers.length ? 'Select a client…' : 'Loading clients…'}
+            placeholder={customers.length ? t('quickQuote', 'clientPlaceholderLoaded') : t('quickQuote', 'clientPlaceholderLoading')}
           />
           <SelectField
-            label="Product"
+            label={t('quickQuote', 'productLabel')}
             value={productId}
             onChange={setProductId}
             options={productOptions}
-            placeholder={products.length ? 'Select a product…' : 'Loading products…'}
+            placeholder={products.length ? t('quickQuote', 'productPlaceholderLoaded') : t('quickQuote', 'productPlaceholderLoading')}
           />
           <TextField
-            label="Quantity"
+            label={t('quickQuote', 'quantityLabel')}
             keyboardType="decimal-pad"
             value={quantity}
             onChangeText={setQuantity}
-            placeholder="e.g. 500"
+            placeholder={t('quickQuote', 'quantityPlaceholder')}
           />
           <DateField
-            label="Availability date needed"
+            label={t('quickQuote', 'dateLabel')}
             value={date}
             onChange={setDate}
             minimumDate={new Date()}
-            hint="The date the customer needs this by."
+            hint={t('quickQuote', 'dateHint')}
           />
         </View>
 
         <Button onPress={handleCheck} isLoading={isChecking} style={styles.checkBtn}>
-          Check &amp; Quote
+          {t('quickQuote', 'checkButton')}
         </Button>
         {statusLine ? <Text style={styles.statusLine}>{statusLine}</Text> : null}
       </GlassCard>

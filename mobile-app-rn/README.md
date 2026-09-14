@@ -70,13 +70,18 @@ src/api/auth.ts                POST /api/auth/login, GET /api/auth/me
 src/api/customers.ts           full Customer CRUD (list/get/create/update/delete/restore/activate)
 src/api/catalog.ts             products, feasibility, quotations
 src/context/AuthContext.tsx    session state, persisted via AsyncStorage
-src/components/                Button, TextField, SelectField, Alert, GlassCard, Logo
-src/screens/LoginScreen.tsx
+src/i18n/translations.ts       EN/AR string dictionaries (typed -- ar must match en's exact shape)
+src/i18n/LocaleContext.tsx     t(), locale persistence, RTL (see "Bilingual (EN/AR)" below)
+src/components/                Button, TextField, SelectField, Alert, GlassCard, Logo, SplashView, BottomActionBar
+src/screens/LoginScreen.tsx           EN/AR toggle lives here
+src/screens/HomeScreen.tsx            feature tile grid (Quick Quote/Clients wired; others mocked "coming soon")
 src/screens/QuickQuoteScreen.tsx      client+product+qty+date → yes/no → quote or admin-notify
-src/screens/ClientsListScreen.tsx     searchable client list
+src/screens/ClientsListScreen.tsx     searchable client list, edit/disable row icons
 src/screens/ClientFormScreen.tsx      create/edit/delete a client
-src/screens/AccountScreen.tsx         who's signed in + log out
-src/navigation/RootNavigator.tsx      auth gate → bottom tabs (Quick Quote / Clients / Account)
+src/screens/ClientHistoryScreen.tsx   a client's quotation ("order") history
+src/navigation/RootNavigator.tsx      auth gate → drawer (Home/Enquiry/Clients) + persistent bottom Back/Logout bar
+src/navigation/DrawerContent.tsx      custom drawer list (Enquiry, Clients)
+src/navigation/HeaderTitle.tsx        company logo + name, shown in the drawer's header
 ```
 
 ## Wiring — how each screen maps to the backend
@@ -161,6 +166,47 @@ register the service worker or be installable.
 Once loaded in mobile Chrome over HTTPS, either wait for the automatic
 "Install app" banner or open the **⋮** menu → **Add to Home screen** /
 **Install app**.
+
+## Bilingual (EN/AR)
+
+A language toggle on the login screen switches the whole app, RTL
+layout included, and persists the choice (`AsyncStorage`, key
+`qq_locale`).
+
+- `src/i18n/translations.ts` — flat, typed EN/AR dictionaries grouped
+  by screen (`login`, `home`, `quickQuote`, `clients`, ...). `ar` is
+  typed as `typeof en`, so a missing/extra key in either is a **build
+  error**, not a silently-blank string at runtime.
+- `src/i18n/LocaleContext.tsx` — `useLocale()` gives you `{ locale, t,
+  setLocale, isRTL }`. `t('section', 'key', { param: value })` looks up
+  the string and does `{{param}}` interpolation.
+
+**RTL is genuinely two different mechanisms depending on platform** --
+worth knowing before touching this code:
+
+- **Web** (this app's main target): `react-native-web`'s `I18nManager`
+  is a hardcoded no-op stub (`allowRTL()`/`forceRTL()` both just
+  `return;`, `isRTL` is always `false` — check
+  `node_modules/react-native-web/src/exports/I18nManager` yourself).
+  Calling it does nothing. What actually mirrors the layout on web is
+  setting `document.documentElement.dir = 'rtl'` directly — CSS defines
+  `flexDirection: 'row'` as direction-relative ("main-start is on the
+  left in LTR, on the right in RTL"), so that one line correctly
+  mirrors every row layout in the app, instantly, no reload needed.
+- **Native** (iOS/Android): the real `I18nManager.forceRTL()` applies,
+  but native only reads the writing-direction flag once at bridge
+  init — an already-running app can't re-flow in place, so a language
+  switch that also flips RTL shows a "restart the app" prompt there.
+
+`src/i18n/LocaleContext.tsx`'s `applyRTL()` is the one place that picks
+between these two, so screens themselves never need to know which
+platform they're on.
+
+**Known gap:** a handful of hardcoded `marginLeft`/`marginRight` values
+(e.g. `ClientsListScreen`'s row action icons) don't flip under RTL --
+only `flexDirection`-driven mirroring is covered. Real logical
+properties (`marginStart`/`marginEnd`) would close this, not done here
+to keep this pass scoped to what was asked.
 
 ## Setup
 

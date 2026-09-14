@@ -8,12 +8,14 @@ import { Button } from '../components/Button';
 import { GlassCard } from '../components/GlassCard';
 import { TextField } from '../components/TextField';
 import { colors, fonts, whiteAlpha } from '../theme';
+import { useLocale } from '../i18n/LocaleContext';
 import { listCustomers, activateCustomer, deactivateCustomer, Customer } from '../api/customers';
 import { ClientsStackParamList } from '../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<ClientsStackParamList, 'ClientsList'>;
 
 export function ClientsListScreen({ navigation }: Props) {
+  const { t } = useLocale();
   const [clients, setClients] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -27,7 +29,7 @@ export function ClientsListScreen({ navigation }: Props) {
       const res = await listCustomers({ search: searchTerm ?? undefined, page_size: 100 });
       setClients(res.items);
     } catch (err: any) {
-      setError(err?.message ?? 'Could not load clients.');
+      setError(err?.message ?? t('clients', 'loadError'));
     } finally {
       setLoading(false);
     }
@@ -47,9 +49,9 @@ export function ClientsListScreen({ navigation }: Props) {
       runToggle(client);
       return;
     }
-    RNAlert.alert('Disable client', `Disable ${client.name}? They can be re-enabled at any time.`, [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Disable', style: 'destructive', onPress: () => runToggle(client) },
+    RNAlert.alert(t('clients', 'disableTitle'), t('clients', 'disableMessage', { name: client.name }), [
+      { text: t('common', 'cancel'), style: 'cancel' },
+      { text: t('clients', 'disableConfirm'), style: 'destructive', onPress: () => runToggle(client) },
     ]);
   }
 
@@ -60,7 +62,7 @@ export function ClientsListScreen({ navigation }: Props) {
       const updated = client.status === 'active' ? await deactivateCustomer(client.id) : await activateCustomer(client.id);
       setClients((prev) => prev.map((c) => (c.id === client.id ? updated : c)));
     } catch (err: any) {
-      setError(err?.message ?? 'Could not update this client.');
+      setError(err?.message ?? t('clients', 'updateError'));
     } finally {
       setTogglingId(null);
     }
@@ -69,18 +71,18 @@ export function ClientsListScreen({ navigation }: Props) {
   return (
     <View style={styles.screen}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Clients</Text>
+        <Text style={styles.headerTitle}>{t('clients', 'title')}</Text>
         <Button size="sm" onPress={() => navigation.navigate('ClientForm', {})}>
-          + New
+          {t('clients', 'newButton')}
         </Button>
       </View>
 
       <View style={styles.searchWrap}>
         <TextField
-          label="Search"
+          label={t('clients', 'searchLabel')}
           value={search}
           onChangeText={setSearch}
-          placeholder="Search by name…"
+          placeholder={t('clients', 'searchPlaceholder')}
           onSubmitEditing={() => load(search)}
           returnKeyType="search"
         />
@@ -94,7 +96,7 @@ export function ClientsListScreen({ navigation }: Props) {
         contentContainerStyle={{ paddingBottom: 24 }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(search)} tintColor={colors.gold400} />}
         ListEmptyComponent={
-          !loading ? <Text style={styles.emptyText}>No clients found.</Text> : null
+          !loading ? <Text style={styles.emptyText}>{t('clients', 'emptyText')}</Text> : null
         }
         renderItem={({ item }) => (
           <Pressable
@@ -116,7 +118,7 @@ export function ClientsListScreen({ navigation }: Props) {
                     item.status === 'active' ? styles.badgeActiveText : styles.badgeInactiveText,
                   ]}
                 >
-                  {item.status}
+                  {item.status === 'active' ? t('clientForm', 'statusActive') : t('clientForm', 'statusInactive')}
                 </Text>
               </View>
 

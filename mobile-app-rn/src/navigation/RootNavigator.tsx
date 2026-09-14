@@ -1,13 +1,19 @@
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
+import { Pressable, View } from 'react-native';
+import { DarkTheme, DrawerActions, NavigationContainer, NavigationContainerRefWithCurrent, useNavigationContainerRef } from '@react-navigation/native';
+import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
+import Feather from '@expo/vector-icons/Feather';
 import { useAuth } from '../context/AuthContext';
 import { LoginScreen } from '../screens/LoginScreen';
+import { HomeScreen } from '../screens/HomeScreen';
 import { QuickQuoteScreen } from '../screens/QuickQuoteScreen';
 import { ClientsListScreen } from '../screens/ClientsListScreen';
 import { ClientFormScreen } from '../screens/ClientFormScreen';
 import { ClientHistoryScreen } from '../screens/ClientHistoryScreen';
-import { AccountScreen } from '../screens/AccountScreen';
+import { BottomActionBar } from '../components/BottomActionBar';
+import { DrawerContent } from './DrawerContent';
+import { HeaderTitle } from './HeaderTitle';
+import { useLocale } from '../i18n/LocaleContext';
 import { colors, fonts, whiteAlpha } from '../theme';
 
 export type ClientsStackParamList = {
@@ -28,7 +34,7 @@ const navTheme = {
   },
 };
 
-const screenOptions = {
+const stackScreenOptions = {
   headerStyle: { backgroundColor: colors.ink900 },
   headerTintColor: colors.white,
   headerTitleStyle: { fontFamily: fonts.sansSemibold, fontSize: 16 },
@@ -36,60 +42,72 @@ const screenOptions = {
   contentStyle: { backgroundColor: colors.ink950 },
 };
 
-const QuickQuoteStack = createNativeStackNavigator();
-function QuickQuoteStackNavigator() {
-  return (
-    <QuickQuoteStack.Navigator screenOptions={screenOptions}>
-      <QuickQuoteStack.Screen name="QuickQuote" component={QuickQuoteScreen} options={{ title: 'Quick Quote' }} />
-    </QuickQuoteStack.Navigator>
-  );
-}
-
 const ClientsStack = createNativeStackNavigator<ClientsStackParamList>();
 function ClientsStackNavigator() {
+  const { t } = useLocale();
   return (
-    <ClientsStack.Navigator screenOptions={screenOptions}>
-      <ClientsStack.Screen name="ClientsList" component={ClientsListScreen} options={{ title: 'Clients' }} />
+    <ClientsStack.Navigator screenOptions={stackScreenOptions}>
+      <ClientsStack.Screen
+        name="ClientsList"
+        component={ClientsListScreen}
+        options={({ navigation }) => ({
+          title: t('clients', 'title'),
+          // The outer Drawer.Screen for "Clients" has headerShown: false
+          // (this stack's own header takes over, so its per-screen
+          // titles/back-chevron work normally) -- this button is how the
+          // drawer stays reachable from a screen whose header the drawer
+          // itself no longer renders. Standard react-navigation pattern
+          // for a stack nested inside a drawer.
+          headerLeft: () => (
+            <Pressable
+              onPress={() => navigation.getParent()?.dispatch(DrawerActions.openDrawer())}
+              hitSlop={10}
+              style={{ paddingHorizontal: 4 }}
+            >
+              <Feather name="menu" size={22} color={colors.white} />
+            </Pressable>
+          ),
+        })}
+      />
       <ClientsStack.Screen name="ClientForm" component={ClientFormScreen} />
-      <ClientsStack.Screen name="ClientHistory" component={ClientHistoryScreen} options={{ title: 'Order history' }} />
+      <ClientsStack.Screen name="ClientHistory" component={ClientHistoryScreen} options={{ title: t('clientHistory', 'title') }} />
     </ClientsStack.Navigator>
   );
 }
 
-const AccountStack = createNativeStackNavigator();
-function AccountStackNavigator() {
-  return (
-    <AccountStack.Navigator screenOptions={screenOptions}>
-      <AccountStack.Screen name="Account" component={AccountScreen} options={{ title: 'Account' }} />
-    </AccountStack.Navigator>
-  );
-}
+const Drawer = createDrawerNavigator();
 
-const Tab = createBottomTabNavigator();
-function MainTabs() {
+function AuthenticatedShell({ navRef }: { navRef: NavigationContainerRefWithCurrent<any> }) {
   return (
-    <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarStyle: { backgroundColor: colors.ink900, borderTopColor: whiteAlpha(0.08) },
-        tabBarActiveTintColor: colors.gold400,
-        tabBarInactiveTintColor: whiteAlpha(0.4),
-        tabBarLabelStyle: { fontFamily: fonts.sansMedium, fontSize: 11 },
-      }}
-    >
-      <Tab.Screen name="QuickQuoteTab" component={QuickQuoteStackNavigator} options={{ title: 'Quick Quote' }} />
-      <Tab.Screen name="ClientsTab" component={ClientsStackNavigator} options={{ title: 'Clients' }} />
-      <Tab.Screen name="AccountTab" component={AccountStackNavigator} options={{ title: 'Account' }} />
-    </Tab.Navigator>
+    <View style={{ flex: 1 }}>
+      <Drawer.Navigator
+        drawerContent={(props) => <DrawerContent {...props} />}
+        screenOptions={{
+          headerStyle: { backgroundColor: colors.ink900 },
+          headerTintColor: colors.white,
+          headerShadowVisible: false,
+          headerTitle: () => <HeaderTitle />,
+          drawerStyle: { backgroundColor: colors.ink900, width: 260 },
+          sceneContainerStyle: { backgroundColor: colors.ink950 },
+        }}
+      >
+        <Drawer.Screen name="Home" component={HomeScreen} />
+        <Drawer.Screen name="Enquiry" component={QuickQuoteScreen} />
+        <Drawer.Screen name="Clients" component={ClientsStackNavigator} options={{ headerShown: false }} />
+      </Drawer.Navigator>
+      <BottomActionBar navRef={navRef} />
+    </View>
   );
 }
 
 export function RootNavigator() {
   const { isReady, isAuthenticated } = useAuth();
+  const navRef = useNavigationContainerRef();
   if (!isReady) return null;
 
   return (
     <NavigationContainer
+      ref={navRef}
       theme={navTheme}
       documentTitle={{
         // React Navigation's web title otherwise falls back to the
@@ -99,7 +117,7 @@ export function RootNavigator() {
         formatter: (options) => (options?.title ? `${options.title} — JDK Quick Quote` : 'JDK Quick Quote'),
       }}
     >
-      {isAuthenticated ? <MainTabs /> : <LoginScreen />}
+      {isAuthenticated ? <AuthenticatedShell navRef={navRef} /> : <LoginScreen />}
     </NavigationContainer>
   );
 }

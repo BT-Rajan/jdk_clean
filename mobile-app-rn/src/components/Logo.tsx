@@ -8,7 +8,7 @@ import { colors, fonts } from '../theme';
 // so this can render before any login happens.
 const ACTIVE_LOGO_URL = `${API_BASE_URL}/api/settings/logo/active/current`;
 
-export function Logo({ size = 40 }: { size?: number }) {
+export function Logo({ size = 40, hideWordmark = false }: { size?: number; hideWordmark?: boolean }) {
   const [failed, setFailed] = useState(false);
 
   if (!failed) {
@@ -24,14 +24,19 @@ export function Logo({ size = 40 }: { size?: number }) {
   // Fallback wordmark -- RN has no CSS gradient-text primitive without
   // an extra masking dependency, so this uses a flat gold rather than
   // the web app's gold gradient clip. Visually close, not pixel-exact.
+  // hideWordmark: for callers (e.g. the app header) that render their
+  // own adjacent company-name text and just want the glyph mark itself,
+  // so the name isn't duplicated.
   return (
     <View style={styles.fallbackRow}>
       <View style={[styles.glyph, { width: size * 0.85, height: size * 0.85 }]}>
         <Text style={[styles.glyphMark, { fontSize: size * 0.4 }]}>◈</Text>
       </View>
-      <Text style={styles.wordmark}>
-        JDK <Text style={{ color: colors.gold400 }}>MEA</Text>
-      </Text>
+      {!hideWordmark && (
+        <Text style={styles.wordmark}>
+          JDK <Text style={{ color: colors.gold400 }}>MEA</Text>
+        </Text>
+      )}
     </View>
   );
 }

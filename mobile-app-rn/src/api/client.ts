@@ -102,8 +102,16 @@ export async function api<T = any>(path: string, options: ApiOptions = {}): Prom
   }
 
   if (!res.ok) {
+    // The backend's own AppError handler (see backend/app/core/exceptions.py)
+    // returns {"error": "[CODE] message"} for virtually every rejected
+    // request -- `detail`/`message` are only a fallback for the rare
+    // plain HTTPException that doesn't go through that handler. Reading
+    // only detail/message (as this used to) meant every real backend
+    // rejection -- a 409 conflict, a 422 validation message, anything --
+    // silently fell through to the generic "Request failed (N)" instead
+    // of the actual, often actionable, reason.
     const message =
-      (data && (data.detail || data.message)) || `Request failed (${res.status})`;
+      (data && (data.error || data.detail || data.message)) || `Request failed (${res.status})`;
     throw new ApiError(typeof message === 'string' ? message : JSON.stringify(message), res.status);
   }
 
