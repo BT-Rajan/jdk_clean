@@ -28,16 +28,22 @@ self.addEventListener('activate', (event) => {
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
+  const url = new URL(request.url);
 
   // Only handle same-origin GETs; let everything else (API calls, POSTs,
   // cross-origin requests) pass straight through to the network.
-  if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) {
+  if (request.method !== 'GET' || url.origin !== self.location.origin) {
     return;
   }
 
-  if (request.mode === 'navigate') {
-    // Network-first for navigations so a new deploy is picked up
-    // immediately when online; cached shell covers being offline.
+  if (request.mode === 'navigate' || url.pathname === '/') {
+    // Network-first for navigations *and* an explicit fetch('/') from
+    // page JS (not just real navigations) -- version-check.js polls
+    // '/' this way to detect a new deploy while the app is already
+    // open, which only works if that poll actually reaches the
+    // network instead of being served the cached copy below. A new
+    // deploy is picked up immediately when online either way; the
+    // cached shell only covers being offline.
     event.respondWith(
       fetch(request)
         .then((response) => {
