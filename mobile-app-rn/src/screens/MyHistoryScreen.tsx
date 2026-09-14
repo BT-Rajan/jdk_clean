@@ -1,10 +1,12 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../components/Alert';
 import { GlassCard } from '../components/GlassCard';
 import { colors, fonts, whiteAlpha } from '../theme';
 import { useLocale } from '../i18n/LocaleContext';
+import { notify } from '../utils/alerts';
 import { getMyHistory, MyHistoryEntry } from '../api/auth';
 
 type LocaleT = ReturnType<typeof useLocale>['t'];
@@ -64,6 +66,7 @@ function formatDateTime(iso: string): string {
 
 export function MyHistoryScreen() {
   const { t } = useLocale();
+  const navigation = useNavigation<any>();
   const [entries, setEntries] = useState<MyHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,6 +96,19 @@ export function MyHistoryScreen() {
     }, [load]),
   );
 
+  // Only 'customers' has a mobile screen to actually land on -- the
+  // other tables (quotations, feasibility checks, orders) don't have a
+  // detail screen in this app yet, so a tap on those rows says so the
+  // same way an unbuilt Home tile does, rather than the row silently
+  // doing nothing.
+  function handlePress(item: MyHistoryEntry) {
+    if (item.table_name === 'customers') {
+      navigation.navigate('Clients', { screen: 'ClientForm', params: { customerId: item.record_id } });
+      return;
+    }
+    notify(`${tableLabel(t, item.table_name)} #${item.record_id}`, t('common', 'comingSoon'));
+  }
+
   return (
     <View style={styles.screen}>
       <Text style={styles.headerTitle}>{t('myHistory', 'title')}</Text>
@@ -103,19 +119,23 @@ export function MyHistoryScreen() {
       <FlatList
         data={entries}
         keyExtractor={(item, i) => `${item.table_name}-${item.record_id}-${item.changed_at}-${i}`}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: 24 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={entries.length === 0 ? styles.listContentEmpty : styles.listContent}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.gold400} />}
         ListEmptyComponent={!loading ? <Text style={styles.emptyText}>{t('myHistory', 'emptyText')}</Text> : null}
         renderItem={({ item }) => (
-          <GlassCard style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>
-                {tableLabel(t, item.table_name)} #{item.record_id}
-              </Text>
-              <Text style={styles.rowDesc}>{describeEntry(t, item)}</Text>
-            </View>
-            <Text style={styles.rowDate}>{formatDateTime(item.changed_at)}</Text>
-          </GlassCard>
+          <Pressable onPress={() => handlePress(item)}>
+            <GlassCard style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowTitle}>
+                  {tableLabel(t, item.table_name)} #{item.record_id}
+                </Text>
+                <Text style={styles.rowDesc}>{describeEntry(t, item)}</Text>
+                <Text style={styles.rowDate}>{formatDateTime(item.changed_at)}</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color={whiteAlpha(0.3)} />
+            </GlassCard>
+          </Pressable>
         )}
       />
     </View>
@@ -126,9 +146,14 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink950, padding: 18 },
   headerTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.white },
   headerSubtitle: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.45), marginBottom: 16 },
-  emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center', marginTop: 30 },
-  row: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10, padding: 16 },
+  listContent: { paddingTop: 8, paddingBottom: 24 },
+  // When there's nothing to show, let the empty-state message center in
+  // the remaining space instead of sitting in a thin band right under
+  // the header with the rest of the screen left blank.
+  listContentEmpty: { flexGrow: 1, justifyContent: 'center' },
+  emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center' },
+  row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, padding: 16 },
   rowTitle: { fontFamily: fonts.sansSemibold, fontSize: 14, color: colors.white, marginBottom: 3 },
-  rowDesc: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.6) },
-  rowDate: { fontFamily: fonts.sans, fontSize: 11, color: whiteAlpha(0.4), flexShrink: 0 },
+  rowDesc: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.6), marginBottom: 3 },
+  rowDate: { fontFamily: fonts.sans, fontSize: 11, color: whiteAlpha(0.4) },
 });

@@ -46,6 +46,8 @@ export function HomeScreen() {
 
   return (
     <View style={styles.screen}>
+      <Text style={styles.pageTitle}>{t('home', 'pageTitle')}</Text>
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -87,6 +89,7 @@ const IMAGE_CARD_WIDTH = 220;
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink950, padding: 18 },
+  pageTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.white, marginBottom: 16 },
   imageScroll: { flexGrow: 0 },
   imageScrollContent: { gap: 14, paddingBottom: 4 },
   imageCard: {

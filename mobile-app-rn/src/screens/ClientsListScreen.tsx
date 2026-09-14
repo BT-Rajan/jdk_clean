@@ -98,7 +98,8 @@ export function ClientsListScreen({ navigation }: Props) {
       <FlatList
         data={clients}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={clients.length === 0 ? styles.listContentEmpty : styles.listContent}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(search)} tintColor={colors.gold400} />}
         ListEmptyComponent={
           !loading ? <Text style={styles.emptyText}>{t('clients', 'emptyText')}</Text> : null
@@ -160,7 +161,12 @@ const styles = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
   headerTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.white },
   searchWrap: { marginBottom: 12 },
-  emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center', marginTop: 30 },
+  listContent: { paddingBottom: 24 },
+  // Centers the empty-state message in the remaining space instead of
+  // leaving it in a thin band under the search field with the rest of
+  // the screen blank.
+  listContentEmpty: { flexGrow: 1, justifyContent: 'center' },
+  emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, padding: 16 },
   rowName: { fontFamily: fonts.sansSemibold, fontSize: 15, color: colors.white, marginBottom: 3 },
   rowMeta: { fontFamily: fonts.sans, fontSize: 12, color: whiteAlpha(0.45) },

@@ -69,7 +69,8 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
       <FlatList
         data={quotations}
         keyExtractor={(item) => String(item.id)}
-        contentContainerStyle={{ paddingTop: 8, paddingBottom: 24 }}
+        style={{ flex: 1 }}
+        contentContainerStyle={quotations.length === 0 ? styles.listContentEmpty : styles.listContent}
         ListEmptyComponent={
           !loading ? <Text style={styles.emptyText}>{t('clientHistory', 'emptyText')}</Text> : null
         }
@@ -100,7 +101,9 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink950, padding: 18 },
   headerTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.white },
   headerSubtitle: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.45), marginBottom: 16 },
-  emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center', marginTop: 30 },
+  listContent: { paddingTop: 8, paddingBottom: 24 },
+  listContentEmpty: { flexGrow: 1, justifyContent: 'center' },
+  emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, padding: 16 },
   rowNumber: { fontFamily: fonts.sansSemibold, fontSize: 15, color: colors.white, marginBottom: 3 },
   rowDate: { fontFamily: fonts.sans, fontSize: 12, color: whiteAlpha(0.45) },
