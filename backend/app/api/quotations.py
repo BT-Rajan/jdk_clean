@@ -43,12 +43,20 @@ def list_quotations(
     search: str | None = Query(None),
     status: str | None = Query(None),
     customer_id: int | None = Query(None),
+    feasibility_id: int | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(read_guard),
 ):
     result = quotation_service.list_quotations(
-        db, page=page, page_size=page_size, search=search, status=status, customer_id=customer_id, sort=sort
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        status=status,
+        customer_id=customer_id,
+        feasibility_id=feasibility_id,
+        sort=sort,
     )
     result["items"] = [QuotationOut.from_model(q) for q in result["items"]]
     return result
