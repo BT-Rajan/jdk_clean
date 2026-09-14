@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Alert as RNAlert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
@@ -9,6 +9,7 @@ import { GlassCard } from '../components/GlassCard';
 import { TextField } from '../components/TextField';
 import { colors, fonts, whiteAlpha } from '../theme';
 import { useLocale } from '../i18n/LocaleContext';
+import { confirm } from '../utils/alerts';
 import { listCustomers, activateCustomer, deactivateCustomer, Customer } from '../api/customers';
 import { ClientsStackParamList } from '../navigation/RootNavigator';
 
@@ -43,16 +44,20 @@ export function ClientsListScreen({ navigation }: Props) {
     }, [load]),
   );
 
-  function handleToggleStatus(client: Customer) {
+  async function handleToggleStatus(client: Customer) {
     const activating = client.status === 'inactive';
     if (activating) {
       runToggle(client);
       return;
     }
-    RNAlert.alert(t('clients', 'disableTitle'), t('clients', 'disableMessage', { name: client.name }), [
-      { text: t('common', 'cancel'), style: 'cancel' },
-      { text: t('clients', 'disableConfirm'), style: 'destructive', onPress: () => runToggle(client) },
-    ]);
+    const proceed = await confirm(
+      t('clients', 'disableTitle'),
+      t('clients', 'disableMessage', { name: client.name }),
+      t('clients', 'disableConfirm'),
+      t('common', 'cancel'),
+      { destructive: true },
+    );
+    if (proceed) runToggle(client);
   }
 
   async function runToggle(client: Customer) {
