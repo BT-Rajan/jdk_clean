@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "JDK Quick Quote",
+    "slug": "jdk-quick-quote-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#05050a",
+    "splash": {
+      "backgroundColor": "#05050a"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.jdkmea.quickquote"
+    },
+    "android": {
+      "package": "com.jdkmea.quickquote",
+      "backgroundColor": "#05050a"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
