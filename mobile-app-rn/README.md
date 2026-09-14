@@ -110,15 +110,47 @@ same role/department permission matrix applies).
    live Notifications feed (`notification_service.get_notifications`).
    Nothing new to build on the notification side.
 
-**Clients** — full CRUD against `/api/customers`:
+**Clients** — full CRUD against `/api/customers`, matching the web app's
+customer onboarding feature-for-feature (`ClientFormScreen.tsx` plays
+both CustomerOnboardingWizardPage's and CustomerFormPage's roles,
+picking one by whether `route.params.customerId` is set):
 - List: `GET /api/customers?search=&page_size=100`
-- Create: `POST /api/customers`
-- Edit: `GET /api/customers/{id}` then `PUT /api/customers/{id}`
-  (`name` and `customer_type` are excluded from the update payload —
-  the backend's `CustomerUpdate` schema deliberately omits `name`
-  since it's locked after creation, and `customer_type` isn't meant to
-  change post-creation either, so the form disables that field and the
-  API layer never sends it back on edit)
+- **Create** → a 5-step wizard (Type → Company Details → Contact &
+  Address → Financial Terms → Review), mirroring
+  `CustomerOnboardingWizardPage` step-for-step: `code` (Civil ID /
+  registration number) is required here (unlike the plain `POST
+  /api/customers` schema, which allows a null `code` for a prospective
+  customer created some other way), and the Company Details step
+  includes an id document picker (`expo-document-picker`) — the file
+  is only uploaded via `POST /api/customers/{id}/id-document` *after*
+  `POST /api/customers` returns an id, same two-step sequence as the
+  web wizard. Every field is validated client-side against the same
+  max-lengths as `backend/app/schemas/customer.py` /
+  `frontend/src/lib/validation/customer.ts`. On success, lands on that
+  same client's edit screen (mirrors the web wizard navigating to
+  `/customers/:id`) rather than just going back to the list.
+- **Edit** → `GET /api/customers/{id}` then `PUT /api/customers/{id}`.
+  `name` is locked (backend's `CustomerUpdate` omits it); `code` is
+  locked *once set*, but if it's still null (a prospective customer)
+  there's an inline "complete it now" mini-form that calls `PUT` with
+  just `{code}}`, same one-directional rule and same UX as
+  `CustomerFormPage`'s `handleCompleteCode`. `customer_type` **is**
+  sent on every other edit — it's editable at any time per the
+  backend schema, unlike name/code.
+  Below the form (only once a customer id exists): a **credit status**
+  card (`GET /api/customers/{id}/credit`, with the same "id isn't
+  verified yet" warning the web detail page shows once a credit limit
+  is set); an **id document** panel to view/replace/remove the
+  document and mark it verified/unverified
+  (`POST|DELETE /api/customers/{id}/id-document`,
+  `POST /api/customers/{id}/verify-id` / `.../unverify-id` — viewing
+  opens the file inline on web, saves-and-shares on native, same
+  platform split as the Quick Quote PDF download); and an
+  **onboarding** section with the same reason-gated status transition
+  buttons as the web detail page
+  (`POST /api/customers/{id}/onboarding-status`,
+  transitions mirrored from `ONBOARDING_ALLOWED_TRANSITIONS` in
+  `backend/app/models/customer.py`).
 - Delete: `DELETE /api/customers/{id}` (soft delete — `restoreCustomer`
   in `api/customers.ts` is there if you want to add an "undo"/trash
   view later; not wired into a screen yet)

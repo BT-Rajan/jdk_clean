@@ -75,7 +75,7 @@ interface ApiOptions {
  * useful to do with that response body. */
 async function fetchWithAuth(
   path: string,
-  init: { method?: string; headers?: Record<string, string>; body?: string },
+  init: { method?: string; headers?: Record<string, string>; body?: string | FormData },
   auth: boolean,
 ): Promise<Response> {
   async function doFetch(token: string | null): Promise<Response> {
@@ -102,14 +102,16 @@ async function fetchWithAuth(
   return res;
 }
 
-export async function api<T = any>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { method = 'GET', body, auth = true } = options;
-  const res = await fetchWithAuth(
-    path,
-    { method, headers: { 'Content-Type': 'application/json' }, body: body !== undefined ? JSON.stringify(body) : undefined },
-    auth,
-  );
-
+/** Shared JSON-body parsing/error-extraction behind api() and
+ * apiUpload() -- the backend's own AppError handler (see
+ * backend/app/core/exceptions.py) returns {"error": "[CODE] message"}
+ * for virtually every rejected request -- `detail`/`message` are only
+ * a fallback for the rare plain HTTPException that doesn't go through
+ * that handler. Reading only detail/message (as this used to) meant
+ * every real backend rejection -- a 409 conflict, a 422 validation
+ * message, anything -- silently fell through to the generic "Request
+ * failed (N)" instead of the actual, often actionable, reason. */
+async function parseJsonOrThrow<T>(res: Response): Promise<T> {
   let data: any = null;
   const text = await res.text();
   if (text) {
@@ -121,20 +123,54 @@ export async function api<T = any>(path: string, options: ApiOptions = {}): Prom
   }
 
   if (!res.ok) {
-    // The backend's own AppError handler (see backend/app/core/exceptions.py)
-    // returns {"error": "[CODE] message"} for virtually every rejected
-    // request -- `detail`/`message` are only a fallback for the rare
-    // plain HTTPException that doesn't go through that handler. Reading
-    // only detail/message (as this used to) meant every real backend
-    // rejection -- a 409 conflict, a 422 validation message, anything --
-    // silently fell through to the generic "Request failed (N)" instead
-    // of the actual, often actionable, reason.
     const message =
       (data && (data.error || data.detail || data.message)) || `Request failed (${res.status})`;
     throw new ApiError(typeof message === 'string' ? message : JSON.stringify(message), res.status);
   }
 
   return data as T;
+}
+
+export async function api<T = any>(path: string, options: ApiOptions = {}): Promise<T> {
+  const { method = 'GET', body, auth = true } = options;
+  const res = await fetchWithAuth(
+    path,
+    { method, headers: { 'Content-Type': 'application/json' }, body: body !== undefined ? JSON.stringify(body) : undefined },
+    auth,
+  );
+  return parseJsonOrThrow<T>(res);
+}
+
+/** One file, picked via expo-document-picker's DocumentPickerAsset (its
+ * `file` field is only set on web -- see uploadFile below). */
+interface UploadAsset {
+  uri: string;
+  name: string;
+  mimeType?: string | null;
+  file?: File;
+}
+
+/** Multipart file upload (e.g. a customer's id document) -- same auth/
+ * refresh handling as api(), deliberately without a Content-Type header
+ * so fetch sets the multipart boundary itself (setting one manually, as
+ * JSON requests do, breaks the boundary the same way it does for the
+ * web app's axios client -- see api/customers.ts's uploadCustomerIdDocument
+ * comment there). On web, FormData wants the real File object picked by
+ * the browser's file input; on native there's no File, so the {uri,
+ * name, type} shape is what React Native's fetch/FormData polyfill
+ * expects instead. */
+export async function uploadFile<T = any>(path: string, asset: UploadAsset): Promise<T> {
+  const form = new FormData();
+  if (Platform.OS === 'web' && asset.file) {
+    form.append('file', asset.file);
+  } else {
+    form.append(
+      'file',
+      { uri: asset.uri, name: asset.name, type: asset.mimeType || 'application/octet-stream' } as unknown as Blob,
+    );
+  }
+  const res = await fetchWithAuth(path, { method: 'POST', body: form }, true);
+  return parseJsonOrThrow<T>(res);
 }
 
 /** Same auth/refresh handling as api(), for endpoints that return a
@@ -184,8 +220,30 @@ export async function downloadAndOpenFile(path: string, filename: string): Promi
   await FileSystem.writeAsStringAsync(fileUri, base64, { encoding: FileSystem.EncodingType.Base64 });
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(fileUri, { mimeType: 'application/pdf', dialogTitle: filename });
+    // blob.type is whatever Content-Type the backend actually served
+    // (a PDF, or a JPEG/PNG/WEBP for an id document image) -- not
+    // hardcoded, since this same helper backs both.
+    await Sharing.shareAsync(fileUri, { mimeType: blob.type || 'application/octet-stream', dialogTitle: filename });
   }
+}
+
+/** "View" rather than "download": on web, opens the file inline in a
+ * new tab (images/PDFs render directly, same as the web app's id
+ * document viewer) instead of forcing a save-to-disk prompt; on native
+ * there's no in-app viewer, so it falls back to the same save+share
+ * flow as downloadAndOpenFile, which lets the user open it in Photos/
+ * Files/a PDF app. */
+export async function viewFile(path: string, filename: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    const blob = await apiBlob(path);
+    const url = URL.createObjectURL(blob);
+    // Deliberately not revoking this URL -- the new tab needs it to stay
+    // valid after this function returns, and the browser reclaims it
+    // when that tab is closed.
+    window.open(url, '_blank');
+    return;
+  }
+  return downloadAndOpenFile(path, filename);
 }
 
 function blobToBase64(blob: Blob): Promise<string> {
