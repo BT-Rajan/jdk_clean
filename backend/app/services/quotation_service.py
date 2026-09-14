@@ -203,6 +203,7 @@ def list_quotations(
     search: str | None = None,
     status: str | None = None,
     customer_id: int | None = None,
+    feasibility_id: int | None = None,
     sort: str | None = None,
 ) -> dict:
     query = _base_query(db)
@@ -211,6 +212,8 @@ def list_quotations(
         query = query.filter(Quotation.status == status)
     if customer_id:
         query = query.filter(Quotation.customer_id == customer_id)
+    if feasibility_id:
+        query = query.filter(Quotation.feasibility_id == feasibility_id)
     if search:
         like = f"%{search}%"
         query = query.join(Customer).filter(

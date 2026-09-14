@@ -10,7 +10,15 @@ import { colors, fonts, whiteAlpha } from '../theme';
 import { ApiError } from '../api/client';
 import { useLocale } from '../i18n/LocaleContext';
 import { listCustomers, Customer } from '../api/customers';
-import { listProducts, Product, createFeasibility, runFeasibility, requestFeasibilityException, createQuotation } from '../api/catalog';
+import {
+  listProducts,
+  Product,
+  createFeasibility,
+  runFeasibility,
+  requestFeasibilityException,
+  createQuotation,
+  getQuotationForFeasibility,
+} from '../api/catalog';
 
 // 'feasible_pending' -- the check passed but nothing has been quoted
 // yet; the green "Generate Quotation" button is the explicit action
@@ -19,7 +27,12 @@ import { listProducts, Product, createFeasibility, runFeasibility, requestFeasib
 type ResultState =
   | { kind: 'feasible_pending'; feasibilityId: number; customerId: number; productId: number; quantity: number; unitPrice: number }
   | { kind: 'feasible'; quotationNumber: string; total: number; validUntil: string }
-  | { kind: 'not_feasible' }
+  // nextAvailableDate: the latest (slowest) per-line estimated_ready_date
+  // the backend projected -- production can't start before every line's
+  // material/capacity is ready, so the slowest one is what actually
+  // applies to the whole request. Absent when the backend couldn't
+  // reliably project a date at all (see FeasibilityLineOut).
+  | { kind: 'not_feasible'; nextAvailableDate?: string }
   | null;
 
 // Deliberately not date.toISOString().slice(0,10) -- that converts to
@@ -108,13 +121,48 @@ export function QuickQuoteScreen() {
           quantity: qty,
           unitPrice: product?.selling_price ?? 0,
         });
-      } else {
+      } else if (checked.status === 'converted') {
+        // Backend-side "auto-create quotation on feasible" is on for
+        // this org (Settings -> Sales; see
+        // feasibility_service._maybe_auto_create_quotation) -- run_check
+        // itself already created the quotation before this response
+        // came back, so there's nothing left to press. Fetch what it
+        // made and go straight to the success screen.
+        setStatusLine(t('quickQuote', 'generatingQuote'));
+        const quotation = await getQuotationForFeasibility(created.id);
+        if (quotation) {
+          setResult({
+            kind: 'feasible',
+            quotationNumber: quotation.quotation_number,
+            total: quotation.total_amount,
+            validUntil: quotation.valid_until,
+          });
+        } else {
+          // Shouldn't happen -- 'converted' implies a quotation exists --
+          // but don't leave the user stuck on a silent failure if it does.
+          setFormError(t('quickQuote', 'genericError'));
+        }
+      } else if (checked.status === 'exception_pending') {
         setStatusLine(t('quickQuote', 'notifyingAdmin'));
         await requestFeasibilityException(
           created.id,
           'Requested via mobile Quick Quote — raw material/capacity shortfall on initial check.',
         );
-        setResult({ kind: 'not_feasible' });
+        // The slowest projected date across every line -- the whole
+        // request can't be ready before all of its lines are, so a
+        // single earlier line's date would understate it.
+        const nextAvailableDate = checked.lines
+          .map((line) => line.estimated_ready_date)
+          .filter((d): d is string => Boolean(d))
+          .sort()
+          .pop();
+        setResult({ kind: 'not_feasible', nextAvailableDate });
+      } else {
+        // Any other status is unexpected for a feasibility this handler
+        // just created and ran itself -- surface it plainly rather than
+        // guessing at an action (e.g. blindly requesting an exception
+        // that isn't valid for this status).
+        setFormError(t('quickQuote', 'unexpectedStatusError', { status: checked.status }));
       }
     } catch (err: any) {
       setFormError(err?.message ?? t('quickQuote', 'genericError'));
@@ -207,6 +255,12 @@ export function QuickQuoteScreen() {
           </View>
           <Text style={[styles.resultTitle, { color: colors.red400 }]}>{t('quickQuote', 'noTitle')}</Text>
           <Text style={styles.resultDetail}>{t('quickQuote', 'noDetail')}</Text>
+
+          {result.nextAvailableDate && (
+            <View style={styles.summaryBox}>
+              <SummaryRow label={t('quickQuote', 'nextAvailableLabel')} value={result.nextAvailableDate} />
+            </View>
+          )}
 
           <Button variant="subtle" onPress={resetForm} style={{ marginTop: 22, width: '100%' }}>
             {t('quickQuote', 'tryAgain')}
