@@ -94,7 +94,16 @@ same role/department permission matrix applies).
 2. `POST /api/feasibility` → `POST /api/feasibility/{id}/run`.
 3. `status === "feasible"` → **Yes** → `POST /api/quotations` (unit
    price pulled from the product's master `selling_price`, 0%
-   discount) → shows the quotation number/total.
+   discount) → shows the quotation number/total, with a **Download
+   PDF** button (`GET /api/quotations/{id}/pdf` — the same
+   admin-templated, LibreOffice-rendered PDF as the web app's Print
+   button and the emailed quotation attachment). Downloading is
+   platform-split in `api/client.ts`'s `downloadAndOpenFile`: on
+   web/PWA it's a normal browser "Save As" via a Blob + temporary
+   `<a download>`; on native there's no browser download tray, so it
+   saves to the app's cache dir (`expo-file-system`) and opens the OS
+   share sheet (`expo-sharing`) instead, which covers "save"/"open
+   in..." the same way.
 4. Otherwise → **No** → `POST /api/feasibility/{id}/exception` with
    `approve: true`, which sets `admin_review_required` on that
    feasibility check — the same flag that already drives the admin's

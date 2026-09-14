@@ -67,6 +67,8 @@ const en = {
     generateQuotation: 'Generate Quotation',
     tryAgain: 'Try again',
     feasibleDetail: 'Stock and capacity can cover this request. Generate the quotation to finish.',
+    downloadPdf: 'Download PDF',
+    downloadPdfError: 'Could not download the quotation PDF.',
   },
   clients: {
     title: 'Clients',
@@ -204,6 +206,8 @@ const ar: typeof en = {
     generateQuotation: 'إصدار عرض السعر',
     tryAgain: 'حاول مرة أخرى',
     feasibleDetail: 'المخزون والطاقة الإنتاجية يمكنهما تغطية هذا الطلب. أصدر عرض السعر للإنهاء.',
+    downloadPdf: 'تنزيل PDF',
+    downloadPdfError: 'تعذر تنزيل ملف PDF لعرض السعر.',
   },
   clients: {
     title: 'العملاء',
