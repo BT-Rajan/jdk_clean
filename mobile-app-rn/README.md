@@ -1,9 +1,20 @@
 # JDK Quick Quote — React Native app
 
 A native (Expo) rewrite of the mobile microsite: same sales-user login,
-same Quick Quote (feasibility → auto-quote / admin-notify) flow, plus
-full **Client CRUD** — list, search, create, edit, delete/restore —
-wired to the real `jdk_clean` backend. No mock data anywhere.
+plus the full sales journey wired to the real `jdk_clean` backend — no
+mock data anywhere:
+
+- **Product Catalog** — read-only searchable browse of sellable products.
+- **Clients** — full CRUD (list, search, create, edit, delete/restore).
+- **Quotations** — the full feasibility → quotation journey: a New
+  Quotation always starts with a feasibility check (stock/capacity),
+  either auto-quotes on a pass or notifies admin on a shortfall; the
+  Quotations list/detail screens then cover edit (while still `draft`),
+  status transitions, delete/restore, PDF download, and converting an
+  `accepted` quotation into an order.
+- **Orders** — full CRUD (search, create, edit while `draft`, status
+  transitions, delete/restore, PDF download), plus every order born
+  from a quotation conversion.
 
 Styled to match the web app's design system exactly, not approximated
 from scratch — every token and component below is a direct port:
@@ -68,20 +79,30 @@ src/theme.ts                   colors/fonts/radii ported from index.css
 src/api/client.ts              fetch wrapper: bearer auth, 401→refresh→logout; uploadFile/downloadAndOpenFile/viewFile for binary endpoints
 src/api/auth.ts                POST /api/auth/login, GET /api/auth/me, GET /api/auth/me/history
 src/api/customers.ts           full Customer onboarding (create/edit/delete/restore/activate, credit status, id document, onboarding-status transitions)
-src/api/catalog.ts             products, feasibility, quotations
+src/api/catalog.ts             products (Product Catalog + line-item pickers)
+src/api/feasibility.ts         feasibility checks (create/run/exception/delete/restore) -- step 1 of the quotation journey
+src/api/quotations.ts          quotations (list/get/create/update/status/delete/restore/pdf/material-conflicts/convert-to-order lookup)
+src/api/orders.ts              orders (list/get/create/update/status/delete/restore/pdf/from-quotation)
+src/utils/format.ts            formatCurrency (KWD, 3dp), toIsoDate (local date, not UTC)
 src/context/AuthContext.tsx    session state, persisted via AsyncStorage
 src/i18n/translations.ts       EN/AR string dictionaries (typed -- ar must match en's exact shape)
 src/i18n/LocaleContext.tsx     t(), locale persistence, RTL (see "Bilingual (EN/AR)" below)
 src/components/                Button, TextField, SelectField, Alert, GlassCard, Logo, SplashView, IdDocumentPanel, StatusBadge, StatusTransitionButtons
 src/screens/LoginScreen.tsx           EN/AR toggle lives here
-src/screens/HomeScreen.tsx            product image scroller + feature tile grid (Quick Quote/Clients/Product Catalog wired or mocked "coming soon"; 2 generic placeholder tiles for what's left)
-src/screens/QuickQuoteScreen.tsx      client+product+qty+date → yes/no → quote (+ PDF download) or admin-notify
+src/screens/HomeScreen.tsx            product image scroller + feature tile grid, fixed order: Product Catalog, Clients, Quotations, Orders, then 2 "coming soon" placeholders
+src/screens/ProductCatalogScreen.tsx  read-only searchable product browse
+src/screens/quotations/NewQuotationScreen.tsx     client+lines(product+qty)+date → feasibility check → yes/no → generate quotation (+ PDF) or admin-notify
+src/screens/quotations/QuotationsListScreen.tsx   searchable quotation list, edit/delete row icons (edit only while draft)
+src/screens/quotations/QuotationDetailScreen.tsx  view, inline edit (draft only), status transitions, convert-to-order, delete, PDF download
+src/screens/orders/OrdersListScreen.tsx    searchable order list, "+ new order" icon, edit/delete row icons (edit only while draft)
+src/screens/orders/OrderFormScreen.tsx     create/edit order (multi-line items)
+src/screens/orders/OrderDetailScreen.tsx   view, status transitions, delete, PDF download; edit icon (draft only) opens OrderFormScreen
 src/screens/ClientsListScreen.tsx     searchable client list, edit/disable row icons
 src/screens/ClientFormScreen.tsx      new-client wizard + edit/onboarding-status/id-document/credit-status/delete (see "Wiring" below)
 src/screens/ClientHistoryScreen.tsx   a client's quotation ("order") history
 src/screens/MyHistoryScreen.tsx       the signed-in user's own action history, current calendar month only
-src/navigation/RootNavigator.tsx      auth gate → drawer (Home/Enquiry/Clients/History); `linking` config maps screens to URLs so the phone's back button navigates in-app
-src/navigation/DrawerContent.tsx      custom drawer list (Enquiry, Clients, History) + pinned Logout footer
+src/navigation/RootNavigator.tsx      auth gate → drawer (Home/ProductCatalog/Clients/Quotations/Orders/History); `linking` config maps screens to URLs so the phone's back button navigates in-app
+src/navigation/DrawerContent.tsx      custom drawer list (Product Catalog, Clients, Quotations, Orders, History) + pinned Logout footer
 src/navigation/HeaderTitle.tsx        company logo + name, shown in the drawer's header
 ```
 
@@ -90,13 +111,20 @@ src/navigation/HeaderTitle.tsx        company logo + name, shown in the drawer's
 **Login** — `POST /api/auth/login` (same credentials as the web app;
 same role/department permission matrix applies).
 
-**Quick Quote** (unchanged logic from the HTML version, just native UI):
+**Product Catalog** — read-only: `GET /api/products?search=` (Products
+read access only — no create/edit/delete here, matching this app's
+sales-role permissions).
+
+**Quotations** — the full feasibility → quotation → order journey:
+
+*New Quotation* (`screens/quotations/NewQuotationScreen.tsx`):
 1. `GET /api/customers`, `GET /api/products` to populate the pickers.
-2. `POST /api/feasibility` → `POST /api/feasibility/{id}/run`.
+2. `POST /api/feasibility` (one or more product+quantity lines) →
+   `POST /api/feasibility/{id}/run`.
 3. `status === "feasible"` → **Yes** → `POST /api/quotations` (unit
-   price pulled from the product's master `selling_price`, 0%
-   discount) → shows the quotation number/total, with a **Download
-   PDF** button (`GET /api/quotations/{id}/pdf` — the same
+   price pulled from each product's master `selling_price`, 0%
+   discount) → lands on that quotation's own detail screen, with a
+   **Download PDF** button (`GET /api/quotations/{id}/pdf` — the same
    admin-templated, LibreOffice-rendered PDF as the web app's Print
    button and the emailed quotation attachment). Downloading is
    platform-split in `api/client.ts`'s `downloadAndOpenFile`: on
@@ -110,6 +138,50 @@ same role/department permission matrix applies).
    feasibility check — the same flag that already drives the admin's
    live Notifications feed (`notification_service.get_notifications`).
    Nothing new to build on the notification side.
+5. A 409 on create (this quotation's material needs overlap another
+   still-open quotation/order) shows the conflict and asks to proceed
+   anyway (`material_conflict_acknowledged: true`), same gate as the
+   web app's New Quotation form.
+
+*Quotations list/detail* (`QuotationsListScreen.tsx` /
+`QuotationDetailScreen.tsx`):
+- List: `GET /api/quotations?search=`, edit/delete row icons (edit
+  only shown while `status === "draft"` — `quotation_service.
+  update_quotation` rejects editing anything else).
+- Detail: view lines/totals/notes; while `draft`, an inline edit mode
+  (`PUT /api/quotations/{id}`) covers lines (add/remove/product/qty/
+  price/discount), overall discount, and notes, with the same 409
+  material-conflict handling as create. Status transitions (`POST
+  /api/quotations/{id}/status`) follow `QUOTATION_TRANSITIONS`, mirrored
+  from `backend/app/models/quotation.py`'s `ALLOWED_TRANSITIONS`
+  (`draft→sent/rejected`, `sent→accepted/rejected/expired`) — `rejected`
+  requires a reason. Once `accepted`, a **Convert to Order** button
+  (`POST /api/orders/from-quotation/{id}`) creates the order and jumps
+  straight to its detail screen in the Orders stack. Delete is
+  `DELETE /api/quotations/{id}` (soft delete; `restoreQuotation` exists
+  in `api/quotations.ts` for a future "undo" view).
+
+**Orders** — full CRUD plus everything born from a quotation conversion:
+
+*Orders list* (`OrdersListScreen.tsx`) — `GET /api/orders?search=`, a
+**+ new order** icon (`plus-circle`) opens `OrderFormScreen` for a
+standalone order (not every order needs a quotation first), and
+edit/delete row icons (edit only while `status === "draft"`).
+
+*Order form* (`OrderFormScreen.tsx`, shared create/edit) — customer,
+order date, requested delivery date, notes, overall discount, and
+multi-line items (add/remove, product/qty/price/discount per line) →
+`POST /api/orders` or, editing, `PUT /api/orders/{id}` (only `draft`
+orders are editable — `order_service.update_order`).
+
+*Order detail* (`OrderDetailScreen.tsx`) — view lines/totals/notes/
+child (split) orders; status transitions (`POST /api/orders/{id}/
+status`) follow `ORDER_TRANSITIONS`, mirrored from `backend/app/models/
+order.py`'s `ALLOWED_TRANSITIONS` — `cancelled` requires a reason. Edit
+icon (draft only) opens `OrderFormScreen`; delete is `DELETE
+/api/orders/{id}` (soft delete; `restoreOrder` exists for a future
+"undo" view); PDF download is the same admin-templated render as
+quotations, via `GET /api/orders/{id}/pdf`.
 
 **Clients** — full CRUD against `/api/customers`, matching the web app's
 customer onboarding feature-for-feature (`ClientFormScreen.tsx` plays
@@ -169,8 +241,8 @@ actor's trail across every record they've touched.
 
 ## Progressive Web App (mobile Chrome)
 
-This app also runs as an installable PWA — same login/Quick Quote/Clients
-code, no separate build, served over the web and installable from
+This app also runs as an installable PWA — same login/Quotations/Orders/
+Clients code, no separate build, served over the web and installable from
 Chrome's "Add to Home screen" / install prompt on Android and desktop
 (iOS Safari/Chrome use the manual "Add to Home Screen" share-sheet
 action instead, since iOS doesn't support the install prompt API).
@@ -242,9 +314,11 @@ layout included, and persists the choice (`AsyncStorage`, key
 `qq_locale`).
 
 - `src/i18n/translations.ts` — flat, typed EN/AR dictionaries grouped
-  by screen (`login`, `home`, `quickQuote`, `clients`, ...). `ar` is
-  typed as `typeof en`, so a missing/extra key in either is a **build
-  error**, not a silently-blank string at runtime.
+  by screen (`login`, `home`, `newQuotation`, `quotationsList`,
+  `quotationDetail`, `ordersList`, `orderForm`, `orderDetail`,
+  `productCatalog`, `clients`, ...). `ar` is typed as `typeof en`, so a
+  missing/extra key in either is a **build error**, not a
+  silently-blank string at runtime.
 - `src/i18n/LocaleContext.tsx` — `useLocale()` gives you `{ locale, t,
   setLocale, isRTL }`. `t('section', 'key', { param: value })` looks up
   the string and does `{{param}}` interpolation.
@@ -303,13 +377,26 @@ npx expo start        # then press i / a / w, or scan the QR code in Expo Go
 
 ## Permissions
 
-Same as the HTML microsite: a sales user needs their existing
-Feasibilities (read+write) and Quotations (read+write) access, plus
-Customers (read+write, for the new CRUD screens) and Products (read).
-No new roles or accounts.
+A sales user needs: Feasibilities (read+write), Quotations
+(read+write), **Orders (read+write — needed for the Orders screens and
+quotation-to-order conversion)**, Customers (read+write, for the
+Clients CRUD screens), and Products (read, for the catalog and line-item
+pickers). Same role/department permission matrix as the web app —
+no new roles or accounts.
 
 ## Known simplifications (flagged for follow-up, not hidden)
 
 - **Client delete** uses RN's built-in `Alert.alert` confirm dialog
   (system-styled, not themed) rather than a themed in-app modal — kept
-  it simple since it's a native confirm dialog, not a full screen.
+  it simple since it's a native confirm dialog, not a full screen. The
+  same applies to the delete confirmations on Quotations/Orders.
+- **New Quotation / Order forms** don't let Sales pick a document
+  language (en/ar) or override `quotation_date`'s auto-derived
+  `valid_until` — both are server-derived and not exposed as editable
+  fields here, matching the fields the mobile UI actually needs day to
+  day; the web app's fuller forms remain the place for anything beyond
+  that.
+- **Order splitting** (`POST /api/orders/{id}/split`, for a
+  `ready_to_ship` order stock can't fully cover) isn't wired up here —
+  `OrderDetailScreen` shows any existing child orders (read-only) but
+  there's no UI to create a split from mobile yet.

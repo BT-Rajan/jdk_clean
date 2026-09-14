@@ -6,7 +6,7 @@ import { Alert } from '../components/Alert';
 import { GlassCard } from '../components/GlassCard';
 import { colors, fonts, whiteAlpha } from '../theme';
 import { useLocale } from '../i18n/LocaleContext';
-import { listQuotationsForCustomer, QuotationSummary } from '../api/catalog';
+import { listQuotationsForCustomer, QuotationSummary } from '../api/quotations';
 import { ClientsStackParamList } from '../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<ClientsStackParamList, 'ClientHistory'>;

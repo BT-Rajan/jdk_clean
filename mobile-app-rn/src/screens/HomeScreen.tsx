@@ -8,19 +8,19 @@ import { colors, fonts, glass, radii, whiteAlpha } from '../theme';
 interface Tile {
   key: string;
   icon: keyof typeof Feather.glyphMap;
-  labelKey: 'quickQuote' | 'clients' | 'poUpload' | 'productCatalog' | 'comingSoon';
+  labelKey: 'productCatalog' | 'clients' | 'quotations' | 'orders' | 'comingSoon';
   route?: string; // real, wired destination -- omitted for not-yet-built tiles
 }
 
+// Fixed order: Product catalog, Clients, Quotations, Orders, then two
+// not-yet-built placeholders.
 const TILES: Tile[] = [
-  { key: 'quickQuote', icon: 'file-text', labelKey: 'quickQuote', route: 'Enquiry' },
+  { key: 'productCatalog', icon: 'box', labelKey: 'productCatalog', route: 'ProductCatalog' },
   { key: 'clients', icon: 'users', labelKey: 'clients', route: 'Clients' },
-  { key: 'poUpload', icon: 'upload', labelKey: 'poUpload' },
-  // Product Catalog took over Send Notification's old spot when that
-  // tile was removed.
-  { key: 'productCatalog', icon: 'box', labelKey: 'productCatalog' },
-  { key: 'comingSoon2', icon: 'grid', labelKey: 'comingSoon' },
-  { key: 'comingSoon', icon: 'clock', labelKey: 'comingSoon' },
+  { key: 'quotations', icon: 'file-text', labelKey: 'quotations', route: 'Quotations' },
+  { key: 'orders', icon: 'package', labelKey: 'orders', route: 'Orders' },
+  { key: 'comingSoon1', icon: 'grid', labelKey: 'comingSoon' },
+  { key: 'comingSoon2', icon: 'clock', labelKey: 'comingSoon' },
 ];
 
 // Rows of 2 -- each row gets flex: 1 so the whole grid stretches to fill

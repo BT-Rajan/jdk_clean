@@ -7,9 +7,18 @@ import { useAuth } from '../context/AuthContext';
 import { useLocale } from '../i18n/LocaleContext';
 import { colors, fonts, whiteAlpha } from '../theme';
 
-const ITEMS: { route: string; icon: keyof typeof Feather.glyphMap; labelKey: 'enquiry' | 'clients' | 'history' }[] = [
-  { route: 'Enquiry', icon: 'file-text', labelKey: 'enquiry' },
+// Order mirrors the home screen's own icon grid: Product catalog,
+// Clients, Quotations, Orders -- History is drawer-only (not one of
+// the home tiles).
+const ITEMS: {
+  route: string;
+  icon: keyof typeof Feather.glyphMap;
+  labelKey: 'productCatalog' | 'clients' | 'quotations' | 'orders' | 'history';
+}[] = [
+  { route: 'ProductCatalog', icon: 'box', labelKey: 'productCatalog' },
   { route: 'Clients', icon: 'users', labelKey: 'clients' },
+  { route: 'Quotations', icon: 'file-text', labelKey: 'quotations' },
+  { route: 'Orders', icon: 'package', labelKey: 'orders' },
   { route: 'History', icon: 'clock', labelKey: 'history' },
 ];
 

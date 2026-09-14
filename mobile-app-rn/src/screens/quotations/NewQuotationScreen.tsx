@@ -1,62 +1,64 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Alert } from '../components/Alert';
-import { Button } from '../components/Button';
-import { DateField } from '../components/DateField';
-import { GlassCard } from '../components/GlassCard';
-import { SelectField, SelectOption } from '../components/SelectField';
-import { TextField } from '../components/TextField';
-import { colors, fonts, whiteAlpha } from '../theme';
-import { ApiError } from '../api/client';
-import { useLocale } from '../i18n/LocaleContext';
-import { listCustomers, Customer } from '../api/customers';
-import { confirm } from '../utils/alerts';
-import {
-  listProducts,
-  Product,
-  createFeasibility,
-  runFeasibility,
-  requestFeasibilityException,
-  createQuotation,
-  getQuotationForFeasibility,
-  downloadQuotationPdf,
-} from '../api/catalog';
+import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Feather from '@expo/vector-icons/Feather';
+import { Alert } from '../../components/Alert';
+import { Button } from '../../components/Button';
+import { DateField } from '../../components/DateField';
+import { GlassCard } from '../../components/GlassCard';
+import { SelectField, SelectOption } from '../../components/SelectField';
+import { TextField } from '../../components/TextField';
+import { colors, fonts, whiteAlpha } from '../../theme';
+import { ApiError } from '../../api/client';
+import { useLocale } from '../../i18n/LocaleContext';
+import { listCustomers, Customer } from '../../api/customers';
+import { confirm } from '../../utils/alerts';
+import { toIsoDate } from '../../utils/format';
+import { listProducts, Product } from '../../api/catalog';
+import { createFeasibility, runFeasibilityCheck, requestFeasibilityException } from '../../api/feasibility';
+import { createQuotation, downloadQuotationPdf, getQuotationForFeasibility } from '../../api/quotations';
+import { QuotationsStackParamList } from '../../navigation/RootNavigator';
+
+type Props = NativeStackScreenProps<QuotationsStackParamList, 'NewQuotation'>;
+
+interface LineDraft {
+  key: string;
+  productId: string | null;
+  quantity: string;
+}
+
+interface PendingLine {
+  productId: number;
+  quantity: number;
+  unitPrice: number;
+}
 
 // 'feasible_pending' -- the check passed but nothing has been quoted
-// yet; the green "Generate Quotation" button is the explicit action
-// that actually creates it (previously this happened automatically the
-// instant the check passed, with no confirmation step at all).
+// yet; the "Generate Quotation" button is the explicit action that
+// actually creates it.
 type ResultState =
-  | { kind: 'feasible_pending'; feasibilityId: number; customerId: number; productId: number; quantity: number; unitPrice: number }
+  | { kind: 'feasible_pending'; feasibilityId: number; customerId: number; lines: PendingLine[] }
   | { kind: 'feasible'; quotationId: number; quotationNumber: string; total: number; validUntil: string }
-  // nextAvailableDate: the latest (slowest) per-line estimated_ready_date
-  // the backend projected -- production can't start before every line's
-  // material/capacity is ready, so the slowest one is what actually
-  // applies to the whole request. Absent when the backend couldn't
-  // reliably project a date at all (see FeasibilityLineOut).
+  // nextAvailableDate: the slowest per-line estimated_ready_date the
+  // backend projected -- production can't start before every line's
+  // material/capacity is ready.
   | { kind: 'not_feasible'; nextAvailableDate?: string }
   | null;
 
-// Deliberately not date.toISOString().slice(0,10) -- that converts to
-// UTC first, which can silently roll the date back a day for anyone
-// west of UTC in the evening. Building the string from local
-// getFullYear/Month/Date keeps it the date the user actually picked.
-function toIsoDate(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+let keySeq = 0;
+function newLine(): LineDraft {
+  keySeq += 1;
+  return { key: `l${keySeq}`, productId: null, quantity: '' };
 }
 
-export function QuickQuoteScreen() {
+export function NewQuotationScreen({ navigation }: Props) {
   const { t } = useLocale();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const [customerId, setCustomerId] = useState<string | null>(null);
-  const [productId, setProductId] = useState<string | null>(null);
-  const [quantity, setQuantity] = useState('');
+  const [lines, setLines] = useState<LineDraft[]>([newLine()]);
   const [date, setDate] = useState<Date | null>(null);
 
   const [formError, setFormError] = useState<string | null>(null);
@@ -73,7 +75,7 @@ export function QuickQuoteScreen() {
         setCustomers(c.items);
         setProducts(p.items);
       } catch (err: any) {
-        setLoadError(err?.message ?? t('quickQuote', 'genericError'));
+        setLoadError(err?.message ?? t('newQuotation', 'genericError'));
       }
     })();
   }, []);
@@ -87,51 +89,60 @@ export function QuickQuoteScreen() {
   function resetForm() {
     setResult(null);
     setCustomerId(null);
-    setProductId(null);
-    setQuantity('');
+    setLines([newLine()]);
     setDate(null);
     setFormError(null);
+  }
+
+  function updateLine(key: string, patch: Partial<LineDraft>) {
+    setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
+  }
+
+  function addLine() {
+    setLines((prev) => [...prev, newLine()]);
+  }
+
+  function removeLine(key: string) {
+    setLines((prev) => (prev.length > 1 ? prev.filter((l) => l.key !== key) : prev));
   }
 
   // Step 1 -- the feasibility check itself. On a pass this only reveals
   // the "Generate Quotation" button; it doesn't create anything yet.
   async function handleCheck() {
     setFormError(null);
-    const qty = parseFloat(quantity);
 
-    if (!customerId) return setFormError(t('quickQuote', 'selectClientError'));
-    if (!productId) return setFormError(t('quickQuote', 'selectProductError'));
-    if (!qty || qty <= 0) return setFormError(t('quickQuote', 'invalidQuantityError'));
-    if (!date) return setFormError(t('quickQuote', 'selectDateError'));
+    if (!customerId) return setFormError(t('newQuotation', 'selectClientError'));
+    if (!date) return setFormError(t('newQuotation', 'selectDateError'));
+
+    const parsedLines: { productId: number; quantity: number }[] = [];
+    for (const line of lines) {
+      if (!line.productId) return setFormError(t('newQuotation', 'selectProductError'));
+      const qty = parseFloat(line.quantity);
+      if (!qty || qty <= 0) return setFormError(t('newQuotation', 'invalidQuantityError'));
+      parsedLines.push({ productId: Number(line.productId), quantity: qty });
+    }
 
     setIsChecking(true);
     try {
-      setStatusLine(t('quickQuote', 'runningCheck'));
+      setStatusLine(t('newQuotation', 'runningCheck'));
       const created = await createFeasibility({
         customer_id: Number(customerId),
         required_by_date: toIsoDate(date),
-        lines: [{ product_id: Number(productId), quantity: qty }],
+        lines: parsedLines.map((l) => ({ product_id: l.productId, quantity: l.quantity })),
       });
-      const checked = await runFeasibility(created.id);
+      const checked = await runFeasibilityCheck(created.id);
 
       if (checked.status === 'feasible') {
-        const product = products.find((p) => String(p.id) === productId);
-        setResult({
-          kind: 'feasible_pending',
-          feasibilityId: created.id,
-          customerId: Number(customerId),
-          productId: Number(productId),
-          quantity: qty,
-          unitPrice: product?.selling_price ?? 0,
+        const pendingLines: PendingLine[] = parsedLines.map((l) => {
+          const product = products.find((p) => p.id === l.productId);
+          return { productId: l.productId, quantity: l.quantity, unitPrice: product?.selling_price ?? 0 };
         });
+        setResult({ kind: 'feasible_pending', feasibilityId: created.id, customerId: Number(customerId), lines: pendingLines });
       } else if (checked.status === 'converted') {
         // Backend-side "auto-create quotation on feasible" is on for
-        // this org (Settings -> Sales; see
-        // feasibility_service._maybe_auto_create_quotation) -- run_check
-        // itself already created the quotation before this response
-        // came back, so there's nothing left to press. Fetch what it
-        // made and go straight to the success screen.
-        setStatusLine(t('quickQuote', 'generatingQuote'));
+        // this org (Settings -> Sales) -- run_check itself already
+        // created the quotation before this response came back.
+        setStatusLine(t('newQuotation', 'generatingQuote'));
         const quotation = await getQuotationForFeasibility(created.id);
         if (quotation) {
           setResult({
@@ -139,22 +150,17 @@ export function QuickQuoteScreen() {
             quotationId: quotation.id,
             quotationNumber: quotation.quotation_number,
             total: quotation.total_amount,
-            validUntil: quotation.valid_until,
+            validUntil: quotation.valid_until ?? '',
           });
         } else {
-          // Shouldn't happen -- 'converted' implies a quotation exists --
-          // but don't leave the user stuck on a silent failure if it does.
-          setFormError(t('quickQuote', 'genericError'));
+          setFormError(t('newQuotation', 'genericError'));
         }
       } else if (checked.status === 'exception_pending') {
-        setStatusLine(t('quickQuote', 'notifyingAdmin'));
+        setStatusLine(t('newQuotation', 'notifyingAdmin'));
         await requestFeasibilityException(
           created.id,
-          'Requested via mobile Quick Quote — raw material/capacity shortfall on initial check.',
+          'Requested via mobile Quotations — raw material/capacity shortfall on initial check.',
         );
-        // The slowest projected date across every line -- the whole
-        // request can't be ready before all of its lines are, so a
-        // single earlier line's date would understate it.
         const nextAvailableDate = checked.lines
           .map((line) => line.estimated_ready_date)
           .filter((d): d is string => Boolean(d))
@@ -162,14 +168,10 @@ export function QuickQuoteScreen() {
           .pop();
         setResult({ kind: 'not_feasible', nextAvailableDate });
       } else {
-        // Any other status is unexpected for a feasibility this handler
-        // just created and ran itself -- surface it plainly rather than
-        // guessing at an action (e.g. blindly requesting an exception
-        // that isn't valid for this status).
-        setFormError(t('quickQuote', 'unexpectedStatusError', { status: checked.status }));
+        setFormError(t('newQuotation', 'unexpectedStatusError', { status: checked.status }));
       }
     } catch (err: any) {
-      setFormError(err?.message ?? t('quickQuote', 'genericError'));
+      setFormError(err?.message ?? t('newQuotation', 'genericError'));
     } finally {
       setIsChecking(false);
       setStatusLine('');
@@ -185,7 +187,12 @@ export function QuickQuoteScreen() {
         customer_id: pending.customerId,
         feasibility_id: pending.feasibilityId,
         quotation_date: toIsoDate(new Date()),
-        lines: [{ product_id: pending.productId, quantity: pending.quantity, unit_price: pending.unitPrice, discount_percent: 0 }],
+        lines: pending.lines.map((l) => ({
+          product_id: l.productId,
+          quantity: l.quantity,
+          unit_price: l.unitPrice,
+          discount_percent: 0,
+        })),
       };
 
       let quotation;
@@ -193,16 +200,13 @@ export function QuickQuoteScreen() {
         quotation = await createQuotation(quotationPayload);
       } catch (err) {
         // 409 here specifically means this quotation's material needs
-        // overlap another still-open quotation/order -- the backend
-        // requires an explicit acknowledgment to proceed anyway (see
-        // quotation_service.check_material_conflicts). Any other error
-        // just rethrows to the outer catch below as normal.
+        // overlap another still-open quotation/order -- an explicit
+        // acknowledgment is required to proceed anyway.
         if (err instanceof ApiError && err.status === 409) {
-          const conflictMessage = err.message;
           const proceed = await confirm(
-            t('quickQuote', 'materialConflictTitle'),
-            conflictMessage,
-            t('quickQuote', 'proceedAnyway'),
+            t('newQuotation', 'materialConflictTitle'),
+            err.message,
+            t('newQuotation', 'proceedAnyway'),
             t('common', 'cancel'),
           );
           if (!proceed) return;
@@ -217,10 +221,10 @@ export function QuickQuoteScreen() {
         quotationId: quotation.id,
         quotationNumber: quotation.quotation_number,
         total: quotation.total_amount,
-        validUntil: quotation.valid_until,
+        validUntil: quotation.valid_until ?? '',
       });
     } catch (err: any) {
-      setFormError(err?.message ?? t('quickQuote', 'genericError'));
+      setFormError(err?.message ?? t('newQuotation', 'genericError'));
     } finally {
       setIsGenerating(false);
     }
@@ -232,7 +236,7 @@ export function QuickQuoteScreen() {
     try {
       await downloadQuotationPdf(quotationId, quotationNumber);
     } catch (err: any) {
-      setFormError(err?.message ?? t('quickQuote', 'downloadPdfError'));
+      setFormError(err?.message ?? t('newQuotation', 'downloadPdfError'));
     } finally {
       setIsDownloadingPdf(false);
     }
@@ -245,8 +249,8 @@ export function QuickQuoteScreen() {
           <View style={[styles.resultIcon, styles.iconYes]}>
             <Text style={[styles.resultIconText, { color: colors.emerald400 }]}>✓</Text>
           </View>
-          <Text style={[styles.resultTitle, { color: colors.emerald400 }]}>{t('quickQuote', 'yesTitle')}</Text>
-          <Text style={styles.resultDetail}>{t('quickQuote', 'feasibleDetail')}</Text>
+          <Text style={[styles.resultTitle, { color: colors.emerald400 }]}>{t('newQuotation', 'yesTitle')}</Text>
+          <Text style={styles.resultDetail}>{t('newQuotation', 'feasibleDetail')}</Text>
 
           <Alert variant="error">{formError}</Alert>
 
@@ -256,7 +260,7 @@ export function QuickQuoteScreen() {
             isLoading={isGenerating}
             style={{ marginTop: 22, width: '100%' }}
           >
-            {t('quickQuote', 'generateQuotation')}
+            {t('newQuotation', 'generateQuotation')}
           </Button>
         </GlassCard>
       </ScrollView>
@@ -270,17 +274,17 @@ export function QuickQuoteScreen() {
           <View style={[styles.resultIcon, styles.iconNo]}>
             <Text style={[styles.resultIconText, { color: colors.red400 }]}>✕</Text>
           </View>
-          <Text style={[styles.resultTitle, { color: colors.red400 }]}>{t('quickQuote', 'noTitle')}</Text>
-          <Text style={styles.resultDetail}>{t('quickQuote', 'noDetail')}</Text>
+          <Text style={[styles.resultTitle, { color: colors.red400 }]}>{t('newQuotation', 'noTitle')}</Text>
+          <Text style={styles.resultDetail}>{t('newQuotation', 'noDetail')}</Text>
 
           {result.nextAvailableDate && (
             <View style={styles.summaryBox}>
-              <SummaryRow label={t('quickQuote', 'nextAvailableLabel')} value={result.nextAvailableDate} />
+              <SummaryRow label={t('newQuotation', 'nextAvailableLabel')} value={result.nextAvailableDate} />
             </View>
           )}
 
           <Button variant="subtle" onPress={resetForm} style={{ marginTop: 22, width: '100%' }}>
-            {t('quickQuote', 'tryAgain')}
+            {t('newQuotation', 'tryAgain')}
           </Button>
         </GlassCard>
       </ScrollView>
@@ -294,26 +298,33 @@ export function QuickQuoteScreen() {
           <View style={[styles.resultIcon, styles.iconYes]}>
             <Text style={[styles.resultIconText, { color: colors.emerald400 }]}>✓</Text>
           </View>
-          <Text style={[styles.resultTitle, { color: colors.emerald400 }]}>{t('quickQuote', 'yesTitle')}</Text>
-          <Text style={styles.resultDetail}>{t('quickQuote', 'yesDetail')}</Text>
+          <Text style={[styles.resultTitle, { color: colors.emerald400 }]}>{t('newQuotation', 'yesTitle')}</Text>
+          <Text style={styles.resultDetail}>{t('newQuotation', 'yesDetail')}</Text>
 
           <Alert variant="error">{formError}</Alert>
 
           <View style={styles.summaryBox}>
-            <SummaryRow label={t('quickQuote', 'quotationNumberLabel')} value={result.quotationNumber} />
-            <SummaryRow label={t('quickQuote', 'totalLabel')} value={result.total.toFixed(2)} />
-            <SummaryRow label={t('quickQuote', 'validUntilLabel')} value={result.validUntil} />
+            <SummaryRow label={t('newQuotation', 'quotationNumberLabel')} value={result.quotationNumber} />
+            <SummaryRow label={t('newQuotation', 'totalLabel')} value={result.total.toFixed(3)} />
+            <SummaryRow label={t('newQuotation', 'validUntilLabel')} value={result.validUntil} />
           </View>
 
           <Button
-            onPress={() => handleDownloadPdf(result.quotationId, result.quotationNumber)}
-            isLoading={isDownloadingPdf}
+            onPress={() => navigation.replace('QuotationDetail', { quotationId: result.quotationId })}
             style={{ marginTop: 22, width: '100%' }}
           >
-            {t('quickQuote', 'downloadPdf')}
+            {t('newQuotation', 'viewQuotation')}
+          </Button>
+          <Button
+            variant="ghost"
+            onPress={() => handleDownloadPdf(result.quotationId, result.quotationNumber)}
+            isLoading={isDownloadingPdf}
+            style={{ marginTop: 10, width: '100%' }}
+          >
+            {t('newQuotation', 'downloadPdf')}
           </Button>
           <Button variant="ghost" size="sm" onPress={resetForm} style={{ marginTop: 10, width: '100%' }}>
-            {t('quickQuote', 'startAnother')}
+            {t('newQuotation', 'startAnother')}
           </Button>
         </GlassCard>
       </ScrollView>
@@ -327,37 +338,56 @@ export function QuickQuoteScreen() {
 
         <View style={{ gap: 18 }}>
           <SelectField
-            label={t('quickQuote', 'clientLabel')}
+            label={t('newQuotation', 'clientLabel')}
             value={customerId}
             onChange={setCustomerId}
             options={customerOptions}
-            placeholder={customers.length ? t('quickQuote', 'clientPlaceholderLoaded') : t('quickQuote', 'clientPlaceholderLoading')}
+            placeholder={customers.length ? t('newQuotation', 'clientPlaceholderLoaded') : t('newQuotation', 'clientPlaceholderLoading')}
           />
-          <SelectField
-            label={t('quickQuote', 'productLabel')}
-            value={productId}
-            onChange={setProductId}
-            options={productOptions}
-            placeholder={products.length ? t('quickQuote', 'productPlaceholderLoaded') : t('quickQuote', 'productPlaceholderLoading')}
-          />
-          <TextField
-            label={t('quickQuote', 'quantityLabel')}
-            keyboardType="decimal-pad"
-            value={quantity}
-            onChangeText={setQuantity}
-            placeholder={t('quickQuote', 'quantityPlaceholder')}
-          />
+
+          <View style={{ gap: 14 }}>
+            {lines.map((line, index) => (
+              <View key={line.key} style={styles.lineRow}>
+                <View style={{ flex: 1, gap: 10 }}>
+                  <SelectField
+                    label={`${t('newQuotation', 'productLabel')} ${index + 1}`}
+                    value={line.productId}
+                    onChange={(v) => updateLine(line.key, { productId: v })}
+                    options={productOptions}
+                    placeholder={products.length ? t('newQuotation', 'productPlaceholderLoaded') : t('newQuotation', 'productPlaceholderLoading')}
+                  />
+                  <TextField
+                    label={t('newQuotation', 'quantityLabel')}
+                    keyboardType="decimal-pad"
+                    value={line.quantity}
+                    onChangeText={(v) => updateLine(line.key, { quantity: v })}
+                    placeholder={t('newQuotation', 'quantityPlaceholder')}
+                  />
+                </View>
+                {lines.length > 1 && (
+                  <Pressable onPress={() => removeLine(line.key)} hitSlop={10} style={styles.removeLineBtn}>
+                    <Feather name="trash-2" size={16} color={colors.red400} />
+                  </Pressable>
+                )}
+              </View>
+            ))}
+            <Pressable onPress={addLine} style={styles.addLineBtn}>
+              <Feather name="plus" size={14} color={colors.gold300} />
+              <Text style={styles.addLineText}>{t('newQuotation', 'addLine')}</Text>
+            </Pressable>
+          </View>
+
           <DateField
-            label={t('quickQuote', 'dateLabel')}
+            label={t('newQuotation', 'dateLabel')}
             value={date}
             onChange={setDate}
             minimumDate={new Date()}
-            hint={t('quickQuote', 'dateHint')}
+            hint={t('newQuotation', 'dateHint')}
           />
         </View>
 
         <Button onPress={handleCheck} isLoading={isChecking} style={styles.checkBtn}>
-          {t('quickQuote', 'checkButton')}
+          {t('newQuotation', 'checkButton')}
         </Button>
         {statusLine ? <Text style={styles.statusLine}>{statusLine}</Text> : null}
       </GlassCard>
@@ -385,6 +415,11 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: whiteAlpha(0.5),
   },
+
+  lineRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  removeLineBtn: { padding: 10, marginBottom: 2 },
+  addLineBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', paddingVertical: 4 },
+  addLineText: { fontFamily: fonts.sansMedium, fontSize: 13, color: colors.gold300 },
 
   resultCard: { padding: 30, alignItems: 'center' },
   resultIcon: {
