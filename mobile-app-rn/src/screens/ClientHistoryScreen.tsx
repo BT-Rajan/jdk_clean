@@ -5,6 +5,7 @@ import { FlatList, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../components/Alert';
 import { GlassCard } from '../components/GlassCard';
 import { colors, fonts, whiteAlpha } from '../theme';
+import { useLocale } from '../i18n/LocaleContext';
 import { listQuotationsForCustomer, QuotationSummary } from '../api/catalog';
 import { ClientsStackParamList } from '../navigation/RootNavigator';
 
@@ -24,7 +25,14 @@ const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
 };
 const DEFAULT_STATUS_STYLE = { bg: 'rgba(255,255,255,0.08)', text: whiteAlpha(0.6) };
 
+// Mirrors backend/app/models/quotation.py's QUOTATION_STATUSES.
+const KNOWN_STATUSES = ['draft', 'sent', 'accepted', 'rejected', 'expired', 'converted'] as const;
+function isKnownStatus(status: string): status is (typeof KNOWN_STATUSES)[number] {
+  return (KNOWN_STATUSES as readonly string[]).includes(status);
+}
+
 export function ClientHistoryScreen({ route, navigation }: Props) {
+  const { t } = useLocale();
   const { customerId, customerName } = route.params;
 
   const [quotations, setQuotations] = useState<QuotationSummary[]>([]);
@@ -38,7 +46,7 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
       const res = await listQuotationsForCustomer(customerId);
       setQuotations(res.items);
     } catch (err: any) {
-      setError(err?.message ?? 'Could not load this client’s history.');
+      setError(err?.message ?? t('clientHistory', 'loadError'));
     } finally {
       setLoading(false);
     }
@@ -46,7 +54,7 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
 
   useFocusEffect(
     useCallback(() => {
-      navigation.setOptions({ title: customerName || 'Order history' });
+      navigation.setOptions({ title: customerName || t('clientHistory', 'title') });
       load();
     }, [load, navigation, customerName]),
   );
@@ -54,7 +62,7 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
   return (
     <View style={styles.screen}>
       <Text style={styles.headerTitle}>{customerName}</Text>
-      <Text style={styles.headerSubtitle}>Quotation history</Text>
+      <Text style={styles.headerSubtitle}>{t('clientHistory', 'subtitle')}</Text>
 
       <Alert variant="error">{error}</Alert>
 
@@ -63,10 +71,11 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ paddingTop: 8, paddingBottom: 24 }}
         ListEmptyComponent={
-          !loading ? <Text style={styles.emptyText}>No quotations for this client yet.</Text> : null
+          !loading ? <Text style={styles.emptyText}>{t('clientHistory', 'emptyText')}</Text> : null
         }
         renderItem={({ item }) => {
           const statusStyle = STATUS_STYLES[item.status] ?? DEFAULT_STATUS_STYLE;
+          const statusLabel = isKnownStatus(item.status) ? t('quotationStatus', item.status) : item.status;
           return (
             <GlassCard style={styles.row}>
               <View style={{ flex: 1 }}>
@@ -76,7 +85,7 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
               <View style={{ alignItems: 'flex-end', gap: 6 }}>
                 <Text style={styles.rowTotal}>{formatCurrency(item.total_amount)}</Text>
                 <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-                  <Text style={[styles.statusText, { color: statusStyle.text }]}>{item.status}</Text>
+                  <Text style={[styles.statusText, { color: statusStyle.text }]}>{statusLabel}</Text>
                 </View>
               </View>
             </GlassCard>

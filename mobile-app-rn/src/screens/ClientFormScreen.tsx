@@ -7,6 +7,7 @@ import { GlassCard } from '../components/GlassCard';
 import { SelectField } from '../components/SelectField';
 import { TextField } from '../components/TextField';
 import { colors, fonts, whiteAlpha } from '../theme';
+import { useLocale } from '../i18n/LocaleContext';
 import {
   Customer,
   createCustomer,
@@ -55,6 +56,7 @@ const emptyForm: FormState = {
 };
 
 export function ClientFormScreen({ route, navigation }: Props) {
+  const { t } = useLocale();
   const customerId = route.params?.customerId;
   const isEditing = Boolean(customerId);
 
@@ -66,14 +68,14 @@ export function ClientFormScreen({ route, navigation }: Props) {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    navigation.setOptions({ title: isEditing ? 'Edit client' : 'New client' });
+    navigation.setOptions({ title: isEditing ? t('clientForm', 'editTitle') : t('clientForm', 'newTitle') });
     if (!customerId) return;
     (async () => {
       try {
         const c = await getCustomer(customerId);
         setForm(customerToForm(c));
       } catch (err: any) {
-        setError(err?.message ?? 'Could not load this client.');
+        setError(err?.message ?? t('clientForm', 'loadError'));
       } finally {
         setLoading(false);
       }
@@ -86,12 +88,12 @@ export function ClientFormScreen({ route, navigation }: Props) {
 
   function validate(): boolean {
     const errs: Record<string, string> = {};
-    if (!isEditing && !form.name.trim()) errs.name = 'Name is required.';
-    if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) errs.email = 'Enter a valid email.';
+    if (!isEditing && !form.name.trim()) errs.name = t('clientForm', 'nameRequiredError');
+    if (form.email && !/^\S+@\S+\.\S+$/.test(form.email)) errs.email = t('clientForm', 'emailInvalidError');
     const credit = Number(form.credit_limit);
-    if (form.credit_limit && (Number.isNaN(credit) || credit < 0)) errs.credit_limit = 'Must be 0 or more.';
+    if (form.credit_limit && (Number.isNaN(credit) || credit < 0)) errs.credit_limit = t('clientForm', 'creditLimitError');
     const terms = Number(form.payment_terms_days);
-    if (form.payment_terms_days && (Number.isNaN(terms) || terms < 0)) errs.payment_terms_days = 'Must be 0 or more.';
+    if (form.payment_terms_days && (Number.isNaN(terms) || terms < 0)) errs.payment_terms_days = t('clientForm', 'paymentTermsError');
     setFieldErrors(errs);
     return Object.keys(errs).length === 0;
   }
@@ -110,7 +112,7 @@ export function ClientFormScreen({ route, navigation }: Props) {
       }
       navigation.goBack();
     } catch (err: any) {
-      setError(err?.message ?? 'Could not save this client.');
+      setError(err?.message ?? t('clientForm', 'saveError'));
     } finally {
       setSaving(false);
     }
@@ -118,10 +120,10 @@ export function ClientFormScreen({ route, navigation }: Props) {
 
   function handleDelete() {
     if (!customerId) return;
-    RNAlert.alert('Delete client', `Remove ${form.name}? This can be restored later if needed.`, [
-      { text: 'Cancel', style: 'cancel' },
+    RNAlert.alert(t('clientForm', 'deleteConfirmTitle'), t('clientForm', 'deleteConfirmMessage', { name: form.name }), [
+      { text: t('common', 'cancel'), style: 'cancel' },
       {
-        text: 'Delete',
+        text: t('clientForm', 'deleteClient'),
         style: 'destructive',
         onPress: async () => {
           setDeleting(true);
@@ -129,7 +131,7 @@ export function ClientFormScreen({ route, navigation }: Props) {
             await deleteCustomer(customerId);
             navigation.goBack();
           } catch (err: any) {
-            setError(err?.message ?? 'Could not delete this client.');
+            setError(err?.message ?? t('clientForm', 'deleteError'));
           } finally {
             setDeleting(false);
           }
@@ -141,7 +143,7 @@ export function ClientFormScreen({ route, navigation }: Props) {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <Text style={styles.loadingText}>Loading…</Text>
+        <Text style={styles.loadingText}>{t('common', 'loading')}</Text>
       </View>
     );
   }
@@ -153,36 +155,36 @@ export function ClientFormScreen({ route, navigation }: Props) {
 
         <View style={{ gap: 18 }}>
           <SelectField
-            label="Customer type"
+            label={t('clientForm', 'typeLabel')}
             value={form.customer_type}
             onChange={(v) => update('customer_type', v as FormState['customer_type'])}
             options={[
-              { label: 'Business', value: 'business' },
-              { label: 'Individual', value: 'individual' },
+              { label: t('clientForm', 'typeBusiness'), value: 'business' },
+              { label: t('clientForm', 'typeIndividual'), value: 'individual' },
             ]}
             searchable={false}
           />
 
           <TextField
-            label="Name"
+            label={t('clientForm', 'nameLabel')}
             value={form.name}
             onChangeText={(v) => update('name', v)}
             error={fieldErrors.name}
             editable={!isEditing}
-            hint={isEditing ? 'Locked after creation.' : undefined}
+            hint={isEditing ? t('clientForm', 'nameLockedHint') : undefined}
           />
 
           <TextField
-            label="Civil ID / registration code"
+            label={t('clientForm', 'codeLabel')}
             value={form.code}
             onChangeText={(v) => update('code', v)}
-            placeholder="Leave blank for a prospective client"
+            placeholder={t('clientForm', 'codePlaceholder')}
           />
 
-          <TextField label="Contact person" value={form.contact_person} onChangeText={(v) => update('contact_person', v)} />
+          <TextField label={t('clientForm', 'contactPersonLabel')} value={form.contact_person} onChangeText={(v) => update('contact_person', v)} />
 
           <TextField
-            label="Email"
+            label={t('clientForm', 'emailLabel')}
             value={form.email}
             onChangeText={(v) => update('email', v)}
             keyboardType="email-address"
@@ -190,25 +192,25 @@ export function ClientFormScreen({ route, navigation }: Props) {
             error={fieldErrors.email}
           />
 
-          <TextField label="Phone" value={form.phone} onChangeText={(v) => update('phone', v)} keyboardType="phone-pad" />
+          <TextField label={t('clientForm', 'phoneLabel')} value={form.phone} onChangeText={(v) => update('phone', v)} keyboardType="phone-pad" />
 
           <View style={styles.rowFields}>
             <View style={{ flex: 1 }}>
-              <TextField label="City" value={form.city} onChangeText={(v) => update('city', v)} />
+              <TextField label={t('clientForm', 'cityLabel')} value={form.city} onChangeText={(v) => update('city', v)} />
             </View>
             <View style={{ flex: 1 }}>
-              <TextField label="Country" value={form.country} onChangeText={(v) => update('country', v)} />
+              <TextField label={t('clientForm', 'countryLabel')} value={form.country} onChangeText={(v) => update('country', v)} />
             </View>
           </View>
 
-          <TextField label="Billing address" value={form.billing_address} onChangeText={(v) => update('billing_address', v)} />
-          <TextField label="Shipping address" value={form.shipping_address} onChangeText={(v) => update('shipping_address', v)} />
-          <TextField label="Nature of business" value={form.nature_of_business} onChangeText={(v) => update('nature_of_business', v)} />
+          <TextField label={t('clientForm', 'billingAddressLabel')} value={form.billing_address} onChangeText={(v) => update('billing_address', v)} />
+          <TextField label={t('clientForm', 'shippingAddressLabel')} value={form.shipping_address} onChangeText={(v) => update('shipping_address', v)} />
+          <TextField label={t('clientForm', 'natureOfBusinessLabel')} value={form.nature_of_business} onChangeText={(v) => update('nature_of_business', v)} />
 
           <View style={styles.rowFields}>
             <View style={{ flex: 1 }}>
               <TextField
-                label="Credit limit"
+                label={t('clientForm', 'creditLimitLabel')}
                 value={form.credit_limit}
                 onChangeText={(v) => update('credit_limit', v)}
                 keyboardType="decimal-pad"
@@ -217,7 +219,7 @@ export function ClientFormScreen({ route, navigation }: Props) {
             </View>
             <View style={{ flex: 1 }}>
               <TextField
-                label="Payment terms (days)"
+                label={t('clientForm', 'paymentTermsLabel')}
                 value={form.payment_terms_days}
                 onChangeText={(v) => update('payment_terms_days', v)}
                 keyboardType="number-pad"
@@ -227,18 +229,18 @@ export function ClientFormScreen({ route, navigation }: Props) {
           </View>
 
           <SelectField
-            label="Status"
+            label={t('clientForm', 'statusLabel')}
             value={form.status}
             onChange={(v) => update('status', v as FormState['status'])}
             options={[
-              { label: 'Active', value: 'active' },
-              { label: 'Inactive', value: 'inactive' },
+              { label: t('clientForm', 'statusActive'), value: 'active' },
+              { label: t('clientForm', 'statusInactive'), value: 'inactive' },
             ]}
             searchable={false}
           />
 
           <TextField
-            label="Notes"
+            label={t('clientForm', 'notesLabel')}
             value={form.notes}
             onChangeText={(v) => update('notes', v)}
             multiline
@@ -248,12 +250,12 @@ export function ClientFormScreen({ route, navigation }: Props) {
         </View>
 
         <Button onPress={handleSave} isLoading={saving} style={styles.saveBtn}>
-          {isEditing ? 'Save changes' : 'Create client'}
+          {isEditing ? t('clientForm', 'saveChanges') : t('clientForm', 'createClient')}
         </Button>
 
         {isEditing && (
           <Button variant="danger" onPress={handleDelete} isLoading={deleting} style={styles.deleteBtn}>
-            Delete client
+            {t('clientForm', 'deleteClient')}
           </Button>
         )}
       </GlassCard>
