@@ -20,6 +20,7 @@ const en = {
     language: 'Language',
   },
   home: {
+    pageTitle: 'Home',
     quickQuote: 'Quick Quote',
     clients: 'Clients',
     poUpload: 'P.O Upload',
@@ -229,6 +230,7 @@ const ar: typeof en = {
     language: 'اللغة',
   },
   home: {
+    pageTitle: 'الرئيسية',
     quickQuote: 'عرض سعر سريع',
     clients: 'العملاء',
     poUpload: 'رفع أمر الشراء',

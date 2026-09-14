@@ -64,9 +64,25 @@
   // Check right away (covers reopening an already-installed PWA from
   // before this script even existed), whenever the tab/PWA comes back
   // to the foreground, and periodically while it stays open.
+  //
+  // Multiple, redundant foreground signals on purpose -- iOS Safari
+  // standalone (home-screen-launched) PWAs are well known to *not*
+  // reliably fire 'visibilitychange' on resume the way Android Chrome
+  // does; iOS instead tends to restore the page from its back-forward
+  // cache, which fires 'pageshow' (with event.persisted === true)
+  // rather than a fresh navigation or a visibility change. Listening
+  // to all of these costs nothing extra on Android (checkForUpdate's
+  // own `checking` guard already no-ops a redundant overlapping call)
+  // and is what actually makes this work cross-platform.
   checkForUpdate();
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') checkForUpdate();
+  });
+  window.addEventListener('pageshow', function () {
+    checkForUpdate();
+  });
+  window.addEventListener('focus', function () {
+    checkForUpdate();
   });
   setInterval(checkForUpdate, 5 * 60 * 1000);
 })();

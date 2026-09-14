@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
@@ -238,9 +238,11 @@ export function QuickQuoteScreen() {
     }
   }
 
+  const pageTitle = t('drawer', 'enquiry');
+
   if (result?.kind === 'feasible_pending') {
     return (
-      <ScrollView contentContainerStyle={styles.screen}>
+      <ScreenBody title={pageTitle}>
         <GlassCard strong style={styles.resultCard}>
           <View style={[styles.resultIcon, styles.iconYes]}>
             <Text style={[styles.resultIconText, { color: colors.emerald400 }]}>✓</Text>
@@ -259,13 +261,13 @@ export function QuickQuoteScreen() {
             {t('quickQuote', 'generateQuotation')}
           </Button>
         </GlassCard>
-      </ScrollView>
+      </ScreenBody>
     );
   }
 
   if (result?.kind === 'not_feasible') {
     return (
-      <ScrollView contentContainerStyle={styles.screen}>
+      <ScreenBody title={pageTitle}>
         <GlassCard strong style={styles.resultCard}>
           <View style={[styles.resultIcon, styles.iconNo]}>
             <Text style={[styles.resultIconText, { color: colors.red400 }]}>✕</Text>
@@ -283,13 +285,13 @@ export function QuickQuoteScreen() {
             {t('quickQuote', 'tryAgain')}
           </Button>
         </GlassCard>
-      </ScrollView>
+      </ScreenBody>
     );
   }
 
   if (result?.kind === 'feasible') {
     return (
-      <ScrollView contentContainerStyle={styles.screen}>
+      <ScreenBody title={pageTitle}>
         <GlassCard strong style={styles.resultCard}>
           <View style={[styles.resultIcon, styles.iconYes]}>
             <Text style={[styles.resultIconText, { color: colors.emerald400 }]}>✓</Text>
@@ -316,12 +318,12 @@ export function QuickQuoteScreen() {
             {t('quickQuote', 'startAnother')}
           </Button>
         </GlassCard>
-      </ScrollView>
+      </ScreenBody>
     );
   }
 
   return (
-    <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps="handled">
+    <ScreenBody title={pageTitle} keyboardShouldPersistTaps="handled">
       <GlassCard strong style={styles.formCard}>
         <Alert variant="error">{loadError ?? formError}</Alert>
 
@@ -361,6 +363,19 @@ export function QuickQuoteScreen() {
         </Button>
         {statusLine ? <Text style={styles.statusLine}>{statusLine}</Text> : null}
       </GlassCard>
+    </ScreenBody>
+  );
+}
+
+// Pins the page title at the top and centers the (usually much shorter
+// than the viewport) card in the space below it, rather than leaving
+// it stranded near the top with a stretch of empty screen underneath --
+// same spirit as HomeScreen's tile grid filling available height.
+function ScreenBody({ title, keyboardShouldPersistTaps, children }: { title: string; keyboardShouldPersistTaps?: 'handled'; children: ReactNode }) {
+  return (
+    <ScrollView contentContainerStyle={styles.screen} keyboardShouldPersistTaps={keyboardShouldPersistTaps}>
+      <Text style={styles.pageTitle}>{title}</Text>
+      <View style={styles.centerArea}>{children}</View>
     </ScrollView>
   );
 }
@@ -376,6 +391,8 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   screen: { flexGrow: 1, backgroundColor: colors.ink950, padding: 18 },
+  pageTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.white, marginBottom: 16 },
+  centerArea: { flex: 1, justifyContent: 'center', width: '100%' },
   formCard: { padding: 22 },
   checkBtn: { marginTop: 24, width: '100%' },
   statusLine: {
