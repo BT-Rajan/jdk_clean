@@ -1,5 +1,5 @@
 import { Pressable, View } from 'react-native';
-import { DarkTheme, DrawerActions, NavigationContainer, NavigationContainerRefWithCurrent, useNavigationContainerRef } from '@react-navigation/native';
+import { DarkTheme, DrawerActions, LinkingOptions, NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import Feather from '@expo/vector-icons/Feather';
@@ -77,7 +77,7 @@ function ClientsStackNavigator() {
 
 const Drawer = createDrawerNavigator();
 
-function AuthenticatedShell({ navRef }: { navRef: NavigationContainerRefWithCurrent<any> }) {
+function AuthenticatedShell() {
   return (
     <View style={{ flex: 1 }}>
       <Drawer.Navigator
@@ -95,10 +95,33 @@ function AuthenticatedShell({ navRef }: { navRef: NavigationContainerRefWithCurr
         <Drawer.Screen name="Enquiry" component={QuickQuoteScreen} />
         <Drawer.Screen name="Clients" component={ClientsStackNavigator} options={{ headerShown: false }} />
       </Drawer.Navigator>
-      <BottomActionBar navRef={navRef} />
+      <BottomActionBar />
     </View>
   );
 }
+
+// Maps screens to URL paths so the browser (and, for an installed PWA,
+// the phone's own back button/gesture -- Android routes that to the
+// frontmost web app's history even with no visible browser chrome) can
+// step back through in-app navigation the normal way, instead of just
+// leaving the app. Without this, React Navigation keeps its state
+// entirely in-memory on web and never touches browser history at all.
+const linking: LinkingOptions<any> = {
+  prefixes: [],
+  config: {
+    screens: {
+      Home: '',
+      Enquiry: 'enquiry',
+      Clients: {
+        screens: {
+          ClientsList: 'clients',
+          ClientForm: 'clients/edit/:customerId?',
+          ClientHistory: 'clients/:customerId/history',
+        },
+      },
+    },
+  },
+};
 
 export function RootNavigator() {
   const { isReady, isAuthenticated } = useAuth();
@@ -109,6 +132,7 @@ export function RootNavigator() {
     <NavigationContainer
       ref={navRef}
       theme={navTheme}
+      linking={linking}
       documentTitle={{
         // React Navigation's web title otherwise falls back to the
         // current screen's `options.title`, which is `undefined` on the
@@ -117,7 +141,7 @@ export function RootNavigator() {
         formatter: (options) => (options?.title ? `${options.title} — JDK Quick Quote` : 'JDK Quick Quote'),
       }}
     >
-      {isAuthenticated ? <AuthenticatedShell navRef={navRef} /> : <LoginScreen />}
+      {isAuthenticated ? <AuthenticatedShell /> : <LoginScreen />}
     </NavigationContainer>
   );
 }
