@@ -53,16 +53,9 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
 
-    <script>
-      // Register the service worker only on web, only in production
-      // (and only over http[s], which excludes file:// during local
-      // debugging). Registration failures are non-fatal -- the app
-      // still works online, it just won't be installable/offline-ready.
-      if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch(() => {});
-        });
-      }
-    </script>
+    <!-- External file, not inline -- an inline <script> here would be
+         blocked by scripts/serve-static.mjs's `script-src 'self'` CSP
+         (no 'unsafe-inline'). -->
+    <script src="/register-sw.js" defer></script>
   </body>
 </html>
