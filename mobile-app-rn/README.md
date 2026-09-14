@@ -72,15 +72,15 @@ src/api/catalog.ts             products, feasibility, quotations
 src/context/AuthContext.tsx    session state, persisted via AsyncStorage
 src/i18n/translations.ts       EN/AR string dictionaries (typed -- ar must match en's exact shape)
 src/i18n/LocaleContext.tsx     t(), locale persistence, RTL (see "Bilingual (EN/AR)" below)
-src/components/                Button, TextField, SelectField, Alert, GlassCard, Logo, SplashView, BottomActionBar
+src/components/                Button, TextField, SelectField, Alert, GlassCard, Logo, SplashView
 src/screens/LoginScreen.tsx           EN/AR toggle lives here
-src/screens/HomeScreen.tsx            feature tile grid (Quick Quote/Clients wired; others mocked "coming soon")
+src/screens/HomeScreen.tsx            product image scroller + feature tile grid (Quick Quote/Clients wired; others mocked "coming soon")
 src/screens/QuickQuoteScreen.tsx      client+product+qty+date → yes/no → quote or admin-notify
 src/screens/ClientsListScreen.tsx     searchable client list, edit/disable row icons
 src/screens/ClientFormScreen.tsx      create/edit/delete a client
 src/screens/ClientHistoryScreen.tsx   a client's quotation ("order") history
-src/navigation/RootNavigator.tsx      auth gate → drawer (Home/Enquiry/Clients) + persistent bottom Logout bar; `linking` config maps screens to URLs so the phone's back button navigates in-app
-src/navigation/DrawerContent.tsx      custom drawer list (Enquiry, Clients)
+src/navigation/RootNavigator.tsx      auth gate → drawer (Home/Enquiry/Clients); `linking` config maps screens to URLs so the phone's back button navigates in-app
+src/navigation/DrawerContent.tsx      custom drawer list (Enquiry, Clients) + pinned Logout footer
 src/navigation/HeaderTitle.tsx        company logo + name, shown in the drawer's header
 ```
 

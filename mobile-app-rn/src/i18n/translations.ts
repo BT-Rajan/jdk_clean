@@ -26,6 +26,7 @@ const en = {
     sendNotification: 'Send Notification',
     productCatalog: 'Product Catalog',
     comingSoon: 'Coming Soon',
+    productImagePlaceholder: 'Product image',
   },
   drawer: {
     enquiry: 'Enquiry',
@@ -157,6 +158,7 @@ const ar: typeof en = {
     sendNotification: 'إرسال إشعار',
     productCatalog: 'كتالوج المنتجات',
     comingSoon: 'قريبًا',
+    productImagePlaceholder: 'صورة المنتج',
   },
   drawer: {
     enquiry: 'الاستفسارات',
