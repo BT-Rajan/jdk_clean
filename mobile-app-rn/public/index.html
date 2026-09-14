@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover"
+    />
+    <title>JDK Quick Quote</title>
+
+    <!-- Web app manifest -- makes the site installable ("Add to Home
+         screen") from mobile Chrome and other browsers that support it. -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Standalone theming: matches the app's ink-950 background so the
+         browser chrome/status bar and splash don't flash white. -->
+    <meta name="theme-color" content="#05050a" />
+    <meta name="background-color" content="#05050a" />
+
+    <!-- Android/Chrome installed-app behavior -->
+    <meta name="mobile-web-app-capable" content="yes" />
+
+    <!-- iOS Safari/Chrome: there's no manifest support for "Add to Home
+         Screen" on iOS, so these tags cover that path directly. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Quick Quote" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+
+    <link rel="icon" href="/favicon-32.png" sizes="32x32" type="image/png" />
+    <link rel="icon" href="/favicon-48.png" sizes="48x48" type="image/png" />
+    <link rel="shortcut icon" href="/favicon-32.png" />
+
+    <style>
+      html,
+      body {
+        height: 100%;
+        background-color: #05050a;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+      }
+      /* RN Web's default cursor/tap-highlight resets for a native feel
+         on touch devices. */
+      * {
+        -webkit-tap-highlight-color: transparent;
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+
+    <script>
+      // Register the service worker only on web, only in production
+      // (and only over http[s], which excludes file:// during local
+      // debugging). Registration failures are non-fatal -- the app
+      // still works online, it just won't be installable/offline-ready.
+      if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js').catch(() => {});
+        });
+      }
+    </script>
+  </body>
+</html>

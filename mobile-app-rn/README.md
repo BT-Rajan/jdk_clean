@@ -109,6 +109,49 @@ same role/department permission matrix applies).
   in `api/customers.ts` is there if you want to add an "undo"/trash
   view later; not wired into a screen yet)
 
+## Progressive Web App (mobile Chrome)
+
+This app also runs as an installable PWA — same login/Quick Quote/Clients
+code, no separate build, served over the web and installable from
+Chrome's "Add to Home screen" / install prompt on Android and desktop
+(iOS Safari/Chrome use the manual "Add to Home Screen" share-sheet
+action instead, since iOS doesn't support the install prompt API).
+
+What makes it installable, all under `public/` (served as-is by Expo's
+Metro web bundler, which looks for a custom `index.html` there):
+- `public/manifest.json` — name, icons, `display: "standalone"`,
+  theme/background color
+- `public/sw.js` — app-shell service worker (cache-first for the JS
+  bundle/fonts/icons, network-first for navigations); it deliberately
+  does **not** cache API calls (`src/api/client.ts`'s `API_BASE_URL`)
+  since there's no offline-write/sync story yet, so quote/customer data
+  is always fetched live
+- `public/index.html` — viewport/theme-color/apple-touch-icon meta tags
+  registering the service worker and linking the manifest
+- `assets/pwa/` — the source icons (192/512/512-maskable/apple-touch/favicon)
+  copied into `public/`, in case you want to regenerate them
+
+Try it locally:
+
+```bash
+npm run web              # dev server (expo start --web) — desktop browser
+npm run build:web         # production export to dist/ (expo export --platform web)
+npx serve dist            # serve the export; visit from your phone at http://<your-LAN-IP>:PORT
+```
+
+To open it on a phone, your phone and computer need to be on the same
+network, using your computer's LAN IP (not `localhost`) — `npm run web`
+prints one, or pass `--tunnel` to `expo start --web` to get a public URL
+instead. **Service workers only run over HTTPS** (`localhost` is
+exempted for local dev, but a LAN IP is not) — installability and
+offline caching only kick in once this is deployed behind HTTPS; over
+plain HTTP on a LAN IP the app still loads and works, it just won't
+register the service worker or be installable.
+
+Once loaded in mobile Chrome over HTTPS, either wait for the automatic
+"Install app" banner or open the **⋮** menu → **Add to Home screen** /
+**Install app**.
+
 ## Setup
 
 ```bash

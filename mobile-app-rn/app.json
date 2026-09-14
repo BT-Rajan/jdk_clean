@@ -18,7 +18,14 @@
       "backgroundColor": "#05050a"
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "name": "JDK Quick Quote",
+      "shortName": "Quick Quote",
+      "themeColor": "#05050a",
+      "backgroundColor": "#05050a",
+      "display": "standalone",
+      "orientation": "portrait",
+      "favicon": "./public/favicon-32.png"
     }
   }
 }

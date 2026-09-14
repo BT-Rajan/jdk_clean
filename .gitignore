@@ -6,6 +6,7 @@ venv/
 node_modules/
 dist/
 build/
+.expo/
 *.log
 .DS_Store
 backend/_smoketest.py
