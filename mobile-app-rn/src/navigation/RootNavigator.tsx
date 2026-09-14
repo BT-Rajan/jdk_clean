@@ -1,4 +1,4 @@
-import { Pressable, View } from 'react-native';
+import { Pressable } from 'react-native';
 import { DarkTheme, DrawerActions, LinkingOptions, NavigationContainer, useNavigationContainerRef } from '@react-navigation/native';
 import { createDrawerNavigator } from '@react-navigation/drawer';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
@@ -10,7 +10,6 @@ import { QuickQuoteScreen } from '../screens/QuickQuoteScreen';
 import { ClientsListScreen } from '../screens/ClientsListScreen';
 import { ClientFormScreen } from '../screens/ClientFormScreen';
 import { ClientHistoryScreen } from '../screens/ClientHistoryScreen';
-import { BottomActionBar } from '../components/BottomActionBar';
 import { DrawerContent } from './DrawerContent';
 import { HeaderTitle } from './HeaderTitle';
 import { useLocale } from '../i18n/LocaleContext';
@@ -79,24 +78,21 @@ const Drawer = createDrawerNavigator();
 
 function AuthenticatedShell() {
   return (
-    <View style={{ flex: 1 }}>
-      <Drawer.Navigator
-        drawerContent={(props) => <DrawerContent {...props} />}
-        screenOptions={{
-          headerStyle: { backgroundColor: colors.ink900 },
-          headerTintColor: colors.white,
-          headerShadowVisible: false,
-          headerTitle: () => <HeaderTitle />,
-          drawerStyle: { backgroundColor: colors.ink900, width: 260 },
-          sceneContainerStyle: { backgroundColor: colors.ink950 },
-        }}
-      >
-        <Drawer.Screen name="Home" component={HomeScreen} />
-        <Drawer.Screen name="Enquiry" component={QuickQuoteScreen} />
-        <Drawer.Screen name="Clients" component={ClientsStackNavigator} options={{ headerShown: false }} />
-      </Drawer.Navigator>
-      <BottomActionBar />
-    </View>
+    <Drawer.Navigator
+      drawerContent={(props) => <DrawerContent {...props} />}
+      screenOptions={{
+        headerStyle: { backgroundColor: colors.ink900 },
+        headerTintColor: colors.white,
+        headerShadowVisible: false,
+        headerTitle: () => <HeaderTitle />,
+        drawerStyle: { backgroundColor: colors.ink900, width: 260 },
+        sceneContainerStyle: { backgroundColor: colors.ink950 },
+      }}
+    >
+      <Drawer.Screen name="Home" component={HomeScreen} />
+      <Drawer.Screen name="Enquiry" component={QuickQuoteScreen} />
+      <Drawer.Screen name="Clients" component={ClientsStackNavigator} options={{ headerShown: false }} />
+    </Drawer.Navigator>
   );
 }
 
