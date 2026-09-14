@@ -8,7 +8,7 @@ import { colors, fonts, glass, radii, whiteAlpha } from '../theme';
 interface Tile {
   key: string;
   icon: keyof typeof Feather.glyphMap;
-  labelKey: 'quickQuote' | 'clients' | 'poUpload' | 'sendNotification' | 'productCatalog' | 'comingSoon';
+  labelKey: 'quickQuote' | 'clients' | 'poUpload' | 'productCatalog' | 'comingSoon';
   route?: string; // real, wired destination -- omitted for not-yet-built tiles
 }
 
@@ -16,8 +16,10 @@ const TILES: Tile[] = [
   { key: 'quickQuote', icon: 'file-text', labelKey: 'quickQuote', route: 'Enquiry' },
   { key: 'clients', icon: 'users', labelKey: 'clients', route: 'Clients' },
   { key: 'poUpload', icon: 'upload', labelKey: 'poUpload' },
-  { key: 'sendNotification', icon: 'bell', labelKey: 'sendNotification' },
+  // Product Catalog took over Send Notification's old spot when that
+  // tile was removed.
   { key: 'productCatalog', icon: 'box', labelKey: 'productCatalog' },
+  { key: 'comingSoon2', icon: 'grid', labelKey: 'comingSoon' },
   { key: 'comingSoon', icon: 'clock', labelKey: 'comingSoon' },
 ];
 

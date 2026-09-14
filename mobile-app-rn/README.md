@@ -65,22 +65,23 @@ no direct RN equivalent:
 ```
 App.tsx                        font loading, splash screen, providers
 src/theme.ts                   colors/fonts/radii ported from index.css
-src/api/client.ts              fetch wrapper: bearer auth, 401→refresh→logout
-src/api/auth.ts                POST /api/auth/login, GET /api/auth/me
-src/api/customers.ts           full Customer CRUD (list/get/create/update/delete/restore/activate)
+src/api/client.ts              fetch wrapper: bearer auth, 401→refresh→logout; uploadFile/downloadAndOpenFile/viewFile for binary endpoints
+src/api/auth.ts                POST /api/auth/login, GET /api/auth/me, GET /api/auth/me/history
+src/api/customers.ts           full Customer onboarding (create/edit/delete/restore/activate, credit status, id document, onboarding-status transitions)
 src/api/catalog.ts             products, feasibility, quotations
 src/context/AuthContext.tsx    session state, persisted via AsyncStorage
 src/i18n/translations.ts       EN/AR string dictionaries (typed -- ar must match en's exact shape)
 src/i18n/LocaleContext.tsx     t(), locale persistence, RTL (see "Bilingual (EN/AR)" below)
-src/components/                Button, TextField, SelectField, Alert, GlassCard, Logo, SplashView
+src/components/                Button, TextField, SelectField, Alert, GlassCard, Logo, SplashView, IdDocumentPanel, StatusBadge, StatusTransitionButtons
 src/screens/LoginScreen.tsx           EN/AR toggle lives here
-src/screens/HomeScreen.tsx            product image scroller + feature tile grid (Quick Quote/Clients wired; others mocked "coming soon")
-src/screens/QuickQuoteScreen.tsx      client+product+qty+date → yes/no → quote or admin-notify
+src/screens/HomeScreen.tsx            product image scroller + feature tile grid (Quick Quote/Clients/Product Catalog wired or mocked "coming soon"; 2 generic placeholder tiles for what's left)
+src/screens/QuickQuoteScreen.tsx      client+product+qty+date → yes/no → quote (+ PDF download) or admin-notify
 src/screens/ClientsListScreen.tsx     searchable client list, edit/disable row icons
-src/screens/ClientFormScreen.tsx      create/edit/delete a client
+src/screens/ClientFormScreen.tsx      new-client wizard + edit/onboarding-status/id-document/credit-status/delete (see "Wiring" below)
 src/screens/ClientHistoryScreen.tsx   a client's quotation ("order") history
-src/navigation/RootNavigator.tsx      auth gate → drawer (Home/Enquiry/Clients); `linking` config maps screens to URLs so the phone's back button navigates in-app
-src/navigation/DrawerContent.tsx      custom drawer list (Enquiry, Clients) + pinned Logout footer
+src/screens/MyHistoryScreen.tsx       the signed-in user's own action history, current calendar month only
+src/navigation/RootNavigator.tsx      auth gate → drawer (Home/Enquiry/Clients/History); `linking` config maps screens to URLs so the phone's back button navigates in-app
+src/navigation/DrawerContent.tsx      custom drawer list (Enquiry, Clients, History) + pinned Logout footer
 src/navigation/HeaderTitle.tsx        company logo + name, shown in the drawer's header
 ```
 
@@ -110,18 +111,61 @@ same role/department permission matrix applies).
    live Notifications feed (`notification_service.get_notifications`).
    Nothing new to build on the notification side.
 
-**Clients** — full CRUD against `/api/customers`:
+**Clients** — full CRUD against `/api/customers`, matching the web app's
+customer onboarding feature-for-feature (`ClientFormScreen.tsx` plays
+both CustomerOnboardingWizardPage's and CustomerFormPage's roles,
+picking one by whether `route.params.customerId` is set):
 - List: `GET /api/customers?search=&page_size=100`
-- Create: `POST /api/customers`
-- Edit: `GET /api/customers/{id}` then `PUT /api/customers/{id}`
-  (`name` and `customer_type` are excluded from the update payload —
-  the backend's `CustomerUpdate` schema deliberately omits `name`
-  since it's locked after creation, and `customer_type` isn't meant to
-  change post-creation either, so the form disables that field and the
-  API layer never sends it back on edit)
+- **Create** → a 5-step wizard (Type → Company Details → Contact &
+  Address → Financial Terms → Review), mirroring
+  `CustomerOnboardingWizardPage` step-for-step: `code` (Civil ID /
+  registration number) is required here (unlike the plain `POST
+  /api/customers` schema, which allows a null `code` for a prospective
+  customer created some other way), and the Company Details step
+  includes an id document picker (`expo-document-picker`) — the file
+  is only uploaded via `POST /api/customers/{id}/id-document` *after*
+  `POST /api/customers` returns an id, same two-step sequence as the
+  web wizard. Every field is validated client-side against the same
+  max-lengths as `backend/app/schemas/customer.py` /
+  `frontend/src/lib/validation/customer.ts`. On success, lands on that
+  same client's edit screen (mirrors the web wizard navigating to
+  `/customers/:id`) rather than just going back to the list.
+- **Edit** → `GET /api/customers/{id}` then `PUT /api/customers/{id}`.
+  `name` is locked (backend's `CustomerUpdate` omits it); `code` is
+  locked *once set*, but if it's still null (a prospective customer)
+  there's an inline "complete it now" mini-form that calls `PUT` with
+  just `{code}}`, same one-directional rule and same UX as
+  `CustomerFormPage`'s `handleCompleteCode`. `customer_type` **is**
+  sent on every other edit — it's editable at any time per the
+  backend schema, unlike name/code.
+  Below the form (only once a customer id exists): a **credit status**
+  card (`GET /api/customers/{id}/credit`, with the same "id isn't
+  verified yet" warning the web detail page shows once a credit limit
+  is set); an **id document** panel to view/replace/remove the
+  document and mark it verified/unverified
+  (`POST|DELETE /api/customers/{id}/id-document`,
+  `POST /api/customers/{id}/verify-id` / `.../unverify-id` — viewing
+  opens the file inline on web, saves-and-shares on native, same
+  platform split as the Quick Quote PDF download); and an
+  **onboarding** section with the same reason-gated status transition
+  buttons as the web detail page
+  (`POST /api/customers/{id}/onboarding-status`,
+  transitions mirrored from `ONBOARDING_ALLOWED_TRANSITIONS` in
+  `backend/app/models/customer.py`).
 - Delete: `DELETE /api/customers/{id}` (soft delete — `restoreCustomer`
   in `api/customers.ts` is there if you want to add an "undo"/trash
   view later; not wired into a screen yet)
+
+**History** (drawer item, `MyHistoryScreen.tsx`) — `GET
+/api/auth/me/history`, a new endpoint (there's no web equivalent):
+every audit-log row this signed-in user has personally generated
+(`changed_by` = them), across every table, restricted server-side to
+the current calendar month (`audit_service.get_my_history` — pass
+`?month=YYYY-MM` to look at a different one, though this screen
+doesn't build a month picker, it just shows "now"). Deliberately
+scoped this way rather than reusing `GET /{resource}/{id}/history`
+(one record's trail, any actor) — this is the opposite shape, one
+actor's trail across every record they've touched.
 
 ## Progressive Web App (mobile Chrome)
 

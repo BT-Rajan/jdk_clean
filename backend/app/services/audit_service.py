@@ -1,5 +1,9 @@
+from datetime import date
+
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from app.core.exceptions import ValidationAppError
 
 IGNORED_FIELDS = {"updated_at", "created_at"}
 
@@ -99,3 +103,39 @@ def get_history(db: Session, table_name: str, record_id: int) -> list[dict]:
         row["changed_by_name"] = names.get(row["changed_by"])
 
     return rows
+
+
+def get_my_history(db: Session, user_id: int, month: str | None = None) -> list[dict]:
+    """Every action this user has personally made (audit_log.changed_by),
+    across every table, restricted to one calendar month -- unlike
+    get_history above (one record's full trail, any actor), this is one
+    actor's full trail, scoped to a month so it can't grow unbounded.
+    `month` is "YYYY-MM"; omitted defaults to the current calendar
+    month. Backs GET /api/auth/me/history, the mobile app's own
+    "History" drawer link -- each user can only ever see their own."""
+    if month is not None:
+        try:
+            year_str, month_str = month.split("-")
+            year, mon = int(year_str), int(month_str)
+            if not (1 <= mon <= 12):
+                raise ValueError
+        except ValueError:
+            raise ValidationAppError("month must be in YYYY-MM format.")
+    else:
+        today = date.today()
+        year, mon = today.year, today.month
+
+    start = date(year, mon, 1)
+    end = date(year + 1, 1, 1) if mon == 12 else date(year, mon + 1, 1)
+
+    result = db.execute(
+        text(
+            """SELECT table_name, record_id, action, field_name, old_value, new_value, changed_at
+               FROM audit_log
+               WHERE changed_by = :u AND changed_at >= :start AND changed_at < :end
+               ORDER BY changed_at DESC, id DESC
+               LIMIT 500"""
+        ),
+        {"u": user_id, "start": start, "end": end},
+    )
+    return [dict(row._mapping) for row in result]

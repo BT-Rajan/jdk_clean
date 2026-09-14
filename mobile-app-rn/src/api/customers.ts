@@ -1,4 +1,18 @@
-import { api } from './client';
+import { api, uploadFile, viewFile } from './client';
+
+export type CustomerOnboardingStatus = 'pending' | 'under_review' | 'active' | 'on_hold' | 'rejected';
+
+// Mirrors backend/app/models/customer.py ONBOARDING_ALLOWED_TRANSITIONS
+// and frontend/src/lib/statusTransitions.ts CUSTOMER_ONBOARDING_TRANSITIONS.
+export const CUSTOMER_ONBOARDING_TRANSITIONS: Record<CustomerOnboardingStatus, CustomerOnboardingStatus[]> = {
+  pending: ['under_review'],
+  under_review: ['active', 'rejected', 'pending'],
+  active: ['on_hold'],
+  on_hold: ['under_review', 'active'],
+  rejected: ['pending'],
+};
+// Mirrors backend/app/models/customer.py ONBOARDING_STATUSES_REQUIRING_REASON.
+export const CUSTOMER_ONBOARDING_STATUSES_REQUIRING_REASON: CustomerOnboardingStatus[] = ['rejected', 'on_hold'];
 
 // Mirrors backend/app/schemas/customer.py exactly -- keep in sync if
 // that file changes.
@@ -19,8 +33,23 @@ export interface Customer {
   credit_limit: number;
   payment_terms_days: number;
   status: 'active' | 'inactive';
-  onboarding_status: string;
+  onboarding_status: CustomerOnboardingStatus;
+  onboarding_reason: string | null;
   notes: string | null;
+  id_document_filename: string | null;
+  id_verified: boolean;
+  id_verified_at: string | null;
+  id_verified_by: number | null;
+}
+
+// Mirrors backend/app/schemas/payment.py CustomerCreditStatusOut.
+export interface CustomerCreditStatus {
+  customer_id: number;
+  credit_limit: number;
+  limit_enforced: boolean;
+  outstanding_balance: number;
+  available_credit: number | null;
+  id_verified: boolean;
 }
 
 export interface CustomerInput {
@@ -67,8 +96,11 @@ export function createCustomer(payload: CustomerInput) {
 }
 
 // name is intentionally not sendable here -- CustomerUpdate on the
-// backend deliberately omits it (locked after creation).
-export function updateCustomer(id: number, payload: Partial<Omit<CustomerInput, 'name' | 'customer_type'>>) {
+// backend deliberately omits it (locked after creation). customer_type
+// IS editable at any time per that same schema (only name and, via the
+// one-directional rule below, an already-set code are locked) -- see
+// backend/app/schemas/customer.py's CustomerUpdate docstring.
+export function updateCustomer(id: number, payload: Partial<Omit<CustomerInput, 'name'>>) {
   return api<Customer>(`/api/customers/${id}`, { method: 'PUT', body: payload });
 }
 
@@ -86,4 +118,44 @@ export function activateCustomer(id: number) {
 
 export function deactivateCustomer(id: number) {
   return api<Customer>(`/api/customers/${id}/deactivate`, { method: 'POST' });
+}
+
+// Credit limit, current outstanding balance, and what's left before
+// order_service.change_status starts refusing to confirm a new order
+// for this customer without admin approval.
+export function getCustomerCredit(id: number) {
+  return api<CustomerCreditStatus>(`/api/customers/${id}/credit`);
+}
+
+export function updateCustomerOnboardingStatus(id: number, status: CustomerOnboardingStatus, reason?: string) {
+  return api<Customer>(`/api/customers/${id}/onboarding-status`, { method: 'POST', body: { status, reason } });
+}
+
+export interface PickedFile {
+  uri: string;
+  name: string;
+  mimeType?: string | null;
+  file?: File; // set on web by expo-document-picker -- see client.ts's uploadFile
+}
+
+export function uploadCustomerIdDocument(id: number, asset: PickedFile) {
+  return uploadFile<Customer>(`/api/customers/${id}/id-document`, asset);
+}
+
+export function deleteCustomerIdDocument(id: number) {
+  return api<Customer>(`/api/customers/${id}/id-document`, { method: 'DELETE' });
+}
+
+// Behind auth like every other file endpoint -- view/download it as a
+// blob rather than pointing something straight at the API path.
+export function viewCustomerIdDocument(id: number, filename: string) {
+  return viewFile(`/api/customers/${id}/id-document`, filename);
+}
+
+export function verifyCustomerId(id: number) {
+  return api<Customer>(`/api/customers/${id}/verify-id`, { method: 'POST' });
+}
+
+export function unverifyCustomerId(id: number) {
+  return api<Customer>(`/api/customers/${id}/unverify-id`, { method: 'POST' });
 }

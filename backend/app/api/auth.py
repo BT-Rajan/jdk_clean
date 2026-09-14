@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, UploadFile
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
@@ -13,7 +13,7 @@ from app.schemas.auth import (
     TokenResponse,
 )
 from app.schemas.user import MeOut, MeUpdate
-from app.services import auth_service, profile_service
+from app.services import audit_service, auth_service, profile_service
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -104,3 +104,16 @@ def get_avatar(current_user: User = Depends(get_current_user)):
     if path is None:
         raise NotFoundError("Avatar")
     return FileResponse(path, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=60"})
+
+
+@router.get("/me/history")
+def my_history(
+    month: str | None = Query(None, description='"YYYY-MM"; defaults to the current calendar month'),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Every action this user has personally made, this calendar month --
+    just being logged in is enough (no page permission needed, same as
+    every other /me endpoint here): it can only ever show your own
+    actions, never anyone else's."""
+    return audit_service.get_my_history(db, current_user.id, month)

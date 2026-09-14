@@ -7,9 +7,10 @@ import { useAuth } from '../context/AuthContext';
 import { useLocale } from '../i18n/LocaleContext';
 import { colors, fonts, whiteAlpha } from '../theme';
 
-const ITEMS: { route: string; icon: keyof typeof Feather.glyphMap; labelKey: 'enquiry' | 'clients' }[] = [
+const ITEMS: { route: string; icon: keyof typeof Feather.glyphMap; labelKey: 'enquiry' | 'clients' | 'history' }[] = [
   { route: 'Enquiry', icon: 'file-text', labelKey: 'enquiry' },
   { route: 'Clients', icon: 'users', labelKey: 'clients' },
+  { route: 'History', icon: 'clock', labelKey: 'history' },
 ];
 
 export function DrawerContent(props: DrawerContentComponentProps) {

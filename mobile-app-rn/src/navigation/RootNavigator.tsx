@@ -10,6 +10,7 @@ import { QuickQuoteScreen } from '../screens/QuickQuoteScreen';
 import { ClientsListScreen } from '../screens/ClientsListScreen';
 import { ClientFormScreen } from '../screens/ClientFormScreen';
 import { ClientHistoryScreen } from '../screens/ClientHistoryScreen';
+import { MyHistoryScreen } from '../screens/MyHistoryScreen';
 import { DrawerContent } from './DrawerContent';
 import { HeaderTitle } from './HeaderTitle';
 import { useLocale } from '../i18n/LocaleContext';
@@ -92,6 +93,7 @@ function AuthenticatedShell() {
       <Drawer.Screen name="Home" component={HomeScreen} />
       <Drawer.Screen name="Enquiry" component={QuickQuoteScreen} />
       <Drawer.Screen name="Clients" component={ClientsStackNavigator} options={{ headerShown: false }} />
+      <Drawer.Screen name="History" component={MyHistoryScreen} />
     </Drawer.Navigator>
   );
 }
@@ -108,6 +110,7 @@ const linking: LinkingOptions<any> = {
     screens: {
       Home: '',
       Enquiry: 'enquiry',
+      History: 'history',
       Clients: {
         screens: {
           ClientsList: 'clients',
