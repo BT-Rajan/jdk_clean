@@ -53,9 +53,17 @@
     <noscript>You need to enable JavaScript to run this app.</noscript>
     <div id="root"></div>
 
-    <!-- External file, not inline -- an inline <script> here would be
+    <!-- External files, not inline -- an inline <script> here would be
          blocked by scripts/serve-static.mjs's `script-src 'self'` CSP
          (no 'unsafe-inline'). -->
     <script src="/register-sw.js" defer></script>
+    <!-- Reads the app's own bundle <script> tag (injected below this
+         one by the build) to know what build is currently running --
+         see version-check.js's currentBundleSrc(). Placement relative
+         to that tag doesn't matter: every `defer` script waits for the
+         whole document to finish parsing before any of them run, so
+         the bundle tag already exists in the DOM by the time this
+         one's callback fires either way. -->
+    <script src="/version-check.js" defer></script>
   </body>
 </html>

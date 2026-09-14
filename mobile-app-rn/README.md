@@ -187,15 +187,30 @@ Metro web bundler, which looks for a custom `index.html` there):
 - `public/manifest.json` — name, icons, `display: "standalone"`,
   theme/background color
 - `public/sw.js` — app-shell service worker (cache-first for the JS
-  bundle/fonts/icons, network-first for navigations); it deliberately
-  does **not** cache API calls (`src/api/client.ts`'s `API_BASE_URL`)
-  since there's no offline-write/sync story yet, so quote/customer data
-  is always fetched live
+  bundle/fonts/icons, network-first for navigations *and* for an
+  explicit `fetch('/')` from page JS — see `version-check.js` below);
+  it deliberately does **not** cache API calls (`src/api/client.ts`'s
+  `API_BASE_URL`) since there's no offline-write/sync story yet, so
+  quote/customer data is always fetched live
 - `public/index.html` — viewport/theme-color/apple-touch-icon meta tags
-  and the manifest link; loads `register-sw.js` via a real `<script
-  src>` rather than inline, so it works under `scripts/serve-static.mjs`'s
-  `script-src 'self'` CSP (no `'unsafe-inline'`)
+  and the manifest link; loads `register-sw.js`/`version-check.js` via
+  real `<script src>` tags rather than inline, so it works under
+  `scripts/serve-static.mjs`'s `script-src 'self'` CSP (no
+  `'unsafe-inline'`)
 - `public/register-sw.js` — registers the service worker
+- `public/version-check.js` — **auto-updates an already-open PWA onto a
+  new deploy.** An installed, standalone PWA can sit in memory for a
+  whole shift without ever re-navigating, so `sw.js`'s network-first-
+  on-navigate handling alone never gets a chance to run — this instead
+  polls `/` (right away, whenever the tab/PWA comes back to the
+  foreground, and every 5 minutes while open) and compares the hashed
+  JS bundle filename it references (Expo already content-hashes
+  `_expo/static/js/web/AppEntry-<hash>.js` per build, so that filename
+  *is* the version — no separate version file to keep in sync) against
+  the one this page actually loaded with. A mismatch means a new build
+  is live: it clears every service-worker-managed cache and reloads
+  straight into it, no "please refresh" prompt to make anyone think
+  about it on an internal sales tool.
 - `assets/pwa/` — the source icons (192/512/512-maskable/apple-touch/favicon)
   copied into `public/`, in case you want to regenerate them
 
