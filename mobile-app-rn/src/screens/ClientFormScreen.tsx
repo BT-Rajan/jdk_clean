@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Alert as RNAlert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { GlassCard } from '../components/GlassCard';
@@ -8,6 +8,7 @@ import { SelectField } from '../components/SelectField';
 import { TextField } from '../components/TextField';
 import { colors, fonts, whiteAlpha } from '../theme';
 import { useLocale } from '../i18n/LocaleContext';
+import { confirm } from '../utils/alerts';
 import {
   Customer,
   createCustomer,
@@ -118,26 +119,25 @@ export function ClientFormScreen({ route, navigation }: Props) {
     }
   }
 
-  function handleDelete() {
+  async function handleDelete() {
     if (!customerId) return;
-    RNAlert.alert(t('clientForm', 'deleteConfirmTitle'), t('clientForm', 'deleteConfirmMessage', { name: form.name }), [
-      { text: t('common', 'cancel'), style: 'cancel' },
-      {
-        text: t('clientForm', 'deleteClient'),
-        style: 'destructive',
-        onPress: async () => {
-          setDeleting(true);
-          try {
-            await deleteCustomer(customerId);
-            navigation.goBack();
-          } catch (err: any) {
-            setError(err?.message ?? t('clientForm', 'deleteError'));
-          } finally {
-            setDeleting(false);
-          }
-        },
-      },
-    ]);
+    const proceed = await confirm(
+      t('clientForm', 'deleteConfirmTitle'),
+      t('clientForm', 'deleteConfirmMessage', { name: form.name }),
+      t('clientForm', 'deleteClient'),
+      t('common', 'cancel'),
+      { destructive: true },
+    );
+    if (!proceed) return;
+    setDeleting(true);
+    try {
+      await deleteCustomer(customerId);
+      navigation.goBack();
+    } catch (err: any) {
+      setError(err?.message ?? t('clientForm', 'deleteError'));
+    } finally {
+      setDeleting(false);
+    }
   }
 
   if (loading) {

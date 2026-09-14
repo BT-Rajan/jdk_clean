@@ -1,7 +1,8 @@
-import { Alert as RNAlert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Feather from '@expo/vector-icons/Feather';
 import { useLocale } from '../i18n/LocaleContext';
+import { notify } from '../utils/alerts';
 import { colors, fonts, glass, radii, whiteAlpha } from '../theme';
 
 interface Tile {
@@ -37,7 +38,7 @@ export function HomeScreen() {
       // Not built yet -- visible on the home screen (matches the design
       // reference) but genuinely nothing behind it, so it just says so
       // rather than pretending to navigate somewhere.
-      RNAlert.alert(t('home', tile.labelKey), t('common', 'comingSoon'));
+      notify(t('home', tile.labelKey), t('common', 'comingSoon'));
     }
   }
 

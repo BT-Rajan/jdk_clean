@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert as RNAlert, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { DateField } from '../components/DateField';
@@ -10,6 +10,7 @@ import { colors, fonts, whiteAlpha } from '../theme';
 import { ApiError } from '../api/client';
 import { useLocale } from '../i18n/LocaleContext';
 import { listCustomers, Customer } from '../api/customers';
+import { confirm } from '../utils/alerts';
 import {
   listProducts,
   Product,
@@ -198,12 +199,12 @@ export function QuickQuoteScreen() {
         // just rethrows to the outer catch below as normal.
         if (err instanceof ApiError && err.status === 409) {
           const conflictMessage = err.message;
-          const proceed = await new Promise<boolean>((resolve) => {
-            RNAlert.alert(t('quickQuote', 'materialConflictTitle'), conflictMessage, [
-              { text: t('common', 'cancel'), style: 'cancel', onPress: () => resolve(false) },
-              { text: t('quickQuote', 'proceedAnyway'), onPress: () => resolve(true) },
-            ]);
-          });
+          const proceed = await confirm(
+            t('quickQuote', 'materialConflictTitle'),
+            conflictMessage,
+            t('quickQuote', 'proceedAnyway'),
+            t('common', 'cancel'),
+          );
           if (!proceed) return;
           quotation = await createQuotation({ ...quotationPayload, material_conflict_acknowledged: true });
         } else {
