@@ -4,9 +4,10 @@ import { colors, fonts, whiteAlpha } from '../theme';
 type Tone = 'neutral' | 'gold' | 'success' | 'danger';
 
 // Mirrors frontend/src/components/ui/Badge.tsx's STATUS_TONES, limited
-// to the statuses this app actually shows (customer status + onboarding
-// status) -- keeps status colors meaning the same thing across web and
-// mobile (active/confirmed-style green, pending/neutral grey, danger red).
+// to the statuses this app actually shows (customer status, onboarding
+// status, quotation status, order status) -- keeps status colors
+// meaning the same thing across web and mobile (active/confirmed-style
+// green, pending/neutral grey, danger red).
 const STATUS_TONES: Record<string, Tone> = {
   active: 'success',
   inactive: 'neutral',
@@ -14,6 +15,19 @@ const STATUS_TONES: Record<string, Tone> = {
   under_review: 'gold',
   on_hold: 'danger',
   rejected: 'danger',
+  // Quotation statuses.
+  draft: 'neutral',
+  sent: 'gold',
+  accepted: 'success',
+  expired: 'danger',
+  converted: 'success',
+  // Order statuses.
+  confirmed: 'gold',
+  in_production: 'gold',
+  ready_to_ship: 'gold',
+  shipped: 'success',
+  delivered: 'success',
+  cancelled: 'danger',
 };
 
 const TONE_STYLES: Record<Tone, { bg: string; border: string; text: string }> = {

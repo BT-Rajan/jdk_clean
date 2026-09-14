@@ -6,10 +6,17 @@ import Feather from '@expo/vector-icons/Feather';
 import { useAuth } from '../context/AuthContext';
 import { LoginScreen } from '../screens/LoginScreen';
 import { HomeScreen } from '../screens/HomeScreen';
-import { QuickQuoteScreen } from '../screens/QuickQuoteScreen';
+import { ProductCatalogScreen } from '../screens/ProductCatalogScreen';
 import { ClientsListScreen } from '../screens/ClientsListScreen';
 import { ClientFormScreen } from '../screens/ClientFormScreen';
 import { ClientHistoryScreen } from '../screens/ClientHistoryScreen';
+import { QuotationsListScreen } from '../screens/quotations/QuotationsListScreen';
+import { NewQuotationScreen } from '../screens/quotations/NewQuotationScreen';
+import { QuotationDetailScreen } from '../screens/quotations/QuotationDetailScreen';
+import { FeasibilityDetailScreen } from '../screens/quotations/FeasibilityDetailScreen';
+import { OrdersListScreen } from '../screens/orders/OrdersListScreen';
+import { OrderFormScreen } from '../screens/orders/OrderFormScreen';
+import { OrderDetailScreen } from '../screens/orders/OrderDetailScreen';
 import { MyHistoryScreen } from '../screens/MyHistoryScreen';
 import { DrawerContent } from './DrawerContent';
 import { HeaderTitle } from './HeaderTitle';
@@ -20,6 +27,24 @@ export type ClientsStackParamList = {
   ClientsList: undefined;
   ClientForm: { customerId?: number };
   ClientHistory: { customerId: number; customerName: string };
+};
+
+export type QuotationsStackParamList = {
+  QuotationsList: undefined;
+  // customerId/productId -- preset when arriving here from a Client's
+  // activity hub or a Product Catalog row's "Start Quotation" action,
+  // so the journey can begin from either of those screens instead of
+  // only from the Quotations tab itself.
+  NewQuotation: { customerId?: number; productId?: number } | undefined;
+  QuotationDetail: { quotationId: number; startInEdit?: boolean };
+  FeasibilityDetail: { feasibilityId: number };
+};
+
+export type OrdersStackParamList = {
+  OrdersList: undefined;
+  // customerId -- preset when arriving here from a Client's activity hub.
+  OrderForm: { orderId?: number; customerId?: number };
+  OrderDetail: { orderId: number };
 };
 
 const navTheme = {
@@ -42,6 +67,25 @@ const stackScreenOptions = {
   contentStyle: { backgroundColor: colors.ink950 },
 };
 
+// Every top-level Drawer.Screen below that renders its own nested stack
+// has headerShown: false on the *outer* Drawer.Screen -- the inner
+// stack's own header takes over instead (so per-screen titles/back-
+// chevrons work normally), which is why each of these needs its own
+// menu button wired back to the drawer: it's otherwise unreachable from
+// a screen whose header the drawer itself no longer renders. Standard
+// react-navigation pattern for a stack nested inside a drawer.
+function DrawerMenuButton({ navigation }: { navigation: any }) {
+  return (
+    <Pressable
+      onPress={() => navigation.getParent()?.dispatch(DrawerActions.openDrawer())}
+      hitSlop={10}
+      style={{ paddingHorizontal: 4 }}
+    >
+      <Feather name="menu" size={22} color={colors.white} />
+    </Pressable>
+  );
+}
+
 const ClientsStack = createNativeStackNavigator<ClientsStackParamList>();
 function ClientsStackNavigator() {
   const { t } = useLocale();
@@ -52,26 +96,59 @@ function ClientsStackNavigator() {
         component={ClientsListScreen}
         options={({ navigation }) => ({
           title: t('clients', 'title'),
-          // The outer Drawer.Screen for "Clients" has headerShown: false
-          // (this stack's own header takes over, so its per-screen
-          // titles/back-chevron work normally) -- this button is how the
-          // drawer stays reachable from a screen whose header the drawer
-          // itself no longer renders. Standard react-navigation pattern
-          // for a stack nested inside a drawer.
-          headerLeft: () => (
-            <Pressable
-              onPress={() => navigation.getParent()?.dispatch(DrawerActions.openDrawer())}
-              hitSlop={10}
-              style={{ paddingHorizontal: 4 }}
-            >
-              <Feather name="menu" size={22} color={colors.white} />
-            </Pressable>
-          ),
+          headerLeft: () => <DrawerMenuButton navigation={navigation} />,
         })}
       />
       <ClientsStack.Screen name="ClientForm" component={ClientFormScreen} />
       <ClientsStack.Screen name="ClientHistory" component={ClientHistoryScreen} options={{ title: t('clientHistory', 'title') }} />
     </ClientsStack.Navigator>
+  );
+}
+
+const QuotationsStack = createNativeStackNavigator<QuotationsStackParamList>();
+function QuotationsStackNavigator() {
+  const { t } = useLocale();
+  return (
+    <QuotationsStack.Navigator screenOptions={stackScreenOptions}>
+      <QuotationsStack.Screen
+        name="QuotationsList"
+        component={QuotationsListScreen}
+        options={({ navigation }) => ({
+          title: t('quotationsList', 'title'),
+          headerLeft: () => <DrawerMenuButton navigation={navigation} />,
+        })}
+      />
+      <QuotationsStack.Screen name="NewQuotation" component={NewQuotationScreen} options={{ title: t('newQuotation', 'title') }} />
+      <QuotationsStack.Screen
+        name="QuotationDetail"
+        component={QuotationDetailScreen}
+        options={{ title: t('quotationDetail', 'title') }}
+      />
+      <QuotationsStack.Screen
+        name="FeasibilityDetail"
+        component={FeasibilityDetailScreen}
+        options={{ title: t('feasibilityDetail', 'title') }}
+      />
+    </QuotationsStack.Navigator>
+  );
+}
+
+const OrdersStack = createNativeStackNavigator<OrdersStackParamList>();
+function OrdersStackNavigator() {
+  const { t } = useLocale();
+  return (
+    <OrdersStack.Navigator screenOptions={stackScreenOptions}>
+      <OrdersStack.Screen
+        name="OrdersList"
+        component={OrdersListScreen}
+        options={({ navigation }) => ({
+          title: t('ordersList', 'title'),
+          headerLeft: () => <DrawerMenuButton navigation={navigation} />,
+        })}
+      />
+      <OrdersStack.Screen name="OrderForm" component={OrderFormScreen} />
+      <OrdersStack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: t('orderDetail', 'title') }} />
+    </OrdersStack.Navigator>
   );
 }
 
@@ -91,8 +168,10 @@ function AuthenticatedShell() {
       }}
     >
       <Drawer.Screen name="Home" component={HomeScreen} />
-      <Drawer.Screen name="Enquiry" component={QuickQuoteScreen} />
+      <Drawer.Screen name="ProductCatalog" component={ProductCatalogScreen} />
       <Drawer.Screen name="Clients" component={ClientsStackNavigator} options={{ headerShown: false }} />
+      <Drawer.Screen name="Quotations" component={QuotationsStackNavigator} options={{ headerShown: false }} />
+      <Drawer.Screen name="Orders" component={OrdersStackNavigator} options={{ headerShown: false }} />
       <Drawer.Screen name="History" component={MyHistoryScreen} />
     </Drawer.Navigator>
   );
@@ -109,13 +188,28 @@ const linking: LinkingOptions<any> = {
   config: {
     screens: {
       Home: '',
-      Enquiry: 'enquiry',
+      ProductCatalog: 'products',
       History: 'history',
       Clients: {
         screens: {
           ClientsList: 'clients',
           ClientForm: 'clients/edit/:customerId?',
           ClientHistory: 'clients/:customerId/history',
+        },
+      },
+      Quotations: {
+        screens: {
+          QuotationsList: 'quotations',
+          NewQuotation: 'quotations/new',
+          QuotationDetail: 'quotations/:quotationId',
+          FeasibilityDetail: 'feasibility/:feasibilityId',
+        },
+      },
+      Orders: {
+        screens: {
+          OrdersList: 'orders',
+          OrderForm: 'orders/edit/:orderId?',
+          OrderDetail: 'orders/:orderId',
         },
       },
     },
