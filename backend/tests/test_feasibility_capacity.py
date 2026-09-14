@@ -7,7 +7,7 @@ test_feasibility_service.py's material-only products.
 
 from datetime import datetime, timedelta, timezone
 
-from app.services import feasibility_service
+from app.services import feasibility_service, settings_service
 
 from .factories import (
     make_bom,
@@ -24,6 +24,13 @@ from .factories import (
 )
 
 TODAY = datetime.now(timezone.utc).date()
+
+
+def _buffered(db, lead_days):
+    """Same as test_feasibility_service._buffered -- the date a supplier
+    lead time alone projects, plus the +1-clear-working-day rule, computed
+    via the real settings_service helper rather than a hardcoded offset."""
+    return settings_service.next_working_day(TODAY + timedelta(days=lead_days), settings_service.get_working_days(db))
 
 
 def _check(db, product_id, quantity=1):
@@ -52,8 +59,9 @@ def _product_with_formula(db, machine=None, production_hours_per_unit=0.01, work
 
 def test_case_a_material_later_than_machine(db):
     """A. Machine is available immediately; a material needs 10 days of
-    procurement -> final ready date is the material constraint (10 days
-    out), not the machine's own (earlier) availability."""
+    procurement (+1 clear working day buffer -- see
+    test_feasibility_service.test_case7) -> final ready date is the
+    material constraint, not the machine's own (earlier) availability."""
     product, machine = _product_with_formula(db)
     material = make_raw_material(db)
     make_bom(db, product.id, output_quantity=1)
@@ -64,7 +72,7 @@ def test_case_a_material_later_than_machine(db):
 
     line = _check(db, product.id)
 
-    assert line.estimated_ready_date == TODAY + timedelta(days=10)
+    assert line.estimated_ready_date == _buffered(db, 10)
 
 
 def test_case_b_machine_later_than_material(db):

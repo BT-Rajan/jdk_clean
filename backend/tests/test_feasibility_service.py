@@ -12,7 +12,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.models.inventory import StockMovement
 from app.schemas.feasibility import FeasibilityOut
-from app.services import bom_service, feasibility_service, inventory_service
+from app.services import bom_service, feasibility_service, inventory_service, settings_service
 
 from .factories import (
     make_alternative,
@@ -27,6 +27,15 @@ from .factories import (
 )
 
 TODAY = datetime.now(timezone.utc).date()  # same basis run_check itself uses
+
+
+def _buffered(db, lead_days):
+    """The date a supplier's lead time alone projects, run through the
+    same +1-clear-working-day rule run_check applies -- computed via the
+    real settings_service helper (not a hardcoded weekday offset) so
+    this doesn't depend on which day of the week the suite happens to
+    run on."""
+    return settings_service.next_working_day(TODAY + timedelta(days=lead_days), settings_service.get_working_days(db))
 
 
 def _check(db, product_id, quantity=1, required_by_date=None):
@@ -155,7 +164,8 @@ def test_case7_supplier_with_known_lead_time(db):
     """7. Shortage remains after alternatives; a supplier with a known
     lead time covers it -> procurement quantity equals the remaining
     shortage (not the material's own full shortfall), and the projected
-    date is today + that lead time."""
+    date is today + that lead time + 1 clear working day (goods aren't
+    usable stock the same day they land -- see next_working_day)."""
     product, material = _product_with_material(db, required_qty=100, stock_qty=60)
     supplier = make_supplier(db)
     make_supplier_material(db, supplier.id, material.id, lead_time_days=5, max_supply_quantity=1000)
@@ -167,7 +177,7 @@ def test_case7_supplier_with_known_lead_time(db):
     assert shortfall.procurement.date_known is True
     assert shortfall.procurement.suppliers[0].quantity == 40
     assert shortfall.procurement.suppliers[0].lead_time_days == 5
-    assert shortfall.procurement.expected_available_date == TODAY + timedelta(days=5)
+    assert shortfall.procurement.expected_available_date == _buffered(db, 5)
 
 
 def test_case8_supplier_without_lead_time(db):
@@ -187,8 +197,9 @@ def test_case8_supplier_without_lead_time(db):
 
 def test_case9_multiple_shortages_use_the_slowest(db):
     """9. Material A available in 3 days, B in 7, C available now (in
-    one product's BOM) -> the line's material constraint is 7 days, not
-    3 and not the sum."""
+    one product's BOM) -> the line's material constraint is B's date, not
+    A's and not the sum. Each date carries its own +1 clear working day
+    buffer (see test_case7)."""
     material_a = make_raw_material(db)
     material_b = make_raw_material(db)
     material_c = make_raw_material(db)
@@ -209,8 +220,8 @@ def test_case9_multiple_shortages_use_the_slowest(db):
 
     by_material = {s.raw_material_id: s for s in line.shortfalls}
     assert material_c.id not in by_material  # fully in stock, never a shortfall
-    assert by_material[material_a.id].procurement.expected_available_date == TODAY + timedelta(days=3)
-    assert by_material[material_b.id].procurement.expected_available_date == TODAY + timedelta(days=7)
+    assert by_material[material_a.id].procurement.expected_available_date == _buffered(db, 3)
+    assert by_material[material_b.id].procurement.expected_available_date == _buffered(db, 7)
 
 
 def test_feasibility_is_read_only(db):
