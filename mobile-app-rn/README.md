@@ -1,0 +1,147 @@
+# JDK Quick Quote — React Native app
+
+A native (Expo) rewrite of the mobile microsite: same sales-user login,
+same Quick Quote (feasibility → auto-quote / admin-notify) flow, plus
+full **Client CRUD** — list, search, create, edit, delete/restore —
+wired to the real `jdk_clean` backend. No mock data anywhere.
+
+Styled to match the web app's design system exactly, not approximated
+from scratch — every token and component below is a direct port:
+
+| Web app source | Ported to |
+|---|---|
+| `frontend/src/index.css` `@theme` block (ink/gold palette, fonts, glow shadow) | `src/theme.ts` |
+| `components/ui/Button.tsx` | `src/components/Button.tsx` |
+| `components/ui/TextField.tsx` | `src/components/TextField.tsx` |
+| `components/ui/SelectField.tsx` | `src/components/SelectField.tsx` (modal picker — RN has no `<select>`) |
+| `components/ui/Alert.tsx` | `src/components/Alert.tsx` |
+| `components/layout/AuthLayout.tsx` glass panel | `src/components/GlassCard.tsx` |
+| `components/ui/Logo.tsx` (dynamic org logo + fallback wordmark) | `src/components/Logo.tsx` |
+| `pages/LoginPage.tsx` copy/layout | `src/screens/LoginScreen.tsx` |
+
+## Date field — usability-first
+
+`src/components/DateField.tsx` replaces the old plain-text date input:
+
+- **Android** opens the OS's own native calendar dialog — the picker
+  Android users already know, rather than a custom sheet fighting the
+  platform.
+- **iOS** opens a themed bottom sheet with an inline calendar (dark,
+  gold accent to match the app) plus a **Done** button, since iOS's
+  inline picker updates live and needs an explicit confirm step.
+- **Quick-pick chips** — Today / Tomorrow / In 3 days / In 1 week / In
+  2 weeks — sit above the calendar on both platforms' sheets where
+  applicable, so the lead times a sales rep hears most ("they need it
+  by next week") are one tap instead of a full date-picker round trip.
+- **Can't select a past date** — `minimumDate` is wired to today,
+  matching the backend's `not_in_past` validator on
+  `required_by_date`, so the error surfaces before submit instead of
+  as a rejected API call.
+- Display format is localized and human-readable ("Fri, 20 Sep 2026"),
+  not a raw ISO string; the ISO conversion for the API call happens
+  from local date parts (not `toISOString()`, which converts to UTC
+  first and can silently roll the date back a day in the evening for
+  anyone west of UTC).
+
+Run `npx expo install @react-native-community/datetimepicker` after
+`npm install` if Expo flags a version mismatch for your SDK — the
+version pinned in `package.json` matches Expo SDK 51 at time of
+writing, but Expo's installer always resolves the exact match for
+whatever SDK you're actually on.
+
+**Two things are intentionally *not* pixel-exact**, both flagged in
+code comments where they occur, because they rely on web-only CSS with
+no direct RN equivalent:
+- `backdrop-filter` (glassmorphism blur) → approximated as translucent
+  fill + border. Real blur is possible via `expo-blur` if you want it
+  closer; not added here to keep the dependency list lean.
+- Gradient-clipped "text-gradient-gold" text (used in the web Logo's
+  text fallback and marketing copy) → approximated as flat gold text.
+  A true gradient-text needs `@react-native-masked-view` wrapping a
+  `LinearGradient`; easy to add if you want it.
+
+## What's in it
+
+```
+App.tsx                        font loading, splash screen, providers
+src/theme.ts                   colors/fonts/radii ported from index.css
+src/api/client.ts              fetch wrapper: bearer auth, 401→refresh→logout
+src/api/auth.ts                POST /api/auth/login, GET /api/auth/me
+src/api/customers.ts           full Customer CRUD (list/get/create/update/delete/restore/activate)
+src/api/catalog.ts             products, feasibility, quotations
+src/context/AuthContext.tsx    session state, persisted via AsyncStorage
+src/components/                Button, TextField, SelectField, Alert, GlassCard, Logo
+src/screens/LoginScreen.tsx
+src/screens/QuickQuoteScreen.tsx      client+product+qty+date → yes/no → quote or admin-notify
+src/screens/ClientsListScreen.tsx     searchable client list
+src/screens/ClientFormScreen.tsx      create/edit/delete a client
+src/screens/AccountScreen.tsx         who's signed in + log out
+src/navigation/RootNavigator.tsx      auth gate → bottom tabs (Quick Quote / Clients / Account)
+```
+
+## Wiring — how each screen maps to the backend
+
+**Login** — `POST /api/auth/login` (same credentials as the web app;
+same role/department permission matrix applies).
+
+**Quick Quote** (unchanged logic from the HTML version, just native UI):
+1. `GET /api/customers`, `GET /api/products` to populate the pickers.
+2. `POST /api/feasibility` → `POST /api/feasibility/{id}/run`.
+3. `status === "feasible"` → **Yes** → `POST /api/quotations` (unit
+   price pulled from the product's master `selling_price`, 0%
+   discount) → shows the quotation number/total.
+4. Otherwise → **No** → `POST /api/feasibility/{id}/exception` with
+   `approve: true`, which sets `admin_review_required` on that
+   feasibility check — the same flag that already drives the admin's
+   live Notifications feed (`notification_service.get_notifications`).
+   Nothing new to build on the notification side.
+
+**Clients** — full CRUD against `/api/customers`:
+- List: `GET /api/customers?search=&page_size=100`
+- Create: `POST /api/customers`
+- Edit: `GET /api/customers/{id}` then `PUT /api/customers/{id}`
+  (`name` and `customer_type` are excluded from the update payload —
+  the backend's `CustomerUpdate` schema deliberately omits `name`
+  since it's locked after creation, and `customer_type` isn't meant to
+  change post-creation either, so the form disables that field and the
+  API layer never sends it back on edit)
+- Delete: `DELETE /api/customers/{id}` (soft delete — `restoreCustomer`
+  in `api/customers.ts` is there if you want to add an "undo"/trash
+  view later; not wired into a screen yet)
+
+## Setup
+
+```bash
+npm install
+```
+
+Then set your API URL in `src/api/client.ts`:
+
+```ts
+export const API_BASE_URL = 'https://your-api-domain.com';
+```
+
+If your backend's CORS/allowed-origins list is enforced at the network
+layer for native apps too (some setups also check `Origin` on mobile
+webviews), make sure this app's usage is covered — usually a non-issue
+for pure native `fetch`, since native apps don't send a browser
+`Origin` header the way a hosted microsite does.
+
+Run it:
+
+```bash
+npx expo start        # then press i / a / w, or scan the QR code in Expo Go
+```
+
+## Permissions
+
+Same as the HTML microsite: a sales user needs their existing
+Feasibilities (read+write) and Quotations (read+write) access, plus
+Customers (read+write, for the new CRUD screens) and Products (read).
+No new roles or accounts.
+
+## Known simplifications (flagged for follow-up, not hidden)
+
+- **Client delete** uses RN's built-in `Alert.alert` confirm dialog
+  (system-styled, not themed) rather than a themed in-app modal — kept
+  it simple since it's a native confirm dialog, not a full screen.
