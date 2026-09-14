@@ -2,7 +2,6 @@ export type Locale = 'en' | 'ar';
 
 const en = {
   common: {
-    back: 'Back',
     logout: 'Log out',
     cancel: 'Cancel',
     save: 'Save',
@@ -134,7 +133,6 @@ const en = {
 
 const ar: typeof en = {
   common: {
-    back: 'رجوع',
     logout: 'تسجيل الخروج',
     cancel: 'إلغاء',
     save: 'حفظ',

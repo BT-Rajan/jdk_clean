@@ -79,7 +79,7 @@ src/screens/QuickQuoteScreen.tsx      client+product+qty+date → yes/no → quo
 src/screens/ClientsListScreen.tsx     searchable client list, edit/disable row icons
 src/screens/ClientFormScreen.tsx      create/edit/delete a client
 src/screens/ClientHistoryScreen.tsx   a client's quotation ("order") history
-src/navigation/RootNavigator.tsx      auth gate → drawer (Home/Enquiry/Clients) + persistent bottom Back/Logout bar
+src/navigation/RootNavigator.tsx      auth gate → drawer (Home/Enquiry/Clients) + persistent bottom Logout bar; `linking` config maps screens to URLs so the phone's back button navigates in-app
 src/navigation/DrawerContent.tsx      custom drawer list (Enquiry, Clients)
 src/navigation/HeaderTitle.tsx        company logo + name, shown in the drawer's header
 ```
