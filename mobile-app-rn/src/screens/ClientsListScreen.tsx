@@ -1,13 +1,14 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { Alert as RNAlert, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { GlassCard } from '../components/GlassCard';
 import { TextField } from '../components/TextField';
 import { colors, fonts, whiteAlpha } from '../theme';
-import { listCustomers, Customer } from '../api/customers';
+import { listCustomers, activateCustomer, deactivateCustomer, Customer } from '../api/customers';
 import { ClientsStackParamList } from '../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<ClientsStackParamList, 'ClientsList'>;
@@ -17,6 +18,7 @@ export function ClientsListScreen({ navigation }: Props) {
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [togglingId, setTogglingId] = useState<number | null>(null);
 
   const load = useCallback(async (searchTerm?: string) => {
     setLoading(true);
@@ -38,6 +40,31 @@ export function ClientsListScreen({ navigation }: Props) {
       load(search);
     }, [load]),
   );
+
+  function handleToggleStatus(client: Customer) {
+    const activating = client.status === 'inactive';
+    if (activating) {
+      runToggle(client);
+      return;
+    }
+    RNAlert.alert('Disable client', `Disable ${client.name}? They can be re-enabled at any time.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Disable', style: 'destructive', onPress: () => runToggle(client) },
+    ]);
+  }
+
+  async function runToggle(client: Customer) {
+    setError(null);
+    setTogglingId(client.id);
+    try {
+      const updated = client.status === 'active' ? await deactivateCustomer(client.id) : await activateCustomer(client.id);
+      setClients((prev) => prev.map((c) => (c.id === client.id ? updated : c)));
+    } catch (err: any) {
+      setError(err?.message ?? 'Could not update this client.');
+    } finally {
+      setTogglingId(null);
+    }
+  }
 
   return (
     <View style={styles.screen}>
@@ -70,7 +97,9 @@ export function ClientsListScreen({ navigation }: Props) {
           !loading ? <Text style={styles.emptyText}>No clients found.</Text> : null
         }
         renderItem={({ item }) => (
-          <Pressable onPress={() => navigation.navigate('ClientForm', { customerId: item.id })}>
+          <Pressable
+            onPress={() => navigation.navigate('ClientHistory', { customerId: item.id, customerName: item.name })}
+          >
             <GlassCard style={styles.row}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.rowName}>{item.name}</Text>
@@ -79,6 +108,7 @@ export function ClientsListScreen({ navigation }: Props) {
                   {item.city ? ` · ${item.city}` : ''}
                 </Text>
               </View>
+
               <View style={[styles.statusBadge, item.status === 'active' ? styles.badgeActive : styles.badgeInactive]}>
                 <Text
                   style={[
@@ -89,6 +119,27 @@ export function ClientsListScreen({ navigation }: Props) {
                   {item.status}
                 </Text>
               </View>
+
+              <Pressable
+                onPress={() => navigation.navigate('ClientForm', { customerId: item.id })}
+                hitSlop={10}
+                style={styles.iconBtn}
+              >
+                <Feather name="edit-2" size={16} color={whiteAlpha(0.7)} />
+              </Pressable>
+
+              <Pressable
+                onPress={() => handleToggleStatus(item)}
+                disabled={togglingId === item.id}
+                hitSlop={10}
+                style={styles.iconBtn}
+              >
+                <Feather
+                  name={item.status === 'active' ? 'slash' : 'check-circle'}
+                  size={16}
+                  color={item.status === 'active' ? colors.red400 : colors.emerald400}
+                />
+              </Pressable>
             </GlassCard>
           </Pressable>
         )}
@@ -112,4 +163,5 @@ const styles = StyleSheet.create({
   statusText: { fontFamily: fonts.sansMedium, fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase' },
   badgeActiveText: { color: colors.emerald400 },
   badgeInactiveText: { color: whiteAlpha(0.5) },
+  iconBtn: { marginLeft: 14, padding: 4 },
 });

@@ -6,12 +6,14 @@ import { LoginScreen } from '../screens/LoginScreen';
 import { QuickQuoteScreen } from '../screens/QuickQuoteScreen';
 import { ClientsListScreen } from '../screens/ClientsListScreen';
 import { ClientFormScreen } from '../screens/ClientFormScreen';
+import { ClientHistoryScreen } from '../screens/ClientHistoryScreen';
 import { AccountScreen } from '../screens/AccountScreen';
 import { colors, fonts, whiteAlpha } from '../theme';
 
 export type ClientsStackParamList = {
   ClientsList: undefined;
   ClientForm: { customerId?: number };
+  ClientHistory: { customerId: number; customerName: string };
 };
 
 const navTheme = {
@@ -49,6 +51,7 @@ function ClientsStackNavigator() {
     <ClientsStack.Navigator screenOptions={screenOptions}>
       <ClientsStack.Screen name="ClientsList" component={ClientsListScreen} options={{ title: 'Clients' }} />
       <ClientsStack.Screen name="ClientForm" component={ClientFormScreen} />
+      <ClientsStack.Screen name="ClientHistory" component={ClientHistoryScreen} options={{ title: 'Order history' }} />
     </ClientsStack.Navigator>
   );
 }

@@ -70,3 +70,24 @@ export function createQuotation(payload: {
     body: { language: 'en', ...payload },
   });
 }
+
+export interface QuotationSummary {
+  id: number;
+  quotation_number: string;
+  quotation_date: string;
+  status: string; // 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'converted'
+  total_amount: number;
+}
+
+// A client's order/quotation history -- Quick Quote is the only thing
+// in this app that creates quotations, so this is what "order history"
+// means here. Uses /api/quotations (not /api/orders): the sales role
+// this app is built for has Quotations read+write already (see
+// README's Permissions section) but isn't granted Orders access.
+export function listQuotationsForCustomer(customerId: number) {
+  const query = new URLSearchParams();
+  query.set('customer_id', String(customerId));
+  query.set('page_size', '100');
+  query.set('sort', '-quotation_date');
+  return api<PagedResponse<QuotationSummary>>(`/api/quotations?${query.toString()}`);
+}
