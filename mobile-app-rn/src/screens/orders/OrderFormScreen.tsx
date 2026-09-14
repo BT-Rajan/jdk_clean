@@ -36,6 +36,10 @@ export function OrderFormScreen({ route, navigation }: Props) {
   const { t } = useLocale();
   const orderId = route.params?.orderId;
   const isEditing = Boolean(orderId);
+  // Preset when arriving here from a Client's activity hub ("+ Order"
+  // for that client) -- irrelevant once editing, since the customer
+  // then comes from the order itself.
+  const presetCustomerId = route.params?.customerId;
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -43,7 +47,7 @@ export function OrderFormScreen({ route, navigation }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [customerId, setCustomerId] = useState<string | null>(null);
+  const [customerId, setCustomerId] = useState<string | null>(presetCustomerId ? String(presetCustomerId) : null);
   const [orderDate, setOrderDate] = useState<Date>(new Date());
   const [deliveryDate, setDeliveryDate] = useState<Date | null>(null);
   const [notes, setNotes] = useState('');

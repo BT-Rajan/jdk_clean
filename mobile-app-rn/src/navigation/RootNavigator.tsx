@@ -13,6 +13,7 @@ import { ClientHistoryScreen } from '../screens/ClientHistoryScreen';
 import { QuotationsListScreen } from '../screens/quotations/QuotationsListScreen';
 import { NewQuotationScreen } from '../screens/quotations/NewQuotationScreen';
 import { QuotationDetailScreen } from '../screens/quotations/QuotationDetailScreen';
+import { FeasibilityDetailScreen } from '../screens/quotations/FeasibilityDetailScreen';
 import { OrdersListScreen } from '../screens/orders/OrdersListScreen';
 import { OrderFormScreen } from '../screens/orders/OrderFormScreen';
 import { OrderDetailScreen } from '../screens/orders/OrderDetailScreen';
@@ -30,13 +31,19 @@ export type ClientsStackParamList = {
 
 export type QuotationsStackParamList = {
   QuotationsList: undefined;
-  NewQuotation: undefined;
+  // customerId/productId -- preset when arriving here from a Client's
+  // activity hub or a Product Catalog row's "Start Quotation" action,
+  // so the journey can begin from either of those screens instead of
+  // only from the Quotations tab itself.
+  NewQuotation: { customerId?: number; productId?: number } | undefined;
   QuotationDetail: { quotationId: number; startInEdit?: boolean };
+  FeasibilityDetail: { feasibilityId: number };
 };
 
 export type OrdersStackParamList = {
   OrdersList: undefined;
-  OrderForm: { orderId?: number };
+  // customerId -- preset when arriving here from a Client's activity hub.
+  OrderForm: { orderId?: number; customerId?: number };
   OrderDetail: { orderId: number };
 };
 
@@ -117,6 +124,11 @@ function QuotationsStackNavigator() {
         component={QuotationDetailScreen}
         options={{ title: t('quotationDetail', 'title') }}
       />
+      <QuotationsStack.Screen
+        name="FeasibilityDetail"
+        component={FeasibilityDetailScreen}
+        options={{ title: t('feasibilityDetail', 'title') }}
+      />
     </QuotationsStack.Navigator>
   );
 }
@@ -190,6 +202,7 @@ const linking: LinkingOptions<any> = {
           QuotationsList: 'quotations',
           NewQuotation: 'quotations/new',
           QuotationDetail: 'quotations/:quotationId',
+          FeasibilityDetail: 'feasibility/:feasibilityId',
         },
       },
       Orders: {

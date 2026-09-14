@@ -140,3 +140,56 @@ export function createOrderFromQuotation(quotationId: number) {
 export function downloadOrderPdf(orderId: number, orderNumber: string): Promise<void> {
   return downloadAndOpenFile(`/api/orders/${orderId}/pdf`, `${orderNumber}.pdf`);
 }
+
+// Mirrors backend/app/schemas/order_journey.py -- traces the real
+// Feasibility -> Quotation -> Order -> Production -> Delivery chain off
+// live foreign keys, not a separately maintained status. This is what
+// ties the four otherwise-separate screens (Product/Clients/Quotations/
+// Orders) into one story for a given order.
+export interface JourneyFeasibility {
+  id: number;
+  feasibility_number: string;
+  status: string;
+  required_by_date: string | null;
+  created_at: string;
+  checked_at: string | null;
+}
+
+export interface JourneyQuotation {
+  id: number;
+  quotation_number: string;
+  status: string;
+  quotation_date: string;
+  total_amount: number;
+  created_at: string;
+}
+
+export interface JourneyProductionBatch {
+  id: number;
+  batch_number: string;
+  status: string;
+  product_name: string | null;
+  machine_name: string | null;
+  planned_quantity: number;
+  produced_quantity: number;
+  scheduled_start: string;
+  scheduled_end: string;
+}
+
+export interface JourneyDeliveryNote {
+  id: number;
+  delivery_note_number: string;
+  status: string;
+  delivery_date: string;
+}
+
+export interface OrderJourney {
+  feasibility: JourneyFeasibility | null;
+  quotation: JourneyQuotation | null;
+  production_batches: JourneyProductionBatch[];
+  delivery_notes: JourneyDeliveryNote[];
+}
+
+export function getOrderJourney(id: number) {
+  return api<OrderJourney>(`/api/orders/${id}/journey`);
+}

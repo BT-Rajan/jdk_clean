@@ -16,6 +16,28 @@ mock data anywhere:
   transitions, delete/restore, PDF download), plus every order born
   from a quotation conversion.
 
+**These four aren't four separate silos** — Product, Clients,
+Quotations and Orders are cross-linked the same way the web app itself
+already ties them together (`CustomerDetailPage`'s recent-activity
+lists, `OrderJourney`'s Feasibility→Quotation→Order trace):
+- A **Product Catalog** row's "Start Quotation" icon jumps straight
+  into a New Quotation with that product preset — see a product, run
+  its feasibility check, carry it through to a quotation, all in one
+  path.
+- A **Client**'s activity hub (tap a row on the Clients list) shows
+  that client's recent feasibility checks, quotations, and orders side
+  by side, each tappable into its own detail screen, plus "+
+  Quotation"/"+ Order" buttons that start either flow with that client
+  already selected.
+- A **Quotation**'s detail screen links to the feasibility report it
+  came from and, once converted, the order it became — and its
+  customer name jumps to that client's activity hub.
+- An **Order**'s detail screen has a **Journey** section tracing back
+  to the feasibility check and quotation it came from (`GET
+  /api/orders/{id}/journey`, same live-foreign-key trace as the web
+  app's own Order Journey panel), and its customer name jumps to that
+  client's activity hub too.
+
 Styled to match the web app's design system exactly, not approximated
 from scratch — every token and component below is a direct port:
 
@@ -82,7 +104,7 @@ src/api/customers.ts           full Customer onboarding (create/edit/delete/rest
 src/api/catalog.ts             products (Product Catalog + line-item pickers)
 src/api/feasibility.ts         feasibility checks (create/run/exception/delete/restore) -- step 1 of the quotation journey
 src/api/quotations.ts          quotations (list/get/create/update/status/delete/restore/pdf/material-conflicts/convert-to-order lookup)
-src/api/orders.ts              orders (list/get/create/update/status/delete/restore/pdf/from-quotation)
+src/api/orders.ts              orders (list/get/create/update/status/delete/restore/pdf/from-quotation/journey)
 src/utils/format.ts            formatCurrency (KWD, 3dp), toIsoDate (local date, not UTC)
 src/context/AuthContext.tsx    session state, persisted via AsyncStorage
 src/i18n/translations.ts       EN/AR string dictionaries (typed -- ar must match en's exact shape)
@@ -90,16 +112,17 @@ src/i18n/LocaleContext.tsx     t(), locale persistence, RTL (see "Bilingual (EN/
 src/components/                Button, TextField, SelectField, Alert, GlassCard, Logo, SplashView, IdDocumentPanel, StatusBadge, StatusTransitionButtons
 src/screens/LoginScreen.tsx           EN/AR toggle lives here
 src/screens/HomeScreen.tsx            product image scroller + feature tile grid, fixed order: Product Catalog, Clients, Quotations, Orders, then 2 "coming soon" placeholders
-src/screens/ProductCatalogScreen.tsx  read-only searchable product browse
-src/screens/quotations/NewQuotationScreen.tsx     client+lines(product+qty)+date → feasibility check → yes/no → generate quotation (+ PDF) or admin-notify
+src/screens/ProductCatalogScreen.tsx  read-only searchable product browse; each row's "Start Quotation" icon jumps into NewQuotationScreen with that product preset
+src/screens/quotations/NewQuotationScreen.tsx     client+lines(product+qty)+date → feasibility check → yes/no → generate quotation (+ PDF) or admin-notify; accepts optional customerId/productId preset params
 src/screens/quotations/QuotationsListScreen.tsx   searchable quotation list, edit/delete row icons (edit only while draft)
-src/screens/quotations/QuotationDetailScreen.tsx  view, inline edit (draft only), status transitions, convert-to-order, delete, PDF download
+src/screens/quotations/QuotationDetailScreen.tsx  view, inline edit (draft only), status transitions, convert-to-order, delete, PDF download; tappable customer name, feasibility-report link, converted-order link
+src/screens/quotations/FeasibilityDetailScreen.tsx  read-only feasibility report (per-line shortfalls/capacity/estimated-ready-date); reached from a quotation, an order's Journey section, or a client's activity hub
 src/screens/orders/OrdersListScreen.tsx    searchable order list, "+ new order" icon, edit/delete row icons (edit only while draft)
-src/screens/orders/OrderFormScreen.tsx     create/edit order (multi-line items)
-src/screens/orders/OrderDetailScreen.tsx   view, status transitions, delete, PDF download; edit icon (draft only) opens OrderFormScreen
+src/screens/orders/OrderFormScreen.tsx     create/edit order (multi-line items); accepts an optional customerId preset param
+src/screens/orders/OrderDetailScreen.tsx   view, status transitions, delete, PDF download; edit icon (draft only) opens OrderFormScreen; tappable customer name + a Journey section (feasibility/quotation this order traces back to, if any)
 src/screens/ClientsListScreen.tsx     searchable client list, edit/disable row icons
 src/screens/ClientFormScreen.tsx      new-client wizard + edit/onboarding-status/id-document/credit-status/delete (see "Wiring" below)
-src/screens/ClientHistoryScreen.tsx   a client's quotation ("order") history
+src/screens/ClientHistoryScreen.tsx   a client's activity hub -- feasibility checks/quotations/orders for that client, each row tappable into its own detail screen, plus "+ Quotation"/"+ Order" quick actions
 src/screens/MyHistoryScreen.tsx       the signed-in user's own action history, current calendar month only
 src/navigation/RootNavigator.tsx      auth gate → drawer (Home/ProductCatalog/Clients/Quotations/Orders/History); `linking` config maps screens to URLs so the phone's back button navigates in-app
 src/navigation/DrawerContent.tsx      custom drawer list (Product Catalog, Clients, Quotations, Orders, History) + pinned Logout footer
@@ -113,7 +136,11 @@ same role/department permission matrix applies).
 
 **Product Catalog** — read-only: `GET /api/products?search=` (Products
 read access only — no create/edit/delete here, matching this app's
-sales-role permissions).
+sales-role permissions). Each row's **Start Quotation** icon
+(`Feather "send"`) is a nested-navigator jump straight into
+`Quotations > NewQuotation` with `{ productId }` preset, so seeing a
+product and running its feasibility check is one tap, not a detour
+through a different tab.
 
 **Quotations** — the full feasibility → quotation → order journey:
 
@@ -142,6 +169,11 @@ sales-role permissions).
    still-open quotation/order) shows the conflict and asks to proceed
    anyway (`material_conflict_acknowledged: true`), same gate as the
    web app's New Quotation form.
+6. Optional `route.params.customerId`/`productId` preset the client
+   picker and the first line's product respectively — how a Product
+   Catalog row's "Start Quotation" icon and a client's "+ Quotation"
+   button hand off into this same screen instead of starting from a
+   blank form.
 
 *Quotations list/detail* (`QuotationsListScreen.tsx` /
 `QuotationDetailScreen.tsx`):
@@ -157,7 +189,11 @@ sales-role permissions).
   (`draft→sent/rejected`, `sent→accepted/rejected/expired`) — `rejected`
   requires a reason. Once `accepted`, a **Convert to Order** button
   (`POST /api/orders/from-quotation/{id}`) creates the order and jumps
-  straight to its detail screen in the Orders stack. Delete is
+  straight to its detail screen in the Orders stack. The customer name
+  is tappable through to that client's activity hub; if this quotation
+  came from a feasibility check, a **View feasibility report** link
+  opens `FeasibilityDetailScreen`; once converted, a **View order**
+  link opens the resulting order. Delete is
   `DELETE /api/quotations/{id}` (soft delete; `restoreQuotation` exists
   in `api/quotations.ts` for a future "undo" view).
 
@@ -172,10 +208,20 @@ edit/delete row icons (edit only while `status === "draft"`).
 order date, requested delivery date, notes, overall discount, and
 multi-line items (add/remove, product/qty/price/discount per line) →
 `POST /api/orders` or, editing, `PUT /api/orders/{id}` (only `draft`
-orders are editable — `order_service.update_order`).
+orders are editable — `order_service.update_order`). Creating (not
+editing) accepts an optional `route.params.customerId` preset — how a
+client's "+ Order" button hands off here with that client already
+selected.
 
 *Order detail* (`OrderDetailScreen.tsx`) — view lines/totals/notes/
-child (split) orders; status transitions (`POST /api/orders/{id}/
+child (split) orders; the customer name is tappable through to that
+client's activity hub. A **Journey** section (`GET
+/api/orders/{id}/journey`) shows the feasibility check and quotation
+this order traces back to, if any — each tappable into its own detail
+screen — mirroring the web app's `OrderJourney` component; production
+batches/delivery notes aren't wired into this trace yet (no mobile
+screens for those exist), see "Known simplifications" below. Status
+transitions (`POST /api/orders/{id}/
 status`) follow `ORDER_TRANSITIONS`, mirrored from `backend/app/models/
 order.py`'s `ALLOWED_TRANSITIONS` — `cancelled` requires a reason. Edit
 icon (draft only) opens `OrderFormScreen`; delete is `DELETE
@@ -218,7 +264,7 @@ picking one by whether `route.params.customerId` is set):
   (`POST|DELETE /api/customers/{id}/id-document`,
   `POST /api/customers/{id}/verify-id` / `.../unverify-id` — viewing
   opens the file inline on web, saves-and-shares on native, same
-  platform split as the Quick Quote PDF download); and an
+  platform split as the quotation/order PDF downloads); and an
   **onboarding** section with the same reason-gated status transition
   buttons as the web detail page
   (`POST /api/customers/{id}/onboarding-status`,
@@ -227,6 +273,26 @@ picking one by whether `route.params.customerId` is set):
 - Delete: `DELETE /api/customers/{id}` (soft delete — `restoreCustomer`
   in `api/customers.ts` is there if you want to add an "undo"/trash
   view later; not wired into a screen yet)
+
+**Client activity hub** (`ClientHistoryScreen.tsx`, reached by tapping
+a row on the Clients list) — mirrors `CustomerDetailPage`'s
+recent-activity sections: `GET /api/feasibility?customer_id=`, `GET
+/api/quotations?customer_id=`, `GET /api/orders?customer_id=` (10 most
+recent each), every row tappable into its own detail screen across the
+Quotations/Orders stacks, plus **+ Quotation**/**+ Order** buttons that
+open `NewQuotationScreen`/`OrderFormScreen` with this client already
+selected. This is the mobile app's main answer to Product/Clients/
+Quotations/Orders not being four separate silos — see "Integration
+across screens" above.
+
+**Feasibility report** (`FeasibilityDetailScreen.tsx`, part of the
+Quotations stack even though it's reached from several places) —
+read-only `GET /api/feasibility/{id}`: status, required-by/checked-at
+dates, and a per-line breakdown (feasible/not, raw-material
+shortfalls, capacity, estimated-ready date) matching the web app's own
+Feasibility detail page. If a quotation was already raised off this
+check, a **View quotation** button looks it up
+(`GET /api/quotations?feasibility_id=`) and jumps there.
 
 **History** (drawer item, `MyHistoryScreen.tsx`) — `GET
 /api/auth/me/history`, a new endpoint (there's no web equivalent):
@@ -400,3 +466,8 @@ no new roles or accounts.
   `ready_to_ship` order stock can't fully cover) isn't wired up here —
   `OrderDetailScreen` shows any existing child orders (read-only) but
   there's no UI to create a split from mobile yet.
+- **Order Journey** only surfaces the feasibility/quotation stages —
+  the web app's own `OrderJourney` component also traces production
+  batches and delivery notes, but there's no mobile screen for either
+  yet, so `OrderDetailScreen` leaves them out of its Journey section
+  rather than showing a dead end.

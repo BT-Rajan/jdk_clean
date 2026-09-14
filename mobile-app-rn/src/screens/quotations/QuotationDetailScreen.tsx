@@ -246,6 +246,27 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
     }
   }
 
+  function goToCustomer() {
+    if (!quotation) return;
+    (navigation.getParent() as any)?.navigate('Clients', {
+      screen: 'ClientHistory',
+      params: { customerId: quotation.customer_id, customerName: quotation.customer_name ?? '' },
+    });
+  }
+
+  function goToFeasibility() {
+    if (!quotation?.feasibility_id) return;
+    navigation.navigate('FeasibilityDetail', { feasibilityId: quotation.feasibility_id });
+  }
+
+  function goToOrder() {
+    if (!quotation?.converted_order_id) return;
+    (navigation.getParent() as any)?.navigate('Orders', {
+      screen: 'OrderDetail',
+      params: { orderId: quotation.converted_order_id },
+    });
+  }
+
   async function handleDownloadPdf() {
     if (!quotation) return;
     setError(null);
@@ -284,7 +305,9 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>{quotation.quotation_number}</Text>
-            <Text style={styles.subtitle}>{quotation.customer_name ?? '—'}</Text>
+            <Pressable onPress={goToCustomer} hitSlop={6}>
+              <Text style={[styles.subtitle, styles.linkText]}>{quotation.customer_name ?? '—'}</Text>
+            </Pressable>
           </View>
           <StatusBadge status={quotation.status} label={statusLabel(t, quotation.status)} />
           {isDraft && !editing && (
@@ -299,10 +322,22 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
         <View style={styles.metaBox}>
           <MetaRow label={t('quotationDetail', 'dateLabel')} value={quotation.quotation_date} />
           <MetaRow label={t('quotationDetail', 'validUntilLabel')} value={quotation.valid_until ?? '—'} />
-          {quotation.converted_order_id && (
-            <MetaRow label={t('quotationDetail', 'convertedOrderLabel')} value={`#${quotation.converted_order_id}`} />
-          )}
         </View>
+
+        {quotation.feasibility_id && (
+          <Pressable onPress={goToFeasibility} style={styles.linkRow}>
+            <Feather name="check-circle" size={14} color={colors.gold300} />
+            <Text style={styles.linkRowText}>{t('quotationDetail', 'viewFeasibility')}</Text>
+            <Feather name="chevron-right" size={14} color={whiteAlpha(0.3)} style={{ marginLeft: 'auto' }} />
+          </Pressable>
+        )}
+        {quotation.converted_order_id && (
+          <Pressable onPress={goToOrder} style={styles.linkRow}>
+            <Feather name="package" size={14} color={colors.gold300} />
+            <Text style={styles.linkRowText}>{t('quotationDetail', 'viewOrder')}</Text>
+            <Feather name="chevron-right" size={14} color={whiteAlpha(0.3)} style={{ marginLeft: 'auto' }} />
+          </Pressable>
+        )}
 
         <Text style={styles.sectionTitle}>{t('quotationDetail', 'linesTitle')}</Text>
 
@@ -474,6 +509,18 @@ const styles = StyleSheet.create({
   headerIconBtn: { padding: 4 },
   title: { fontFamily: fonts.display, fontSize: 19, color: colors.white },
   subtitle: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.5), marginTop: 2 },
+  linkText: { color: colors.gold300 },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: whiteAlpha(0.04),
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  linkRowText: { fontFamily: fonts.sansMedium, fontSize: 13, color: colors.gold300 },
 
   metaBox: { backgroundColor: whiteAlpha(0.04), borderRadius: 12, padding: 14, gap: 4, marginBottom: 18 },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, gap: 12 },

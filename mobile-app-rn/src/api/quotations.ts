@@ -160,23 +160,6 @@ export function downloadQuotationPdf(quotationId: number, quotationNumber: strin
   return downloadAndOpenFile(`/api/quotations/${quotationId}/pdf`, `${quotationNumber}.pdf`);
 }
 
-export interface QuotationSummary {
-  id: number;
-  quotation_number: string;
-  quotation_date: string;
-  status: QuotationStatus;
-  total_amount: number;
-}
-
-// A client's quotation history -- used by ClientHistoryScreen.
-export function listQuotationsForCustomer(customerId: number) {
-  const query = new URLSearchParams();
-  query.set('customer_id', String(customerId));
-  query.set('page_size', '100');
-  query.set('sort', '-quotation_date');
-  return api<PagedResponse<QuotationSummary>>(`/api/quotations?${query.toString()}`);
-}
-
 // Looks up the quotation auto-created for a feasibility check whose
 // run_check came back already 'converted' (see FeasibilityOut.status in
 // api/feasibility.ts) -- there's exactly one, since a feasibility can

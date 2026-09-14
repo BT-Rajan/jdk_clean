@@ -51,14 +51,24 @@ function newLine(): LineDraft {
   return { key: `l${keySeq}`, productId: null, quantity: '' };
 }
 
-export function NewQuotationScreen({ navigation }: Props) {
+export function NewQuotationScreen({ route, navigation }: Props) {
   const { t } = useLocale();
+  // Preset when arriving here from a Client's activity hub ("+
+  // Quotation" for that client) or a Product Catalog row's "Start
+  // Quotation" action -- either way this is still the same feasibility
+  // -> quotation flow, just with the first field(s) already filled in.
+  const presetCustomerId = route.params?.customerId;
+  const presetProductId = route.params?.productId;
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const [customerId, setCustomerId] = useState<string | null>(null);
-  const [lines, setLines] = useState<LineDraft[]>([newLine()]);
+  const [customerId, setCustomerId] = useState<string | null>(presetCustomerId ? String(presetCustomerId) : null);
+  const [lines, setLines] = useState<LineDraft[]>(() => {
+    const first = newLine();
+    return [presetProductId ? { ...first, productId: String(presetProductId) } : first];
+  });
   const [date, setDate] = useState<Date | null>(null);
 
   const [formError, setFormError] = useState<string | null>(null);

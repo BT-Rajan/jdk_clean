@@ -14,14 +14,18 @@ import { confirm } from '../../utils/alerts';
 import { formatCurrency } from '../../utils/format';
 import {
   getOrder,
+  getOrderJourney,
   updateOrderStatus,
   deleteOrder,
   downloadOrderPdf,
   Order,
+  OrderJourney,
   OrderStatus,
   ORDER_TRANSITIONS,
   ORDER_STATUSES_REQUIRING_REASON,
 } from '../../api/orders';
+import { FeasibilityStatus } from '../../api/feasibility';
+import { QuotationStatus } from '../../api/quotations';
 import { OrdersStackParamList } from '../../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<OrdersStackParamList, 'OrderDetail'>;
@@ -31,11 +35,31 @@ function statusLabel(t: LocaleT, status: OrderStatus): string {
   return t('orderStatus', status);
 }
 
+const FEASIBILITY_STATUS_KEYS = [
+  'draft',
+  'feasible',
+  'exception_pending',
+  'exception_approved',
+  'exception_rejected',
+  'closed',
+  'converted',
+  'expired',
+];
+const QUOTATION_STATUS_KEYS = ['draft', 'sent', 'accepted', 'rejected', 'expired', 'converted'];
+
+function journeyFeasibilityLabel(t: LocaleT, status: string): string {
+  return FEASIBILITY_STATUS_KEYS.includes(status) ? t('feasibilityStatus', status as FeasibilityStatus) : status;
+}
+function journeyQuotationLabel(t: LocaleT, status: string): string {
+  return QUOTATION_STATUS_KEYS.includes(status) ? t('quotationStatus', status as QuotationStatus) : status;
+}
+
 export function OrderDetailScreen({ route, navigation }: Props) {
   const { t } = useLocale();
   const { orderId } = route.params;
 
   const [order, setOrder] = useState<Order | null>(null);
+  const [journey, setJourney] = useState<OrderJourney | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
@@ -48,6 +72,10 @@ export function OrderDetailScreen({ route, navigation }: Props) {
     try {
       const o = await getOrder(orderId);
       setOrder(o);
+      // Best-effort -- the journey trace is a nice-to-have (ties this
+      // order back to the feasibility check/quotation it came from, if
+      // any), not something that should block the rest of the page.
+      getOrderJourney(orderId).then(setJourney).catch(() => setJourney(null));
     } catch (err: any) {
       setError(err?.message ?? t('orderDetail', 'loadError'));
     } finally {
@@ -97,6 +125,30 @@ export function OrderDetailScreen({ route, navigation }: Props) {
     }
   }
 
+  function goToCustomer() {
+    if (!order) return;
+    (navigation.getParent() as any)?.navigate('Clients', {
+      screen: 'ClientHistory',
+      params: { customerId: order.customer_id, customerName: order.customer_name ?? '' },
+    });
+  }
+
+  function goToFeasibility() {
+    if (!journey?.feasibility) return;
+    (navigation.getParent() as any)?.navigate('Quotations', {
+      screen: 'FeasibilityDetail',
+      params: { feasibilityId: journey.feasibility.id },
+    });
+  }
+
+  function goToQuotation() {
+    if (!journey?.quotation) return;
+    (navigation.getParent() as any)?.navigate('Quotations', {
+      screen: 'QuotationDetail',
+      params: { quotationId: journey.quotation.id },
+    });
+  }
+
   async function handleDownloadPdf() {
     if (!order) return;
     setError(null);
@@ -135,7 +187,9 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>{order.order_number}</Text>
-            <Text style={styles.subtitle}>{order.customer_name ?? '—'}</Text>
+            <Pressable onPress={goToCustomer} hitSlop={6}>
+              <Text style={[styles.subtitle, styles.linkText]}>{order.customer_name ?? '—'}</Text>
+            </Pressable>
           </View>
           <StatusBadge status={order.status} label={statusLabel(t, order.status)} />
           {isDraft && (
@@ -155,6 +209,30 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           )}
           {order.close_reason && <MetaRow label={t('orderDetail', 'closeReasonLabel')} value={order.close_reason} />}
         </View>
+
+        {journey && (journey.feasibility || journey.quotation) && (
+          <View style={{ marginBottom: 18 }}>
+            <Text style={styles.sectionTitle}>{t('orderDetail', 'journeyTitle')}</Text>
+            {journey.feasibility && (
+              <Pressable onPress={goToFeasibility} style={styles.linkRow}>
+                <Feather name="check-circle" size={14} color={colors.gold300} />
+                <Text style={styles.linkRowText}>
+                  {journey.feasibility.feasibility_number} · {journeyFeasibilityLabel(t, journey.feasibility.status)}
+                </Text>
+                <Feather name="chevron-right" size={14} color={whiteAlpha(0.3)} style={{ marginLeft: 'auto' }} />
+              </Pressable>
+            )}
+            {journey.quotation && (
+              <Pressable onPress={goToQuotation} style={styles.linkRow}>
+                <Feather name="file-text" size={14} color={colors.gold300} />
+                <Text style={styles.linkRowText}>
+                  {journey.quotation.quotation_number} · {journeyQuotationLabel(t, journey.quotation.status)}
+                </Text>
+                <Feather name="chevron-right" size={14} color={whiteAlpha(0.3)} style={{ marginLeft: 'auto' }} />
+              </Pressable>
+            )}
+          </View>
+        )}
 
         <Text style={styles.sectionTitle}>{t('orderDetail', 'linesTitle')}</Text>
         <View style={{ gap: 8 }}>
@@ -247,6 +325,18 @@ const styles = StyleSheet.create({
   headerIconBtn: { padding: 4 },
   title: { fontFamily: fonts.display, fontSize: 19, color: colors.white },
   subtitle: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.5), marginTop: 2 },
+  linkText: { color: colors.gold300 },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: whiteAlpha(0.04),
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  linkRowText: { fontFamily: fonts.sansMedium, fontSize: 13, color: colors.gold300 },
 
   metaBox: { backgroundColor: whiteAlpha(0.04), borderRadius: 12, padding: 14, gap: 4, marginBottom: 18 },
   metaRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4, gap: 12 },
