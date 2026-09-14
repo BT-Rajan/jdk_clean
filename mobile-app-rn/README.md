@@ -65,22 +65,23 @@ no direct RN equivalent:
 ```
 App.tsx                        font loading, splash screen, providers
 src/theme.ts                   colors/fonts/radii ported from index.css
-src/api/client.ts              fetch wrapper: bearer auth, 401→refresh→logout
-src/api/auth.ts                POST /api/auth/login, GET /api/auth/me
-src/api/customers.ts           full Customer CRUD (list/get/create/update/delete/restore/activate)
+src/api/client.ts              fetch wrapper: bearer auth, 401→refresh→logout; uploadFile/downloadAndOpenFile/viewFile for binary endpoints
+src/api/auth.ts                POST /api/auth/login, GET /api/auth/me, GET /api/auth/me/history
+src/api/customers.ts           full Customer onboarding (create/edit/delete/restore/activate, credit status, id document, onboarding-status transitions)
 src/api/catalog.ts             products, feasibility, quotations
 src/context/AuthContext.tsx    session state, persisted via AsyncStorage
 src/i18n/translations.ts       EN/AR string dictionaries (typed -- ar must match en's exact shape)
 src/i18n/LocaleContext.tsx     t(), locale persistence, RTL (see "Bilingual (EN/AR)" below)
-src/components/                Button, TextField, SelectField, Alert, GlassCard, Logo, SplashView
+src/components/                Button, TextField, SelectField, Alert, GlassCard, Logo, SplashView, IdDocumentPanel, StatusBadge, StatusTransitionButtons
 src/screens/LoginScreen.tsx           EN/AR toggle lives here
-src/screens/HomeScreen.tsx            product image scroller + feature tile grid (Quick Quote/Clients wired; others mocked "coming soon")
-src/screens/QuickQuoteScreen.tsx      client+product+qty+date → yes/no → quote or admin-notify
+src/screens/HomeScreen.tsx            product image scroller + feature tile grid (Quick Quote/Clients/Product Catalog wired or mocked "coming soon"; 2 generic placeholder tiles for what's left)
+src/screens/QuickQuoteScreen.tsx      client+product+qty+date → yes/no → quote (+ PDF download) or admin-notify
 src/screens/ClientsListScreen.tsx     searchable client list, edit/disable row icons
-src/screens/ClientFormScreen.tsx      create/edit/delete a client
+src/screens/ClientFormScreen.tsx      new-client wizard + edit/onboarding-status/id-document/credit-status/delete (see "Wiring" below)
 src/screens/ClientHistoryScreen.tsx   a client's quotation ("order") history
-src/navigation/RootNavigator.tsx      auth gate → drawer (Home/Enquiry/Clients); `linking` config maps screens to URLs so the phone's back button navigates in-app
-src/navigation/DrawerContent.tsx      custom drawer list (Enquiry, Clients) + pinned Logout footer
+src/screens/MyHistoryScreen.tsx       the signed-in user's own action history, current calendar month only
+src/navigation/RootNavigator.tsx      auth gate → drawer (Home/Enquiry/Clients/History); `linking` config maps screens to URLs so the phone's back button navigates in-app
+src/navigation/DrawerContent.tsx      custom drawer list (Enquiry, Clients, History) + pinned Logout footer
 src/navigation/HeaderTitle.tsx        company logo + name, shown in the drawer's header
 ```
 
@@ -154,6 +155,17 @@ picking one by whether `route.params.customerId` is set):
 - Delete: `DELETE /api/customers/{id}` (soft delete — `restoreCustomer`
   in `api/customers.ts` is there if you want to add an "undo"/trash
   view later; not wired into a screen yet)
+
+**History** (drawer item, `MyHistoryScreen.tsx`) — `GET
+/api/auth/me/history`, a new endpoint (there's no web equivalent):
+every audit-log row this signed-in user has personally generated
+(`changed_by` = them), across every table, restricted server-side to
+the current calendar month (`audit_service.get_my_history` — pass
+`?month=YYYY-MM` to look at a different one, though this screen
+doesn't build a month picker, it just shows "now"). Deliberately
+scoped this way rather than reusing `GET /{resource}/{id}/history`
+(one record's trail, any actor) — this is the opposite shape, one
+actor's trail across every record they've touched.
 
 ## Progressive Web App (mobile Chrome)
 
