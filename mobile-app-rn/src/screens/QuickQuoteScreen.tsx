@@ -12,7 +12,12 @@ import { useLocale } from '../i18n/LocaleContext';
 import { listCustomers, Customer } from '../api/customers';
 import { listProducts, Product, createFeasibility, runFeasibility, requestFeasibilityException, createQuotation } from '../api/catalog';
 
+// 'feasible_pending' -- the check passed but nothing has been quoted
+// yet; the green "Generate Quotation" button is the explicit action
+// that actually creates it (previously this happened automatically the
+// instant the check passed, with no confirmation step at all).
 type ResultState =
+  | { kind: 'feasible_pending'; feasibilityId: number; customerId: number; productId: number; quantity: number; unitPrice: number }
   | { kind: 'feasible'; quotationNumber: string; total: number; validUntil: string }
   | { kind: 'not_feasible' }
   | null;
@@ -42,6 +47,7 @@ export function QuickQuoteScreen() {
   const [formError, setFormError] = useState<string | null>(null);
   const [statusLine, setStatusLine] = useState('');
   const [isChecking, setIsChecking] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
   const [result, setResult] = useState<ResultState>(null);
 
   useEffect(() => {
@@ -71,6 +77,8 @@ export function QuickQuoteScreen() {
     setFormError(null);
   }
 
+  // Step 1 -- the feasibility check itself. On a pass this only reveals
+  // the "Generate Quotation" button; it doesn't create anything yet.
   async function handleCheck() {
     setFormError(null);
     const qty = parseFloat(quantity);
@@ -80,61 +88,25 @@ export function QuickQuoteScreen() {
     if (!qty || qty <= 0) return setFormError(t('quickQuote', 'invalidQuantityError'));
     if (!date) return setFormError(t('quickQuote', 'selectDateError'));
 
-    const dateIso = toIsoDate(date);
-
     setIsChecking(true);
     try {
       setStatusLine(t('quickQuote', 'runningCheck'));
       const created = await createFeasibility({
         customer_id: Number(customerId),
-        required_by_date: dateIso,
+        required_by_date: toIsoDate(date),
         lines: [{ product_id: Number(productId), quantity: qty }],
       });
       const checked = await runFeasibility(created.id);
 
       if (checked.status === 'feasible') {
-        setStatusLine(t('quickQuote', 'generatingQuote'));
         const product = products.find((p) => String(p.id) === productId);
-        const unitPrice = product?.selling_price ?? 0;
-        const quotationPayload = {
-          customer_id: Number(customerId),
-          feasibility_id: created.id,
-          quotation_date: toIsoDate(new Date()),
-          lines: [{ product_id: Number(productId), quantity: qty, unit_price: unitPrice, discount_percent: 0 }],
-        };
-
-        let quotation;
-        try {
-          quotation = await createQuotation(quotationPayload);
-        } catch (err) {
-          // 409 here specifically means this quotation's material needs
-          // overlap another still-open quotation/order -- the backend
-          // requires an explicit acknowledgment to proceed anyway (see
-          // quotation_service.check_material_conflicts). Any other error
-          // just rethrows to the outer catch below as normal.
-          if (err instanceof ApiError && err.status === 409) {
-            const conflictMessage = err.message;
-            const proceed = await new Promise<boolean>((resolve) => {
-              RNAlert.alert(t('quickQuote', 'materialConflictTitle'), conflictMessage, [
-                { text: t('common', 'cancel'), style: 'cancel', onPress: () => resolve(false) },
-                { text: t('quickQuote', 'proceedAnyway'), onPress: () => resolve(true) },
-              ]);
-            });
-            if (!proceed) {
-              setResult(null);
-              return;
-            }
-            quotation = await createQuotation({ ...quotationPayload, material_conflict_acknowledged: true });
-          } else {
-            throw err;
-          }
-        }
-
         setResult({
-          kind: 'feasible',
-          quotationNumber: quotation.quotation_number,
-          total: quotation.total_amount,
-          validUntil: quotation.valid_until,
+          kind: 'feasible_pending',
+          feasibilityId: created.id,
+          customerId: Number(customerId),
+          productId: Number(productId),
+          quantity: qty,
+          unitPrice: product?.selling_price ?? 0,
         });
       } else {
         setStatusLine(t('quickQuote', 'notifyingAdmin'));
@@ -152,30 +124,113 @@ export function QuickQuoteScreen() {
     }
   }
 
-  if (result) {
-    const isYes = result.kind === 'feasible';
+  // Step 2 -- only reached by explicitly pressing "Generate Quotation".
+  async function handleGenerateQuotation(pending: Extract<ResultState, { kind: 'feasible_pending' }>) {
+    setFormError(null);
+    setIsGenerating(true);
+    try {
+      const quotationPayload = {
+        customer_id: pending.customerId,
+        feasibility_id: pending.feasibilityId,
+        quotation_date: toIsoDate(new Date()),
+        lines: [{ product_id: pending.productId, quantity: pending.quantity, unit_price: pending.unitPrice, discount_percent: 0 }],
+      };
+
+      let quotation;
+      try {
+        quotation = await createQuotation(quotationPayload);
+      } catch (err) {
+        // 409 here specifically means this quotation's material needs
+        // overlap another still-open quotation/order -- the backend
+        // requires an explicit acknowledgment to proceed anyway (see
+        // quotation_service.check_material_conflicts). Any other error
+        // just rethrows to the outer catch below as normal.
+        if (err instanceof ApiError && err.status === 409) {
+          const conflictMessage = err.message;
+          const proceed = await new Promise<boolean>((resolve) => {
+            RNAlert.alert(t('quickQuote', 'materialConflictTitle'), conflictMessage, [
+              { text: t('common', 'cancel'), style: 'cancel', onPress: () => resolve(false) },
+              { text: t('quickQuote', 'proceedAnyway'), onPress: () => resolve(true) },
+            ]);
+          });
+          if (!proceed) return;
+          quotation = await createQuotation({ ...quotationPayload, material_conflict_acknowledged: true });
+        } else {
+          throw err;
+        }
+      }
+
+      setResult({
+        kind: 'feasible',
+        quotationNumber: quotation.quotation_number,
+        total: quotation.total_amount,
+        validUntil: quotation.valid_until,
+      });
+    } catch (err: any) {
+      setFormError(err?.message ?? t('quickQuote', 'genericError'));
+    } finally {
+      setIsGenerating(false);
+    }
+  }
+
+  if (result?.kind === 'feasible_pending') {
     return (
       <ScrollView contentContainerStyle={styles.screen}>
         <GlassCard strong style={styles.resultCard}>
-          <View style={[styles.resultIcon, isYes ? styles.iconYes : styles.iconNo]}>
-            <Text style={[styles.resultIconText, { color: isYes ? colors.emerald400 : colors.red400 }]}>
-              {isYes ? '✓' : '✕'}
-            </Text>
+          <View style={[styles.resultIcon, styles.iconYes]}>
+            <Text style={[styles.resultIconText, { color: colors.emerald400 }]}>✓</Text>
           </View>
-          <Text style={[styles.resultTitle, { color: isYes ? colors.emerald400 : colors.red400 }]}>
-            {isYes ? t('quickQuote', 'yesTitle') : t('quickQuote', 'noTitle')}
-          </Text>
-          <Text style={styles.resultDetail}>
-            {isYes ? t('quickQuote', 'yesDetail') : t('quickQuote', 'noDetail')}
-          </Text>
+          <Text style={[styles.resultTitle, { color: colors.emerald400 }]}>{t('quickQuote', 'yesTitle')}</Text>
+          <Text style={styles.resultDetail}>{t('quickQuote', 'feasibleDetail')}</Text>
 
-          {isYes && result.kind === 'feasible' && (
-            <View style={styles.summaryBox}>
-              <SummaryRow label={t('quickQuote', 'quotationNumberLabel')} value={result.quotationNumber} />
-              <SummaryRow label={t('quickQuote', 'totalLabel')} value={result.total.toFixed(2)} />
-              <SummaryRow label={t('quickQuote', 'validUntilLabel')} value={result.validUntil} />
-            </View>
-          )}
+          <Alert variant="error">{formError}</Alert>
+
+          <Button
+            variant="success"
+            onPress={() => handleGenerateQuotation(result)}
+            isLoading={isGenerating}
+            style={{ marginTop: 22, width: '100%' }}
+          >
+            {t('quickQuote', 'generateQuotation')}
+          </Button>
+        </GlassCard>
+      </ScrollView>
+    );
+  }
+
+  if (result?.kind === 'not_feasible') {
+    return (
+      <ScrollView contentContainerStyle={styles.screen}>
+        <GlassCard strong style={styles.resultCard}>
+          <View style={[styles.resultIcon, styles.iconNo]}>
+            <Text style={[styles.resultIconText, { color: colors.red400 }]}>✕</Text>
+          </View>
+          <Text style={[styles.resultTitle, { color: colors.red400 }]}>{t('quickQuote', 'noTitle')}</Text>
+          <Text style={styles.resultDetail}>{t('quickQuote', 'noDetail')}</Text>
+
+          <Button variant="subtle" onPress={resetForm} style={{ marginTop: 22, width: '100%' }}>
+            {t('quickQuote', 'tryAgain')}
+          </Button>
+        </GlassCard>
+      </ScrollView>
+    );
+  }
+
+  if (result?.kind === 'feasible') {
+    return (
+      <ScrollView contentContainerStyle={styles.screen}>
+        <GlassCard strong style={styles.resultCard}>
+          <View style={[styles.resultIcon, styles.iconYes]}>
+            <Text style={[styles.resultIconText, { color: colors.emerald400 }]}>✓</Text>
+          </View>
+          <Text style={[styles.resultTitle, { color: colors.emerald400 }]}>{t('quickQuote', 'yesTitle')}</Text>
+          <Text style={styles.resultDetail}>{t('quickQuote', 'yesDetail')}</Text>
+
+          <View style={styles.summaryBox}>
+            <SummaryRow label={t('quickQuote', 'quotationNumberLabel')} value={result.quotationNumber} />
+            <SummaryRow label={t('quickQuote', 'totalLabel')} value={result.total.toFixed(2)} />
+            <SummaryRow label={t('quickQuote', 'validUntilLabel')} value={result.validUntil} />
+          </View>
 
           <Button variant="ghost" onPress={resetForm} style={{ marginTop: 22, width: '100%' }}>
             {t('quickQuote', 'startAnother')}

@@ -62,6 +62,9 @@ const en = {
     totalLabel: 'Total',
     validUntilLabel: 'Valid until',
     startAnother: 'Start another check',
+    generateQuotation: 'Generate Quotation',
+    tryAgain: 'Try again',
+    feasibleDetail: 'Stock and capacity can cover this request. Generate the quotation to finish.',
   },
   clients: {
     title: 'Clients',
@@ -194,6 +197,9 @@ const ar: typeof en = {
     totalLabel: 'الإجمالي',
     validUntilLabel: 'صالح حتى',
     startAnother: 'بدء فحص آخر',
+    generateQuotation: 'إصدار عرض السعر',
+    tryAgain: 'حاول مرة أخرى',
+    feasibleDetail: 'المخزون والطاقة الإنتاجية يمكنهما تغطية هذا الطلب. أصدر عرض السعر للإنهاء.',
   },
   clients: {
     title: 'العملاء',
