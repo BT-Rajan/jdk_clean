@@ -64,6 +64,11 @@ export function createQuotation(payload: {
   quotation_date: string;
   lines: { product_id: number; quantity: number; unit_price: number; discount_percent: number }[];
   language?: 'en' | 'ar';
+  // Required when a prior attempt came back 409 because this quotation's
+  // material needs overlap another still-open quotation/order -- see
+  // backend/app/services/quotation_service.py's check_material_conflicts.
+  // Retrying the exact same call with this set to true proceeds anyway.
+  material_conflict_acknowledged?: boolean;
 }) {
   return api<QuotationOut>('/api/quotations', {
     method: 'POST',

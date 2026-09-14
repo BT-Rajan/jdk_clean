@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert as RNAlert, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { DateField } from '../components/DateField';
@@ -7,6 +7,7 @@ import { GlassCard } from '../components/GlassCard';
 import { SelectField, SelectOption } from '../components/SelectField';
 import { TextField } from '../components/TextField';
 import { colors, fonts, whiteAlpha } from '../theme';
+import { ApiError } from '../api/client';
 import { listCustomers, Customer } from '../api/customers';
 import { listProducts, Product, createFeasibility, runFeasibility, requestFeasibilityException, createQuotation } from '../api/catalog';
 
@@ -93,13 +94,39 @@ export function QuickQuoteScreen() {
         setStatusLine('Feasible — generating quotation…');
         const product = products.find((p) => String(p.id) === productId);
         const unitPrice = product?.selling_price ?? 0;
-
-        const quotation = await createQuotation({
+        const quotationPayload = {
           customer_id: Number(customerId),
           feasibility_id: created.id,
           quotation_date: toIsoDate(new Date()),
           lines: [{ product_id: Number(productId), quantity: qty, unit_price: unitPrice, discount_percent: 0 }],
-        });
+        };
+
+        let quotation;
+        try {
+          quotation = await createQuotation(quotationPayload);
+        } catch (err) {
+          // 409 here specifically means this quotation's material needs
+          // overlap another still-open quotation/order -- the backend
+          // requires an explicit acknowledgment to proceed anyway (see
+          // quotation_service.check_material_conflicts). Any other error
+          // just rethrows to the outer catch below as normal.
+          if (err instanceof ApiError && err.status === 409) {
+            const conflictMessage = err.message;
+            const proceed = await new Promise<boolean>((resolve) => {
+              RNAlert.alert('Material conflict', conflictMessage, [
+                { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
+                { text: 'Proceed anyway', onPress: () => resolve(true) },
+              ]);
+            });
+            if (!proceed) {
+              setResult(null);
+              return;
+            }
+            quotation = await createQuotation({ ...quotationPayload, material_conflict_acknowledged: true });
+          } else {
+            throw err;
+          }
+        }
 
         setResult({
           kind: 'feasible',
