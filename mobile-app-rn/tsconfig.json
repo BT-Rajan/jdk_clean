@@ -2,5 +2,13 @@
   "extends": "expo/tsconfig.base",
   "compilerOptions": {
     "strict": true
-  }
+  },
+  // expo/tsconfig.base excludes node_modules but not dist/ -- without
+  // this, `tsc` picks up the built web bundle (expo/tsconfig.base sets
+  // allowJs: true) as a *source* file after `npm run build:web`, and
+  // its minified output happens to declare local `process`/`env`
+  // variables that shadow the real global `process.env` types, breaking
+  // every process.env.* reference in the whole project with a
+  // nonsensical "does not exist on type 'typeof env'" error.
+  "exclude": ["node_modules", "dist"]
 }
