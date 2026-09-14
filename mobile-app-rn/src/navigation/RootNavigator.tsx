@@ -86,7 +86,16 @@ export function RootNavigator() {
   if (!isReady) return null;
 
   return (
-    <NavigationContainer theme={navTheme}>
+    <NavigationContainer
+      theme={navTheme}
+      documentTitle={{
+        // React Navigation's web title otherwise falls back to the
+        // current screen's `options.title`, which is `undefined` on the
+        // (title-less) login screen -- shows as a literal "undefined"
+        // browser tab title, so give it an explicit default.
+        formatter: (options) => (options?.title ? `${options.title} — JDK Quick Quote` : 'JDK Quick Quote'),
+      }}
+    >
       {isAuthenticated ? <MainTabs /> : <LoginScreen />}
     </NavigationContainer>
   );

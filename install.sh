@@ -1,22 +1,25 @@
 #!/usr/bin/env bash
 #
 # Interactive installer for jdk_clean: sets up the backend (FastAPI),
-# frontend (React), and process management (pm2), asking along the way
-# rather than requiring a pile of flags up front.
+# frontend (React), mobile PWA (Expo/React Native web build), and
+# process management (pm2), asking along the way rather than requiring
+# a pile of flags up front.
 #
 # If backend/.env, frontend/.env, and ecosystem.config.js already all
 # exist, you're asked ONCE up front whether to reuse them as-is -- if
 # so, every database/port/secret question is skipped entirely and the
-# existing values (including the backend/frontend ports) are read back
-# out of those files. Say no (or if any of the three is missing) and
-# you get the full configuration walkthrough, same as a fresh install.
+# existing values (including the backend/frontend/mobile ports) are
+# read back out of those files. Say no (or if any of the three is
+# missing) and you get the full configuration walkthrough, same as a
+# fresh install.
 #
-# Both apps run as a single pm2 service ('jdk', via scripts/run-all.mjs)
-# rather than two separate ones, so `pm2 status`/`pm2 logs`/`pm2 restart`
-# only ever have one thing to say. Database migrations always run
-# (idempotent -- safe on every install/re-run), and once pm2 starts the
-# service this script waits for and checks both the backend and frontend
-# to actually answer before declaring success.
+# All three apps run as a single pm2 service ('jdk', via
+# scripts/run-all.mjs) rather than separate ones, so `pm2
+# status`/`pm2 logs`/`pm2 restart` only ever have one thing to say.
+# Database migrations always run (idempotent -- safe on every
+# install/re-run), and once pm2 starts the service this script waits
+# for and checks the backend, frontend, and mobile PWA to actually
+# answer before declaring success.
 #
 # Usage: ./install.sh   (run from the repo root)
 
@@ -92,14 +95,15 @@ require_cmd() {
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$SCRIPT_DIR/backend"
 FRONTEND_DIR="$SCRIPT_DIR/frontend"
+MOBILE_DIR="$SCRIPT_DIR/mobile-app-rn"
 ECOSYSTEM_FILE="$SCRIPT_DIR/ecosystem.config.js"
 
-[[ -d "$BACKEND_DIR" && -d "$FRONTEND_DIR" ]] \
-  || die "Run this from the repo root (expected ./backend and ./frontend here)."
+[[ -d "$BACKEND_DIR" && -d "$FRONTEND_DIR" && -d "$MOBILE_DIR" ]] \
+  || die "Run this from the repo root (expected ./backend, ./frontend, and ./mobile-app-rn here)."
 
 echo ""
 echo "${BOLD}jdk_clean — interactive installer${RESET}"
-echo "${DIM}Sets up the backend, frontend, and pm2 process management.${RESET}"
+echo "${DIM}Sets up the backend, frontend, mobile PWA, and pm2 process management.${RESET}"
 
 # ---------------------------------------------------------------------
 # Prerequisites
@@ -155,6 +159,7 @@ CREATE_DB=n
 LOAD_SCHEMA=n
 WRITE_BACKEND_ENV=n
 WRITE_FRONTEND_ENV=n
+WRITE_MOBILE_ENV=n
 WRITE_ECOSYSTEM=n
 
 if [[ "$REUSE_CONFIG" == "y" ]]; then
@@ -170,9 +175,10 @@ if [[ "$REUSE_CONFIG" == "y" ]]; then
   # script right here with no message at all -- exactly what an older
   # ecosystem.config.js (from before this became a single-service
   # layout, e.g. one with no BACKEND_PORT key at all) does. `|| true`
-  # lets that fall through to the explicit, informative check below.
+  # lets that fall through to the explicit, informative checks below.
   BACKEND_PORT=$(grep -oP "(?<=BACKEND_PORT: ')\d+" "$ECOSYSTEM_FILE" | head -1 || true)
   FRONTEND_PORT=$(grep -oP "(?<=FRONTEND_PORT: ')\d+" "$ECOSYSTEM_FILE" | head -1 || true)
+  MOBILE_PORT=$(grep -oP "(?<=MOBILE_PORT: ')\d+" "$ECOSYSTEM_FILE" | head -1 || true)
   BACKEND_URL=$(grep -oP "(?<=API_BASE_URL: ')[^']+" "$ECOSYSTEM_FILE" | head -1 || true)
 
   if [[ -z "$BACKEND_PORT" || -z "$FRONTEND_PORT" ]]; then
@@ -181,10 +187,17 @@ if [[ "$REUSE_CONFIG" == "y" ]]; then
     DEFAULT_BACKEND_URL_FROM_ENV=$(grep -oP '(?<=^VITE_API_BASE_URL=).+' "$FRONTEND_DIR/.env" | head -1 || true)
     BACKEND_PORT=$(ask "Backend port" "8000")
     FRONTEND_PORT=$(ask "Frontend port" "4173")
+    MOBILE_PORT=$(ask "Mobile PWA port" "4174")
     BACKEND_URL=$(ask "Backend base URL (used for the frontend's VITE_API_BASE_URL / CSP)" "${DEFAULT_BACKEND_URL_FROM_ENV:-http://localhost:${BACKEND_PORT}}")
     WRITE_ECOSYSTEM=y
+    WRITE_MOBILE_ENV=y
+  elif [[ -z "$MOBILE_PORT" ]]; then
+    warn "ecosystem.config.js doesn't have a MOBILE_PORT yet (from before the mobile PWA was wired into pm2) -- just need that to regenerate it."
+    MOBILE_PORT=$(ask "Mobile PWA port" "4174")
+    WRITE_ECOSYSTEM=y
+    WRITE_MOBILE_ENV=y
   else
-    ok "Using existing ports: backend ${BACKEND_PORT}, frontend ${FRONTEND_PORT}, API base URL ${BACKEND_URL:-<not set>}."
+    ok "Using existing ports: backend ${BACKEND_PORT}, frontend ${FRONTEND_PORT}, mobile ${MOBILE_PORT}, API base URL ${BACKEND_URL:-<not set>}."
   fi
 else
   heading "Database"
@@ -253,8 +266,13 @@ else
   FRONTEND_ORIGIN=$(ask "Frontend origin(s) (used for the backend's CORS_ORIGINS -- comma-separated is fine)" "$DEFAULT_FRONTEND_ORIGIN")
   BACKEND_URL=$(ask "Backend base URL (used for the frontend's VITE_API_BASE_URL)" "$DEFAULT_BACKEND_URL")
 
+  heading "Mobile PWA"
+
+  MOBILE_PORT=$(ask "Mobile PWA port" "4174")
+
   WRITE_BACKEND_ENV=y
   WRITE_FRONTEND_ENV=y
+  WRITE_MOBILE_ENV=y
   WRITE_ECOSYSTEM=y
 fi
 
@@ -435,9 +453,44 @@ ok "Frontend built."
 cd "$SCRIPT_DIR"
 
 # ---------------------------------------------------------------------
-# pm2 ecosystem file -- ONE service ('jdk') running both the backend
-# and frontend as child processes via scripts/run-all.mjs, instead of
-# two separate pm2 apps.
+# Mobile PWA setup -- same Expo app as mobile-app-rn/README.md's native
+# (Expo Go / device build) instructions, exported for web instead so it
+# can be served and installed as a PWA from mobile Chrome.
+# ---------------------------------------------------------------------
+heading "Setting up the mobile PWA"
+cd "$MOBILE_DIR"
+
+# Same skip-if-unchanged check as the frontend's package-lock.json above.
+PACKAGE_LOCK_HASH_FILE="node_modules/.package-lock.sha256"
+PACKAGE_LOCK_HASH="$(sha256sum package-lock.json | awk '{print $1}')"
+if [[ -d node_modules && -f "$PACKAGE_LOCK_HASH_FILE" && "$(cat "$PACKAGE_LOCK_HASH_FILE")" == "$PACKAGE_LOCK_HASH" ]]; then
+  ok "Node dependencies already up to date (package-lock.json unchanged) -- skipping install."
+else
+  info "Installing Node dependencies..."
+  npm ci --no-audit --no-fund --silent
+  echo "$PACKAGE_LOCK_HASH" > "$PACKAGE_LOCK_HASH_FILE"
+  ok "Mobile PWA dependencies installed."
+fi
+
+if [[ "$WRITE_MOBILE_ENV" == "y" ]]; then
+  cat > .env <<ENVFILE
+EXPO_PUBLIC_API_BASE_URL=${BACKEND_URL}
+ENVFILE
+  ok "Wrote mobile-app-rn/.env"
+else
+  ok "Using existing mobile-app-rn/.env."
+fi
+
+info "Building the mobile PWA for production (expo export --platform web)..."
+npm run build:web
+ok "Mobile PWA built."
+
+cd "$SCRIPT_DIR"
+
+# ---------------------------------------------------------------------
+# pm2 ecosystem file -- ONE service ('jdk') running the backend,
+# frontend, and mobile PWA as child processes via scripts/run-all.mjs,
+# instead of separate pm2 apps.
 # ---------------------------------------------------------------------
 heading "Process management (pm2)"
 
@@ -447,9 +500,9 @@ if [[ "$WRITE_ECOSYSTEM" == "y" ]]; then
 // Safe to edit by hand -- re-running install.sh will ask before
 // overwriting it (or will reuse it as-is if you say so up front).
 //
-// One pm2 service runs both the backend and frontend, via
+// One pm2 service runs the backend, frontend, and mobile PWA, via
 // scripts/run-all.mjs -- see that file's header for why (they
-// restart together, and 'pm2 logs jdk' shows both, prefixed).
+// restart together, and 'pm2 logs jdk' shows all three, prefixed).
 module.exports = {
   apps: [
     {
@@ -462,6 +515,7 @@ module.exports = {
       env: {
         BACKEND_PORT: '${BACKEND_PORT}',
         FRONTEND_PORT: '${FRONTEND_PORT}',
+        MOBILE_PORT: '${MOBILE_PORT}',
         API_BASE_URL: '${BACKEND_URL}',
       },
     },
@@ -496,8 +550,8 @@ if [[ "$START_PM2" == "y" ]]; then
   fi
 
   # -------------------------------------------------------------
-  # Health checks -- wait for both the backend and frontend to
-  # actually answer, not just for pm2 to say "online".
+  # Health checks -- wait for the backend, frontend, and mobile PWA
+  # to actually answer, not just for pm2 to say "online".
   # -------------------------------------------------------------
   heading "Health checks"
 
@@ -518,6 +572,7 @@ if [[ "$START_PM2" == "y" ]]; then
   HEALTH_OK=y
   wait_for_http "Backend" "http://localhost:${BACKEND_PORT}/api/health" || HEALTH_OK=n
   wait_for_http "Frontend" "http://localhost:${FRONTEND_PORT}/" || HEALTH_OK=n
+  wait_for_http "Mobile PWA" "http://localhost:${MOBILE_PORT}/" || HEALTH_OK=n
 
   if [[ "$HEALTH_OK" != "y" ]]; then
     warn "One or more health checks failed -- see 'pm2 logs jdk --lines 50 --nostream' for details (see README.md's \"Relaunching cleanly\" for what to check next)."
@@ -532,8 +587,9 @@ fi
 heading "${GREEN}Setup complete${RESET}"
 
 DISPLAY_HOST="${SERVER_HOST:-localhost}"
-echo "  Backend:   http://${DISPLAY_HOST}:${BACKEND_PORT}  (docs at /docs)"
-echo "  Frontend:  http://${DISPLAY_HOST}:${FRONTEND_PORT}"
+echo "  Backend:    http://${DISPLAY_HOST}:${BACKEND_PORT}  (docs at /docs)"
+echo "  Frontend:   http://${DISPLAY_HOST}:${FRONTEND_PORT}"
+echo "  Mobile PWA: http://${DISPLAY_HOST}:${MOBILE_PORT}  (open in mobile Chrome, then ⋮ menu → Add to Home screen -- needs HTTPS to actually install, see mobile-app-rn/README.md)"
 
 if [[ "$SEED_ADMIN" == "y" ]]; then
   echo ""
@@ -549,7 +605,7 @@ fi
 if [[ "$START_PM2" == "y" ]]; then
   echo ""
   echo "  pm2 status         -- check the service"
-  echo "  pm2 logs jdk       -- tail logs (both backend and frontend, prefixed)"
+  echo "  pm2 logs jdk       -- tail logs (backend, frontend, and mobile, prefixed)"
   echo "  pm2 restart jdk    -- restart"
   echo "  pm2 stop jdk       -- stop"
 fi

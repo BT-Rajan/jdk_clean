@@ -1,23 +1,25 @@
 #!/usr/bin/env node
 /**
- * Single-process launcher for pm2: runs the backend (uvicorn) and the
- * frontend static server (frontend/scripts/serve-static.mjs) as child
- * processes under one parent, so pm2 manages jdk_clean as ONE service
- * ('jdk' in ecosystem.config.js) instead of two separate apps.
+ * Single-process launcher for pm2: runs the backend (uvicorn), the
+ * frontend static server (frontend/scripts/serve-static.mjs), and the
+ * mobile PWA static server (mobile-app-rn/scripts/serve-static.mjs) as
+ * child processes under one parent, so pm2 manages jdk_clean as ONE
+ * service ('jdk' in ecosystem.config.js) instead of three separate apps.
  *
- * Both children's stdout/stderr are forwarded to this process's own
- * (prefixed with [backend]/[frontend]), so `pm2 logs jdk` still shows
- * both. If either child exits unexpectedly, this process tears the
- * other one down and exits non-zero too -- pm2's autorestart then
- * brings the whole pair back up together rather than leaving one half
- * running without the other.
+ * All three children's stdout/stderr are forwarded to this process's
+ * own (prefixed with [backend]/[frontend]/[mobile]), so `pm2 logs jdk`
+ * still shows all of them. If any child exits unexpectedly, this
+ * process tears the others down and exits non-zero too -- pm2's
+ * autorestart then brings the whole group back up together rather than
+ * leaving some running without the others.
  *
  * Usage: node scripts/run-all.mjs   (run from the repo root; see
  *        ecosystem.config.js, which sets cwd there)
  * Env:   BACKEND_PORT   -- port uvicorn listens on (default 8000)
- *        FRONTEND_PORT  -- port the static file server listens on (default 4173)
- *        API_BASE_URL   -- backend origin, passed through to serve-static.mjs
- *                           for its CSP connect-src
+ *        FRONTEND_PORT  -- port the frontend static file server listens on (default 4173)
+ *        MOBILE_PORT    -- port the mobile PWA static file server listens on (default 4174)
+ *        API_BASE_URL   -- backend origin, passed through to both static
+ *                           servers for their CSP connect-src
  */
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
@@ -27,9 +29,11 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const ROOT = resolve(__dirname, '..')
 const BACKEND_DIR = resolve(ROOT, 'backend')
 const FRONTEND_DIR = resolve(ROOT, 'frontend')
+const MOBILE_DIR = resolve(ROOT, 'mobile-app-rn')
 
 const BACKEND_PORT = process.env.BACKEND_PORT || '8000'
 const FRONTEND_PORT = process.env.FRONTEND_PORT || '4173'
+const MOBILE_PORT = process.env.MOBILE_PORT || '4174'
 
 const children = []
 let shuttingDown = false
@@ -85,4 +89,11 @@ spawnChild(
   process.execPath,
   ['scripts/serve-static.mjs'],
   { cwd: FRONTEND_DIR, env: { ...process.env, PORT: FRONTEND_PORT } },
+)
+
+spawnChild(
+  'mobile',
+  process.execPath,
+  ['scripts/serve-static.mjs'],
+  { cwd: MOBILE_DIR, env: { ...process.env, PORT: MOBILE_PORT } },
 )

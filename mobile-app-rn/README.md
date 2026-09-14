@@ -109,17 +109,71 @@ same role/department permission matrix applies).
   in `api/customers.ts` is there if you want to add an "undo"/trash
   view later; not wired into a screen yet)
 
+## Progressive Web App (mobile Chrome)
+
+This app also runs as an installable PWA — same login/Quick Quote/Clients
+code, no separate build, served over the web and installable from
+Chrome's "Add to Home screen" / install prompt on Android and desktop
+(iOS Safari/Chrome use the manual "Add to Home Screen" share-sheet
+action instead, since iOS doesn't support the install prompt API).
+
+**If you're running the whole repo under pm2** (see the root
+[README.md](../README.md#running-with-pm2)), `install.sh`/`relaunch.sh`
+already build and serve this automatically — the pm2 service's
+**mobile** child (`scripts/serve-static.mjs`) serves this app's `dist/`
+export alongside the backend and frontend, no separate steps needed.
+The rest of this section is for running/testing it standalone.
+
+What makes it installable, all under `public/` (served as-is by Expo's
+Metro web bundler, which looks for a custom `index.html` there):
+- `public/manifest.json` — name, icons, `display: "standalone"`,
+  theme/background color
+- `public/sw.js` — app-shell service worker (cache-first for the JS
+  bundle/fonts/icons, network-first for navigations); it deliberately
+  does **not** cache API calls (`src/api/client.ts`'s `API_BASE_URL`)
+  since there's no offline-write/sync story yet, so quote/customer data
+  is always fetched live
+- `public/index.html` — viewport/theme-color/apple-touch-icon meta tags
+  and the manifest link; loads `register-sw.js` via a real `<script
+  src>` rather than inline, so it works under `scripts/serve-static.mjs`'s
+  `script-src 'self'` CSP (no `'unsafe-inline'`)
+- `public/register-sw.js` — registers the service worker
+- `assets/pwa/` — the source icons (192/512/512-maskable/apple-touch/favicon)
+  copied into `public/`, in case you want to regenerate them
+
+Try it locally:
+
+```bash
+npm run web                    # dev server (expo start --web) — desktop browser
+npm run build:web               # production export to dist/ (expo export --platform web)
+node scripts/serve-static.mjs   # serve the export (zero-dependency); visit from your phone at http://<your-LAN-IP>:PORT
+```
+
+To open it on a phone, your phone and computer need to be on the same
+network, using your computer's LAN IP (not `localhost`) — `npm run web`
+prints one, or pass `--tunnel` to `expo start --web` to get a public URL
+instead. **Service workers only run over HTTPS** (`localhost` is
+exempted for local dev, but a LAN IP is not) — installability and
+offline caching only kick in once this is deployed behind HTTPS; over
+plain HTTP on a LAN IP the app still loads and works, it just won't
+register the service worker or be installable.
+
+Once loaded in mobile Chrome over HTTPS, either wait for the automatic
+"Install app" banner or open the **⋮** menu → **Add to Home screen** /
+**Install app**.
+
 ## Setup
 
 ```bash
 npm install
+cp .env.example .env   # then edit EXPO_PUBLIC_API_BASE_URL to point at your backend
 ```
 
-Then set your API URL in `src/api/client.ts`:
-
-```ts
-export const API_BASE_URL = 'https://your-api-domain.com';
-```
+`src/api/client.ts` reads `API_BASE_URL` from `EXPO_PUBLIC_API_BASE_URL`
+(Expo/Metro's build-time env convention, same idea as the web app's
+`VITE_API_BASE_URL`) — inlined into the bundle for web *and* native
+builds alike, falling back to an obviously-fake placeholder if `.env`
+is missing so a forgotten setup step fails loudly instead of silently.
 
 If your backend's CORS/allowed-origins list is enforced at the network
 layer for native apps too (some setups also check `Origin` on mobile

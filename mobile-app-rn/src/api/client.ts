@@ -1,12 +1,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
- * Point this at your backend, same as the web app's VITE_API_BASE_URL.
- * e.g. "https://api.yourcompany.com". Leave as "" only if you proxy
- * /api through the same origin the app is served from (not applicable
- * to a native build -- set a real URL for iOS/Android).
+ * Backend origin, e.g. "https://api.yourcompany.com". Read from
+ * EXPO_PUBLIC_API_BASE_URL (see .env.example) -- Expo/Metro's
+ * equivalent of the web app's VITE_API_BASE_URL, inlined into the
+ * bundle at build time for web *and* native alike. Falls back to a
+ * placeholder so a missing .env fails loudly (every request 404s/DNS-
+ * errors against "your-api-domain.com") instead of silently.
  */
-export const API_BASE_URL = 'https://your-api-domain.com';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://your-api-domain.com';
 
 const ACCESS_TOKEN_KEY = 'qq_access_token';
 const REFRESH_TOKEN_KEY = 'qq_refresh_token';

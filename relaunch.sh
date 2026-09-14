@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# Rebuilds and restarts jdk_clean's backend + frontend (run together as
-# a single pm2 service, 'jdk' -- see ecosystem.config.js and
+# Rebuilds and restarts jdk_clean's backend + frontend + mobile PWA (run
+# together as a single pm2 service, 'jdk' -- see ecosystem.config.js and
 # scripts/run-all.mjs).
 #
 # Deliberately plain: stop, reinstall/rebuild, start, tail logs -- one
@@ -32,10 +32,10 @@ step() { printf '\n%s\n' "${BOLD}${BLUE}==>${RESET} ${BOLD}$*${RESET}"; }
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-step "1/6: pm2 stop jdk"
+step "1/8: pm2 stop jdk"
 pm2 stop jdk
 
-step "2/6: Backend dependencies (backend/venv)"
+step "2/8: Backend dependencies (backend/venv)"
 (
   cd backend
   # Skip the reinstall once requirements.txt hasn't changed since the
@@ -53,7 +53,7 @@ step "2/6: Backend dependencies (backend/venv)"
   fi
 )
 
-step "3/6: Frontend dependencies (frontend/node_modules)"
+step "3/8: Frontend dependencies (frontend/node_modules)"
 (
   cd frontend
   # Same sha256-next-to-the-install-dir skip check as the backend's
@@ -81,20 +81,39 @@ step "3/6: Frontend dependencies (frontend/node_modules)"
   fi
 )
 
-step "4/6: Frontend build (frontend/dist)"
+step "4/8: Frontend build (frontend/dist)"
 # tsc -b's incremental build cache (node_modules/.tmp/*.tsbuildinfo) can
 # reference file states from before this pull landed, producing
 # confusing type errors on an otherwise-clean checkout -- cheap to
 # clear, no downside, and has fixed real "build suddenly fails" reports.
 (cd frontend && rm -rf node_modules/.tmp && npm run build)
 
-step "5/6: pm2 restart jdk --update-env"
+step "5/8: Mobile PWA dependencies (mobile-app-rn/node_modules)"
+(
+  cd mobile-app-rn
+  # Same sha256-next-to-the-install-dir skip check as the frontend's
+  # step above.
+  PACKAGE_LOCK_HASH_FILE="node_modules/.package-lock.sha256"
+  PACKAGE_LOCK_HASH="$(sha256sum package-lock.json | awk '{print $1}')"
+  if [[ -d node_modules && -f "$PACKAGE_LOCK_HASH_FILE" && "$(cat "$PACKAGE_LOCK_HASH_FILE")" == "$PACKAGE_LOCK_HASH" ]]; then
+    echo "package-lock.json unchanged -- skipping npm install."
+  else
+    npm ci --no-audit --no-fund
+    echo "$PACKAGE_LOCK_HASH" > "$PACKAGE_LOCK_HASH_FILE"
+  fi
+)
+
+step "6/8: Mobile PWA build (mobile-app-rn/dist)"
+(cd mobile-app-rn && npm run build:web)
+
+step "7/8: pm2 restart jdk --update-env"
 pm2 restart jdk --update-env
 
-step "6/6: Recent logs"
+step "8/8: Recent logs"
 pm2 logs jdk --lines 50 --nostream
 
 printf '\n%s\n' "${BOLD}Done.${RESET} Confirm it's actually serving, not just \"online\":"
 printf '  curl -i http://localhost:8000/api/health\n'
 printf '  curl -i http://localhost:4173/\n'
+printf '  curl -i http://localhost:4174/\n'
 printf '(swap in your real ports from ecosystem.config.js if different)\n'

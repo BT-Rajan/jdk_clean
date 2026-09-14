@@ -9,6 +9,9 @@ auth, soft deletes, and a field-level audit log.
 - `frontend/` — React app (currently: authentication end to end — login,
   session handling, protected routes, password change). See
   [frontend/README.md](frontend/README.md).
+- `mobile-app-rn/` — Expo/React Native app (sales Quick Quote + client
+  CRUD), also exportable as an installable PWA for mobile Chrome. See
+  [mobile-app-rn/README.md](mobile-app-rn/README.md).
 
 ## Quick start
 
@@ -50,16 +53,18 @@ If you'd rather do it by hand or understand each step, see:
 
 - [backend/README.md](backend/README.md) — venv, schema, `.env`, seeding, running
 - [frontend/README.md](frontend/README.md) — `.env`, dev server, production build/serving
+- [mobile-app-rn/README.md](mobile-app-rn/README.md) — `.env`, native (Expo) dev, PWA build/serving
 
 ## Running with pm2
 
 `install.sh` generates `ecosystem.config.js` at the repo root (not
 committed — it's environment-specific: ports, URLs). It defines a
 single pm2 service, **jdk**, running `scripts/run-all.mjs` — a small
-launcher that starts both the backend and frontend as its own direct
-child processes and forwards their output (prefixed `[backend]`/
-`[frontend]`) and shutdown signals, so the pair is managed, restarted,
-and logged as one unit rather than two separate pm2 apps:
+launcher that starts the backend, frontend, and mobile PWA as its own
+direct child processes and forwards their output (prefixed
+`[backend]`/`[frontend]`/`[mobile]`) and shutdown signals, so all three
+are managed, restarted, and logged as one unit rather than separate
+pm2 apps:
 
 - **backend** — `uvicorn app.main:app` from the backend venv
 - **frontend** — `frontend/scripts/serve-static.mjs`, a small
@@ -67,14 +72,18 @@ and logged as one unit rather than two separate pm2 apps:
   hashed assets, SPA fallback, security headers including a CSP) —
   see [frontend/README.md](frontend/README.md#deploying) for why this
   exists instead of a third-party static-server package.
+- **mobile** — `mobile-app-rn/scripts/serve-static.mjs`, the same
+  static-server pattern serving `mobile-app-rn`'s `expo export
+  --platform web` output as an installable PWA — see
+  [mobile-app-rn/README.md](mobile-app-rn/README.md#progressive-web-app-mobile-chrome).
 
-If either child process dies unexpectedly, the launcher stops the
-other one too and exits non-zero, so pm2's autorestart brings the pair
-back up together instead of leaving one half running alone.
+If any child process dies unexpectedly, the launcher stops the others
+too and exits non-zero, so pm2's autorestart brings the whole group
+back up together instead of leaving some running alone.
 
 ```bash
 pm2 status              # check the service
-pm2 logs jdk            # tail logs (both backend and frontend, prefixed)
+pm2 logs jdk            # tail logs (backend, frontend, and mobile, prefixed)
 pm2 restart jdk         # restart
 pm2 stop jdk            # stop
 pm2 save                # persist the current process list
@@ -84,11 +93,11 @@ pm2 startup             # (optional, Linux/macOS) print the command to auto-star
 `install.sh` re-run on an existing install asks once, up front, whether
 to reuse the existing `backend/.env`, `frontend/.env`, and
 `ecosystem.config.js` as-is — if so, every database/port/secret
-question is skipped and the existing ports are read straight out of
-`ecosystem.config.js`. Database migrations always run on every
-install/re-run (idempotent), and once pm2 starts the service the
-script waits for and health-checks both the backend and frontend
-before declaring success.
+question is skipped and the existing ports (including the mobile PWA's)
+are read straight out of `ecosystem.config.js`. Database migrations
+always run on every install/re-run (idempotent), and once pm2 starts
+the service the script waits for and health-checks the backend,
+frontend, and mobile PWA before declaring success.
 
 > `install.bat` (Windows) hasn't been updated to this single-service
 > model yet — it still generates two separate pm2 apps, **jdk-backend**
@@ -103,18 +112,18 @@ app's README — and skip pm2 entirely.
 
 ### Relaunching cleanly
 
-Both apps run as one pm2 service (`jdk`, via `scripts/run-all.mjs`).
+All three apps run as one pm2 service (`jdk`, via `scripts/run-all.mjs`).
 `./relaunch.sh` (repo root) is the one-shot command for "pull new code,
 rebuild, restart": `pm2 stop jdk`, backend `pip install`, frontend
-`npm install && npm run build`, `pm2 restart jdk --update-env`, then
-tails the logs -- one real command per step, nothing hidden behind
-custom cross-checking logic:
+`npm install && npm run build`, mobile PWA `npm install && npm run
+build:web`, `pm2 restart jdk --update-env`, then tails the logs -- one
+real command per step, nothing hidden behind custom cross-checking logic:
 
 ```bash
 ./relaunch.sh
 ```
 
-It runs with `set -e` and prints a `==> N/6: <step>` header before each
+It runs with `set -e` and prints a `==> N/8: <step>` header before each
 command, so if something fails the script stops right there and what
 you're looking at is that exact command's own real error -- not a
 wrapper's interpretation of it. (An earlier version of this script
@@ -126,12 +135,13 @@ problems it was checking for, and was replaced with this plainer
 version.)
 
 If you'd rather run the same steps by hand -- e.g. to skip the frontend
-rebuild when only backend code changed -- they're exactly:
+and mobile rebuilds when only backend code changed -- they're exactly:
 
 ```bash
 pm2 stop jdk
 (cd backend && source venv/bin/activate && pip install -r requirements.txt)
 (cd frontend && npm install && npm run build)
+(cd mobile-app-rn && npm install && npm run build:web)
 pm2 restart jdk --update-env
 pm2 logs jdk --lines 50 --nostream
 ```
@@ -142,24 +152,27 @@ Diagnosing a failure, whether from the script or by hand:
   look for a `[backend]` line. A Python traceback there is almost
   always a `backend/.env` problem (bad `DB_PASSWORD`, DB not
   reachable) or a missing dependency (re-run the `pip install` above).
-- **Frontend didn't come up, or the browser can't reach the backend**:
-  check `frontend/.env`'s `VITE_API_BASE_URL` against
-  `ecosystem.config.js`'s own `API_BASE_URL` -- the static server
-  prefers the latter at runtime for its CSP header (see
-  `frontend/scripts/serve-static.mjs`), so if only `.env` was updated,
-  update `ecosystem.config.js` too and restart again. Also confirm
-  `backend/.env`'s `CORS_ORIGINS` actually lists the origin the
-  frontend is really being opened from.
+- **Frontend or mobile PWA didn't come up, or the browser can't reach
+  the backend**: check `frontend/.env`'s `VITE_API_BASE_URL` (or
+  `mobile-app-rn/.env`'s `EXPO_PUBLIC_API_BASE_URL`) against
+  `ecosystem.config.js`'s own `API_BASE_URL` -- both static servers
+  prefer the latter at runtime for their CSP header (see
+  `frontend/scripts/serve-static.mjs` and
+  `mobile-app-rn/scripts/serve-static.mjs`), so if only `.env` was
+  updated, update `ecosystem.config.js` too and restart again. Also
+  confirm `backend/.env`'s `CORS_ORIGINS` actually lists the origin
+  the frontend/mobile PWA is really being opened from.
 - **Something's already listening on the port**: `lsof -i :8000` /
-  `lsof -i :4173` (swap in your real ports from `ecosystem.config.js`)
-  shows what and its pid; `kill` it if it's a stray process from an
-  earlier run, then restart again.
+  `lsof -i :4173` / `lsof -i :4174` (swap in your real ports from
+  `ecosystem.config.js`) shows what and its pid; `kill` it if it's a
+  stray process from an earlier run, then restart again.
 - **pm2 says "online" but nothing answers**: that only means the
   process hasn't crashed *yet* -- confirm it's actually serving
   requests:
   ```bash
   curl -i http://localhost:8000/api/health
   curl -i http://localhost:4173/
+  curl -i http://localhost:4174/
   ```
 
 ## Testing the login
@@ -171,7 +184,7 @@ rotation, password change), or just open the frontend and sign in.
 ## Project layout
 
 ```
-install.sh               # interactive installer, Linux/macOS (backend + frontend + pm2)
+install.sh               # interactive installer, Linux/macOS (backend + frontend + mobile PWA + pm2)
 install.bat               # interactive installer, Windows (same, via cmd.exe)
 ecosystem.config.js       # generated by install.sh/install.bat, not committed
 
@@ -201,4 +214,15 @@ frontend/
     types/        # types mirroring the backend's Pydantic schemas
   scripts/
     serve-static.mjs   # zero-dependency production static server
+
+mobile-app-rn/
+  src/
+    api/          # fetch client + token store + typed endpoint functions
+    components/   # Button, TextField, GlassCard, ...
+    context/      # AuthContext + AuthProvider
+    navigation/   # RootNavigator (auth gate → bottom tabs)
+    screens/      # LoginScreen, QuickQuoteScreen, ClientsListScreen, ...
+  public/         # PWA manifest, service worker, icons, custom index.html
+  scripts/
+    serve-static.mjs   # zero-dependency production static server (PWA build)
 ```
