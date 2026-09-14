@@ -458,7 +458,17 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
                 expected_available_date = None
                 if date_known:
                     material_lead_days = max(s["lead_time_days"] for s in suggestions)
-                    expected_available_date = today + timedelta(days=material_lead_days)
+                    # Supplier's SLA lead time, then 1 clear working day on
+                    # top -- next_working_day() already excludes its input
+                    # date itself (see its own docstring), so this lands on
+                    # the first working day *after* the SLA arrival date,
+                    # not the arrival date itself: goods that land don't
+                    # become usable stock the same day they land (receiving
+                    # + inspection + put-away), and a Friday arrival with
+                    # Sat/Sun off shouldn't read as "available Saturday".
+                    expected_available_date = settings_service.next_working_day(
+                        today + timedelta(days=material_lead_days), working_days
+                    )
                     if line_material_available_date is None or expected_available_date > line_material_available_date:
                         line_material_available_date = expected_available_date
                 else:
