@@ -6,6 +6,7 @@ import { Button } from './Button';
 import { GlassCard } from './GlassCard';
 import { colors, fonts, whiteAlpha } from '../theme';
 import { useLocale } from '../i18n/LocaleContext';
+import { formatDate } from '../utils/format';
 import { PickedFile } from '../api/customers';
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
@@ -77,7 +78,7 @@ export function IdDocumentPanel({
         {hasDocument
           ? verified
             ? verifiedAt
-              ? t('idDocument', 'verifiedStatusWithDate', { date: verifiedAt.slice(0, 10) })
+              ? t('idDocument', 'verifiedStatusWithDate', { date: formatDate(verifiedAt) })
               : t('idDocument', 'verifiedStatus')
             : t('idDocument', 'onFileStatus')
           : t('idDocument', 'noneStatus')}

@@ -56,7 +56,6 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     # once set, same as `name` (see schemas/customer.py CustomerUpdate).
     code: Mapped[str | None] = mapped_column(String(30), unique=True, nullable=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
-    nature_of_business: Mapped[str | None] = mapped_column(String(150), nullable=True)
     contact_person: Mapped[str | None] = mapped_column(String(120), nullable=True)
     email: Mapped[str | None] = mapped_column(String(120), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)

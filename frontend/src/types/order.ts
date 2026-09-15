@@ -43,11 +43,19 @@ export interface Order {
   total_amount: number
   notes: string | null
   close_reason: string | null
+  /** Copied from the source quotation at conversion time -- see
+   * Quotation.payment_link. Printed as a QR code on this order's PDF. */
+  payment_link: string | null
+  /** Set the moment this order first reaches 'confirmed'. */
+  confirmed_at: string | null
   /** Set once an admin has approved a large discount on this order
    * (Settings -> large_discount_approval_threshold). Null if never
    * required or not yet approved. */
   approved_at: string | null
   admin_review_required: boolean
+  /** 'overdue_delivery' or 'payment_overdue' -- null whenever
+   * admin_review_required is false. */
+  admin_review_reason: 'overdue_delivery' | 'payment_overdue' | null
   admin_reviewed_at: string | null
   admin_review_notes: string | null
   /** Last time a payment-request email went out for this order (see

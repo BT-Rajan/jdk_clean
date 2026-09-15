@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { colors, fonts, glass, radii, whiteAlpha } from '../theme';
+import { formatDate } from '../utils/format';
 
 interface DateFieldProps {
   label: string;
@@ -36,8 +37,10 @@ function startOfDay(d: Date): Date {
   return copy;
 }
 
+// App-wide DD-MM-YYYY standard (see utils/format.ts) -- keeps the value
+// shown here consistent with every other date on screen once picked.
 function formatDisplay(d: Date): string {
-  return d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  return formatDate(d);
 }
 
 export function DateField({ label, value, onChange, minimumDate, error, hint }: DateFieldProps) {

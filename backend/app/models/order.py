@@ -87,15 +87,32 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     # Set when Sales cancels this order without a delivery note ever
     # having been issued for it.
     close_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Copied from the source quotation at conversion time (see
+    # order_service.create_order_from_quotation / quotation_service.
+    # set_payment_link) -- this order's own snapshot, not a live join.
+    # Printed as a QR code on this order's PDF (see pdf_generator.
+    # generate_order_pdf).
+    payment_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    # Set the moment this order first reaches 'confirmed' -- drives
+    # escalate_unpaid_orders' "no payment N days after confirm" check.
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # An order whose discount (document-level or any single line's) is
     # at/above Settings -> large_discount_approval_threshold can't leave
     # 'draft' until an admin approves it.
     approved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     approved_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
-    # Set by order_service.escalate_overdue_orders when the (confirmed or
-    # requested) delivery date has passed with neither a delivery note nor
-    # close_reason recorded. Cleared by an admin via admin_review().
+    # Set by order_service.escalate_overdue_orders (delivery date passed
+    # with no delivery note/close_reason) or escalate_unpaid_orders (no
+    # payment recorded N days after confirm) -- admin_review_reason below
+    # says which. Cleared by an admin via admin_review().
     admin_review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # 'overdue_delivery' or 'payment_overdue' -- NULL whenever
+    # admin_review_required is false. Only one reason at a time: each
+    # escalation function only targets admin_review_required=false
+    # candidates, so whichever fires first "wins" until admin_review()
+    # clears it -- rare enough in practice not to warrant a proper
+    # multi-reason model.
+    admin_review_reason: Mapped[str | None] = mapped_column(String(30), nullable=True)
     admin_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     admin_reviewed_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
     admin_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)

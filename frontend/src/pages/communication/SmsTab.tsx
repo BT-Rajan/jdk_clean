@@ -4,6 +4,7 @@ import { Alert, Button, GlassCard, PasswordField, SelectField, Spinner, TextFiel
 import { getSmsAccount, getSmsProviders, testSmsAccount, updateSmsAccount } from '@/api/communication'
 import type { SmsAccount, SmsAccountFormValues, SmsProviderPresets } from '@/types/smsAccount'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDateTime } from '@/lib/dateFormat'
 
 export function SmsTab() {
   const [loading, setLoading] = useState(true)
@@ -192,7 +193,7 @@ export function SmsTab() {
             <h2 className="font-display text-lg font-medium text-white">Status</h2>
             <p className="mt-1 text-sm text-white/50">
               {lastTest.last_tested_at
-                ? `Last tested ${new Date(lastTest.last_tested_at).toLocaleString()} -- ${
+                ? `Last tested ${formatDateTime(lastTest.last_tested_at)} -- ${
                     lastTest.last_test_ok ? 'sent successfully' : lastTest.last_test_error
                   }`
                 : 'Not tested yet.'}

@@ -63,7 +63,15 @@ export interface Order {
   total_amount: number;
   notes: string | null;
   close_reason: string | null;
+  /** Copied from the source quotation at conversion time. Printed as a
+   * QR code on this order's PDF. */
+  payment_link: string | null;
+  /** Set the moment this order first reaches 'confirmed'. */
+  confirmed_at: string | null;
   admin_review_required: boolean;
+  /** 'overdue_delivery' or 'payment_overdue' -- null whenever
+   * admin_review_required is false. */
+  admin_review_reason: 'overdue_delivery' | 'payment_overdue' | null;
   admin_reviewed_at: string | null;
   admin_review_notes: string | null;
   parent_order_id: number | null;
@@ -119,6 +127,12 @@ export function updateOrder(id: number, payload: Partial<OrderPayload>) {
 
 export function updateOrderStatus(id: number, status: SettableOrderStatus, reason?: string) {
   return api<Order>(`/api/orders/${id}/status`, { method: 'POST', body: { status, reason } });
+}
+
+// Admin-only -- acknowledges the admin_review_required flag (whatever
+// its admin_review_reason) and clears it. See order_service.admin_review.
+export function adminReviewOrder(id: number, notes: string) {
+  return api<Order>(`/api/orders/${id}/admin-review`, { method: 'POST', body: { notes } });
 }
 
 export function deleteOrder(id: number) {

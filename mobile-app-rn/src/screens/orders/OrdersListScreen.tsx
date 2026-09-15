@@ -10,7 +10,7 @@ import { TextField } from '../../components/TextField';
 import { colors, fonts, whiteAlpha } from '../../theme';
 import { useLocale } from '../../i18n/LocaleContext';
 import { confirm } from '../../utils/alerts';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatDate } from '../../utils/format';
 import { listOrders, deleteOrder, Order, OrderStatus } from '../../api/orders';
 import { OrdersStackParamList } from '../../navigation/RootNavigator';
 
@@ -120,7 +120,7 @@ export function OrdersListScreen({ navigation }: Props) {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowNumber}>{item.order_number}</Text>
                   <Text style={styles.rowMeta}>
-                    {item.customer_name ?? '—'} · {item.order_date}
+                    {item.customer_name ?? '—'} · {formatDate(item.order_date)}
                   </Text>
                 </View>
 

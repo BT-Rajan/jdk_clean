@@ -30,7 +30,7 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import { formatCurrency } from '@/lib/currency'
 import { formatDate } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
-import { canWrite } from '@/lib/roles'
+import { canWrite, isAdmin } from '@/lib/roles'
 import { CUSTOMER_ONBOARDING_STATUSES_REQUIRING_REASON, CUSTOMER_ONBOARDING_TRANSITIONS } from '@/lib/statusTransitions'
 
 function ActivitySection<T>({
@@ -168,7 +168,7 @@ export function CustomerDetailPage() {
         title={customer.name}
         subtitle={customer.code ? `${customer.customer_number} · ${customer.code}` : `${customer.customer_number} · Prospective`}
         actions={
-          canWrite(user?.role) && !justDeleted ? (
+          isAdmin(user?.role) && !justDeleted ? (
             <>
               <Button
                 variant="primary"
@@ -197,7 +197,7 @@ export function CustomerDetailPage() {
       {notice && (
         <div className="mb-4 flex items-center justify-between rounded-xl border border-emerald-400/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
           <span>{notice}</span>
-          {justDeleted && canWrite(user?.role) && (
+          {justDeleted && isAdmin(user?.role) && (
             <button type="button" onClick={handleRestore} className="font-medium text-gold-300 underline">
               Undo
             </button>
@@ -215,9 +215,6 @@ export function CustomerDetailPage() {
             label={customer.customer_type === 'individual' ? 'Civil ID' : 'Registration number'}
             value={customer.code}
           />
-          {customer.customer_type !== 'individual' && (
-            <Field label="Nature of business" value={customer.nature_of_business} />
-          )}
           <Field label="Contact person" value={customer.contact_person} />
           <Field label="Email" value={customer.email} />
           <Field label="Phone" value={customer.phone} />

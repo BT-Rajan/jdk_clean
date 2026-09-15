@@ -22,7 +22,6 @@ export interface Customer {
   customer_type: 'individual' | 'business';
   code: string | null;
   name: string;
-  nature_of_business: string | null;
   contact_person: string | null;
   email: string | null;
   phone: string | null;
@@ -56,7 +55,6 @@ export interface CustomerInput {
   customer_type: 'individual' | 'business';
   name: string;
   code?: string | null;
-  nature_of_business?: string | null;
   contact_person?: string | null;
   email?: string | null;
   phone?: string | null;

@@ -17,6 +17,7 @@ from app.schemas.quotation import (
     MaterialConflictOut,
     QuotationCreate,
     QuotationOut,
+    QuotationPaymentLinkIn,
     QuotationStatusUpdate,
     QuotationUpdate,
 )
@@ -131,6 +132,21 @@ def update_status(
     quotation = quotation_service.change_status(
         db, quotation_id, payload.status, reason=payload.reason, user_id=user.id
     )
+    return QuotationOut.from_model(quotation)
+
+
+@router.post("/{quotation_id}/payment-link", response_model=QuotationOut)
+def set_payment_link(
+    quotation_id: int,
+    payload: QuotationPaymentLinkIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """Records the manually-entered link to an external payment system --
+    only settable while 'accepted', and required before this quotation
+    can be converted to an order (see order_service.
+    create_order_from_quotation)."""
+    quotation = quotation_service.set_payment_link(db, quotation_id, payload.payment_link, user_id=user.id)
     return QuotationOut.from_model(quotation)
 
 

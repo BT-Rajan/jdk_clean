@@ -154,7 +154,19 @@ def check_material_conflicts(
 
 def _price_lines(db: Session, lines: list[dict]) -> list[dict]:
     """Validate referenced products exist and compute each line's total,
-    net of that line's own discount_percent (default 0)."""
+    net of that line's own discount_percent (default 0). Also the one
+    choke point both create_quotation and update_quotation funnel their
+    lines through, so it's where a duplicate product across two lines --
+    the same thing quoted twice on one document, almost always a mistake
+    rather than a deliberate second line -- gets rejected for both."""
+    seen_product_ids: set[int] = set()
+    for line in lines:
+        if line["product_id"] in seen_product_ids:
+            raise ValidationAppError(
+                f"Product {line['product_id']} appears more than once -- combine it into a single line instead."
+            )
+        seen_product_ids.add(line["product_id"])
+
     priced: list[dict] = []
     for line in lines:
         product = (
@@ -447,6 +459,28 @@ def change_status(
     if new_status in ("rejected", "expired"):
         deal_service.reconcile_deal_status(db, quotation.deal_id, user_id)
 
+    return get_quotation(db, quotation_id)
+
+
+def set_payment_link(db: Session, quotation_id: int, payment_link: str, user_id: int | None = None) -> Quotation:
+    """Records the manually-entered link to an external payment system --
+    only meaningful once the customer has actually accepted the
+    quotation, and required before order_service.create_order_from_
+    quotation will convert it to an order at all. Settable more than
+    once (e.g. Sales pastes the wrong link) as long as the quotation is
+    still 'accepted' and hasn't been converted yet."""
+    quotation = get_quotation(db, quotation_id)
+    if quotation.status != "accepted":
+        raise ConflictError(
+            f"A payment link can only be entered on an accepted quotation (current status: '{quotation.status}')."
+        )
+    old_link = quotation.payment_link
+    quotation.payment_link = payment_link
+    quotation.updated_by = user_id
+    audit_service.log_update(
+        db, TABLE_NAME, quotation_id, {"payment_link": (old_link, payment_link)}, user_id
+    )
+    db.commit()
     return get_quotation(db, quotation_id)
 
 

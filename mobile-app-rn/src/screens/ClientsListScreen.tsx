@@ -13,11 +13,15 @@ import { useLocale } from '../i18n/LocaleContext';
 import { confirm } from '../utils/alerts';
 import { listCustomers, activateCustomer, deactivateCustomer, Customer } from '../api/customers';
 import { ClientsStackParamList } from '../navigation/RootNavigator';
+import { useAuth } from '../context/AuthContext';
+import { isAdmin } from '../utils/roles';
 
 type Props = NativeStackScreenProps<ClientsStackParamList, 'ClientsList'>;
 
 export function ClientsListScreen({ navigation }: Props) {
   const { t } = useLocale();
+  const { user } = useAuth();
+  const allowAdmin = isAdmin(user?.role);
   const [clients, setClients] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -130,26 +134,30 @@ export function ClientsListScreen({ navigation }: Props) {
                 </Text>
               </View>
 
-              <Pressable
-                onPress={() => navigation.navigate('ClientForm', { customerId: item.id })}
-                hitSlop={10}
-                style={styles.iconBtn}
-              >
-                <Feather name="edit-2" size={16} color={whiteAlpha(0.7)} />
-              </Pressable>
+              {allowAdmin && (
+                <Pressable
+                  onPress={() => navigation.navigate('ClientForm', { customerId: item.id })}
+                  hitSlop={10}
+                  style={styles.iconBtn}
+                >
+                  <Feather name="edit-2" size={16} color={whiteAlpha(0.7)} />
+                </Pressable>
+              )}
 
-              <Pressable
-                onPress={() => handleToggleStatus(item)}
-                disabled={togglingId === item.id}
-                hitSlop={10}
-                style={styles.iconBtn}
-              >
-                <Feather
-                  name={item.status === 'active' ? 'slash' : 'check-circle'}
-                  size={16}
-                  color={item.status === 'active' ? colors.red400 : colors.emerald400}
-                />
-              </Pressable>
+              {allowAdmin && (
+                <Pressable
+                  onPress={() => handleToggleStatus(item)}
+                  disabled={togglingId === item.id}
+                  hitSlop={10}
+                  style={styles.iconBtn}
+                >
+                  <Feather
+                    name={item.status === 'active' ? 'slash' : 'check-circle'}
+                    size={16}
+                    color={item.status === 'active' ? colors.red400 : colors.emerald400}
+                  />
+                </Pressable>
+              )}
             </GlassCard>
           </Pressable>
         )}

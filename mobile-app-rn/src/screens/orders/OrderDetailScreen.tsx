@@ -1,21 +1,25 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../../components/Alert';
 import { Button } from '../../components/Button';
 import { GlassCard } from '../../components/GlassCard';
 import { StatusBadge } from '../../components/StatusBadge';
 import { StatusTransitionButtons } from '../../components/StatusTransitionButtons';
-import { colors, fonts, whiteAlpha } from '../../theme';
+import { TextField } from '../../components/TextField';
+import { colors, fonts, radii, whiteAlpha } from '../../theme';
 import { useLocale } from '../../i18n/LocaleContext';
 import { confirm } from '../../utils/alerts';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatDate } from '../../utils/format';
+import { useAuth } from '../../context/AuthContext';
+import { isAdmin } from '../../utils/roles';
 import {
   getOrder,
   getOrderJourney,
   updateOrderStatus,
+  adminReviewOrder,
   deleteOrder,
   downloadOrderPdf,
   Order,
@@ -58,6 +62,8 @@ function journeyQuotationLabel(t: LocaleT, status: string): string {
 export function OrderDetailScreen({ route, navigation }: Props) {
   const { t } = useLocale();
   const { orderId } = route.params;
+  const { user } = useAuth();
+  const allowAdmin = isAdmin(user?.role);
 
   const [order, setOrder] = useState<Order | null>(null);
   const [journey, setJourney] = useState<OrderJourney | null>(null);
@@ -66,6 +72,10 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
+  const [adminReviewOpen, setAdminReviewOpen] = useState(false);
+  const [adminReviewNotes, setAdminReviewNotes] = useState('');
+  const [adminReviewError, setAdminReviewError] = useState<string | null>(null);
+  const [adminReviewBusy, setAdminReviewBusy] = useState(false);
   // An order can be shipped across more than one delivery note (multiple
   // trucks/dates) -- see backend delivery_note_service.py's
   // ELIGIBLE_ORDER_STATUSES -- so this tracks every note issued against
@@ -131,6 +141,26 @@ export function OrderDetailScreen({ route, navigation }: Props) {
       setError(err?.message ?? t('orderDetail', 'saveError'));
     } finally {
       setStatusBusy(false);
+    }
+  }
+
+  async function handleAdminReview() {
+    if (!order) return;
+    if (!adminReviewNotes.trim()) {
+      setAdminReviewError(t('orderDetail', 'adminReviewNotesRequired'));
+      return;
+    }
+    setAdminReviewBusy(true);
+    try {
+      const updated = await adminReviewOrder(order.id, adminReviewNotes.trim());
+      setOrder(updated);
+      setAdminReviewOpen(false);
+      setAdminReviewNotes('');
+      setAdminReviewError(null);
+    } catch (err: any) {
+      setAdminReviewError(err?.message ?? t('orderDetail', 'saveError'));
+    } finally {
+      setAdminReviewBusy(false);
     }
   }
 
@@ -219,9 +249,24 @@ export function OrderDetailScreen({ route, navigation }: Props) {
 
         <Alert variant="error">{error}</Alert>
 
+        {order.admin_review_required && allowAdmin && (
+          <View style={styles.reviewBanner}>
+            <Text style={styles.reviewBannerText}>
+              {order.admin_review_reason === 'payment_overdue'
+                ? t('orderDetail', 'adminReviewPaymentOverdue')
+                : order.admin_review_reason === 'overdue_delivery'
+                  ? t('orderDetail', 'adminReviewOverdueDelivery')
+                  : t('orderDetail', 'adminReviewGeneric')}
+            </Text>
+            <Button variant="ghost" size="sm" onPress={() => setAdminReviewOpen(true)}>
+              {t('orderDetail', 'acknowledge')}
+            </Button>
+          </View>
+        )}
+
         <View style={styles.metaBox}>
-          <MetaRow label={t('orderDetail', 'orderDateLabel')} value={order.order_date} />
-          <MetaRow label={t('orderDetail', 'deliveryDateLabel')} value={order.requested_delivery_date ?? '—'} />
+          <MetaRow label={t('orderDetail', 'orderDateLabel')} value={formatDate(order.order_date)} />
+          <MetaRow label={t('orderDetail', 'deliveryDateLabel')} value={formatDate(order.requested_delivery_date)} />
           {order.parent_order_number && (
             <MetaRow label={t('orderDetail', 'parentOrderLabel')} value={order.parent_order_number} />
           )}
@@ -322,7 +367,7 @@ export function OrderDetailScreen({ route, navigation }: Props) {
               <Pressable key={n.id} onPress={() => goToDeliveryNote(n.id)} style={styles.linkRow}>
                 <Feather name="truck" size={14} color={colors.gold300} />
                 <Text style={styles.linkRowText}>
-                  {n.delivery_note_number} · {n.delivery_date}
+                  {n.delivery_note_number} · {formatDate(n.delivery_date)}
                 </Text>
                 <Feather name="chevron-right" size={14} color={whiteAlpha(0.3)} style={{ marginLeft: 'auto' }} />
               </Pressable>
@@ -343,6 +388,39 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           {t('orderDetail', 'deleteOrder')}
         </Button>
       </GlassCard>
+
+      <Modal
+        visible={adminReviewOpen}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setAdminReviewOpen(false)}
+      >
+        <Pressable style={styles.backdrop} onPress={() => setAdminReviewOpen(false)} />
+        <View style={styles.sheet}>
+          <View style={styles.sheetHandle} />
+          <Text style={styles.sheetTitle}>{t('orderDetail', 'acknowledgeReviewTitle')}</Text>
+          <TextField
+            label={t('orderDetail', 'adminReviewNotesLabel')}
+            value={adminReviewNotes}
+            onChangeText={(v) => {
+              setAdminReviewNotes(v);
+              if (adminReviewError) setAdminReviewError(null);
+            }}
+            error={adminReviewError ?? undefined}
+            multiline
+            numberOfLines={3}
+            style={{ height: 80, textAlignVertical: 'top' }}
+          />
+          <View style={styles.sheetActions}>
+            <Button variant="ghost" onPress={() => setAdminReviewOpen(false)} style={{ flex: 1 }}>
+              {t('common', 'cancel')}
+            </Button>
+            <Button isLoading={adminReviewBusy} onPress={handleAdminReview} style={{ flex: 1 }}>
+              {t('common', 'confirm')}
+            </Button>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 }
@@ -399,4 +477,43 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: whiteAlpha(0.06),
   },
+
+  reviewBanner: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 10,
+    backgroundColor: 'rgba(245,158,11,0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,158,11,0.3)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    marginBottom: 16,
+  },
+  reviewBannerText: { flex: 1, fontFamily: fonts.sans, fontSize: 12, color: '#fcd34d' },
+
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)' },
+  sheet: {
+    backgroundColor: colors.ink900,
+    borderTopLeftRadius: radii['2xl'],
+    borderTopRightRadius: radii['2xl'],
+    borderWidth: 1,
+    borderColor: whiteAlpha(0.12),
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 28,
+    gap: 16,
+  },
+  sheetHandle: {
+    alignSelf: 'center',
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: whiteAlpha(0.2),
+    marginBottom: 4,
+  },
+  sheetTitle: { fontFamily: fonts.display, fontSize: 17, color: colors.white },
+  sheetActions: { flexDirection: 'row', gap: 12, marginTop: 4 },
 });

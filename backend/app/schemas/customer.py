@@ -14,7 +14,6 @@ class CustomerCreate(BaseModel):
     # optional at this layer for that prospective-customer path.
     code: str | None = Field(default=None, max_length=30)
     name: str = Field(min_length=1, max_length=150)
-    nature_of_business: str | None = Field(default=None, max_length=150)
     contact_person: str | None = Field(default=None, max_length=120)
     email: EmailStr | None = Field(default=None, max_length=120)
     phone: str | None = Field(default=None, max_length=30)
@@ -38,8 +37,8 @@ class CustomerUpdate(BaseModel):
     CustomerCRUD.update rejects trying to change it once already set --
     this only exists so a prospective customer's code (NULL at creation,
     see CustomerCreate) can be filled in later once they provide it.
-    Every other field, including customer_type and nature_of_business, is
-    editable at any time. customer_number and the id_verified/id_document
+    Every other field, including customer_type, is editable at any time.
+    customer_number and the id_verified/id_document
     fields are also absent -- customer_number is system-generated, and
     id_verified/id_document_filename change only via the dedicated
     endpoints in api/customers.py (verify-id, id-document), never a plain
@@ -49,7 +48,6 @@ class CustomerUpdate(BaseModel):
 
     code: str | None = Field(default=None, max_length=30)
     customer_type: str | None = Field(default=None, pattern="^(individual|business)$")
-    nature_of_business: str | None = Field(default=None, max_length=150)
     contact_person: str | None = Field(default=None, max_length=120)
     email: EmailStr | None = Field(default=None, max_length=120)
     phone: str | None = Field(default=None, max_length=30)
@@ -70,7 +68,6 @@ class CustomerOut(BaseModel):
     customer_type: str
     code: str | None
     name: str
-    nature_of_business: str | None
     contact_person: str | None
     email: str | None
     phone: str | None

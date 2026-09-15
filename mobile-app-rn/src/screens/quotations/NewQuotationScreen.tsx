@@ -15,9 +15,9 @@ import { useLocale } from '../../i18n/LocaleContext';
 import { listCustomers, Customer } from '../../api/customers';
 import { customerOptionLabel } from '../../utils/customerOptionLabel';
 import { confirm } from '../../utils/alerts';
-import { toIsoDate } from '../../utils/format';
+import { toIsoDate, formatDate } from '../../utils/format';
 import { listProducts, Product } from '../../api/catalog';
-import { createFeasibility, getFeasibility, runFeasibilityCheck, requestFeasibilityException, Feasibility } from '../../api/feasibility';
+import { createFeasibility, getFeasibility, runFeasibilityCheck, requestFeasibilityException, Feasibility, FeasibilityLine } from '../../api/feasibility';
 import { checkMaterialConflicts, createQuotation, downloadQuotationPdf, getQuotationForFeasibility, MaterialConflict } from '../../api/quotations';
 import { QuotationsStackParamList } from '../../navigation/RootNavigator';
 
@@ -43,8 +43,10 @@ type ResultState =
   | { kind: 'feasible'; quotationId: number; quotationNumber: string; total: number; validUntil: string }
   // nextAvailableDate: the slowest per-line estimated_ready_date the
   // backend projected -- production can't start before every line's
-  // material/capacity is ready.
-  | { kind: 'not_feasible'; nextAvailableDate?: string }
+  // material/capacity is ready. lines: the full per-product breakdown
+  // (in stock vs. short, both product and quantity) mirroring the web
+  // app's feasibilityStages.ts.
+  | { kind: 'not_feasible'; nextAvailableDate?: string; lines: FeasibilityLine[] }
   | null;
 
 let keySeq = 0;
@@ -102,10 +104,19 @@ export function NewQuotationScreen({ route, navigation }: Props) {
 
   const customerOptions: SelectOption[] = customers.map((c) => ({ label: customerOptionLabel(t, c), value: String(c.id) }));
   const selectedCustomer = customerId ? customers.find((c) => String(c.id) === customerId) ?? null : null;
-  const productOptions: SelectOption[] = products.map((p) => ({
-    label: p.code ? `${p.name} (${p.code})` : p.name,
-    value: String(p.id),
-  }));
+
+  // A product already picked on another line shouldn't be offered again
+  // -- every product should appear at most once in a quotation. Mirrors
+  // the web app's LineItemsEditor selectedProductIds/availableProducts
+  // filter.
+  function productOptionsForLine(currentLineKey: string): SelectOption[] {
+    const selectedElsewhere = new Set(
+      lines.filter((l) => l.key !== currentLineKey && l.productId).map((l) => l.productId),
+    );
+    return products
+      .filter((p) => !selectedElsewhere.has(String(p.id)))
+      .map((p) => ({ label: p.code ? `${p.name} (${p.code})` : p.name, value: String(p.id) }));
+  }
 
   function resetForm() {
     setResult(null);
@@ -221,7 +232,7 @@ export function NewQuotationScreen({ route, navigation }: Props) {
           .filter((d): d is string => Boolean(d))
           .sort()
           .pop();
-        setResult({ kind: 'not_feasible', nextAvailableDate });
+        setResult({ kind: 'not_feasible', nextAvailableDate, lines: checked.lines });
       } else {
         setFormError(t('newQuotation', 'unexpectedStatusError', { status: checked.status }));
       }
@@ -342,9 +353,36 @@ export function NewQuotationScreen({ route, navigation }: Props) {
 
           {result.nextAvailableDate && (
             <View style={styles.summaryBox}>
-              <SummaryRow label={t('newQuotation', 'nextAvailableLabel')} value={result.nextAvailableDate} />
+              <SummaryRow label={t('newQuotation', 'nextAvailableLabel')} value={formatDate(result.nextAvailableDate)} />
             </View>
           )}
+
+          <View style={{ marginTop: 16, width: '100%', gap: 10 }}>
+            {result.lines.map((line) => (
+              <View key={line.id} style={styles.shortfallLineCard}>
+                <Text style={styles.lineName}>{line.product_name ?? `#${line.product_id}`}</Text>
+                <Text style={styles.lineMeta}>
+                  {t('newQuotation', 'requestedQtyLabel', { quantity: line.quantity })}
+                </Text>
+                {line.covered_by_stock ? (
+                  <Text style={styles.okText}>
+                    {t('newQuotation', 'inStockLabel', { quantity: line.covered_by_stock })}
+                  </Text>
+                ) : null}
+                {line.bom_missing && <Text style={styles.warnText}>{t('newQuotation', 'bomMissing')}</Text>}
+                {line.shortfalls.map((s) => (
+                  <Text key={s.raw_material_id} style={styles.shortfallText}>
+                    {s.name}: {t('newQuotation', 'shortByDetailed', {
+                      shortfall: s.shortfall,
+                      unit: s.unit,
+                      required: s.required,
+                      onHand: s.on_hand,
+                    })}
+                  </Text>
+                ))}
+              </View>
+            ))}
+          </View>
 
           <Button variant="subtle" onPress={resetForm} style={{ marginTop: 22, width: '100%' }}>
             {t('newQuotation', 'tryAgain')}
@@ -369,7 +407,7 @@ export function NewQuotationScreen({ route, navigation }: Props) {
           <View style={styles.summaryBox}>
             <SummaryRow label={t('newQuotation', 'quotationNumberLabel')} value={result.quotationNumber} />
             <SummaryRow label={t('newQuotation', 'totalLabel')} value={result.total.toFixed(3)} />
-            <SummaryRow label={t('newQuotation', 'validUntilLabel')} value={result.validUntil} />
+            <SummaryRow label={t('newQuotation', 'validUntilLabel')} value={formatDate(result.validUntil)} />
           </View>
 
           <Button
@@ -417,7 +455,7 @@ export function NewQuotationScreen({ route, navigation }: Props) {
                     label={`${t('newQuotation', 'productLabel')} ${index + 1}`}
                     value={line.productId}
                     onChange={(v) => updateLine(line.key, { productId: v })}
-                    options={productOptions}
+                    options={productOptionsForLine(line.key)}
                     placeholder={products.length ? t('newQuotation', 'productPlaceholderLoaded') : t('newQuotation', 'productPlaceholderLoading')}
                   />
                   <TextField
@@ -525,4 +563,11 @@ const styles = StyleSheet.create({
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   summaryLabel: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.5) },
   summaryValue: { fontFamily: fonts.sansMedium, fontSize: 13, color: colors.white },
+
+  shortfallLineCard: { width: '100%', backgroundColor: whiteAlpha(0.04), borderRadius: 12, padding: 14, alignItems: 'flex-start' },
+  lineName: { fontFamily: fonts.sansSemibold, fontSize: 14, color: colors.white },
+  lineMeta: { fontFamily: fonts.sans, fontSize: 12, color: whiteAlpha(0.5), marginTop: 4 },
+  okText: { fontFamily: fonts.sans, fontSize: 12, color: colors.emerald400, marginTop: 4 },
+  warnText: { fontFamily: fonts.sans, fontSize: 12, color: '#fcd34d', marginTop: 4 },
+  shortfallText: { fontFamily: fonts.sans, fontSize: 12, color: colors.red400, marginTop: 4 },
 });

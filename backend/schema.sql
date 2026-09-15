@@ -116,7 +116,6 @@ CREATE TABLE IF NOT EXISTS customers (
     -- locked once set, same as `name`.
     code            VARCHAR(30)  NULL UNIQUE,
     name            VARCHAR(150) NOT NULL,
-    nature_of_business VARCHAR(150) NULL,
     contact_person  VARCHAR(120) NULL,
     email           VARCHAR(120) NULL,
     phone           VARCHAR(30)  NULL,
@@ -676,12 +675,33 @@ CREATE TABLE IF NOT EXISTS orders (
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
     close_reason    TEXT NULL,                        -- Sales' reason for cancelling without a delivery note
+    -- Manually entered (from an external payment system) once the
+    -- source quotation is 'accepted' -- copied here at conversion time
+    -- as this order's own snapshot, not a live join. Required before
+    -- create_order_from_quotation will convert a quotation at all (see
+    -- quotation_service.set_payment_link); printed as a QR code on this
+    -- order's PDF/invoice.
+    payment_link    VARCHAR(500) NULL,
+    -- Set the moment this order first reaches 'confirmed' -- drives
+    -- escalate_unpaid_orders' "no payment N days after confirm" check,
+    -- since credit_limit/outstanding-balance alone doesn't say how long
+    -- this specific order has been waiting.
+    confirmed_at    DATETIME NULL,
     -- A document whose discount (document-level or any single line's)
     -- is at/above Settings -> large_discount_approval_threshold can't
     -- leave 'draft' until an admin approves it.
     approved_at     DATETIME NULL,
     approved_by     BIGINT UNSIGNED NULL,
-    admin_review_required TINYINT(1) NOT NULL DEFAULT 0, -- flagged when overdue with no delivery note and no close_reason
+    admin_review_required TINYINT(1) NOT NULL DEFAULT 0, -- flagged for admin_review_reason below
+    -- Distinguishes *why* admin_review_required is set -- 'overdue_delivery'
+    -- (escalate_overdue_orders) or 'payment_overdue' (escalate_unpaid_orders).
+    -- NULL whenever admin_review_required is false. Only one reason can be
+    -- recorded at a time -- if an order is flagged for one reason, the other
+    -- escalation's own query (which only ever targets admin_review_required
+    -- = false candidates) will skip it until the first is cleared via
+    -- admin_review(). Rare enough in practice not to warrant a proper
+    -- multi-reason model.
+    admin_review_reason    VARCHAR(30) NULL,
     admin_reviewed_at      DATETIME NULL,
     admin_reviewed_by      BIGINT UNSIGNED NULL,
     admin_review_notes     TEXT NULL,
@@ -956,6 +976,11 @@ CREATE TABLE IF NOT EXISTS quotations (
     feasibility_id  BIGINT UNSIGNED NULL,             -- the passed/exception-approved feasibility check this came from
     auto_created    TINYINT(1) NOT NULL DEFAULT 0,    -- true when the system drafted this from a passed feasibility check, not a person
     close_reason    TEXT NULL,                        -- Sales' reason for closing without converting to an order
+    -- Manually entered (from an external payment system) once this
+    -- quotation is 'accepted' -- see quotation_service.set_payment_link.
+    -- Required before create_order_from_quotation will convert this
+    -- quotation at all; copied onto the new order as its own snapshot.
+    payment_link    VARCHAR(500) NULL,
     -- A quotation whose discount (document-level or any single line's)
     -- is at/above Settings -> large_discount_approval_threshold can't
     -- leave 'draft' until an admin approves it.

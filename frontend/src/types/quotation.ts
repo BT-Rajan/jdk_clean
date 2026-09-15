@@ -43,6 +43,11 @@ export interface Quotation {
   total_amount: number
   notes: string | null
   converted_order_id: number | null
+  /** Manually entered (from an external payment system) once this
+   * quotation is 'accepted' -- required before it can be converted to
+   * an order (see convertQuotationToOrder). Printed as a QR code on the
+   * resulting order's PDF. */
+  payment_link: string | null
   /** Set once an admin has approved a large discount on this quotation
    * (Settings -> large_discount_approval_threshold). Null if never
    * required or not yet approved. */

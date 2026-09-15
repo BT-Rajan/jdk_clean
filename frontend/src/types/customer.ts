@@ -19,7 +19,6 @@ export interface Customer {
    * it yet; can be completed later but is locked once set. */
   code: string | null
   name: string
-  nature_of_business: string | null
   contact_person: string | null
   email: string | null
   phone: string | null
@@ -47,7 +46,6 @@ export interface CustomerPayload {
   /** Omit to create a prospective customer with no ID on file yet. */
   code?: string | null
   name: string
-  nature_of_business?: string | null
   contact_person?: string | null
   email?: string | null
   phone?: string | null

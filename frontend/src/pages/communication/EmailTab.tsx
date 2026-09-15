@@ -4,6 +4,7 @@ import { Alert, Button, GlassCard, PasswordField, SelectField, Spinner, TextFiel
 import { getEmailAccount, getEmailProviders, testEmailAccount, updateEmailAccount } from '@/api/communication'
 import type { EmailAccount, EmailAccountFormValues, EmailProviderPresets } from '@/types/emailAccount'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatDateTime } from '@/lib/dateFormat'
 
 export function EmailTab() {
   const [loading, setLoading] = useState(true)
@@ -258,7 +259,7 @@ export function EmailTab() {
             <h2 className="font-display text-lg font-medium text-white">Status</h2>
             <p className="mt-1 text-sm text-white/50">
               {lastTest.last_tested_at
-                ? `Last tested ${new Date(lastTest.last_tested_at).toLocaleString()} -- ${
+                ? `Last tested ${formatDateTime(lastTest.last_tested_at)} -- ${
                     lastTest.last_test_ok ? 'connected successfully' : lastTest.last_test_error
                   }`
                 : 'Not tested yet.'}

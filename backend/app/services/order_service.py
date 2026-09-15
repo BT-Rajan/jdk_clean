@@ -502,10 +502,19 @@ def change_status(
                 inventory_service.release_reservation(db, "product", line.product_id, remaining, commit=False)
 
     order.status = new_status
+    if new_status == "confirmed":
+        # Drives escalate_unpaid_orders' "no payment N days after
+        # confirm" check -- 'confirmed' is only ever reached once (see
+        # ALLOWED_TRANSITIONS), so this never needs to guard against
+        # overwriting an earlier value.
+        order.confirmed_at = datetime.now(timezone.utc)
     if new_status in STATUSES_REQUIRING_CLOSE_REASON:
         order.close_reason = reason
-        # A deliberate close resolves any pending overdue-delivery escalation.
+        # A deliberate close resolves any pending escalation (overdue-
+        # delivery or payment-overdue) -- no more delivery or payment is
+        # expected on a cancelled order.
         order.admin_review_required = False
+        order.admin_review_reason = None
     order.updated_by = user_id
     audit_service.log_update(db, TABLE_NAME, order_id, {"status": (old_status, new_status)}, user_id)
     db.commit()
@@ -687,6 +696,12 @@ def split_order(db: Session, order_id: int, lines: list[dict], user_id: int | No
         notes=f"Split from {order.order_number} -- stock only covered part of it at dispatch.",
         approved_at=order.approved_at,
         approved_by=order.approved_by,
+        # Same underlying sale/payment obligation as the parent -- the
+        # split is a fulfillment detail, not a new commitment, so both
+        # the invoice QR code and escalate_unpaid_orders' clock should
+        # carry over rather than restart.
+        payment_link=order.payment_link,
+        confirmed_at=order.confirmed_at,
         parent_order_id=order.id,
         created_by=user_id,
     )
@@ -699,6 +714,7 @@ def split_order(db: Session, order_id: int, lines: list[dict], user_id: int | No
         order.status = "cancelled"
         order.close_reason = f"Fully split into child order {child.order_number}."
         order.admin_review_required = False
+        order.admin_review_reason = None
 
     audit_service.log_create(db, TABLE_NAME, child.id, user_id)
     audit_service.log_update(
@@ -1045,6 +1061,7 @@ def escalate_overdue_orders(db: Session, as_of: date | None = None) -> list[Orde
         due_date = order.confirmed_delivery_date or order.requested_delivery_date
         if due_date is not None and due_date < today:
             order.admin_review_required = True
+            order.admin_review_reason = "overdue_delivery"
             audit_service.log_update(
                 db, TABLE_NAME, order.id, {"admin_review_required": (False, True)}, None
             )
@@ -1055,13 +1072,64 @@ def escalate_overdue_orders(db: Session, as_of: date | None = None) -> list[Orde
     return flagged
 
 
+# How long an order can sit 'confirmed' (or later) with no payment
+# recorded before escalate_unpaid_orders flags it for a manager.
+UNPAID_ESCALATION_DAYS = 7
+
+
+def escalate_unpaid_orders(db: Session, as_of: date | None = None) -> list[Order]:
+    """Flags every order that's been confirmed for at least
+    UNPAID_ESCALATION_DAYS with no payment recorded against it yet, for
+    manager review. Same idempotent, periodic-scan shape as
+    escalate_overdue_orders -- only ever targets admin_review_required
+    = false candidates, so it never re-flags or clobbers a pending
+    overdue-delivery escalation on the same order.
+    """
+    from app.services import payment_service
+
+    today = as_of or datetime.now(timezone.utc).date()
+
+    candidates = (
+        db.query(Order)
+        .filter(
+            Order.deleted_at.is_(None),
+            Order.status.in_(OPEN_STATUSES),
+            Order.close_reason.is_(None),
+            Order.admin_review_required.is_(False),
+            Order.confirmed_at.isnot(None),
+        )
+        .all()
+    )
+
+    flagged: list[Order] = []
+    for order in candidates:
+        days_since_confirm = (today - order.confirmed_at.date()).days
+        if days_since_confirm < UNPAID_ESCALATION_DAYS:
+            continue
+        amount_paid = payment_service.get_order_amount_paid(db, order.id)
+        if amount_paid >= float(order.total_amount):
+            continue
+        order.admin_review_required = True
+        order.admin_review_reason = "payment_overdue"
+        audit_service.log_update(
+            db, TABLE_NAME, order.id, {"admin_review_required": (False, True)}, None
+        )
+        flagged.append(order)
+
+    if flagged:
+        db.commit()
+    return flagged
+
+
 def admin_review(db: Session, order_id: int, notes: str, user_id: int | None = None) -> Order:
-    """Admin clears an overdue-delivery escalation, recording their decision."""
+    """Admin/manager clears a pending escalation (overdue-delivery or
+    payment-overdue -- see admin_review_reason), recording their decision."""
     order = get_order(db, order_id)
     if not order.admin_review_required:
         raise ConflictError("This order has no pending admin review.")
 
     order.admin_review_required = False
+    order.admin_review_reason = None
     order.admin_reviewed_at = datetime.now(timezone.utc)
     order.admin_reviewed_by = user_id
     order.admin_review_notes = notes
@@ -1086,6 +1154,11 @@ def create_order_from_quotation(db: Session, quotation_id: int, user_id: int | N
     if quotation.status != "accepted":
         raise ConflictError(
             f"Only accepted quotations can be converted to an order (current status: '{quotation.status}')."
+        )
+    if not quotation.payment_link:
+        raise ConflictError(
+            "A payment link must be entered on this quotation (see quotation_service.set_payment_link) "
+            "before it can be converted to an order."
         )
 
     order_number = number_series_service.next_number(db, "ORDER")
@@ -1115,6 +1188,7 @@ def create_order_from_quotation(db: Session, quotation_id: int, user_id: int | N
         subtotal_amount=quotation.subtotal_amount,
         total_amount=quotation.total_amount,
         notes=f"Converted from quotation {quotation.quotation_number}.",
+        payment_link=quotation.payment_link,
         created_by=user_id,
     )
     order.lines = [OrderDetail(**line) for line in lines]

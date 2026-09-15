@@ -146,8 +146,11 @@ class OrderOut(BaseModel):
     total_amount: float
     notes: str | None
     close_reason: str | None
+    payment_link: str | None
+    confirmed_at: datetime | None
     approved_at: datetime | None
     admin_review_required: bool
+    admin_review_reason: str | None
     admin_reviewed_at: datetime | None
     admin_review_notes: str | None
     payment_requested_at: datetime | None

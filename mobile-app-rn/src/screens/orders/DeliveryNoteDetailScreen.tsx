@@ -11,6 +11,7 @@ import { StatusTransitionButtons } from '../../components/StatusTransitionButton
 import { TextField } from '../../components/TextField';
 import { colors, fonts, whiteAlpha } from '../../theme';
 import { useLocale } from '../../i18n/LocaleContext';
+import { formatDate } from '../../utils/format';
 import {
   getDeliveryNote,
   updateDeliveryNote,
@@ -160,7 +161,7 @@ export function DeliveryNoteDetailScreen({ route, navigation }: Props) {
 
         <View style={styles.metaBox}>
           <MetaRow label={t('deliveryNoteDetail', 'customerLabel')} value={note.customer_name ?? '—'} />
-          <MetaRow label={t('deliveryNoteDetail', 'deliveryDateLabel')} value={note.delivery_date} />
+          <MetaRow label={t('deliveryNoteDetail', 'deliveryDateLabel')} value={formatDate(note.delivery_date)} />
           {note.auto_created && (
             <MetaRow label={t('deliveryNoteDetail', 'sourceLabel')} value={t('deliveryNoteDetail', 'autoCreated')} />
           )}

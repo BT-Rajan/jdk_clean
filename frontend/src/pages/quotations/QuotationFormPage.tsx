@@ -74,6 +74,15 @@ function LineItemsEditor({
 }) {
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' })
   const lines = watch('lines')
+  // Every product should appear on at most one line -- a product picked
+  // on a different line is left out of this one's own options instead
+  // of letting it be selected twice and only catching it as an error on
+  // submit (the backend rejects a duplicate the same way -- see
+  // quotation_service._price_lines -- this is just the earlier, nicer
+  // place to prevent it).
+  const selectedProductIds = new Set(
+    (lines || []).map((l) => Number(l?.product_id)).filter((id) => id > 0),
+  )
 
   return (
     <div>
@@ -97,12 +106,16 @@ function LineItemsEditor({
           const unitPrice = Number(lines?.[index]?.unit_price ?? 0)
           const discountPercent = Number(lines?.[index]?.discount_percent ?? 0)
           const lineTotal = quantity * unitPrice * (1 - discountPercent / 100)
+          const currentProductId = Number(lines?.[index]?.product_id ?? 0)
+          const availableProducts = products.filter(
+            (p) => p.id === currentProductId || !selectedProductIds.has(p.id),
+          )
           return (
             <div key={field.id} className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-end">
               <div className="sm:col-span-4">
                 <SelectField label="Product" {...register(`lines.${index}.product_id` as const)}>
                   <option value="">Choose…</option>
-                  {products.map((p) => (
+                  {availableProducts.map((p) => (
                     <option key={p.id} value={p.id}>{p.code} — {p.name}</option>
                   ))}
                 </SelectField>
