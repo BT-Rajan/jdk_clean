@@ -60,10 +60,44 @@ export class ApiError extends Error {
   }
 }
 
+// A bare fetch() has no timeout of its own -- on the kind of patchy
+// connectivity a field sales rep actually deals with, a request can
+// otherwise hang indefinitely with the calling screen's button spinner
+// just spinning forever instead of ever failing. These give every
+// request a hard ceiling instead, sized to what each kind of call
+// actually needs: plain JSON calls should be quick, while uploads (id
+// documents) and downloads (generated PDFs/docx, which the backend
+// renders through LibreOffice before it can even start sending bytes)
+// are naturally slower.
+const DEFAULT_TIMEOUT_MS = 20_000;
+const UPLOAD_TIMEOUT_MS = 60_000;
+const DOWNLOAD_TIMEOUT_MS = 45_000;
+
+/** fetch() with a hard timeout via AbortController -- turns a hung
+ * request into a normal, retryable ApiError instead of a promise that
+ * never settles. status 0 (never a real HTTP status) marks this case
+ * so callers can tell it apart from a server-returned error if they
+ * need to. */
+async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: number): Promise<Response> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...init, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new ApiError('Request timed out. Check your connection and try again.', 0);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 interface ApiOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?: unknown;
   auth?: boolean; // default true
+  timeoutMs?: number; // default DEFAULT_TIMEOUT_MS
 }
 
 /** Shared auth/refresh plumbing behind both api() (JSON) and apiBlob()
@@ -77,11 +111,12 @@ async function fetchWithAuth(
   path: string,
   init: { method?: string; headers?: Record<string, string>; body?: string | FormData },
   auth: boolean,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS,
 ): Promise<Response> {
   async function doFetch(token: string | null): Promise<Response> {
     const headers: Record<string, string> = { ...init.headers };
     if (auth && token) headers.Authorization = `Bearer ${token}`;
-    return fetch(`${API_BASE_URL}${path}`, { ...init, headers });
+    return fetchWithTimeout(`${API_BASE_URL}${path}`, { ...init, headers }, timeoutMs);
   }
 
   let res = await doFetch(accessToken);
@@ -132,11 +167,12 @@ async function parseJsonOrThrow<T>(res: Response): Promise<T> {
 }
 
 export async function api<T = any>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { method = 'GET', body, auth = true } = options;
+  const { method = 'GET', body, auth = true, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
   const res = await fetchWithAuth(
     path,
     { method, headers: { 'Content-Type': 'application/json' }, body: body !== undefined ? JSON.stringify(body) : undefined },
     auth,
+    timeoutMs,
   );
   return parseJsonOrThrow<T>(res);
 }
@@ -169,14 +205,14 @@ export async function uploadFile<T = any>(path: string, asset: UploadAsset): Pro
       { uri: asset.uri, name: asset.name, type: asset.mimeType || 'application/octet-stream' } as unknown as Blob,
     );
   }
-  const res = await fetchWithAuth(path, { method: 'POST', body: form }, true);
+  const res = await fetchWithAuth(path, { method: 'POST', body: form }, true, UPLOAD_TIMEOUT_MS);
   return parseJsonOrThrow<T>(res);
 }
 
 /** Same auth/refresh handling as api(), for endpoints that return a
  * binary body (e.g. a PDF) instead of JSON. */
 async function apiBlob(path: string): Promise<Blob> {
-  const res = await fetchWithAuth(path, {}, true);
+  const res = await fetchWithAuth(path, {}, true, DOWNLOAD_TIMEOUT_MS);
 
   if (!res.ok) {
     // Error responses from these endpoints are still the normal JSON
@@ -263,11 +299,15 @@ function blobToBase64(blob: Blob): Promise<string> {
 async function tryRefresh(): Promise<boolean> {
   if (!refreshToken) return false;
   try {
-    const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
+    const res = await fetchWithTimeout(
+      `${API_BASE_URL}/api/auth/refresh`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ refresh_token: refreshToken }),
+      },
+      DEFAULT_TIMEOUT_MS,
+    );
     if (!res.ok) return false;
     const tokens = await res.json();
     await setTokens(tokens);
