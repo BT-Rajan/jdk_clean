@@ -21,7 +21,7 @@ import { DeliveryNoteFormScreen } from '../screens/orders/DeliveryNoteFormScreen
 import { DeliveryNoteDetailScreen } from '../screens/orders/DeliveryNoteDetailScreen';
 import { MyHistoryScreen } from '../screens/MyHistoryScreen';
 import { DrawerContent } from './DrawerContent';
-import { HeaderTitle, DetailHeaderTitle } from './HeaderTitle';
+import { HeaderTitle } from './HeaderTitle';
 import { useLocale } from '../i18n/LocaleContext';
 import { colors, fonts, whiteAlpha } from '../theme';
 
@@ -71,14 +71,11 @@ const stackScreenOptions = {
   headerTitleStyle: { fontFamily: fonts.sansSemibold, fontSize: 16 },
   headerShadowVisible: false,
   contentStyle: { backgroundColor: colors.ink950 },
-  // Default for every screen in these stacks: small logo + the screen's
-  // own `title`. The three list screens below override this back to
-  // the full HeaderTitle brand lockup; every other (detail) screen in
-  // these stacks -- ClientForm, ClientHistory, NewQuotation,
-  // QuotationDetail, FeasibilityDetail, OrderForm, OrderDetail,
-  // DeliveryNoteForm, DeliveryNoteDetail -- picks this up automatically,
-  // so none of them can end up logo-less again.
-  headerTitle: (props: { children?: string }) => <DetailHeaderTitle {...props} />,
+  // Single shared header (logo + this screen's own `title`) for every
+  // screen in every stack -- see HeaderTitle.tsx. No screen below
+  // overrides this, so it's structurally impossible for one page to
+  // end up with a different header than the rest.
+  headerTitle: (props: { children?: string }) => <HeaderTitle {...props} />,
 };
 
 // Every top-level Drawer.Screen below that renders its own nested stack
@@ -109,11 +106,7 @@ function ClientsStackNavigator() {
         name="ClientsList"
         component={ClientsListScreen}
         options={({ navigation }) => ({
-          // Branded logo/wordmark header, same as the drawer's own
-          // top-level screens (Home/ProductCatalog/History) -- the
-          // screen's own name lives in ClientsListScreen's in-body
-          // PageHeader instead, same split those screens already use.
-          headerTitle: () => <HeaderTitle />,
+          title: t('clients', 'title'),
           headerLeft: () => <DrawerMenuButton navigation={navigation} />,
         })}
       />
@@ -132,9 +125,7 @@ function QuotationsStackNavigator() {
         name="QuotationsList"
         component={QuotationsListScreen}
         options={({ navigation }) => ({
-          // See ClientsList's options above: branded header here, the
-          // page's own title stays in QuotationsListScreen's PageHeader.
-          headerTitle: () => <HeaderTitle />,
+          title: t('quotationsList', 'title'),
           headerLeft: () => <DrawerMenuButton navigation={navigation} />,
         })}
       />
@@ -162,9 +153,7 @@ function OrdersStackNavigator() {
         name="OrdersList"
         component={OrdersListScreen}
         options={({ navigation }) => ({
-          // See ClientsList's options above: branded header here, the
-          // page's own title stays in OrdersListScreen's PageHeader.
-          headerTitle: () => <HeaderTitle />,
+          title: t('ordersList', 'title'),
           headerLeft: () => <DrawerMenuButton navigation={navigation} />,
         })}
       />
@@ -187,24 +176,32 @@ function OrdersStackNavigator() {
 const Drawer = createDrawerNavigator();
 
 function AuthenticatedShell() {
+  const { t } = useLocale();
   return (
     <Drawer.Navigator
       drawerContent={(props) => <DrawerContent {...props} />}
       screenOptions={{
         headerStyle: { backgroundColor: colors.ink900 },
         headerTintColor: colors.white,
+        headerTitleStyle: { fontFamily: fonts.sansSemibold, fontSize: 16 },
         headerShadowVisible: false,
-        headerTitle: () => <HeaderTitle />,
+        // Same shared header as every nested stack screen -- see
+        // stackScreenOptions above and HeaderTitle.tsx.
+        headerTitle: (props: { children?: string }) => <HeaderTitle {...props} />,
         drawerStyle: { backgroundColor: colors.ink900, width: 260 },
         sceneContainerStyle: { backgroundColor: colors.ink950 },
       }}
     >
-      <Drawer.Screen name="Home" component={HomeScreen} />
-      <Drawer.Screen name="ProductCatalog" component={ProductCatalogScreen} />
+      <Drawer.Screen name="Home" component={HomeScreen} options={{ title: t('home', 'title') }} />
+      <Drawer.Screen
+        name="ProductCatalog"
+        component={ProductCatalogScreen}
+        options={{ title: t('productCatalog', 'title') }}
+      />
       <Drawer.Screen name="Clients" component={ClientsStackNavigator} options={{ headerShown: false }} />
       <Drawer.Screen name="Quotations" component={QuotationsStackNavigator} options={{ headerShown: false }} />
       <Drawer.Screen name="Orders" component={OrdersStackNavigator} options={{ headerShown: false }} />
-      <Drawer.Screen name="History" component={MyHistoryScreen} />
+      <Drawer.Screen name="History" component={MyHistoryScreen} options={{ title: t('myHistory', 'title') }} />
     </Drawer.Navigator>
   );
 }
