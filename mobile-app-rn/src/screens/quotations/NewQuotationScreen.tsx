@@ -17,7 +17,7 @@ import { customerOptionLabel } from '../../utils/customerOptionLabel';
 import { confirm } from '../../utils/alerts';
 import { toIsoDate } from '../../utils/format';
 import { listProducts, Product } from '../../api/catalog';
-import { createFeasibility, runFeasibilityCheck, requestFeasibilityException } from '../../api/feasibility';
+import { createFeasibility, getFeasibility, runFeasibilityCheck, requestFeasibilityException, Feasibility } from '../../api/feasibility';
 import { createQuotation, downloadQuotationPdf, getQuotationForFeasibility } from '../../api/quotations';
 import { QuotationsStackParamList } from '../../navigation/RootNavigator';
 
@@ -79,6 +79,14 @@ export function NewQuotationScreen({ route, navigation }: Props) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [result, setResult] = useState<ResultState>(null);
+  // A feasibility check that's been created but not yet confirmed to
+  // have run -- set as soon as createFeasibility succeeds, cleared once
+  // run/read-back completes either way. Lets a retry (e.g. connectivity
+  // dropped between create and run) resume the same record instead of
+  // creating another orphaned draft every time "Check" is pressed --
+  // `key` guards against reusing it once the form's actual inputs have
+  // since changed.
+  const [pendingCheck, setPendingCheck] = useState<{ feasibilityId: number; key: string } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -105,6 +113,7 @@ export function NewQuotationScreen({ route, navigation }: Props) {
     setLines([newLine()]);
     setDate(null);
     setFormError(null);
+    setPendingCheck(null);
   }
 
   function updateLine(key: string, patch: Partial<LineDraft>) {
@@ -135,28 +144,57 @@ export function NewQuotationScreen({ route, navigation }: Props) {
       parsedLines.push({ productId: Number(line.productId), quantity: qty });
     }
 
+    // Identifies this exact set of inputs -- only reuse a pending
+    // feasibility record if the form still matches what created it;
+    // otherwise (the salesman changed something before retrying) a
+    // fresh check is the correct thing to create.
+    const checkKey = JSON.stringify({ customerId, date: toIsoDate(date), parsedLines });
+
     setIsChecking(true);
     try {
       setStatusLine(t('newQuotation', 'runningCheck'));
-      const created = await createFeasibility({
-        customer_id: Number(customerId),
-        required_by_date: toIsoDate(date),
-        lines: parsedLines.map((l) => ({ product_id: l.productId, quantity: l.quantity })),
-      });
-      const checked = await runFeasibilityCheck(created.id);
+
+      let feasibilityId: number;
+      if (pendingCheck && pendingCheck.key === checkKey) {
+        feasibilityId = pendingCheck.feasibilityId;
+      } else {
+        const created = await createFeasibility({
+          customer_id: Number(customerId),
+          required_by_date: toIsoDate(date),
+          lines: parsedLines.map((l) => ({ product_id: l.productId, quantity: l.quantity })),
+        });
+        feasibilityId = created.id;
+        setPendingCheck({ feasibilityId, key: checkKey });
+      }
+
+      let checked: Feasibility;
+      try {
+        checked = await runFeasibilityCheck(feasibilityId);
+      } catch (err) {
+        // A 409 here specifically means this check is no longer 'draft'
+        // -- i.e. an earlier attempt's run() actually went through on
+        // the server and only its response got lost (the connectivity-
+        // drop case this resume logic exists for). Read back its
+        // current state instead of treating that as a fresh failure.
+        if (err instanceof ApiError && err.status === 409) {
+          checked = await getFeasibility(feasibilityId);
+        } else {
+          throw err;
+        }
+      }
 
       if (checked.status === 'feasible') {
         const pendingLines: PendingLine[] = parsedLines.map((l) => {
           const product = products.find((p) => p.id === l.productId);
           return { productId: l.productId, quantity: l.quantity, unitPrice: product?.selling_price ?? 0 };
         });
-        setResult({ kind: 'feasible_pending', feasibilityId: created.id, customerId: Number(customerId), lines: pendingLines });
+        setResult({ kind: 'feasible_pending', feasibilityId, customerId: Number(customerId), lines: pendingLines });
       } else if (checked.status === 'converted') {
         // Backend-side "auto-create quotation on feasible" is on for
         // this org (Settings -> Sales) -- run_check itself already
         // created the quotation before this response came back.
         setStatusLine(t('newQuotation', 'generatingQuote'));
-        const quotation = await getQuotationForFeasibility(created.id);
+        const quotation = await getQuotationForFeasibility(feasibilityId);
         if (quotation) {
           setResult({
             kind: 'feasible',
@@ -170,8 +208,12 @@ export function NewQuotationScreen({ route, navigation }: Props) {
         }
       } else if (checked.status === 'exception_pending') {
         setStatusLine(t('newQuotation', 'notifyingAdmin'));
+        // Idempotent while still exception_pending (see
+        // feasibility_service.decide_exception) -- safe to send again
+        // if a first attempt's request went through but its response
+        // didn't come back.
         await requestFeasibilityException(
-          created.id,
+          feasibilityId,
           'Requested via mobile Quotations — raw material/capacity shortfall on initial check.',
         );
         const nextAvailableDate = checked.lines
@@ -183,6 +225,9 @@ export function NewQuotationScreen({ route, navigation }: Props) {
       } else {
         setFormError(t('newQuotation', 'unexpectedStatusError', { status: checked.status }));
       }
+      // The check reached a real outcome one way or another -- nothing
+      // left to resume.
+      setPendingCheck(null);
     } catch (err: any) {
       setFormError(err?.message ?? t('newQuotation', 'genericError'));
     } finally {
