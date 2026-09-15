@@ -3,6 +3,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.common import build_crud_router
+from app.api.deps import require_role
 from app.core.database import get_db
 from app.core.exceptions import NotFoundError
 from app.core.permissions import require_page_access
@@ -19,6 +20,10 @@ from app.services import customer_service, id_document_service, payment_service
 
 read_guard = require_page_access("customers", "read")
 write_guard = require_page_access("customers", "write")
+# Creating a new customer stays open to whoever normally has customers
+# write access (e.g. Sales onboarding a new client); editing, deleting,
+# restoring, or activating/deactivating an existing one is admin-only.
+admin_guard = require_role("admin")
 
 ID_DOCUMENT_SUBDIR = "customer_ids"
 TABLE_NAME = "customers"
@@ -31,6 +36,7 @@ router = build_crud_router(
     prefix="/api/customers",
     tags=["customers"],
     page_key="customers",
+    strict_write_guard=admin_guard,
 )
 
 

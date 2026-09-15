@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, PageHeader, Spinner, StatusBadge, ThumbsUpIcon } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, PageHeader, Spinner, StatusBadge, TextField, ThumbsUpIcon } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   approveQuotation,
@@ -13,6 +13,7 @@ import {
   getQuotation,
   getQuotationEmailPreview,
   restoreQuotation,
+  setQuotationPaymentLink,
   updateQuotationStatus,
 } from '@/api/quotations'
 import type { Quotation } from '@/types/quotation'
@@ -43,6 +44,7 @@ export function QuotationDetailPage() {
   const [emailOpen, setEmailOpen] = useState(false)
   const [emailPreview, setEmailPreview] = useState<{ to_email: string | null; subject: string; body: string } | null>(null)
   const [emailPreviewLoading, setEmailPreviewLoading] = useState(false)
+  const [paymentLinkInput, setPaymentLinkInput] = useState('')
 
   async function handleOpenEmail() {
     setEmailPreviewLoading(true)
@@ -68,6 +70,10 @@ export function QuotationDetailPage() {
   }
 
   useEffect(load, [quotationId])
+
+  useEffect(() => {
+    setPaymentLinkInput(quotation?.payment_link ?? '')
+  }, [quotation?.payment_link])
 
   // One request in flight at a time (see useAsyncGuard) -- a fast
   // double-click on "Convert to order" or "Approve" must not fire the
@@ -97,6 +103,14 @@ export function QuotationDetailPage() {
     await withBusy(async () => {
       const order = await convertQuotationToOrder(quotationId)
       navigate(`/orders/${order.id}`)
+    })
+  }
+
+  async function handleSavePaymentLink() {
+    await withBusy(async () => {
+      const updated = await setQuotationPaymentLink(quotationId, paymentLinkInput.trim())
+      setQuotation(updated)
+      setNotice('Payment link saved.')
     })
   }
 
@@ -192,7 +206,7 @@ export function QuotationDetailPage() {
                   <EditIcon />
                 </Button>
               )}
-              {allowWrite && quotation.status === 'accepted' && (
+              {allowWrite && quotation.status === 'accepted' && quotation.payment_link && (
                 <Button onClick={handleConvert} isLoading={busy}>Convert to order</Button>
               )}
               {allowWrite && canDelete && (
@@ -291,6 +305,37 @@ export function QuotationDetailPage() {
             {' '}− {quotation.discount_percent}% discount ({formatCurrency(quotation.discount_amount)})
             {' '}= {formatCurrency(quotation.total_amount)}
           </p>
+        )}
+
+        {quotation.status === 'accepted' && (
+          <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
+            <p className="mb-1 text-sm font-medium text-white">Payment link</p>
+            <p className="mb-3 text-xs text-white/40">
+              Paste the payment link generated in the external payment system. Required before this
+              quotation can be converted to an order -- it's printed as a QR code on the order's invoice.
+            </p>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="min-w-[280px] flex-1">
+                <TextField
+                  label="Payment link"
+                  value={paymentLinkInput}
+                  onChange={(e) => setPaymentLinkInput(e.target.value)}
+                  placeholder="https://payments.example.com/…"
+                  disabled={!allowWrite}
+                />
+              </div>
+              {allowWrite && (
+                <Button
+                  size="sm"
+                  onClick={handleSavePaymentLink}
+                  isLoading={busy}
+                  disabled={!paymentLinkInput.trim() || paymentLinkInput.trim() === quotation.payment_link}
+                >
+                  {quotation.payment_link ? 'Update' : 'Save'}
+                </Button>
+              )}
+            </div>
+          </div>
         )}
 
         {quotation.notes && (

@@ -16,7 +16,7 @@ import {
 import { listCustomers } from '@/api/customers'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
-import { canWrite } from '@/lib/roles'
+import { canWriteDepartment } from '@/lib/roles'
 
 export function CustomersListPage() {
   const { user } = useAuth()
@@ -64,7 +64,10 @@ export function CustomersListPage() {
               <option value="inactive">Inactive</option>
             </SelectField>
           </div>
-          {canWrite(user?.role) && (
+          {/* Creating a customer stays open to Sales (matches the backend's
+              customers page_key write guard); editing/deleting an existing
+              one is admin-only -- see CustomerDetailPage. */}
+          {canWriteDepartment(user, 'sales') && (
             <Button onClick={() => navigate('/customers/new')}>New customer</Button>
           )}
         </div>

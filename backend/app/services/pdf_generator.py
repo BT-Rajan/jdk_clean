@@ -18,6 +18,7 @@ from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
 
+import qrcode
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.units import mm
@@ -111,6 +112,26 @@ def _signature_block(styles, signer_name: str | None, signature_path: Path | Non
     return elements
 
 
+def _payment_qr_block(styles, payment_link: str) -> list:
+    """Flowables for the "scan to pay" QR code -- order.payment_link is
+    a manually-entered link to an external payment system (see
+    quotation_service.set_payment_link / order_service.
+    create_order_from_quotation), required before this order could even
+    exist, so it's always available by the time this PDF is generated."""
+    small_muted = ParagraphStyle("QrMuted", parent=styles["Normal"], fontSize=8, textColor=colors.grey)
+
+    qr_image = qrcode.make(payment_link)
+    buffer = BytesIO()
+    qr_image.save(buffer, format="PNG")
+    buffer.seek(0)
+
+    return [
+        Spacer(1, 8 * mm),
+        RLImage(buffer, width=28 * mm, height=28 * mm),
+        Paragraph("Scan to pay", small_muted),
+    ]
+
+
 def _render_document(
     *,
     doc_label: str,
@@ -127,6 +148,7 @@ def _render_document(
     footer_note: str,
     signer_name: str | None,
     signature_path: Path | None,
+    payment_link: str | None = None,
 ) -> bytes:
     settings = {**DEFAULT_COMPANY_SETTINGS, **(company_settings or {})}
     buffer = BytesIO()
@@ -229,6 +251,9 @@ def _render_document(
         story.append(Spacer(1, 8 * mm))
         story.append(Paragraph("<b>Notes</b>", styles["Heading4"]))
         story.append(Paragraph(notes.replace("\n", "<br/>"), styles["Normal"]))
+
+    if payment_link:
+        story.extend(_payment_qr_block(styles, payment_link))
 
     story.extend(_signature_block(styles, signer_name, signature_path))
 
@@ -346,6 +371,7 @@ def generate_order_pdf(order, company_settings: dict | None = None, signer=None)
         footer_note="This is a system-generated order confirmation.",
         signer_name=signer_name,
         signature_path=signature_path,
+        payment_link=order.payment_link,
     )
 
 

@@ -9,6 +9,7 @@ import { GlassCard } from '../../components/GlassCard';
 import { StatusBadge } from '../../components/StatusBadge';
 import { colors, fonts, whiteAlpha } from '../../theme';
 import { useLocale } from '../../i18n/LocaleContext';
+import { formatDate, formatDateTime } from '../../utils/format';
 import { getFeasibility, Feasibility, FeasibilityStatus } from '../../api/feasibility';
 import { getQuotationForFeasibility } from '../../api/quotations';
 import { QuotationsStackParamList } from '../../navigation/RootNavigator';
@@ -86,8 +87,8 @@ export function FeasibilityDetailScreen({ route, navigation }: Props) {
         <Alert variant="error">{error}</Alert>
 
         <View style={styles.metaBox}>
-          <MetaRow label={t('feasibilityDetail', 'requiredByLabel')} value={feasibility.required_by_date ?? '—'} />
-          <MetaRow label={t('feasibilityDetail', 'checkedAtLabel')} value={feasibility.checked_at ?? '—'} />
+          <MetaRow label={t('feasibilityDetail', 'requiredByLabel')} value={formatDate(feasibility.required_by_date)} />
+          <MetaRow label={t('feasibilityDetail', 'checkedAtLabel')} value={feasibility.checked_at ? formatDateTime(feasibility.checked_at) : '—'} />
           {feasibility.exception_reason && (
             <MetaRow label={t('feasibilityDetail', 'exceptionReasonLabel')} value={feasibility.exception_reason} />
           )}
@@ -116,17 +117,27 @@ export function FeasibilityDetailScreen({ route, navigation }: Props) {
                 </View>
               </View>
               <Text style={styles.lineMeta}>{t('feasibilityDetail', 'quantityLabel')}: {line.quantity}</Text>
+              {line.covered_by_stock ? (
+                <Text style={styles.okText}>
+                  {t('feasibilityDetail', 'inStockLabel', { quantity: line.covered_by_stock })}
+                </Text>
+              ) : null}
               {line.bom_missing && <Text style={styles.warnText}>{t('feasibilityDetail', 'bomMissing')}</Text>}
               {line.estimated_ready_date && (
                 <Text style={styles.lineMeta}>
-                  {t('feasibilityDetail', 'estimatedReadyLabel')}: {line.estimated_ready_date}
+                  {t('feasibilityDetail', 'estimatedReadyLabel')}: {formatDate(line.estimated_ready_date)}
                 </Text>
               )}
               {line.shortfalls.length > 0 && (
                 <View style={{ marginTop: 6, gap: 4 }}>
                   {line.shortfalls.map((s) => (
                     <Text key={s.raw_material_id} style={styles.shortfallText}>
-                      {s.name}: {t('feasibilityDetail', 'shortBy', { shortfall: s.shortfall, unit: s.unit })}
+                      {s.name}: {t('feasibilityDetail', 'shortByDetailed', {
+                        shortfall: s.shortfall,
+                        unit: s.unit,
+                        required: s.required,
+                        onHand: s.on_hand,
+                      })}
                     </Text>
                   ))}
                 </View>
@@ -180,6 +191,7 @@ const styles = StyleSheet.create({
   lineBadgeOk: { backgroundColor: 'rgba(16,185,129,0.15)' },
   lineBadgeBad: { backgroundColor: 'rgba(239,68,68,0.15)' },
   lineMeta: { fontFamily: fonts.sans, fontSize: 12, color: whiteAlpha(0.5), marginTop: 4 },
+  okText: { fontFamily: fonts.sans, fontSize: 12, color: colors.emerald400, marginTop: 4 },
   warnText: { fontFamily: fonts.sans, fontSize: 12, color: '#fcd34d', marginTop: 4 },
   shortfallText: { fontFamily: fonts.sans, fontSize: 12, color: colors.red400 },
 });

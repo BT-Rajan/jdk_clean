@@ -33,6 +33,8 @@ import {
   viewCustomerIdDocument,
 } from '../api/customers';
 import { ClientsStackParamList } from '../navigation/RootNavigator';
+import { useAuth } from '../context/AuthContext';
+import { isAdmin } from '../utils/roles';
 
 type Props = NativeStackScreenProps<ClientsStackParamList, 'ClientForm'>;
 
@@ -47,7 +49,6 @@ interface FormState {
   country: string;
   billing_address: string;
   shipping_address: string;
-  nature_of_business: string;
   credit_limit: string;
   payment_terms_days: string;
   status: 'active' | 'inactive';
@@ -65,7 +66,6 @@ const emptyForm: FormState = {
   country: '',
   billing_address: '',
   shipping_address: '',
-  nature_of_business: '',
   credit_limit: '0',
   payment_terms_days: '30',
   status: 'active',
@@ -79,7 +79,6 @@ type FieldKey = keyof FormState;
 const MAX_LENGTHS: Partial<Record<FieldKey, number>> = {
   name: 150,
   code: 30,
-  nature_of_business: 150,
   contact_person: 120,
   email: 120,
   phone: 30,
@@ -116,7 +115,7 @@ function validateField(t: LocaleT, key: FieldKey, form: FormState, requireCode: 
 type StepId = 'type' | 'company' | 'contact' | 'financial' | 'review';
 const WIZARD_STEPS: { id: StepId; fields: FieldKey[] }[] = [
   { id: 'type', fields: ['customer_type'] },
-  { id: 'company', fields: ['code', 'name', 'nature_of_business', 'contact_person'] },
+  { id: 'company', fields: ['code', 'name', 'contact_person'] },
   { id: 'contact', fields: ['email', 'phone', 'city', 'country', 'billing_address', 'shipping_address'] },
   { id: 'financial', fields: ['credit_limit', 'payment_terms_days', 'notes'] },
   { id: 'review', fields: [] },
@@ -124,6 +123,8 @@ const WIZARD_STEPS: { id: StepId; fields: FieldKey[] }[] = [
 
 export function ClientFormScreen({ route, navigation }: Props) {
   const { t } = useLocale();
+  const { user } = useAuth();
+  const allowAdmin = isAdmin(user?.role);
   const customerId = route.params?.customerId;
   const isEditing = Boolean(customerId);
 
@@ -345,14 +346,6 @@ export function ClientFormScreen({ route, navigation }: Props) {
             <View style={{ gap: 18 }}>
               <TextField label={idLabel} value={form.code} onChangeText={(v) => update('code', v)} error={fieldErrors.code} />
               <TextField label={t('clientForm', 'nameLabel')} value={form.name} onChangeText={(v) => update('name', v)} error={fieldErrors.name} />
-              {!isIndividual && (
-                <TextField
-                  label={t('clientForm', 'natureOfBusinessLabel')}
-                  value={form.nature_of_business}
-                  onChangeText={(v) => update('nature_of_business', v)}
-                  error={fieldErrors.nature_of_business}
-                />
-              )}
               <TextField
                 label={t('clientForm', 'contactPersonLabel')}
                 value={form.contact_person}
@@ -456,7 +449,6 @@ export function ClientFormScreen({ route, navigation }: Props) {
                 <ReviewRow label={t('clientForm', 'typeLabel')} value={isIndividual ? t('clientForm', 'typeIndividual') : t('clientForm', 'typeBusiness')} />
                 <ReviewRow label={idLabel} value={form.code} />
                 <ReviewRow label={t('clientForm', 'nameLabel')} value={form.name} />
-                {!isIndividual && <ReviewRow label={t('clientForm', 'natureOfBusinessLabel')} value={form.nature_of_business} />}
                 <ReviewRow label={t('clientForm', 'contactPersonLabel')} value={form.contact_person} />
                 <ReviewRow label={t('clientForm', 'emailLabel')} value={form.email} />
                 <ReviewRow label={t('clientForm', 'phoneLabel')} value={form.phone} />
@@ -524,15 +516,6 @@ export function ClientFormScreen({ route, navigation }: Props) {
             ]}
             searchable={false}
           />
-
-          {!isIndividual && (
-            <TextField
-              label={t('clientForm', 'natureOfBusinessLabel')}
-              value={form.nature_of_business}
-              onChangeText={(v) => update('nature_of_business', v)}
-              error={fieldErrors.nature_of_business}
-            />
-          )}
 
           <TextField label={t('clientForm', 'contactPersonLabel')} value={form.contact_person} onChangeText={(v) => update('contact_person', v)} error={fieldErrors.contact_person} />
 
@@ -603,12 +586,16 @@ export function ClientFormScreen({ route, navigation }: Props) {
           />
         </View>
 
-        <Button onPress={handleSaveEdit} isLoading={saving} style={styles.saveBtn}>
-          {t('clientForm', 'saveChanges')}
-        </Button>
-        <Button variant="danger" onPress={handleDelete} isLoading={deleting} style={styles.deleteBtn}>
-          {t('clientForm', 'deleteClient')}
-        </Button>
+        {allowAdmin && (
+          <>
+            <Button onPress={handleSaveEdit} isLoading={saving} style={styles.saveBtn}>
+              {t('clientForm', 'saveChanges')}
+            </Button>
+            <Button variant="danger" onPress={handleDelete} isLoading={deleting} style={styles.deleteBtn}>
+              {t('clientForm', 'deleteClient')}
+            </Button>
+          </>
+        )}
       </GlassCard>
 
       {customer && creditStatus && (
@@ -743,7 +730,6 @@ function customerToForm(c: Customer): FormState {
     country: c.country ?? '',
     billing_address: c.billing_address ?? '',
     shipping_address: c.shipping_address ?? '',
-    nature_of_business: c.nature_of_business ?? '',
     credit_limit: String(c.credit_limit ?? 0),
     payment_terms_days: String(c.payment_terms_days ?? 30),
     status: c.status,
@@ -763,7 +749,6 @@ function formToCreatePayload(f: FormState) {
     country: f.country.trim() || null,
     billing_address: f.billing_address.trim() || null,
     shipping_address: f.shipping_address.trim() || null,
-    nature_of_business: f.nature_of_business.trim() || null,
     credit_limit: Number(f.credit_limit) || 0,
     payment_terms_days: Number(f.payment_terms_days) || 0,
     status: f.status,

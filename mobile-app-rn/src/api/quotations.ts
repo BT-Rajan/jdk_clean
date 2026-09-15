@@ -74,6 +74,11 @@ export interface Quotation {
   total_amount: number;
   notes: string | null;
   converted_order_id: number | null;
+  /** Manually entered by sales once the customer pays through a
+   * different, external system -- required before this quotation can
+   * be converted to an order. Printed as a QR code on the order's PDF.
+   * Mirrors backend/app/schemas/quotation.py. */
+  payment_link: string | null;
   material_conflict_acknowledged: boolean;
   material_conflict_details: MaterialConflict[] | null;
   lines: QuotationLine[];
@@ -130,6 +135,12 @@ export function updateQuotation(id: number, payload: Partial<QuotationPayload>) 
 
 export function updateQuotationStatus(id: number, status: SettableQuotationStatus, reason?: string) {
   return api<Quotation>(`/api/quotations/${id}/status`, { method: 'POST', body: { status, reason } });
+}
+
+// Only 'accepted' quotations accept a payment link -- see
+// quotation_service.set_payment_link. Required before convert-to-order.
+export function setQuotationPaymentLink(id: number, paymentLink: string) {
+  return api<Quotation>(`/api/quotations/${id}/payment-link`, { method: 'POST', body: { payment_link: paymentLink } });
 }
 
 export function deleteQuotation(id: number) {

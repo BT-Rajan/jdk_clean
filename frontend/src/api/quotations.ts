@@ -53,6 +53,14 @@ export async function updateQuotationStatus(id: number, status: SettableQuotatio
   return data
 }
 
+/** Records the manually-entered link to an external payment system --
+ * only settable while 'accepted', and required before
+ * convertQuotationToOrder will convert this quotation at all. */
+export async function setQuotationPaymentLink(id: number, paymentLink: string): Promise<Quotation> {
+  const { data } = await apiClient.post<Quotation>(`/api/quotations/${id}/payment-link`, { payment_link: paymentLink })
+  return data
+}
+
 export async function deleteQuotation(id: number): Promise<MessageResponse> {
   const { data } = await apiClient.delete<MessageResponse>(`/api/quotations/${id}`)
   return data

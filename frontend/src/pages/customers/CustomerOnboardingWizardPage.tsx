@@ -24,7 +24,7 @@ type StepId = 'type' | 'company' | 'contact' | 'financial' | 'review'
 
 const STEPS: { id: StepId; label: string; fields: (keyof CustomerFormValues)[] }[] = [
   { id: 'type', label: 'Type', fields: ['customer_type'] },
-  { id: 'company', label: 'Company Details', fields: ['code', 'name', 'nature_of_business', 'contact_person'] },
+  { id: 'company', label: 'Company Details', fields: ['code', 'name', 'contact_person'] },
   {
     id: 'contact',
     label: 'Contact & Address',
@@ -63,7 +63,6 @@ export function CustomerOnboardingWizardPage() {
       customer_type: 'business',
       code: '',
       name: '',
-      nature_of_business: '',
       contact_person: '',
       email: '',
       phone: '',
@@ -160,9 +159,6 @@ export function CustomerOnboardingWizardPage() {
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <TextField label={idLabel} error={errors.code?.message} {...register('code')} />
                   <TextField label="Name" error={errors.name?.message} {...register('name')} />
-                  {!isIndividual && (
-                    <TextField label="Nature of business" {...register('nature_of_business')} />
-                  )}
                   <TextField label="Contact person" {...register('contact_person')} />
                 </div>
                 <IdDocumentPicker
@@ -228,7 +224,6 @@ export function CustomerOnboardingWizardPage() {
                   <ReviewField label="Type" value={isIndividual ? 'Individual' : 'Business'} />
                   <ReviewField label={idLabel} value={values.code} />
                   <ReviewField label="Name" value={values.name} />
-                  {!isIndividual && <ReviewField label="Nature of business" value={values.nature_of_business} />}
                   <ReviewField label="Contact person" value={values.contact_person} />
                   <ReviewField label="Email" value={values.email} />
                   <ReviewField label="Phone" value={values.phone} />

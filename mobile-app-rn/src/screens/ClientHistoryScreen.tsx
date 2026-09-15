@@ -8,7 +8,7 @@ import { Button } from '../components/Button';
 import { GlassCard } from '../components/GlassCard';
 import { colors, fonts, whiteAlpha } from '../theme';
 import { useLocale } from '../i18n/LocaleContext';
-import { formatCurrency } from '../utils/format';
+import { formatCurrency, formatDate } from '../utils/format';
 import { listFeasibilities, Feasibility, FeasibilityStatus } from '../api/feasibility';
 import { listQuotations, Quotation, QuotationStatus } from '../api/quotations';
 import { listOrders, Order, OrderStatus } from '../api/orders';
@@ -119,7 +119,7 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
           <Pressable key={f.id} onPress={() => goToFeasibility(f.id)}>
             <ActivityRow
               primary={f.feasibility_number}
-              secondary={f.created_at.slice(0, 10)}
+              secondary={formatDate(f.created_at)}
               status={f.status}
               statusLabel={t('feasibilityStatus', f.status as FeasibilityStatus)}
             />

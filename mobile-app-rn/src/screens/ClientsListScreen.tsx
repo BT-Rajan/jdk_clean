@@ -6,17 +6,22 @@ import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { GlassCard } from '../components/GlassCard';
+import { PageHeader } from '../components/PageHeader';
 import { TextField } from '../components/TextField';
 import { colors, fonts, whiteAlpha } from '../theme';
 import { useLocale } from '../i18n/LocaleContext';
 import { confirm } from '../utils/alerts';
 import { listCustomers, activateCustomer, deactivateCustomer, Customer } from '../api/customers';
 import { ClientsStackParamList } from '../navigation/RootNavigator';
+import { useAuth } from '../context/AuthContext';
+import { isAdmin } from '../utils/roles';
 
 type Props = NativeStackScreenProps<ClientsStackParamList, 'ClientsList'>;
 
 export function ClientsListScreen({ navigation }: Props) {
   const { t } = useLocale();
+  const { user } = useAuth();
+  const allowAdmin = isAdmin(user?.role);
   const [clients, setClients] = useState<Customer[]>([]);
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
@@ -75,12 +80,14 @@ export function ClientsListScreen({ navigation }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t('clients', 'title')}</Text>
-        <Button size="sm" onPress={() => navigation.navigate('ClientForm', {})}>
-          {t('clients', 'newButton')}
-        </Button>
-      </View>
+      <PageHeader
+        title={t('clients', 'title')}
+        action={
+          <Button size="sm" onPress={() => navigation.navigate('ClientForm', {})}>
+            {t('clients', 'newButton')}
+          </Button>
+        }
+      />
 
       <View style={styles.searchWrap}>
         <TextField
@@ -127,26 +134,30 @@ export function ClientsListScreen({ navigation }: Props) {
                 </Text>
               </View>
 
-              <Pressable
-                onPress={() => navigation.navigate('ClientForm', { customerId: item.id })}
-                hitSlop={10}
-                style={styles.iconBtn}
-              >
-                <Feather name="edit-2" size={16} color={whiteAlpha(0.7)} />
-              </Pressable>
+              {allowAdmin && (
+                <Pressable
+                  onPress={() => navigation.navigate('ClientForm', { customerId: item.id })}
+                  hitSlop={10}
+                  style={styles.iconBtn}
+                >
+                  <Feather name="edit-2" size={16} color={whiteAlpha(0.7)} />
+                </Pressable>
+              )}
 
-              <Pressable
-                onPress={() => handleToggleStatus(item)}
-                disabled={togglingId === item.id}
-                hitSlop={10}
-                style={styles.iconBtn}
-              >
-                <Feather
-                  name={item.status === 'active' ? 'slash' : 'check-circle'}
-                  size={16}
-                  color={item.status === 'active' ? colors.red400 : colors.emerald400}
-                />
-              </Pressable>
+              {allowAdmin && (
+                <Pressable
+                  onPress={() => handleToggleStatus(item)}
+                  disabled={togglingId === item.id}
+                  hitSlop={10}
+                  style={styles.iconBtn}
+                >
+                  <Feather
+                    name={item.status === 'active' ? 'slash' : 'check-circle'}
+                    size={16}
+                    color={item.status === 'active' ? colors.red400 : colors.emerald400}
+                  />
+                </Pressable>
+              )}
             </GlassCard>
           </Pressable>
         )}
@@ -157,8 +168,6 @@ export function ClientsListScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink950, padding: 18 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  headerTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.white },
   searchWrap: { marginBottom: 12 },
   emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center', marginTop: 30 },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, padding: 16 },

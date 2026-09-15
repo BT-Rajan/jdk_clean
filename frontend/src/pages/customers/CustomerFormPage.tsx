@@ -60,7 +60,6 @@ function CustomerEditForm({ id }: { id: number }) {
     register,
     handleSubmit,
     reset,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<CustomerEditFormValues, unknown, CustomerEditSubmitValues>({
     resolver: zodResolver(customerEditSchema),
@@ -76,7 +75,6 @@ function CustomerEditForm({ id }: { id: number }) {
         })
         reset({
           customer_type: customer.customer_type,
-          nature_of_business: customer.nature_of_business ?? '',
           contact_person: customer.contact_person ?? '',
           email: customer.email ?? '',
           phone: customer.phone ?? '',
@@ -94,8 +92,6 @@ function CustomerEditForm({ id }: { id: number }) {
       .catch((err) => setFormError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
   }, [id, reset])
-
-  const isIndividual = watch('customer_type') === 'individual'
 
   async function handleCompleteCode() {
     if (!newCode.trim()) return
@@ -165,7 +161,6 @@ function CustomerEditForm({ id }: { id: number }) {
             ]}
             {...register('customer_type')}
           />
-          {!isIndividual && <TextField label="Nature of business" {...register('nature_of_business')} />}
 
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <TextField label="Contact person" {...register('contact_person')} />

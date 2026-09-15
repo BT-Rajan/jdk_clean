@@ -13,7 +13,7 @@ import { TextField } from '../../components/TextField';
 import { colors, fonts, whiteAlpha } from '../../theme';
 import { useLocale } from '../../i18n/LocaleContext';
 import { confirm } from '../../utils/alerts';
-import { formatCurrency } from '../../utils/format';
+import { formatCurrency, formatDate } from '../../utils/format';
 import { listProducts, Product } from '../../api/catalog';
 import {
   getQuotation,
@@ -22,6 +22,7 @@ import {
   deleteQuotation,
   downloadQuotationPdf,
   checkMaterialConflicts,
+  setQuotationPaymentLink,
   Quotation,
   QuotationLineInput,
   QuotationStatus,
@@ -84,6 +85,8 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
   const [converting, setConverting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
+  const [paymentLinkInput, setPaymentLinkInput] = useState('');
+  const [savingPaymentLink, setSavingPaymentLink] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,10 +119,22 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
     }
   }, [startInEdit, quotation]);
 
-  const productOptions: SelectOption[] = products.map((p) => ({
-    label: p.code ? `${p.name} (${p.code})` : p.name,
-    value: String(p.id),
-  }));
+  useEffect(() => {
+    setPaymentLinkInput(quotation?.payment_link ?? '');
+  }, [quotation?.id, quotation?.payment_link]);
+
+  // A product already picked on another line shouldn't be offered again
+  // -- every product should appear at most once in a quotation. Mirrors
+  // the web app's LineItemsEditor selectedProductIds/availableProducts
+  // filter.
+  function productOptionsForLine(currentLineKey: string): SelectOption[] {
+    const selectedElsewhere = new Set(
+      lines.filter((l) => l.key !== currentLineKey && l.productId).map((l) => l.productId),
+    );
+    return products
+      .filter((p) => !selectedElsewhere.has(String(p.id)))
+      .map((p) => ({ label: p.code ? `${p.name} (${p.code})` : p.name, value: String(p.id) }));
+  }
 
   function updateLine(key: string, patch: Partial<LineDraft>) {
     setLines((prev) => prev.map((l) => (l.key === key ? { ...l, ...patch } : l)));
@@ -235,6 +250,20 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
     }
   }
 
+  async function handleSavePaymentLink() {
+    if (!quotation || !paymentLinkInput.trim()) return;
+    setError(null);
+    setSavingPaymentLink(true);
+    try {
+      const updated = await setQuotationPaymentLink(quotation.id, paymentLinkInput.trim());
+      setQuotation(updated);
+    } catch (err: any) {
+      setError(err?.message ?? t('quotationDetail', 'saveError'));
+    } finally {
+      setSavingPaymentLink(false);
+    }
+  }
+
   async function handleConvert() {
     if (!quotation) return;
     const proceed = await confirm(
@@ -330,8 +359,8 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
         <Alert variant="error">{error}</Alert>
 
         <View style={styles.metaBox}>
-          <MetaRow label={t('quotationDetail', 'dateLabel')} value={quotation.quotation_date} />
-          <MetaRow label={t('quotationDetail', 'validUntilLabel')} value={quotation.valid_until ?? '—'} />
+          <MetaRow label={t('quotationDetail', 'dateLabel')} value={formatDate(quotation.quotation_date)} />
+          <MetaRow label={t('quotationDetail', 'validUntilLabel')} value={formatDate(quotation.valid_until)} />
         </View>
 
         {quotation.feasibility_id && (
@@ -360,7 +389,7 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
                     label={`${t('quotationDetail', 'productLabel')} ${index + 1}`}
                     value={line.productId}
                     onChange={(v) => updateLine(line.key, { productId: v })}
-                    options={productOptions}
+                    options={productOptionsForLine(line.key)}
                     placeholder={t('quotationDetail', 'productPlaceholder')}
                   />
                   <View style={styles.rowFields}>
@@ -478,14 +507,41 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
             )}
 
             {quotation.status === 'accepted' && (
-              <Button
-                variant="success"
-                onPress={handleConvert}
-                isLoading={converting}
-                style={{ marginTop: 16, width: '100%' }}
-              >
-                {t('quotationDetail', 'convertToOrder')}
-              </Button>
+              <View style={{ marginTop: 20 }}>
+                <Text style={styles.sectionTitle}>{t('quotationDetail', 'paymentLinkTitle')}</Text>
+                <Text style={styles.notesText}>{t('quotationDetail', 'paymentLinkHint')}</Text>
+                <View style={{ marginTop: 10, gap: 10 }}>
+                  <TextField
+                    label={t('quotationDetail', 'paymentLinkLabel')}
+                    value={paymentLinkInput}
+                    onChangeText={setPaymentLinkInput}
+                    autoCapitalize="none"
+                    placeholder="https://…"
+                  />
+                  <Button
+                    variant="ghost"
+                    onPress={handleSavePaymentLink}
+                    isLoading={savingPaymentLink}
+                    disabled={!paymentLinkInput.trim()}
+                    style={{ width: '100%' }}
+                  >
+                    {quotation.payment_link ? t('quotationDetail', 'updatePaymentLink') : t('quotationDetail', 'savePaymentLink')}
+                  </Button>
+                </View>
+
+                <Button
+                  variant="success"
+                  onPress={handleConvert}
+                  isLoading={converting}
+                  disabled={!quotation.payment_link}
+                  style={{ marginTop: 16, width: '100%' }}
+                >
+                  {t('quotationDetail', 'convertToOrder')}
+                </Button>
+                {!quotation.payment_link && (
+                  <Text style={styles.warnText}>{t('quotationDetail', 'paymentLinkRequiredHint')}</Text>
+                )}
+              </View>
             )}
 
             <Button onPress={handleDownloadPdf} isLoading={downloading} variant="ghost" style={{ marginTop: 16, width: '100%' }}>
@@ -562,6 +618,7 @@ const styles = StyleSheet.create({
 
   totalsBox: { marginTop: 10, backgroundColor: whiteAlpha(0.04), borderRadius: 12, padding: 14, gap: 4 },
   notesText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.7), lineHeight: 19 },
+  warnText: { fontFamily: fonts.sans, fontSize: 12, color: '#fcd34d', marginTop: 8, textAlign: 'center' },
 
   lineEditRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   removeLineBtn: { padding: 10, marginTop: 26 },

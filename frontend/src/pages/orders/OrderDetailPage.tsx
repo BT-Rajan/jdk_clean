@@ -413,7 +413,13 @@ export function OrderDetailPage() {
 
       {order.admin_review_required && allowAdmin && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
-          <span>This order is flagged for admin review.</span>
+          <span>
+            {order.admin_review_reason === 'payment_overdue'
+              ? 'This order was confirmed over 7 days ago with no payment recorded — needs admin review.'
+              : order.admin_review_reason === 'overdue_delivery'
+                ? 'This order is past its confirmed delivery date — needs admin review.'
+                : 'This order is flagged for admin review.'}
+          </span>
           <Button variant="ghost" size="sm" onClick={() => setAdminReviewOpen(true)}>Acknowledge</Button>
         </div>
       )}

@@ -1,11 +1,44 @@
 import { useCallback, useState } from 'react';
-import { useFocusEffect } from '@react-navigation/native';
-import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../components/Alert';
 import { GlassCard } from '../components/GlassCard';
+import { PageHeader } from '../components/PageHeader';
 import { colors, fonts, whiteAlpha } from '../theme';
 import { useLocale } from '../i18n/LocaleContext';
 import { getMyHistory, MyHistoryEntry } from '../api/auth';
+
+// Which stack/screen a given table's records live in -- mirrors the
+// same routes ClientHistoryScreen/OrderDetailScreen/etc. already
+// navigate to, so tapping a row here lands on the exact same detail
+// screen reached from anywhere else in the app.
+function goToRecord(navigation: any, entry: MyHistoryEntry) {
+  switch (entry.table_name) {
+    case 'customers':
+      navigation.navigate('Clients', {
+        screen: 'ClientHistory',
+        params: { customerId: entry.record_id, customerName: '' },
+      });
+      return;
+    case 'quotations':
+      navigation.navigate('Quotations', { screen: 'QuotationDetail', params: { quotationId: entry.record_id } });
+      return;
+    case 'feasibility_checks':
+      navigation.navigate('Quotations', { screen: 'FeasibilityDetail', params: { feasibilityId: entry.record_id } });
+      return;
+    case 'orders':
+      navigation.navigate('Orders', { screen: 'OrderDetail', params: { orderId: entry.record_id } });
+      return;
+    default:
+      // Unknown/unsupported table -- nothing to navigate to.
+      return;
+  }
+}
+
+function isNavigable(tableName: string): boolean {
+  return ['customers', 'quotations', 'feasibility_checks', 'orders'].includes(tableName);
+}
 
 type LocaleT = ReturnType<typeof useLocale>['t'];
 
@@ -58,12 +91,17 @@ function describeEntry(t: LocaleT, entry: MyHistoryEntry): string {
 
 function formatDateTime(iso: string): string {
   // No year -- every row on this screen is already known to be within
-  // the one calendar month shown up top.
-  return new Date(iso).toLocaleString(undefined, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+  // the one calendar month shown up top. Day-month order and 24-hour
+  // time match the app-wide DD-MM-YYYY standard (see utils/format.ts).
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${pad(d.getDate())}-${pad(d.getMonth() + 1)} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
 export function MyHistoryScreen() {
   const { t } = useLocale();
+  const navigation = useNavigation<any>();
   const [entries, setEntries] = useState<MyHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +133,7 @@ export function MyHistoryScreen() {
 
   return (
     <View style={styles.screen}>
-      <Text style={styles.headerTitle}>{t('myHistory', 'title')}</Text>
+      <PageHeader title={t('myHistory', 'title')} style={styles.pageHeader} />
       <Text style={styles.headerSubtitle}>{monthLabel}</Text>
 
       <Alert variant="error">{error}</Alert>
@@ -106,17 +144,22 @@ export function MyHistoryScreen() {
         contentContainerStyle={{ paddingTop: 8, paddingBottom: 24 }}
         refreshControl={<RefreshControl refreshing={loading} onRefresh={load} tintColor={colors.gold400} />}
         ListEmptyComponent={!loading ? <Text style={styles.emptyText}>{t('myHistory', 'emptyText')}</Text> : null}
-        renderItem={({ item }) => (
-          <GlassCard style={styles.row}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.rowTitle}>
-                {tableLabel(t, item.table_name)} #{item.record_id}
-              </Text>
-              <Text style={styles.rowDesc}>{describeEntry(t, item)}</Text>
-            </View>
-            <Text style={styles.rowDate}>{formatDateTime(item.changed_at)}</Text>
-          </GlassCard>
-        )}
+        renderItem={({ item }) => {
+          const navigable = isNavigable(item.table_name);
+          const row = (
+            <GlassCard style={styles.row}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowTitle}>
+                  {tableLabel(t, item.table_name)} #{item.record_id}
+                </Text>
+                <Text style={styles.rowDesc}>{describeEntry(t, item)}</Text>
+              </View>
+              <Text style={styles.rowDate}>{formatDateTime(item.changed_at)}</Text>
+              {navigable && <Feather name="chevron-right" size={16} color={whiteAlpha(0.3)} style={{ marginLeft: 8 }} />}
+            </GlassCard>
+          );
+          return navigable ? <Pressable onPress={() => goToRecord(navigation, item)}>{row}</Pressable> : row;
+        }}
       />
     </View>
   );
@@ -124,7 +167,7 @@ export function MyHistoryScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink950, padding: 18 },
-  headerTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.white },
+  pageHeader: { marginBottom: 4 },
   headerSubtitle: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.45), marginBottom: 16 },
   emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center', marginTop: 30 },
   row: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10, padding: 16 },

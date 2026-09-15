@@ -16,12 +16,15 @@ export async function login(username: string, password: string) {
   return tokens;
 }
 
+export type UserRole = 'admin' | 'manager' | 'staff';
+
 export interface MeOut {
   id: number;
   username: string;
   email: string | null;
   full_name: string | null;
-  role: string;
+  role: UserRole;
+  department_code: string | null;
   department_name: string | null;
 }
 

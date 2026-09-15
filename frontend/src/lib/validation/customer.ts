@@ -5,7 +5,6 @@ export const customerSchema = z.object({
   customer_type: z.enum(['individual', 'business']),
   code: z.string().trim().min(1, 'Civil ID / Registration number is required').max(30),
   name: z.string().trim().min(1, 'Name is required').max(150),
-  nature_of_business: z.string().trim().max(150, 'Max 150 characters').optional().or(z.literal('')),
   contact_person: z.string().trim().max(120, 'Max 120 characters').optional().or(z.literal('')),
   email: z.string().trim().email('Enter a valid email').max(120, 'Max 120 characters').optional().or(z.literal('')),
   phone: z.string().trim().max(30, 'Max 30 characters').optional().or(z.literal('')),

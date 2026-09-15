@@ -79,6 +79,12 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
     auto_created: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     # Set when Sales closes this quotation without converting it to an order.
     close_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Manually entered (from an external payment system) once this
+    # quotation is 'accepted' -- see quotation_service.set_payment_link.
+    # create_order_from_quotation refuses to convert this quotation to an
+    # order until this is set; copied onto the new order as its own
+    # snapshot (Order.payment_link), then printed there as a QR code.
+    payment_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # A quotation whose discount (document-level or any single line's) is
     # at/above Settings -> large_discount_approval_threshold can't leave
     # 'draft' until an admin approves it.

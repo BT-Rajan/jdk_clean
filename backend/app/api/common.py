@@ -34,6 +34,7 @@ def build_crud_router(
     extra_routes: Callable[[APIRouter, Any, Any], None] | None = None,
     activatable: bool | None = None,
     delete_guard: Callable[[Session, int], None] | None = None,
+    strict_write_guard: Callable[..., User] | None = None,
 ) -> APIRouter:
     """The one router factory every master (and only masters) should use --
     see app/crud/base.py's BaseCRUD for the matching CRUD-engine half. Do
@@ -68,6 +69,15 @@ def build_crud_router(
     deletion isn't safe -- soft delete already protects history, but
     some masters (e.g. a Department still assigned to users) need a
     harder stop.
+
+    strict_write_guard, when given, replaces write_guard specifically
+    for update/delete/restore/activate/deactivate -- i.e. every action
+    on a record that already exists -- while create still uses the
+    plain write_guard above. Use this for a master where creating a new
+    record should stay open to whoever normally has write access, but
+    changing or removing an existing one needs a tighter check (e.g.
+    require_role("admin")). Defaults to write_guard, so every other
+    master using this factory is unaffected.
     """
     router = APIRouter(prefix=prefix, tags=tags)
     if page_key is not None:
@@ -76,6 +86,7 @@ def build_crud_router(
     else:
         read_guard = get_current_user
         write_guard = require_role(*write_roles)
+    existing_record_guard = strict_write_guard if strict_write_guard is not None else write_guard
 
     if activatable is None:
         activatable = hasattr(crud.model, "status")
@@ -130,7 +141,7 @@ def build_crud_router(
         item_id: int,
         payload: update_schema,
         db: Session = Depends(get_db),
-        user: User = Depends(write_guard),
+        user: User = Depends(existing_record_guard),
     ):
         data = payload.model_dump(exclude_unset=True)
         return crud.update(db, item_id, data, user_id=user.id)
@@ -139,7 +150,7 @@ def build_crud_router(
     def delete_item(
         item_id: int,
         db: Session = Depends(get_db),
-        user: User = Depends(write_guard),
+        user: User = Depends(existing_record_guard),
     ):
         if delete_guard is not None:
             delete_guard(db, item_id)
@@ -150,7 +161,7 @@ def build_crud_router(
     def restore_item(
         item_id: int,
         db: Session = Depends(get_db),
-        user: User = Depends(write_guard),
+        user: User = Depends(existing_record_guard),
     ):
         return crud.restore(db, item_id, user_id=user.id)
 
@@ -160,7 +171,7 @@ def build_crud_router(
         def activate_item(
             item_id: int,
             db: Session = Depends(get_db),
-            user: User = Depends(write_guard),
+            user: User = Depends(existing_record_guard),
         ):
             return crud.update(db, item_id, {"status": "active"}, user_id=user.id)
 
@@ -168,7 +179,7 @@ def build_crud_router(
         def deactivate_item(
             item_id: int,
             db: Session = Depends(get_db),
-            user: User = Depends(write_guard),
+            user: User = Depends(existing_record_guard),
         ):
             return crud.update(db, item_id, {"status": "inactive"}, user_id=user.id)
 

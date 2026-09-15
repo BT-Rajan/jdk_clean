@@ -120,6 +120,14 @@ class MaterialConflictCompetitor(BaseModel):
     quotation_number: str
 
 
+class QuotationPaymentLinkIn(BaseModel):
+    """See quotation_service.set_payment_link -- only settable while the
+    quotation is 'accepted', and required before it can be converted to
+    an order."""
+
+    payment_link: str = Field(min_length=1, max_length=500)
+
+
 class MaterialConflictOut(BaseModel):
     raw_material_id: int
     code: str
@@ -152,6 +160,7 @@ class QuotationOut(BaseModel):
     feasibility_id: int | None
     auto_created: bool
     close_reason: str | None
+    payment_link: str | None = None
     approved_at: datetime | None
     material_conflict_acknowledged: bool
     # Deliberately not named material_conflict_notes (the ORM column it's

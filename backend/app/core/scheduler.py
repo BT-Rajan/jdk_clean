@@ -46,6 +46,7 @@ def _run_all_scans() -> None:
             ("stale feasibility checks", feasibility_service.escalate_stale_feasibility_checks),
             ("expired feasibility checks", feasibility_service.escalate_expired_feasibility_checks),
             ("overdue orders", order_service.escalate_overdue_orders),
+            ("unpaid orders", order_service.escalate_unpaid_orders),
             ("overdue purchase orders", purchase_order_service.escalate_overdue_purchase_orders),
             ("overdue production batches", production_service.escalate_overdue_batches),
             ("expired quotations", quotation_service.escalate_expired_quotations),
