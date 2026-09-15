@@ -126,6 +126,13 @@ CREATE TABLE IF NOT EXISTS customers (
     country         VARCHAR(80)  NULL,
     credit_limit    DECIMAL(14,2) NOT NULL DEFAULT 0,
     payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+    -- Per-customer override of Settings' global large-discount approval
+    -- threshold (see app/services/settings_service.py) -- e.g. a
+    -- long-standing wholesale customer can be trusted with more discount
+    -- room than a walk-in one, without changing the threshold for
+    -- everyone. NULL means "use the global setting" -- see
+    -- get_effective_discount_approval_threshold.
+    discount_approval_threshold_override DECIMAL(5,2) NULL,
     status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
     -- Onboarding workflow for a newly created customer -- see
     -- app/models/customer.py ONBOARDING_ALLOWED_TRANSITIONS. Independent
@@ -169,6 +176,14 @@ CREATE TABLE IF NOT EXISTS suppliers (
     city            VARCHAR(80)  NULL,
     country         VARCHAR(80)  NULL,
     payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+    -- Per-supplier overrides of Settings' global approval thresholds (see
+    -- app/services/settings_service.py) -- a trusted long-standing
+    -- supplier can be given a higher PO ceiling (or a new/risky one a
+    -- lower one) without changing the threshold for everyone. NULL means
+    -- "use the global setting" -- see get_effective_po_approval_threshold
+    -- / get_effective_discount_approval_threshold.
+    po_approval_threshold_override DECIMAL(12,2) NULL,
+    discount_approval_threshold_override DECIMAL(5,2) NULL,
     mode_of_supply  ENUM('direct','distributor','broker','import') NULL,
     rating          TINYINT UNSIGNED NULL,          -- 1-5 stars
     status          ENUM('active','inactive','suspended') NOT NULL DEFAULT 'active',
@@ -829,6 +844,11 @@ CREATE TABLE IF NOT EXISTS purchase_order_lines (
     discount_percent    DECIMAL(5,2) NOT NULL DEFAULT 0,
     line_total          DECIMAL(14,2) NOT NULL,
     received_quantity   DECIMAL(14,4) NOT NULL DEFAULT 0,
+    -- Closes out this one line (the supplier can't deliver the rest of
+    -- it) without cancelling the whole PO -- see
+    -- purchase_order_service.cancel_purchase_order_line.
+    is_cancelled        TINYINT(1) NOT NULL DEFAULT 0,
+    cancel_reason       TEXT NULL,
     CONSTRAINT fk_pol_po FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
     CONSTRAINT fk_pol_material FOREIGN KEY (raw_material_id) REFERENCES raw_materials(id),
     INDEX idx_pol_po (purchase_order_id)
@@ -991,12 +1011,14 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     machine_id      BIGINT UNSIGNED NULL,             -- which machine this batch occupies (defaults to the product's machine)
     order_id        BIGINT UNSIGNED NULL,             -- nullable: batch may be for stock, not a specific order
     planned_quantity DECIMAL(14,4) NOT NULL,
+    -- Cumulative across every recording made against this batch -- see
+    -- app/models/production_schedule.py's comment on this column.
     produced_quantity DECIMAL(14,4) NOT NULL DEFAULT 0,
     scheduled_start DATE NOT NULL,
     scheduled_end   DATE NOT NULL,
     actual_start    DATETIME NULL,
     actual_end      DATETIME NULL,
-    status          ENUM('planned','in_progress','completed','cancelled') NOT NULL DEFAULT 'planned',
+    status          ENUM('planned','in_progress','paused','completed','cancelled') NOT NULL DEFAULT 'planned',
     -- True when the system created this batch automatically on order
     -- confirmation (see order_service.py's auto-scheduling hook), false
     -- for a person-created batch. Purely informational -- an
@@ -1005,6 +1027,9 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     -- Mandatory when status becomes 'cancelled' -- same requirement as
     -- orders/quotations/feasibility, previously missing here.
     cancel_reason   TEXT NULL,
+    -- Mandatory when status becomes 'paused' -- see
+    -- app/models/production_schedule.py's comment on this column.
+    pause_reason    TEXT NULL,
     notes           TEXT NULL,
     -- Set on completion when actual raw-material usage (see
     -- app/api/production_schedules.py's actual_materials) either exceeds
@@ -1013,6 +1038,12 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     -- production_service._complete_batch and notification_service.py.
     material_discrepancy_flag TINYINT(1) NOT NULL DEFAULT 0,
     material_discrepancy_notes TEXT NULL, -- JSON list of per-material findings
+    -- Same admin-review escalation pattern as orders/purchase_orders --
+    -- see app/models/production_schedule.py's comment on this column.
+    admin_review_required TINYINT(1) NOT NULL DEFAULT 0,
+    admin_reviewed_at DATETIME NULL,
+    admin_reviewed_by BIGINT UNSIGNED NULL,
+    admin_review_notes TEXT NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -1021,6 +1052,7 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     CONSTRAINT fk_ps_product FOREIGN KEY (product_id) REFERENCES products(id),
     CONSTRAINT fk_ps_machine FOREIGN KEY (machine_id) REFERENCES machines(id),
     CONSTRAINT fk_ps_order FOREIGN KEY (order_id) REFERENCES orders(id),
+    CONSTRAINT fk_ps_admin_reviewed_by FOREIGN KEY (admin_reviewed_by) REFERENCES users(id),
     INDEX idx_ps_status (status),
     INDEX idx_ps_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

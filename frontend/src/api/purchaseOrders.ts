@@ -84,6 +84,22 @@ export async function receivePurchaseOrder(
   return data
 }
 
+/** Closes out one line of a still-open PO (the supplier can't deliver
+ * the rest of it) without cancelling the whole order -- the other
+ * lines keep going. Use updatePurchaseOrderStatus(id, 'cancelled', ...)
+ * instead if nothing on the PO can still be fulfilled. */
+export async function cancelPurchaseOrderLine(
+  id: number,
+  lineId: number,
+  reason: string,
+): Promise<PurchaseOrder> {
+  const { data } = await apiClient.post<PurchaseOrder>(
+    `/api/purchase-orders/${id}/lines/${lineId}/cancel`,
+    { reason },
+  )
+  return data
+}
+
 export async function deletePurchaseOrder(id: number): Promise<MessageResponse> {
   const { data } = await apiClient.delete<MessageResponse>(`/api/purchase-orders/${id}`)
   return data

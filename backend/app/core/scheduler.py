@@ -32,7 +32,13 @@ def _run_all_scans() -> None:
     """One pass of every escalation check, each isolated so one failing
     doesn't stop the others. Imports are local to avoid this module
     being part of any service's own import chain."""
-    from app.services import feasibility_service, order_service, purchase_order_service, quotation_service
+    from app.services import (
+        feasibility_service,
+        order_service,
+        production_service,
+        purchase_order_service,
+        quotation_service,
+    )
 
     db = SessionLocal()
     try:
@@ -41,6 +47,7 @@ def _run_all_scans() -> None:
             ("expired feasibility checks", feasibility_service.escalate_expired_feasibility_checks),
             ("overdue orders", order_service.escalate_overdue_orders),
             ("overdue purchase orders", purchase_order_service.escalate_overdue_purchase_orders),
+            ("overdue production batches", production_service.escalate_overdue_batches),
             ("expired quotations", quotation_service.escalate_expired_quotations),
         )
         for label, fn in checks:

@@ -106,7 +106,14 @@ export function CustomerOnboardingWizardPage() {
   async function onSubmit(values: CustomerSubmitValues) {
     setFormError(null)
     try {
-      const created = await createCustomer(values)
+      const created = await createCustomer({
+        ...values,
+        // Not collected in the wizard -- new customers start on the
+        // factory-wide default; an override is a deliberate later
+        // decision set via CustomerFormPage once the customer's actually
+        // been dealt with for a while.
+        discount_approval_threshold_override: values.discount_approval_threshold_override || null,
+      })
       if (idDocumentFile) {
         // Best-effort: the customer record itself is already created at
         // this point, so a failed upload here shouldn't block navigating

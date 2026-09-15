@@ -96,6 +96,13 @@ class PurchaseOrderLine(Base):
     discount_percent: Mapped[float] = mapped_column(DECIMAL(5, 2), nullable=False, default=0)
     line_total: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False)
     received_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
+    # Closes out this one line (the supplier can't deliver the rest of
+    # it) without cancelling the whole PO -- see
+    # purchase_order_service.cancel_purchase_order_line. A line that
+    # already has some received_quantity keeps it; only what's still
+    # outstanding is written off.
+    is_cancelled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     purchase_order: Mapped[PurchaseOrder] = relationship(back_populates="lines")
     raw_material: Mapped[RawMaterial] = relationship(lazy="joined")

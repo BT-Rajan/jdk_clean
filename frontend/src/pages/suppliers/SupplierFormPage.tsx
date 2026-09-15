@@ -58,6 +58,8 @@ function SupplierEditForm({ id }: { id: number }) {
           city: supplier.city ?? '',
           country: supplier.country ?? '',
           payment_terms_days: supplier.payment_terms_days,
+          po_approval_threshold_override: supplier.po_approval_threshold_override ?? '',
+          discount_approval_threshold_override: supplier.discount_approval_threshold_override ?? '',
           mode_of_supply: supplier.mode_of_supply ?? '',
           rating: supplier.rating ?? '',
           status: supplier.status,
@@ -74,6 +76,8 @@ function SupplierEditForm({ id }: { id: number }) {
         ...values,
         mode_of_supply: values.mode_of_supply || null,
         rating: values.rating || null,
+        po_approval_threshold_override: values.po_approval_threshold_override || null,
+        discount_approval_threshold_override: values.discount_approval_threshold_override || null,
       })
       navigate(`/suppliers/${id}`)
     } catch (err) {
@@ -130,6 +134,24 @@ function SupplierEditForm({ id }: { id: number }) {
               <option value="4">★★★★☆ (4)</option>
               <option value="5">★★★★★ (5)</option>
             </SelectField>
+          </div>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <TextField
+              label="PO approval threshold override (KWD)"
+              type="number"
+              step="0.01"
+              hint="Leave blank to use the factory-wide setting (Settings > Approvals). Set this to give this supplier its own ceiling before a purchase order needs admin sign-off."
+              error={errors.po_approval_threshold_override?.message}
+              {...register('po_approval_threshold_override')}
+            />
+            <TextField
+              label="Discount approval threshold override (%)"
+              type="number"
+              step="0.01"
+              hint="Leave blank to use the factory-wide setting."
+              error={errors.discount_approval_threshold_override?.message}
+              {...register('discount_approval_threshold_override')}
+            />
           </div>
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>

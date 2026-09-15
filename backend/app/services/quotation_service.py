@@ -419,7 +419,7 @@ def change_status(
     assert_transition_allowed(ALLOWED_TRANSITIONS, quotation.status, new_status, "quotation")
 
     if new_status == "sent":
-        threshold = settings_service.get_large_discount_approval_threshold(db)
+        threshold = settings_service.get_effective_discount_approval_threshold(db, customer=quotation.customer)
         if threshold is not None and quotation.approved_at is None:
             largest = max(
                 [float(quotation.discount_percent)] + [float(line.discount_percent) for line in quotation.lines],

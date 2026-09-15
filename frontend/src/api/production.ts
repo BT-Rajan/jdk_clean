@@ -4,6 +4,7 @@ import type {
   MaterialRequirement,
   ProductionBatch,
   ProductionBatchPayload,
+  ProductionLogOutputPayload,
   ReadinessResult,
   SettableProductionStatus,
 } from '@/types/production'
@@ -76,6 +77,20 @@ export async function updateProductionBatchStatus(
   return data
 }
 
+/** Records output produced so far without closing the batch out -- for a
+ * run being paused or otherwise interrupted partway through. See
+ * backend/app/services/production_service.py's log_partial_production. */
+export async function logPartialProduction(
+  batchId: number,
+  payload: ProductionLogOutputPayload,
+): Promise<ProductionBatch> {
+  const { data } = await apiClient.post<ProductionBatch>(
+    `/api/production-schedules/${batchId}/log-output`,
+    payload,
+  )
+  return data
+}
+
 /** Per-raw-material breakdown for this batch's planned run -- net
  * (zero-scrap) requirement, the BOM's scrap-inflated figure, and current
  * stock -- for the "Complete batch" screen's actual-quantity inputs. */
@@ -103,5 +118,12 @@ export async function deleteProductionBatch(id: number): Promise<MessageResponse
 
 export async function restoreProductionBatch(id: number): Promise<ProductionBatch> {
   const { data } = await apiClient.post<ProductionBatch>(`/api/production-schedules/${id}/restore`)
+  return data
+}
+
+/** Admin clears an overdue-schedule escalation, recording their decision
+ * -- see backend/app/services/production_service.py's admin_review. */
+export async function adminReviewProductionBatch(id: number, notes: string): Promise<ProductionBatch> {
+  const { data } = await apiClient.post<ProductionBatch>(`/api/production-schedules/${id}/admin-review`, { notes })
   return data
 }

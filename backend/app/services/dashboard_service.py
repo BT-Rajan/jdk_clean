@@ -162,7 +162,10 @@ def get_stats(db: Session) -> dict:
     # Production
     active_batches = (
         db.query(ProductionSchedule)
-        .filter(ProductionSchedule.deleted_at.is_(None), ProductionSchedule.status.in_(("planned", "in_progress")))
+        .filter(
+            ProductionSchedule.deleted_at.is_(None),
+            ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
+        )
         .all()
     )
     stats["production_active"] = _stat(len(active_batches))
@@ -299,7 +302,10 @@ def _production_timeline(db: Session, today: date) -> list[dict]:
     at_risk_by = today + timedelta(days=AT_RISK_WINDOW_DAYS)
     batches = (
         db.query(ProductionSchedule)
-        .filter(ProductionSchedule.deleted_at.is_(None), ProductionSchedule.status.in_(("planned", "in_progress")))
+        .filter(
+            ProductionSchedule.deleted_at.is_(None),
+            ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
+        )
         .all()
     )
     on_schedule = sum(1 for b in batches if b.scheduled_end > at_risk_by)

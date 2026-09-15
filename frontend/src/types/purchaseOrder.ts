@@ -19,6 +19,11 @@ export interface PurchaseOrderLine {
   discount_percent: number
   line_total: number
   received_quantity: number
+  /** True once this one line has been closed out (the supplier can't
+   * deliver the rest of it) without cancelling the whole PO -- see
+   * PurchaseOrderDetailPage's "Cancel line" action. */
+  is_cancelled: boolean
+  cancel_reason: string | null
 }
 
 export interface PurchaseOrder {

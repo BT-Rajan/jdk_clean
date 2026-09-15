@@ -17,6 +17,7 @@ import {
   verifySupplierId,
 } from '@/api/suppliers'
 import type { Supplier } from '@/types/supplier'
+import { formatCurrency } from '@/lib/currency'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
@@ -170,6 +171,22 @@ export function SupplierDetailPage() {
             value={supplier.mode_of_supply ? MODE_OF_SUPPLY_LABELS[supplier.mode_of_supply] : null}
           />
           <Field label="Rating" value={<RatingStars rating={supplier.rating} />} />
+          <Field
+            label="PO approval threshold"
+            value={
+              supplier.po_approval_threshold_override != null
+                ? `${formatCurrency(supplier.po_approval_threshold_override)} (override)`
+                : 'Using factory default'
+            }
+          />
+          <Field
+            label="Discount approval threshold"
+            value={
+              supplier.discount_approval_threshold_override != null
+                ? `${supplier.discount_approval_threshold_override}% (override)`
+                : 'Using factory default'
+            }
+          />
         </dl>
       </GlassCard>
 

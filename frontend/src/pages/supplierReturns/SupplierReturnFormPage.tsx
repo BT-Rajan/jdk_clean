@@ -1,15 +1,17 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
-import { Alert, Button, GlassCard, SelectField, TextareaField, TextField } from '@/components/ui'
+import { Alert, Button, Field, GlassCard, SelectField, TextareaField, TextField } from '@/components/ui'
 import { createSupplierReturn } from '@/api/supplierReturns'
+import { getPurchaseOrder } from '@/api/purchaseOrders'
 import { listSuppliers } from '@/api/suppliers'
 import { listRawMaterials } from '@/api/rawMaterials'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import { getApiErrorMessage } from '@/lib/apiError'
+import type { PurchaseOrder } from '@/types/purchaseOrder'
 import {
   supplierReturnSchema,
   todayDateInputMin,
@@ -29,6 +31,14 @@ function useRawMaterialOptions() {
 
 export function SupplierReturnFormPage() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  // Arriving from a PO's own "Return to supplier" button (see
+  // PurchaseOrderDetailPage) -- that PO's supplier is locked in (a return
+  // can only ever name the supplier that PO was placed with, enforced
+  // server-side too -- see supplier_return_service._validate_purchase_order)
+  // and its lines seed the return's own lines as a starting point.
+  const purchaseOrderId = Number(searchParams.get('purchase_order_id')) || null
+  const [sourcePo, setSourcePo] = useState<PurchaseOrder | null>(null)
   const [formError, setFormError] = useState<string | null>(null)
   const { options: suppliers } = useSupplierOptions()
   const { options: materials } = useRawMaterialOptions()
@@ -37,6 +47,7 @@ export function SupplierReturnFormPage() {
     register,
     control,
     handleSubmit,
+    reset,
     formState: { errors, isSubmitting },
   } = useForm<SupplierReturnFormValues, unknown, SupplierReturnSubmitValues>({
     resolver: zodResolver(supplierReturnSchema),
@@ -49,6 +60,23 @@ export function SupplierReturnFormPage() {
     },
   })
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' })
+
+  useEffect(() => {
+    if (!purchaseOrderId) return
+    getPurchaseOrder(purchaseOrderId)
+      .then((po) => {
+        setSourcePo(po)
+        reset({
+          supplier_id: po.supplier_id,
+          purchase_order_id: po.id,
+          return_date: todayDateInputMin,
+          reason: '',
+          notes: '',
+          lines: po.lines.map((line) => ({ raw_material_id: line.raw_material_id, quantity: 1 })),
+        })
+      })
+      .catch((err) => setFormError(getApiErrorMessage(err)))
+  }, [purchaseOrderId, reset])
 
   async function onSubmit(values: SupplierReturnSubmitValues) {
     setFormError(null)
@@ -67,13 +95,28 @@ export function SupplierReturnFormPage() {
         <GlassCard className="mt-8 p-8">
           <Alert variant="error">{formError}</Alert>
           <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
+            {sourcePo && (
+              <>
+                <input type="hidden" {...register('supplier_id')} />
+                <input type="hidden" {...register('purchase_order_id')} />
+              </>
+            )}
+            {sourcePo && (
+              <div className="rounded-xl border border-gold-400/30 bg-gold-500/10 px-4 py-3 text-sm text-gold-200">
+                Returning against {sourcePo.po_number} — {sourcePo.supplier_name}
+              </div>
+            )}
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-              <SelectField label="Supplier" error={errors.supplier_id?.message} {...register('supplier_id')}>
-                <option value="">Choose…</option>
-                {suppliers.map((s) => (
-                  <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
-                ))}
-              </SelectField>
+              {sourcePo ? (
+                <Field label="Supplier" value={sourcePo.supplier_name} />
+              ) : (
+                <SelectField label="Supplier" error={errors.supplier_id?.message} {...register('supplier_id')}>
+                  <option value="">Choose…</option>
+                  {suppliers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.code} — {s.name}</option>
+                  ))}
+                </SelectField>
+              )}
               <TextField
                 label="Return date"
                 type="date"
@@ -120,6 +163,11 @@ export function SupplierReturnFormPage() {
                     <div className="sm:col-span-3">
                       <TextField
                         label="Quantity"
+                        hint={
+                          sourcePo?.lines[index]
+                            ? `received ${sourcePo.lines[index].received_quantity}`
+                            : undefined
+                        }
                         type="number"
                         step="0.0001"
                         {...register(`lines.${index}.quantity` as const)}

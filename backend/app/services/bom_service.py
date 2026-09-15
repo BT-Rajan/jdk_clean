@@ -397,7 +397,7 @@ def explode_requirements_detailed(db: Session, product_id: int, quantity: float)
     percentage of net, is the admin-configured scrap allowance for
     however this material's own contributing BOM line(s) are set up
     (used by production_service to check actual usage against it at
-    batch completion -- see _complete_batch).
+    batch completion -- see _record_output).
 
     Kept as a separate function rather than changing explode_requirements
     itself so every existing caller (feasibility's shortfall check,

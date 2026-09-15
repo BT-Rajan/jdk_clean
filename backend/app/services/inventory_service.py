@@ -34,9 +34,10 @@ def _get_or_create_inventory_row(db: Session, item_type: str, item_id: int, for_
     return row
 
 
-def get_stock(db: Session, item_type: str, item_id: int) -> dict:
+def get_stock(db: Session, item_type: str, item_id: int, commit: bool = True) -> dict:
     row = _get_or_create_inventory_row(db, item_type, item_id)
-    db.commit()
+    if commit:
+        db.commit()
     return {
         "item_type": item_type,
         "item_id": item_id,
@@ -70,11 +71,18 @@ def adjust_stock(
     invoice_number: str | None = None,
     received_by: str | None = None,
     received_date=None,
+    commit: bool = True,
 ) -> dict:
     """Apply a signed quantity delta to on-hand stock and record the movement.
 
     quantity > 0 means stock coming in, quantity < 0 means stock going out.
     Refuses to let on-hand stock go negative.
+
+    commit=False lets a caller that's already holding a row lock on some
+    parent record (an order, PO, batch, delivery note) fold this movement
+    into its own single transaction/commit instead of this call committing
+    (and releasing that lock) on its own -- see order_service.change_status
+    for the pattern this exists for.
 
     Every raw material physically arriving at the factory must be
     traceable to a supplier, a cost, an invoice/delivery note, who
@@ -139,11 +147,12 @@ def adjust_stock(
             created_by=user_id,
         )
     )
-    db.commit()
-    return get_stock(db, item_type, item_id)
+    if commit:
+        db.commit()
+    return get_stock(db, item_type, item_id, commit=commit)
 
 
-def reserve_stock(db: Session, item_type: str, item_id: int, quantity: float) -> dict:
+def reserve_stock(db: Session, item_type: str, item_id: int, quantity: float, commit: bool = True) -> dict:
     """Increases quantity_reserved without touching on-hand stock.
 
     Used when an order is confirmed: the stock is earmarked for that order
@@ -151,6 +160,8 @@ def reserve_stock(db: Session, item_type: str, item_id: int, quantity: float) ->
     allowed to exceed on-hand quantity -- a shortfall here is exactly the
     signal the future MRP/feasibility engine will act on, not something to
     silently block at this layer.
+
+    commit=False -- see adjust_stock's docstring.
     """
     if item_type not in _INVENTORY_MODEL:
         raise ValidationAppError("item_type must be 'product' or 'raw_material'.")
@@ -159,14 +170,17 @@ def reserve_stock(db: Session, item_type: str, item_id: int, quantity: float) ->
 
     row = _get_or_create_inventory_row(db, item_type, item_id, for_update=True)
     row.quantity_reserved = float(row.quantity_reserved) + quantity
-    db.commit()
-    return get_stock(db, item_type, item_id)
+    if commit:
+        db.commit()
+    return get_stock(db, item_type, item_id, commit=commit)
 
 
-def release_reservation(db: Session, item_type: str, item_id: int, quantity: float) -> dict:
+def release_reservation(db: Session, item_type: str, item_id: int, quantity: float, commit: bool = True) -> dict:
     """Decreases quantity_reserved (e.g. order cancelled, or shipped and no
     longer just "reserved"). Clamps at zero rather than going negative in
     case of any prior drift.
+
+    commit=False -- see adjust_stock's docstring.
     """
     if item_type not in _INVENTORY_MODEL:
         raise ValidationAppError("item_type must be 'product' or 'raw_material'.")
@@ -175,8 +189,9 @@ def release_reservation(db: Session, item_type: str, item_id: int, quantity: flo
 
     row = _get_or_create_inventory_row(db, item_type, item_id, for_update=True)
     row.quantity_reserved = max(0.0, float(row.quantity_reserved) - quantity)
-    db.commit()
-    return get_stock(db, item_type, item_id)
+    if commit:
+        db.commit()
+    return get_stock(db, item_type, item_id, commit=commit)
 
 
 _FG_SORTABLE_FIELDS = {

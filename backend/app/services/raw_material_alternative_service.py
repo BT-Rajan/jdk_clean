@@ -110,7 +110,7 @@ def allocate_alternative_coverage(
     could these approved alternatives cover this shortfall, and by how
     much" for feasibility to report -- any actual substitution still
     happens exactly where it already did, as an explicit, recorded
-    choice at production time (see production_service._complete_batch).
+    choice at production time (see production_service._record_output).
 
     Each alternative's `available` stock is converted into primary-
     material-equivalent units via its own conversion_ratio (how many

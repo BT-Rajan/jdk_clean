@@ -24,6 +24,9 @@ class CustomerCreate(BaseModel):
     country: str | None = Field(default=None, max_length=80)
     credit_limit: float = Field(default=0, ge=0)
     payment_terms_days: int = Field(default=30, ge=0)
+    # Overrides Settings' global large-discount approval threshold for
+    # this customer only -- blank/omitted means "use the global setting".
+    discount_approval_threshold_override: float | None = Field(default=None, ge=0, le=100)
     status: str = Field(default="active", pattern="^(active|inactive)$")
     notes: str | None = Field(default=None, max_length=5000)
 
@@ -56,6 +59,7 @@ class CustomerUpdate(BaseModel):
     country: str | None = Field(default=None, max_length=80)
     credit_limit: float | None = Field(default=None, ge=0)
     payment_terms_days: int | None = Field(default=None, ge=0)
+    discount_approval_threshold_override: float | None = Field(default=None, ge=0, le=100)
     status: str | None = Field(default=None, pattern="^(active|inactive)$")
     notes: str | None = Field(default=None, max_length=5000)
 
@@ -76,6 +80,7 @@ class CustomerOut(BaseModel):
     country: str | None
     credit_limit: float
     payment_terms_days: int
+    discount_approval_threshold_override: float | None
     status: str
     onboarding_status: str
     onboarding_reason: str | None

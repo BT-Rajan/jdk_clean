@@ -64,18 +64,21 @@ export const ORDER_TRANSITIONS: Record<OrderStatus, SettableOrderStatus[]> = {
 export const ORDER_STATUSES_REQUIRING_REASON: SettableOrderStatus[] = ['cancelled']
 
 /** Mirrors ALLOWED_TRANSITIONS in backend/app/models/production_schedule.py.
- * 'completed' additionally requires a produced_quantity, handled by the
+ * 'completed' additionally accepts a produced_quantity, handled by the
  * detail page prompting for it rather than being a plain one-click button
- * like the others. */
+ * like the others -- it's optional there once a batch already has output
+ * recorded via "Log production" (see ProductionLogOutputModal). */
 export const PRODUCTION_TRANSITIONS: Record<ProductionStatus, SettableProductionStatus[]> = {
   planned: ['in_progress', 'cancelled'],
-  in_progress: ['completed', 'cancelled'],
+  in_progress: ['paused', 'completed', 'cancelled'],
+  paused: ['in_progress', 'completed', 'cancelled'],
   completed: [],
   cancelled: [],
 }
-/** Cancelling a batch now requires a reason, same as orders/quotations/
- * feasibility -- previously the only module missing this. */
-export const PRODUCTION_STATUSES_REQUIRING_REASON: SettableProductionStatus[] = ['cancelled']
+/** Cancelling or pausing a batch requires a reason -- pausing mirrors
+ * cancelling/closing's same "say why" requirement everywhere else in the
+ * app, since it's the one transition here that isn't self-explanatory. */
+export const PRODUCTION_STATUSES_REQUIRING_REASON: SettableProductionStatus[] = ['cancelled', 'paused']
 
 /** Mirrors ALLOWED_TRANSITIONS in backend/app/models/purchase_order.py.
  * 'partially_received' and 'received' are reached via the dedicated

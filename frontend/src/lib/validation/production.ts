@@ -34,3 +34,10 @@ export const productionQuickLogSchema = z.object({
 
 export type ProductionQuickLogFormValues = z.input<typeof productionQuickLogSchema>
 export type ProductionQuickLogSubmitValues = z.output<typeof productionQuickLogSchema>
+
+// Mirrors backend/app/schemas/production_schedule.py's ProductionAdminReview.
+export const productionAdminReviewSchema = z.object({
+  notes: z.string().trim().min(1, 'Notes are required.'),
+})
+
+export type ProductionAdminReviewFormValues = z.infer<typeof productionAdminReviewSchema>

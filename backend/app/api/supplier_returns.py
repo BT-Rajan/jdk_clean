@@ -23,12 +23,19 @@ def list_supplier_returns(
     page_size: int = Query(10, ge=1, le=200),
     search: str | None = Query(None),
     supplier_id: int | None = Query(None),
+    purchase_order_id: int | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(read_guard),
 ):
     result = supplier_return_service.list_supplier_returns(
-        db, page=page, page_size=page_size, search=search, supplier_id=supplier_id, sort=sort
+        db,
+        page=page,
+        page_size=page_size,
+        search=search,
+        supplier_id=supplier_id,
+        purchase_order_id=purchase_order_id,
+        sort=sort,
     )
     result["items"] = [SupplierReturnOut.from_model(r) for r in result["items"]]
     return result

@@ -27,6 +27,7 @@ const STATUS_TONES: Record<string, Tone> = {
   draft: 'neutral',
   planned: 'neutral',
   in_progress: 'gold',
+  paused: 'info',
   sent: 'info',
   accepted: 'success',
   confirmed: 'success',

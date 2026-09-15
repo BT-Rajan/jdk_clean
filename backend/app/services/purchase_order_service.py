@@ -42,8 +42,19 @@ def _base_query(db: Session, include_deleted: bool = False):
     return query
 
 
-def get_purchase_order(db: Session, po_id: int, include_deleted: bool = False) -> PurchaseOrder:
-    obj = _base_query(db, include_deleted).filter(PurchaseOrder.id == po_id).first()
+def get_purchase_order(
+    db: Session, po_id: int, include_deleted: bool = False, for_update: bool = False
+) -> PurchaseOrder:
+    if for_update:
+        # Plain, unjoined lock query -- see order_service.get_order's
+        # for_update branch for why _base_query's joinedloads can't be
+        # combined with with_for_update().
+        query = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id)
+        if not include_deleted:
+            query = query.filter(PurchaseOrder.deleted_at.is_(None))
+        obj = query.with_for_update().first()
+    else:
+        obj = _base_query(db, include_deleted).filter(PurchaseOrder.id == po_id).first()
     if obj is None:
         raise NotFoundError("Purchase order")
     return obj
@@ -280,14 +291,14 @@ def change_status(
     assert_transition_allowed(ALLOWED_TRANSITIONS, po.status, new_status, "purchase order")
 
     if new_status == "sent":
-        amount_threshold = settings_service.get_large_po_approval_threshold(db)
+        amount_threshold = settings_service.get_effective_po_approval_threshold(db, po.supplier)
         if amount_threshold is not None and float(po.total_amount) >= amount_threshold and po.approved_at is None:
             raise ConflictError(
                 f"This purchase order (KWD {float(po.total_amount):,.2f}) is at or above the "
                 f"large-PO approval threshold (KWD {amount_threshold:,.2f}) and needs admin approval "
                 f"before it can be sent."
             )
-        discount_threshold = settings_service.get_large_discount_approval_threshold(db)
+        discount_threshold = settings_service.get_effective_discount_approval_threshold(db, supplier=po.supplier)
         if discount_threshold is not None and po.approved_at is None:
             largest = max(
                 [float(po.discount_percent)] + [float(line.discount_percent) for line in po.lines],
@@ -353,7 +364,11 @@ def receive_lines(
     date), same as a paper goods-received note would record once per
     delivery rather than once per line item.
     """
-    po = get_purchase_order(db, po_id)
+    # Locked for the whole call -- see order_service.change_status's
+    # comment for why this, plus commit=False below, is what stops a
+    # double-submitted receipt (double-click, retry) from crediting stock
+    # twice for one physical delivery.
+    po = get_purchase_order(db, po_id, for_update=True)
     if po.status not in ("confirmed", "partially_received"):
         raise ConflictError(
             f"Cannot receive goods against a purchase order in '{po.status}' status; "
@@ -367,12 +382,14 @@ def receive_lines(
 
     # Validate every receipt before applying any of them, so a bad line in
     # the batch doesn't leave earlier ones already applied (adjust_stock
-    # commits per call -- see production_service.py's _complete_batch for
+    # commits per call -- see production_service.py's _record_output for
     # the same reasoning).
     for receipt in receipts:
         line = lines_by_id.get(receipt["line_id"])
         if line is None:
             raise ValidationAppError(f"Line {receipt['line_id']} does not belong to this purchase order.")
+        if line.is_cancelled:
+            raise ValidationAppError(f"{line.raw_material.name}'s line was cancelled; it can no longer receive goods.")
         remaining = float(line.quantity) - float(line.received_quantity)
         if receipt["quantity"] > remaining:
             raise ValidationAppError(
@@ -400,6 +417,7 @@ def receive_lines(
             invoice_number=invoice_number,
             received_by=received_by,
             received_date=received_date,
+            commit=False,
         )
         line.received_quantity = float(line.received_quantity) + qty
 
@@ -413,12 +431,56 @@ def receive_lines(
             SupplierMaterial.deleted_at.is_(None),
         ).update({"last_transaction_at": received_date})
 
-    all_received = all(float(l.received_quantity) >= float(l.quantity) for l in po.lines)
+    all_received = all(l.is_cancelled or float(l.received_quantity) >= float(l.quantity) for l in po.lines)
     old_status = po.status
     po.status = "received" if all_received else "partially_received"
     po.updated_by = user_id
     audit_service.log_update(
         db, TABLE_NAME, po_id, {"status": (old_status, po.status)}, user_id
+    )
+    db.commit()
+    return get_purchase_order(db, po_id)
+
+
+def cancel_purchase_order_line(
+    db: Session, po_id: int, line_id: int, reason: str, user_id: int | None = None
+) -> PurchaseOrder:
+    """Closes out one line of a still-open PO -- e.g. a supplier can't
+    get one material any more but the rest of the order is still coming
+    -- without cancelling the whole thing. Whatever was already received
+    against the line stays on the books; only the outstanding remainder
+    is written off. Cancel the whole PO instead (change_status) if
+    nothing on it can still be fulfilled.
+    """
+    # Locked for the whole call -- same double-submit protection as
+    # receive_lines above.
+    po = get_purchase_order(db, po_id, for_update=True)
+    if po.status not in ("sent", "confirmed", "partially_received"):
+        raise ConflictError(f"Cannot cancel a line on a purchase order in '{po.status}' status.")
+
+    line = next((l for l in po.lines if l.id == line_id), None)
+    if line is None:
+        raise ValidationAppError(f"Line {line_id} does not belong to this purchase order.")
+    if line.is_cancelled:
+        raise ConflictError("This line is already cancelled.")
+    if float(line.received_quantity) >= float(line.quantity):
+        raise ConflictError("This line has already been fully received; there's nothing left to cancel.")
+    assert_reason_given(reason, "A reason is required to cancel a purchase order line.")
+
+    line.is_cancelled = True
+    line.cancel_reason = reason
+
+    # Recompute the PO's own status from what's left open -- a cancelled
+    # line no longer counts as outstanding, same as a fully-received one.
+    old_status = po.status
+    if all(l.is_cancelled for l in po.lines) and not any(float(l.received_quantity) > 0 for l in po.lines):
+        po.status = "cancelled"
+        po.cancel_reason = po.cancel_reason or reason
+    elif all(l.is_cancelled or float(l.received_quantity) >= float(l.quantity) for l in po.lines):
+        po.status = "received"
+    po.updated_by = user_id
+    audit_service.log_update(
+        db, TABLE_NAME, po_id, {f"line_{line_id}_cancelled": (False, True), "status": (old_status, po.status)}, user_id
     )
     db.commit()
     return get_purchase_order(db, po_id)

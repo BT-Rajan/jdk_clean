@@ -10,14 +10,23 @@ from app.models.order import Order
 from app.models.product import Product
 from app.models.user import BigPK
 
-PRODUCTION_STATUSES = ("planned", "in_progress", "completed", "cancelled")
+PRODUCTION_STATUSES = ("planned", "in_progress", "paused", "completed", "cancelled")
 
 # Status transitions allowed from each current status. Mirrors the exact
 # shape of Order/Quotation's ALLOWED_TRANSITIONS (see models/order.py) so
 # the service-layer check is identical in style.
+#
+# 'paused' is a real-world hold on an already-started batch -- a machine
+# breakdown, a worker shortage, a quality question -- that isn't a
+# cancellation: whatever's been produced so far (see production_service.
+# log_partial_production) stays recorded, the remaining raw-material
+# reservation stays held, and the batch resumes right where it left off.
+# It can also be closed out as 'completed' directly from paused (accept
+# whatever was produced and stop here) or 'cancelled' (abandon the rest).
 ALLOWED_TRANSITIONS = {
     "planned": {"in_progress", "cancelled"},
-    "in_progress": {"completed", "cancelled"},
+    "in_progress": {"paused", "completed", "cancelled"},
+    "paused": {"in_progress", "completed", "cancelled"},
     "completed": set(),
     "cancelled": set(),
 }
@@ -42,6 +51,11 @@ class ProductionSchedule(Base, TimestampMixin, SoftDeleteMixin):
     machine_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("machines.id"), nullable=True)
     order_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("orders.id"), nullable=True)
     planned_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False)
+    # Cumulative across every recording made against this batch -- a
+    # single completion (the common case), or several
+    # production_service.log_partial_production calls plus a final
+    # completion for whatever's left (a batch paused and resumed one or
+    # more times). Never reset; each recording adds to it.
     produced_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
     scheduled_start: Mapped[date] = mapped_column(DATE, nullable=False)
     scheduled_end: Mapped[date] = mapped_column(DATE, nullable=False)
@@ -58,8 +72,13 @@ class ProductionSchedule(Base, TimestampMixin, SoftDeleteMixin):
     # Mandatory when status becomes 'cancelled' -- same requirement as
     # orders/quotations/feasibility.
     cancel_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Mandatory when status becomes 'paused' -- why production stopped
+    # (machine breakdown, worker shortage, quality hold, ...). Cleared
+    # implicitly by whatever transition leaves 'paused' next; only ever
+    # reflects the most recent pause.
+    pause_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Set on completion (see production_service._complete_batch) when any
+    # Set on completion (see production_service._record_output) when any
     # raw material's actual usage either exceeds its BOM line(s)'
     # admin-configured scrap_percent allowance, or comes in below the
     # bare zero-scrap requirement (physically implausible for the
@@ -68,6 +87,15 @@ class ProductionSchedule(Base, TimestampMixin, SoftDeleteMixin):
     # is a JSON list of the specific per-material findings.
     material_discrepancy_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     material_discrepancy_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Same admin-review escalation pattern as orders/purchase orders:
+    # flagged when this batch is past scheduled_end and not yet completed
+    # or cancelled -- a run behind schedule, the production-side mirror of
+    # a customer order or purchase order running overdue. See
+    # production_service.escalate_overdue_batches / admin_review.
+    admin_review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    admin_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    admin_reviewed_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+    admin_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     product: Mapped[Product] = relationship(foreign_keys=[product_id], lazy="joined")
     machine: Mapped[Machine | None] = relationship(foreign_keys=[machine_id], lazy="joined")

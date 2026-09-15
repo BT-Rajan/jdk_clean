@@ -9,6 +9,7 @@ from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.email import SendDocumentEmailRequest
 from app.schemas.purchase_order import (
+    CancelPurchaseOrderLine,
     PurchaseOrderAdminReview,
     PurchaseOrderCreate,
     PurchaseOrderOut,
@@ -172,6 +173,22 @@ def receive_purchase_order(
         received_by=payload.received_by,
         received_date=payload.received_date,
     )
+    return PurchaseOrderOut.from_model(po)
+
+
+@router.post("/{po_id}/lines/{line_id}/cancel", response_model=PurchaseOrderOut)
+def cancel_purchase_order_line(
+    po_id: int,
+    line_id: int,
+    payload: CancelPurchaseOrderLine,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """Closes out one line of a still-open PO (the supplier can't deliver
+    the rest of it) without cancelling the whole order -- the other lines
+    keep going. Use POST /{po_id}/status with status=cancelled instead if
+    nothing on the PO can still be fulfilled."""
+    po = purchase_order_service.cancel_purchase_order_line(db, po_id, line_id, payload.reason, user_id=user.id)
     return PurchaseOrderOut.from_model(po)
 
 

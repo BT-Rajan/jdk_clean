@@ -2,12 +2,15 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.common import PagedResponse
+from app.api.deps import require_role
 from app.core.database import get_db
 from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.production_readiness import ReadinessResult
 from app.schemas.production_schedule import (
     MaterialRequirementOut,
+    ProductionAdminReview,
+    ProductionLogOutput,
     ProductionQuickLog,
     ProductionScheduleCreate,
     ProductionScheduleOut,
@@ -19,6 +22,7 @@ from app.services import audit_service, production_readiness_service, production
 router = APIRouter(prefix="/api/production-schedules", tags=["production"])
 read_guard = require_page_access("production", "read")
 write_guard = require_page_access("production", "write")
+admin_guard = require_role("admin")
 
 
 def _with_readiness(db: Session, batch, out: ProductionScheduleOut) -> ProductionScheduleOut:
@@ -145,6 +149,25 @@ def get_material_requirements(
     return production_service.get_material_requirements(db, batch_id)
 
 
+@router.post("/{batch_id}/log-output", response_model=ProductionScheduleOut)
+def log_partial_production(
+    batch_id: int,
+    payload: ProductionLogOutput,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """Records output produced so far without closing the batch out --
+    for a run being paused or otherwise interrupted partway through. See
+    production_service.log_partial_production."""
+    actual_materials = (
+        [m.model_dump() for m in payload.actual_materials] if payload.actual_materials else None
+    )
+    batch = production_service.log_partial_production(
+        db, batch_id, payload.quantity, actual_materials=actual_materials, user_id=user.id
+    )
+    return ProductionScheduleOut.from_model(batch)
+
+
 @router.post("/{batch_id}/status", response_model=ProductionScheduleOut)
 def update_status(
     batch_id: int,
@@ -184,4 +207,32 @@ def restore_batch(
     user: User = Depends(write_guard),
 ):
     batch = production_service.restore_batch(db, batch_id, user_id=user.id)
+    return ProductionScheduleOut.from_model(batch)
+
+
+@router.post("/scan-overdue")
+def scan_overdue_batches(
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    """Flags production batches past their scheduled end that aren't
+    completed or cancelled -- a run behind schedule -- for admin
+    attention. Run this periodically (e.g. an external cron/scheduled
+    task hitting this endpoint daily); also runs automatically every 6
+    hours (see core/scheduler.py)."""
+    flagged = production_service.escalate_overdue_batches(db)
+    return {
+        "flagged_count": len(flagged),
+        "batch_ids": [b.id for b in flagged],
+    }
+
+
+@router.post("/{batch_id}/admin-review", response_model=ProductionScheduleOut)
+def admin_review_batch(
+    batch_id: int,
+    payload: ProductionAdminReview,
+    db: Session = Depends(get_db),
+    user: User = Depends(admin_guard),
+):
+    batch = production_service.admin_review(db, batch_id, payload.notes, user_id=user.id)
     return ProductionScheduleOut.from_model(batch)

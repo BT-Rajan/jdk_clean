@@ -16,12 +16,15 @@ from sqlalchemy.orm import Session
 
 from app.models.bom import Bom, BomLine
 from app.models.customer import Customer
+from app.models.delivery_note import DeliveryNote, DeliveryNoteLine
 from app.models.machine import Machine
+from app.models.order import Order, OrderDetail
 from app.models.product import Product
 from app.models.production_schedule import ProductionSchedule
+from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
 from app.models.raw_material import RawMaterial
 from app.models.raw_material_alternative import RawMaterialAlternative
-from app.models.inventory import RawMaterialInventory
+from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory
 from app.models.setting import Setting
 from app.models.supplier import Supplier
 from app.models.supplier_material import SupplierMaterial
@@ -189,6 +192,20 @@ def set_stock(db: Session, raw_material_id: int, quantity_on_hand: float, quanti
     return row
 
 
+def set_product_stock(db: Session, product_id: int, quantity_on_hand: float, quantity_reserved: float = 0) -> FinishedGoodsInventory:
+    """Finished-goods equivalent of set_stock -- test setup for "this
+    order's product already has X on hand / Y reserved", bypassing
+    order_service's own confirm-time reservation flow."""
+    row = FinishedGoodsInventory(
+        product_id=product_id,
+        quantity_on_hand=quantity_on_hand,
+        quantity_reserved=quantity_reserved,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
 def set_factory_labor_pool(db: Session, total_workers: int, workday_hours: float = 8) -> None:
     """Seeds the two settings rows settings_service.get_factory_labor_pool
     reads -- unset, the worker-capacity side of the capacity check is
@@ -197,6 +214,124 @@ def set_factory_labor_pool(db: Session, total_workers: int, workday_hours: float
     db.add(Setting(setting_key="factory_total_workers", setting_value=str(total_workers)))
     db.add(Setting(setting_key="factory_workday_hours", setting_value=str(workday_hours)))
     db.flush()
+
+
+def make_purchase_order(
+    db: Session,
+    supplier_id: int,
+    lines: list[dict] | None = None,
+    status: str = "draft",
+    **overrides,
+) -> PurchaseOrder:
+    """lines: [{"raw_material_id", "quantity", "unit_price", optionally
+    "received_quantity"}]. Defaults to one line of 10 units at 5.0 each
+    against a freshly made raw material if none given."""
+    n = _n()
+    if lines is None:
+        material = make_raw_material(db)
+        lines = [{"raw_material_id": material.id, "quantity": 10, "unit_price": 5.0}]
+
+    subtotal = sum(float(line["quantity"]) * float(line["unit_price"]) for line in lines)
+    po = PurchaseOrder(
+        po_number=overrides.pop("po_number", f"TESTPO-{n}"),
+        supplier_id=supplier_id,
+        order_date=overrides.pop("order_date", date(2026, 1, 1)),
+        status=status,
+        subtotal_amount=subtotal,
+        total_amount=subtotal,
+        **overrides,
+    )
+    db.add(po)
+    db.flush()
+    for line in lines:
+        db.add(
+            PurchaseOrderLine(
+                purchase_order_id=po.id,
+                raw_material_id=line["raw_material_id"],
+                quantity=line["quantity"],
+                unit_price=line["unit_price"],
+                line_total=float(line["quantity"]) * float(line["unit_price"]),
+                received_quantity=line.get("received_quantity", 0),
+            )
+        )
+    db.flush()
+    return po
+
+
+def make_order(
+    db: Session,
+    customer_id: int,
+    lines: list[dict] | None = None,
+    status: str = "draft",
+    **overrides,
+) -> Order:
+    """lines: [{"product_id", "quantity", "unit_price"}]. Defaults to one
+    line of 10 units at 5.0 each against a freshly made product if none
+    given."""
+    n = _n()
+    if lines is None:
+        product = make_product(db)
+        lines = [{"product_id": product.id, "quantity": 10, "unit_price": 5.0}]
+
+    subtotal = sum(float(line["quantity"]) * float(line["unit_price"]) for line in lines)
+    order = Order(
+        order_number=overrides.pop("order_number", f"TESTORD-{n}"),
+        customer_id=customer_id,
+        order_date=overrides.pop("order_date", date(2026, 1, 1)),
+        status=status,
+        subtotal_amount=subtotal,
+        total_amount=subtotal,
+        **overrides,
+    )
+    db.add(order)
+    db.flush()
+    for line in lines:
+        db.add(
+            OrderDetail(
+                order_id=order.id,
+                product_id=line["product_id"],
+                quantity=line["quantity"],
+                unit_price=line["unit_price"],
+                line_total=float(line["quantity"]) * float(line["unit_price"]),
+            )
+        )
+    db.flush()
+    return order
+
+
+def make_delivery_note(
+    db: Session,
+    order_id: int,
+    lines: list[dict] | None = None,
+    status: str = "draft",
+    **overrides,
+) -> DeliveryNote:
+    """lines: [{"product_id", "quantity_delivered"}]. Defaults to one line
+    of 10 units against a freshly made product if none given."""
+    n = _n()
+    if lines is None:
+        product = make_product(db)
+        lines = [{"product_id": product.id, "quantity_delivered": 10}]
+
+    note = DeliveryNote(
+        delivery_note_number=overrides.pop("delivery_note_number", f"TESTDN-{n}"),
+        order_id=order_id,
+        delivery_date=overrides.pop("delivery_date", date(2026, 1, 1)),
+        status=status,
+        **overrides,
+    )
+    db.add(note)
+    db.flush()
+    for line in lines:
+        db.add(
+            DeliveryNoteLine(
+                delivery_note_id=note.id,
+                product_id=line["product_id"],
+                quantity_delivered=line["quantity_delivered"],
+            )
+        )
+    db.flush()
+    return note
 
 
 def make_production_schedule(db: Session, product_id: int, planned_quantity: float, scheduled_start, scheduled_end, machine_id: int | None = None, status: str = "planned", **overrides) -> ProductionSchedule:

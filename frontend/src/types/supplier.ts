@@ -17,6 +17,10 @@ export interface Supplier {
   city: string | null
   country: string | null
   payment_terms_days: number
+  /** Overrides Settings' global approval thresholds for this supplier
+   * only -- null on either means "use the global setting". */
+  po_approval_threshold_override: number | null
+  discount_approval_threshold_override: number | null
   mode_of_supply: ModeOfSupply | null
   rating: number | null
   status: SupplierStatus
@@ -39,6 +43,8 @@ export interface SupplierPayload {
   city?: string | null
   country?: string | null
   payment_terms_days?: number
+  po_approval_threshold_override?: number | null
+  discount_approval_threshold_override?: number | null
   mode_of_supply?: ModeOfSupply | null
   rating?: number | null
   status?: SupplierStatus

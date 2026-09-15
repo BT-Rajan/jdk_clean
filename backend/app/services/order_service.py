@@ -53,8 +53,20 @@ def _base_query(db: Session, include_deleted: bool = False):
     return query
 
 
-def get_order(db: Session, order_id: int, include_deleted: bool = False) -> Order:
-    obj = _base_query(db, include_deleted).filter(Order.id == order_id).first()
+def get_order(db: Session, order_id: int, include_deleted: bool = False, for_update: bool = False) -> Order:
+    if for_update:
+        # A plain, unjoined lock query -- with_for_update() on top of
+        # _base_query's joinedloads would try to lock every outer-joined
+        # table too, which Postgres refuses ("FOR UPDATE cannot be applied
+        # to the nullable side of an outer join"). Locking just the order
+        # row is all change_status needs: it only ever mutates the order
+        # itself and inventory rows, never a line.
+        query = db.query(Order).filter(Order.id == order_id)
+        if not include_deleted:
+            query = query.filter(Order.deleted_at.is_(None))
+        obj = query.with_for_update().first()
+    else:
+        obj = _base_query(db, include_deleted).filter(Order.id == order_id).first()
     if obj is None:
         raise NotFoundError("Order")
     return obj
@@ -294,13 +306,22 @@ def change_status(
     user_id: int | None = None,
     shipped_lines: list[tuple[int, float]] | None = None,
 ) -> Order:
-    order = get_order(db, order_id)
+    # Locks the order row for the whole call (fetch through the final
+    # commit below) so two near-simultaneous requests on the same order
+    # (double-click, retry, two people) can't both pass the status check
+    # and both apply the stock side-effects below -- the second blocks
+    # here until the first commits, then re-reads the now-changed status
+    # and gets rejected by assert_transition_allowed instead of repeating
+    # the reservation/issue. See inventory_service.adjust_stock's
+    # commit=False for why this only works together with passing
+    # commit=False to every stock call in this function.
+    order = get_order(db, order_id, for_update=True)
     assert_transition_allowed(ALLOWED_TRANSITIONS, order.status, new_status, "order")
 
     if new_status == "confirmed" and order.approved_at is None:
         block_reasons: list[str] = []
 
-        threshold = settings_service.get_large_discount_approval_threshold(db)
+        threshold = settings_service.get_effective_discount_approval_threshold(db, customer=order.customer)
         if threshold is not None:
             largest = max(
                 [float(order.discount_percent)] + [float(line.discount_percent) for line in order.lines],
@@ -353,7 +374,7 @@ def change_status(
     # - cancelling from any state that had reserved stock releases it.
     if new_status == "confirmed":
         for line in order.lines:
-            inventory_service.reserve_stock(db, "product", line.product_id, float(line.quantity))
+            inventory_service.reserve_stock(db, "product", line.product_id, float(line.quantity), commit=False)
     elif new_status == "shipped":
         # Issue against what actually left the building, not what was
         # originally ordered -- delivery_note_service passes its own
@@ -381,17 +402,22 @@ def change_status(
                 reference_id=order.id,
                 notes=f"Shipped against {order.order_number}",
                 user_id=user_id,
+                commit=False,
             )
-        # The reservation, however, always tracks what was originally
-        # confirmed on the order -- that's the amount reserve_stock
-        # actually placed a hold on -- so it's released in full here
-        # regardless of what the delivery note ended up saying, or
-        # leftover reserved stock would linger uncleared forever.
-        for line in order.lines:
-            inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity))
+        # Released proportional to what's actually shipped *this call*,
+        # not the order's full original line quantity -- an order can now
+        # be shipped across more than one delivery note (see
+        # delivery_note_service.py's ELIGIBLE_ORDER_STATUSES comment), each
+        # its own call here, so releasing the full reservation on every
+        # one would double- (or triple-, ...) release it. A short-shipped
+        # *final* note still leaves the unshipped remainder's reservation
+        # dangling under this scheme -- same known imprecision as before
+        # multi-shipment existed, not a new one.
+        for product_id, quantity in lines_to_issue:
+            inventory_service.release_reservation(db, "product", product_id, quantity, commit=False)
     elif new_status == "cancelled" and old_status in RESERVED_STATUSES:
         for line in order.lines:
-            inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity))
+            inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity), commit=False)
     elif new_status == "cancelled" and old_status in ("shipped", "delivered"):
         # The goods already left the building -- cancelling here means the
         # customer is refusing or returning them, not that the order never
@@ -402,20 +428,30 @@ def change_status(
         # flag, matching the terminal-state philosophy used everywhere else
         # (DeliveryNote.ALLOWED_TRANSITIONS): reversing a completed physical
         # event must itself be a real, traceable action.
-        delivery_note = (
+        # An order can have more than one issued delivery note now (see
+        # delivery_note_service.py's ELIGIBLE_ORDER_STATUSES comment) --
+        # reverse what every one of them actually delivered, summed per
+        # product, not just whichever note query.first() happened to
+        # return.
+        issued_notes = (
             db.query(DeliveryNote)
             .filter(
                 DeliveryNote.order_id == order.id,
                 DeliveryNote.status == "issued",
                 DeliveryNote.deleted_at.is_(None),
             )
-            .first()
+            .all()
         )
-        lines_to_return = (
-            [(line.product_id, float(line.quantity_delivered)) for line in delivery_note.lines]
-            if delivery_note is not None
-            else [(line.product_id, float(line.quantity)) for line in order.lines]
-        )
+        if issued_notes:
+            delivered_by_product: dict[int, float] = {}
+            for note in issued_notes:
+                for line in note.lines:
+                    delivered_by_product[line.product_id] = (
+                        delivered_by_product.get(line.product_id, 0.0) + float(line.quantity_delivered)
+                    )
+            lines_to_return = list(delivered_by_product.items())
+        else:
+            lines_to_return = [(line.product_id, float(line.quantity)) for line in order.lines]
         for product_id, quantity in lines_to_return:
             inventory_service.adjust_stock(
                 db,
@@ -427,7 +463,19 @@ def change_status(
                 reference_id=order.id,
                 notes=f"Cancelled after shipment -- {order.order_number} ({reason})",
                 user_id=user_id,
+                commit=False,
             )
+        # Whatever's shipped is reversed above; whatever was reserved but
+        # never got that far (a partially-shipped order cancelled before
+        # the rest went out -- only possible now that shipping can span
+        # more than one delivery note) is forfeit, same as production/PO
+        # completing early: release it here rather than leaving it
+        # reserved forever for a shipment that's no longer coming.
+        delivered_totals = dict(lines_to_return)
+        for line in order.lines:
+            remaining = float(line.quantity) - delivered_totals.get(line.product_id, 0.0)
+            if remaining > 0:
+                inventory_service.release_reservation(db, "product", line.product_id, remaining, commit=False)
 
     order.status = new_status
     if new_status in STATUSES_REQUIRING_CLOSE_REASON:
@@ -649,20 +697,23 @@ def split_order(db: Session, order_id: int, lines: list[dict], user_id: int | No
 
 def _cancel_active_production_batches(db: Session, order_id: int, user_id: int | None = None) -> None:
     """Fires when an order is cancelled: any production batch still tied
-    to it that hasn't finished -- 'planned' (auto-scheduled or not, not
-    yet started) or 'in_progress' (started, but no materials consumed or
-    finished goods produced yet -- that only happens on completion, see
-    production_service._complete_batch) -- is cancelled too, freeing the
-    machine time and worker-hours it was holding for a request that no
-    longer exists. This is the resource-freeing half of what the
-    automation needs to stay honest: it auto-schedules real capacity on
-    confirmation, so it has to auto-release that capacity on cancellation
-    too, or a cancelled order would silently leave a phantom batch
-    occupying a slot forever.
+    to it that hasn't finished -- 'planned' (not yet started), 'in_progress',
+    or 'paused' -- is cancelled too, freeing the machine time and
+    worker-hours it was holding for a request that no longer exists.
+    Cancelling only releases whatever raw-material reservation is still
+    outstanding (planned_quantity minus whatever's already been recorded
+    via production_service.log_partial_production) -- any output already
+    produced and its materials already consumed, on a batch paused or
+    partway through before this cancellation, stand: they're real and
+    aren't reversed, same reasoning as a fully completed batch below.
+    This is the resource-freeing half of what the automation needs to
+    stay honest: it auto-schedules real capacity on confirmation, so it
+    has to auto-release that capacity on cancellation too, or a cancelled
+    order would silently leave a phantom batch occupying a slot forever.
 
     A batch that already *completed* before the order was cancelled is
     deliberately left alone -- see the comment on that case in
-    _complete_batch and the note in feasibility_service's finished-goods
+    _record_output and the note in feasibility_service's finished-goods
     netting: the materials are genuinely consumed and the units genuinely
     exist, so there's nothing to reverse. The stock reservation on those
     finished units is already released above (RESERVED_STATUSES), which
@@ -679,7 +730,7 @@ def _cancel_active_production_batches(db: Session, order_id: int, user_id: int |
         .filter(
             ProductionSchedule.order_id == order_id,
             ProductionSchedule.deleted_at.is_(None),
-            ProductionSchedule.status.in_(("planned", "in_progress")),
+            ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
         )
         .all()
     )

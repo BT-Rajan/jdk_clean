@@ -4,6 +4,7 @@ import { apiClient } from './client'
 
 export interface SupplierReturnListParams extends ListQueryParams {
   supplier_id?: number
+  purchase_order_id?: number
 }
 
 export async function listSupplierReturns(
