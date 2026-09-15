@@ -404,13 +404,17 @@ def change_status(
                 user_id=user_id,
                 commit=False,
             )
-        # The reservation, however, always tracks what was originally
-        # confirmed on the order -- that's the amount reserve_stock
-        # actually placed a hold on -- so it's released in full here
-        # regardless of what the delivery note ended up saying, or
-        # leftover reserved stock would linger uncleared forever.
-        for line in order.lines:
-            inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity), commit=False)
+        # Released proportional to what's actually shipped *this call*,
+        # not the order's full original line quantity -- an order can now
+        # be shipped across more than one delivery note (see
+        # delivery_note_service.py's ELIGIBLE_ORDER_STATUSES comment), each
+        # its own call here, so releasing the full reservation on every
+        # one would double- (or triple-, ...) release it. A short-shipped
+        # *final* note still leaves the unshipped remainder's reservation
+        # dangling under this scheme -- same known imprecision as before
+        # multi-shipment existed, not a new one.
+        for product_id, quantity in lines_to_issue:
+            inventory_service.release_reservation(db, "product", product_id, quantity, commit=False)
     elif new_status == "cancelled" and old_status in RESERVED_STATUSES:
         for line in order.lines:
             inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity), commit=False)
@@ -424,20 +428,30 @@ def change_status(
         # flag, matching the terminal-state philosophy used everywhere else
         # (DeliveryNote.ALLOWED_TRANSITIONS): reversing a completed physical
         # event must itself be a real, traceable action.
-        delivery_note = (
+        # An order can have more than one issued delivery note now (see
+        # delivery_note_service.py's ELIGIBLE_ORDER_STATUSES comment) --
+        # reverse what every one of them actually delivered, summed per
+        # product, not just whichever note query.first() happened to
+        # return.
+        issued_notes = (
             db.query(DeliveryNote)
             .filter(
                 DeliveryNote.order_id == order.id,
                 DeliveryNote.status == "issued",
                 DeliveryNote.deleted_at.is_(None),
             )
-            .first()
+            .all()
         )
-        lines_to_return = (
-            [(line.product_id, float(line.quantity_delivered)) for line in delivery_note.lines]
-            if delivery_note is not None
-            else [(line.product_id, float(line.quantity)) for line in order.lines]
-        )
+        if issued_notes:
+            delivered_by_product: dict[int, float] = {}
+            for note in issued_notes:
+                for line in note.lines:
+                    delivered_by_product[line.product_id] = (
+                        delivered_by_product.get(line.product_id, 0.0) + float(line.quantity_delivered)
+                    )
+            lines_to_return = list(delivered_by_product.items())
+        else:
+            lines_to_return = [(line.product_id, float(line.quantity)) for line in order.lines]
         for product_id, quantity in lines_to_return:
             inventory_service.adjust_stock(
                 db,
@@ -451,6 +465,17 @@ def change_status(
                 user_id=user_id,
                 commit=False,
             )
+        # Whatever's shipped is reversed above; whatever was reserved but
+        # never got that far (a partially-shipped order cancelled before
+        # the rest went out -- only possible now that shipping can span
+        # more than one delivery note) is forfeit, same as production/PO
+        # completing early: release it here rather than leaving it
+        # reserved forever for a shipment that's no longer coming.
+        delivered_totals = dict(lines_to_return)
+        for line in order.lines:
+            remaining = float(line.quantity) - delivered_totals.get(line.product_id, 0.0)
+            if remaining > 0:
+                inventory_service.release_reservation(db, "product", line.product_id, remaining, commit=False)
 
     order.status = new_status
     if new_status in STATUSES_REQUIRING_CLOSE_REASON:

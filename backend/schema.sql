@@ -844,6 +844,11 @@ CREATE TABLE IF NOT EXISTS purchase_order_lines (
     discount_percent    DECIMAL(5,2) NOT NULL DEFAULT 0,
     line_total          DECIMAL(14,2) NOT NULL,
     received_quantity   DECIMAL(14,4) NOT NULL DEFAULT 0,
+    -- Closes out this one line (the supplier can't deliver the rest of
+    -- it) without cancelling the whole PO -- see
+    -- purchase_order_service.cancel_purchase_order_line.
+    is_cancelled        TINYINT(1) NOT NULL DEFAULT 0,
+    cancel_reason       TEXT NULL,
     CONSTRAINT fk_pol_po FOREIGN KEY (purchase_order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
     CONSTRAINT fk_pol_material FOREIGN KEY (raw_material_id) REFERENCES raw_materials(id),
     INDEX idx_pol_po (purchase_order_id)

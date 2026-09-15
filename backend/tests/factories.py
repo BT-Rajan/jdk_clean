@@ -24,7 +24,7 @@ from app.models.production_schedule import ProductionSchedule
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
 from app.models.raw_material import RawMaterial
 from app.models.raw_material_alternative import RawMaterialAlternative
-from app.models.inventory import RawMaterialInventory
+from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory
 from app.models.setting import Setting
 from app.models.supplier import Supplier
 from app.models.supplier_material import SupplierMaterial
@@ -184,6 +184,20 @@ def set_stock(db: Session, raw_material_id: int, quantity_on_hand: float, quanti
     test_inventory_safety.py for that)."""
     row = RawMaterialInventory(
         raw_material_id=raw_material_id,
+        quantity_on_hand=quantity_on_hand,
+        quantity_reserved=quantity_reserved,
+    )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def set_product_stock(db: Session, product_id: int, quantity_on_hand: float, quantity_reserved: float = 0) -> FinishedGoodsInventory:
+    """Finished-goods equivalent of set_stock -- test setup for "this
+    order's product already has X on hand / Y reserved", bypassing
+    order_service's own confirm-time reservation flow."""
+    row = FinishedGoodsInventory(
+        product_id=product_id,
         quantity_on_hand=quantity_on_hand,
         quantity_reserved=quantity_reserved,
     )

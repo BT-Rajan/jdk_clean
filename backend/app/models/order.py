@@ -32,13 +32,20 @@ ALLOWED_TRANSITIONS = {
     "confirmed": {"in_production", "ready_to_ship", "cancelled"},
     "in_production": {"ready_to_ship", "cancelled"},
     "ready_to_ship": {"shipped", "cancelled"},
+    # 'shipped' -> 'shipped' looks like a no-op but isn't one: an order
+    # can now be shipped across more than one delivery note (see
+    # delivery_note_service.py's ELIGIBLE_ORDER_STATUSES comment) -- the
+    # first issued note moves the order 'ready_to_ship' -> 'shipped',
+    # and every note after that re-enters this same transition to record
+    # its own shipment while the order's already sitting at 'shipped'.
+    #
     # Cancelling from 'shipped'/'delivered' is a genuine after-the-fact
     # cancellation (customer refused/returned the goods after they left the
     # building) -- unlike DeliveryNote's 'issued', which stays terminal.
     # order_service.change_status reverses the actual delivered quantities
     # back into stock (movement_type='return') rather than just flipping
     # the status, so physical reality and the ledger stay in sync.
-    "shipped": {"delivered", "cancelled"},
+    "shipped": {"shipped", "delivered", "cancelled"},
     "delivered": {"cancelled"},
     "cancelled": set(),
 }

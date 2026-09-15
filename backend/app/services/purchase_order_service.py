@@ -388,6 +388,8 @@ def receive_lines(
         line = lines_by_id.get(receipt["line_id"])
         if line is None:
             raise ValidationAppError(f"Line {receipt['line_id']} does not belong to this purchase order.")
+        if line.is_cancelled:
+            raise ValidationAppError(f"{line.raw_material.name}'s line was cancelled; it can no longer receive goods.")
         remaining = float(line.quantity) - float(line.received_quantity)
         if receipt["quantity"] > remaining:
             raise ValidationAppError(
@@ -429,12 +431,56 @@ def receive_lines(
             SupplierMaterial.deleted_at.is_(None),
         ).update({"last_transaction_at": received_date})
 
-    all_received = all(float(l.received_quantity) >= float(l.quantity) for l in po.lines)
+    all_received = all(l.is_cancelled or float(l.received_quantity) >= float(l.quantity) for l in po.lines)
     old_status = po.status
     po.status = "received" if all_received else "partially_received"
     po.updated_by = user_id
     audit_service.log_update(
         db, TABLE_NAME, po_id, {"status": (old_status, po.status)}, user_id
+    )
+    db.commit()
+    return get_purchase_order(db, po_id)
+
+
+def cancel_purchase_order_line(
+    db: Session, po_id: int, line_id: int, reason: str, user_id: int | None = None
+) -> PurchaseOrder:
+    """Closes out one line of a still-open PO -- e.g. a supplier can't
+    get one material any more but the rest of the order is still coming
+    -- without cancelling the whole thing. Whatever was already received
+    against the line stays on the books; only the outstanding remainder
+    is written off. Cancel the whole PO instead (change_status) if
+    nothing on it can still be fulfilled.
+    """
+    # Locked for the whole call -- same double-submit protection as
+    # receive_lines above.
+    po = get_purchase_order(db, po_id, for_update=True)
+    if po.status not in ("sent", "confirmed", "partially_received"):
+        raise ConflictError(f"Cannot cancel a line on a purchase order in '{po.status}' status.")
+
+    line = next((l for l in po.lines if l.id == line_id), None)
+    if line is None:
+        raise ValidationAppError(f"Line {line_id} does not belong to this purchase order.")
+    if line.is_cancelled:
+        raise ConflictError("This line is already cancelled.")
+    if float(line.received_quantity) >= float(line.quantity):
+        raise ConflictError("This line has already been fully received; there's nothing left to cancel.")
+    assert_reason_given(reason, "A reason is required to cancel a purchase order line.")
+
+    line.is_cancelled = True
+    line.cancel_reason = reason
+
+    # Recompute the PO's own status from what's left open -- a cancelled
+    # line no longer counts as outstanding, same as a fully-received one.
+    old_status = po.status
+    if all(l.is_cancelled for l in po.lines) and not any(float(l.received_quantity) > 0 for l in po.lines):
+        po.status = "cancelled"
+        po.cancel_reason = po.cancel_reason or reason
+    elif all(l.is_cancelled or float(l.received_quantity) >= float(l.quantity) for l in po.lines):
+        po.status = "received"
+    po.updated_by = user_id
+    audit_service.log_update(
+        db, TABLE_NAME, po_id, {f"line_{line_id}_cancelled": (False, True), "status": (old_status, po.status)}, user_id
     )
     db.commit()
     return get_purchase_order(db, po_id)

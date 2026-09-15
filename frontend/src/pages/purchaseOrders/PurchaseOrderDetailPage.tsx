@@ -8,6 +8,7 @@ import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewPurchaseOrder,
   approvePurchaseOrder,
+  cancelPurchaseOrderLine,
   deletePurchaseOrder,
   downloadPurchaseOrderPdf,
   emailPurchaseOrder,
@@ -17,7 +18,7 @@ import {
   updatePurchaseOrderStatus,
 } from '@/api/purchaseOrders'
 import { listSupplierReturns } from '@/api/supplierReturns'
-import type { PurchaseOrder } from '@/types/purchaseOrder'
+import type { PurchaseOrder, PurchaseOrderLine } from '@/types/purchaseOrder'
 import type { SupplierReturn } from '@/types/supplierReturn'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
@@ -63,6 +64,62 @@ function AdminReviewModal({
   )
 }
 
+function CancelLineModal({
+  line,
+  onClose,
+  onSubmit,
+}: {
+  line: PurchaseOrderLine | null
+  onClose: () => void
+  onSubmit: (reason: string) => Promise<void>
+}) {
+  const [reason, setReason] = useState('')
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+
+  useEffect(() => {
+    setReason('')
+    setError(null)
+  }, [line])
+
+  async function handleConfirm() {
+    if (!reason.trim()) {
+      setError('A reason is required to cancel this line.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      await onSubmit(reason.trim())
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal open={line !== null} title={line ? `Cancel line — ${line.material_code} ${line.material_name}` : ''} onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <p className="text-sm text-white/60">
+          The rest of this line will be written off; the other lines on this purchase order are unaffected.
+          {line && line.received_quantity > 0 && ` What's already been received (${line.received_quantity} ${line.unit}) stays on the books.`}
+        </p>
+        <TextareaField
+          label="Reason"
+          value={reason}
+          onChange={(e) => {
+            setReason(e.target.value)
+            if (error) setError(null)
+          }}
+          error={error ?? undefined}
+        />
+        <div className="mt-2 flex justify-end gap-3">
+          <Button variant="ghost" type="button" onClick={onClose}>Back</Button>
+          <Button variant="danger" type="button" isLoading={submitting} onClick={handleConfirm}>Cancel line</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 export function PurchaseOrderDetailPage() {
   const { id } = useParams()
   const poId = Number(id)
@@ -86,6 +143,7 @@ export function PurchaseOrderDetailPage() {
   >({})
   const [receiptMeta, setReceiptMeta] = useState({ invoice_number: '', received_by: '', received_date: '' })
   const [supplierReturns, setSupplierReturns] = useState<SupplierReturn[]>([])
+  const [cancelLineTarget, setCancelLineTarget] = useState<PurchaseOrderLine | null>(null)
 
   function defaultReceiveQuantities(data: PurchaseOrder): Record<number, string> {
     const defaults: Record<number, string> = {}
@@ -195,6 +253,20 @@ export function PurchaseOrderDetailPage() {
     }
   }
 
+  async function handleCancelLine(reason: string) {
+    if (!cancelLineTarget) return
+    setError(null)
+    try {
+      const updated = await cancelPurchaseOrderLine(poId, cancelLineTarget.id, reason)
+      setPo(updated)
+      setReceiveQuantities(defaultReceiveQuantities(updated))
+      setCancelLineTarget(null)
+      setNotice('Line cancelled.')
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    }
+  }
+
   async function handleDelete() {
     setBusy(true)
     try {
@@ -255,6 +327,11 @@ export function PurchaseOrderDetailPage() {
 
   const nextStatuses = PURCHASE_ORDER_TRANSITIONS[po.status]
   const canReceive = allowWrite && !justDeleted && (po.status === 'confirmed' || po.status === 'partially_received')
+  // Closing out one line (without touching the others) only makes sense
+  // once the PO has actually gone out and while it's still open --
+  // draft/received/cancelled have nothing left to write off.
+  const canCancelLines =
+    allowWrite && !justDeleted && (po.status === 'sent' || po.status === 'confirmed' || po.status === 'partially_received')
   // Returning to the supplier only makes sense once something's actually
   // been received -- nothing to send back before then.
   const canReturn = allowWrite && !justDeleted && (po.status === 'partially_received' || po.status === 'received')
@@ -411,15 +488,20 @@ export function PurchaseOrderDetailPage() {
                 {canReceive && <th className="px-6 py-4 font-medium">Actual unit cost</th>}
                 {canReceive && <th className="px-6 py-4 font-medium">Batch/Lot</th>}
                 {canReceive && <th className="px-6 py-4 font-medium">Expiry</th>}
+                {canCancelLines && <th className="px-6 py-4 font-medium">&nbsp;</th>}
               </tr>
             </thead>
             <tbody>
               {po.lines.map((line) => {
                 const remaining = line.quantity - line.received_quantity
+                const fullyReceived = remaining <= 0
                 return (
-                  <tr key={line.id} className="border-b border-white/5 last:border-0">
+                  <tr key={line.id} className={`border-b border-white/5 last:border-0 ${line.is_cancelled ? 'opacity-50' : ''}`}>
                     <td className="px-6 py-4 text-white">
                       {line.material_code} — {line.material_name}
+                      {line.is_cancelled && (
+                        <div className="mt-1 text-xs text-white/40">Cancelled: {line.cancel_reason}</div>
+                      )}
                     </td>
                     <td className="px-6 py-4 text-white/60">{line.quantity} {line.unit}</td>
                     <td className="px-6 py-4 text-white/60">{formatCurrency(line.unit_price)}</td>
@@ -427,7 +509,9 @@ export function PurchaseOrderDetailPage() {
                     <td className="px-6 py-4 text-white/60">{line.received_quantity} {line.unit}</td>
                     {canReceive && (
                       <td className="px-6 py-4">
-                        {remaining > 0 ? (
+                        {line.is_cancelled ? (
+                          <span className="text-xs text-white/40">Cancelled</span>
+                        ) : remaining > 0 ? (
                           <div className="w-28">
                             <TextField
                               label=""
@@ -485,6 +569,15 @@ export function PurchaseOrderDetailPage() {
                             onChange={(e) => updateLineDetail(line.id, 'expiry_date', e.target.value)}
                           />
                         </div>
+                      </td>
+                    )}
+                    {canCancelLines && (
+                      <td className="px-6 py-4">
+                        {!line.is_cancelled && !fullyReceived && (
+                          <Button variant="ghost" size="sm" onClick={() => setCancelLineTarget(line)}>
+                            Cancel line
+                          </Button>
+                        )}
                       </td>
                     )}
                   </tr>
@@ -594,6 +687,12 @@ export function PurchaseOrderDetailPage() {
           await emailPurchaseOrder(po.id, toEmail, message, attachPdf)
           setNotice(`Emailed to ${toEmail}.`)
         }}
+      />
+
+      <CancelLineModal
+        line={cancelLineTarget}
+        onClose={() => setCancelLineTarget(null)}
+        onSubmit={handleCancelLine}
       />
 
       <AdminReviewModal

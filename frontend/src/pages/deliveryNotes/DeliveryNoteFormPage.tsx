@@ -21,14 +21,22 @@ export function DeliveryNoteFormPage() {
   const navigate = useNavigate()
   const [formError, setFormError] = useState<string | null>(null)
 
-  // Only orders that are ready_to_ship can get a delivery note (see
-  // delivery_note_service.ELIGIBLE_ORDER_STATUS) -- filtering the picker
-  // to that status avoids a round trip just to find out an order isn't
-  // eligible yet.
-  const ordersFetcher = useCallback(
-    () => listOrders({ page: 1, page_size: 200, status: 'ready_to_ship' }),
-    [],
-  )
+  // An order can get a delivery note while it's ready_to_ship, or again
+  // while already 'shipped' if an earlier note didn't cover everything
+  // (multiple trucks/dates against one order -- see
+  // delivery_note_service.ELIGIBLE_ORDER_STATUSES). The list endpoint
+  // only filters on one status at a time, so this fetches both buckets
+  // and merges them; a 'shipped' order that's actually fully covered
+  // already just gets a clear "nothing left to ship" error from the
+  // backend on submit rather than being pre-filtered here.
+  const ordersFetcher = useCallback(async () => {
+    const [readyToShip, shipped] = await Promise.all([
+      listOrders({ page: 1, page_size: 200, status: 'ready_to_ship' }),
+      listOrders({ page: 1, page_size: 200, status: 'shipped' }),
+    ])
+    const items = [...readyToShip.items, ...shipped.items]
+    return { items, total: items.length, page: 1, page_size: items.length, total_pages: 1 }
+  }, [])
   const { options: orders } = useSelectOptions(ordersFetcher)
   const { busy: submitting, run: runGuarded } = useAsyncGuard()
 
@@ -65,10 +73,11 @@ export function DeliveryNoteFormPage() {
           <Alert variant="error">{formError}</Alert>
           <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
             <SelectField label="Order" error={errors.order_id?.message} {...register('order_id')}>
-              <option value="">Choose an order ready to ship…</option>
+              <option value="">Choose an order…</option>
               {orders.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.order_number} — {o.customer_name ?? 'Unknown customer'}
+                  {o.status === 'shipped' ? ' (partially shipped)' : ''}
                 </option>
               ))}
             </SelectField>

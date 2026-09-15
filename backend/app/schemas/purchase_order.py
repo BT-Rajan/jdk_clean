@@ -23,6 +23,8 @@ class PurchaseOrderLineOut(BaseModel):
     discount_percent: float
     line_total: float
     received_quantity: float
+    is_cancelled: bool
+    cancel_reason: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -68,6 +70,10 @@ class PurchaseOrderStatusUpdate(BaseModel):
 
 class PurchaseOrderAdminReview(BaseModel):
     notes: str = Field(min_length=1)
+
+
+class CancelPurchaseOrderLine(BaseModel):
+    reason: str = Field(min_length=1)
 
 
 class ReceiveLine(BaseModel):

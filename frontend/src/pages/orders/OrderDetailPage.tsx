@@ -23,6 +23,7 @@ import { todayDateInputMin } from '@/lib/validation'
 import { PaymentsPanel } from './PaymentsPanel'
 import { PaymentPlansPanel } from './PaymentPlansPanel'
 import type { Order } from '@/types/order'
+import type { DeliveryNote } from '@/types/deliveryNote'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
@@ -172,11 +173,11 @@ export function OrderDetailPage() {
   const [adminReviewOpen, setAdminReviewOpen] = useState(false)
   const [splitOpen, setSplitOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
-  // null = none yet (or not checked); drives whether the header offers
-  // "Create delivery note" or "View delivery note" -- only one
-  // non-cancelled note is ever allowed per order (see
-  // delivery_note_service.create_delivery_note).
-  const [deliveryNoteId, setDeliveryNoteId] = useState<number | null>(null)
+  // An order can now be shipped across more than one delivery note
+  // (multiple trucks/dates) -- see delivery_note_service.py's
+  // ELIGIBLE_ORDER_STATUSES -- so this tracks every note issued against
+  // it, not just a single "the" note.
+  const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([])
 
   function load() {
     setLoading(true)
@@ -186,16 +187,14 @@ export function OrderDetailPage() {
       .finally(() => setLoading(false))
   }
 
-  useEffect(load, [orderId])
+  function loadDeliveryNotes() {
+    listDeliveryNotes({ order_id: orderId, page: 1, page_size: 50 })
+      .then((result) => setDeliveryNotes(result.items))
+      .catch(() => setDeliveryNotes([]))
+  }
 
-  useEffect(() => {
-    listDeliveryNotes({ order_id: orderId, page: 1, page_size: 5 })
-      .then((result) => {
-        const active = result.items.find((n) => n.status !== 'cancelled')
-        setDeliveryNoteId(active?.id ?? null)
-      })
-      .catch(() => setDeliveryNoteId(null))
-  }, [orderId])
+  useEffect(load, [orderId])
+  useEffect(loadDeliveryNotes, [orderId])
 
   async function handleStatusChange(status: (typeof ORDER_TRANSITIONS)['draft'][number], reason?: string) {
     setBusy(true)
@@ -281,6 +280,10 @@ export function OrderDetailPage() {
     setBusy(true)
     setError(null)
     try {
+      // Lines are omitted -- delivery_note_service defaults them to
+      // whatever's still outstanding on the order, so this works the
+      // same whether it's the first note or another one covering the
+      // remainder of an already-'shipped' order.
       const note = await createDeliveryNote({ order_id: orderId, delivery_date: todayDateInputMin })
       navigate(`/delivery-notes/${note.id}`)
     } catch (err) {
@@ -359,23 +362,17 @@ export function OrderDetailPage() {
                   <TornPaperIcon />
                 </Button>
               )}
-              {order.status === 'ready_to_ship' && (
-                deliveryNoteId ? (
-                  <Button variant="ghost" onClick={() => navigate(`/delivery-notes/${deliveryNoteId}`)}>
-                    View delivery note
-                  </Button>
-                ) : allowWrite ? (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="!w-9 !px-0"
-                    onClick={handleCreateDeliveryNote}
-                    isLoading={busy}
-                    aria-label="Create delivery note"
-                  >
-                    <MovingCartIcon />
-                  </Button>
-                ) : null
+              {allowWrite && (order.status === 'ready_to_ship' || order.status === 'shipped') && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  className="!w-9 !px-0"
+                  onClick={handleCreateDeliveryNote}
+                  isLoading={busy}
+                  aria-label="Create delivery note"
+                >
+                  <MovingCartIcon />
+                </Button>
               )}
               {allowWrite && order.status === 'draft' && (
                 <Button
@@ -529,6 +526,40 @@ export function OrderDetailPage() {
           </table>
         </div>
       </GlassCard>
+
+      {deliveryNotes.length > 0 && (
+        <GlassCard className="mt-6 overflow-hidden">
+          <div className="border-b border-white/10 px-6 py-4">
+            <h2 className="font-display text-lg font-medium text-white">
+              Delivery notes {deliveryNotes.length > 1 && <span className="text-sm text-white/40">({deliveryNotes.length})</span>}
+            </h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                  <th className="px-6 py-4 font-medium">Note</th>
+                  <th className="px-6 py-4 font-medium">Date</th>
+                  <th className="px-6 py-4 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {deliveryNotes.map((n) => (
+                  <tr key={n.id} className="border-b border-white/5 last:border-0">
+                    <td className="px-6 py-4">
+                      <Link to={`/delivery-notes/${n.id}`} className="font-medium text-gold-300 hover:text-gold-200">
+                        {n.delivery_note_number}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 text-white/60">{formatDate(n.delivery_date)}</td>
+                    <td className="px-6 py-4"><StatusBadge status={n.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </GlassCard>
+      )}
 
       {order.child_orders.length > 0 && (
         <GlassCard className="mt-6 p-6">
