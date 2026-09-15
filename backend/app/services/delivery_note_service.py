@@ -30,8 +30,19 @@ def _base_query(db: Session, include_deleted: bool = False):
     return query
 
 
-def get_delivery_note(db: Session, note_id: int, include_deleted: bool = False) -> DeliveryNote:
-    obj = _base_query(db, include_deleted).filter(DeliveryNote.id == note_id).first()
+def get_delivery_note(
+    db: Session, note_id: int, include_deleted: bool = False, for_update: bool = False
+) -> DeliveryNote:
+    if for_update:
+        # Plain, unjoined lock query -- see order_service.get_order's
+        # for_update branch for why _base_query's joinedloads can't be
+        # combined with with_for_update().
+        query = db.query(DeliveryNote).filter(DeliveryNote.id == note_id)
+        if not include_deleted:
+            query = query.filter(DeliveryNote.deleted_at.is_(None))
+        obj = query.with_for_update().first()
+    else:
+        obj = _base_query(db, include_deleted).filter(DeliveryNote.id == note_id).first()
     if obj is None:
         raise NotFoundError("Delivery note")
     return obj
@@ -162,7 +173,16 @@ def update_delivery_note(db: Session, note_id: int, data: dict, user_id: int | N
 def change_status(
     db: Session, note_id: int, new_status: str, reason: str | None = None, user_id: int | None = None
 ) -> DeliveryNote:
-    note = get_delivery_note(db, note_id)
+    # Locked for the whole call so two near-simultaneous "issue" requests
+    # on the same delivery note can't both pass the status check below.
+    # The actual stock issue happens inside order_service.change_status
+    # (called just below), which takes its own lock on the order row and
+    # commits on its own -- if a concurrent issue call is already mid-way
+    # through that order-level transition, this one blocks on the order
+    # lock there and then correctly fails assert_transition_allowed on
+    # the order's now-already-"shipped" status, so it never reaches the
+    # note.status write below either.
+    note = get_delivery_note(db, note_id, for_update=True)
     assert_transition_allowed(ALLOWED_TRANSITIONS, note.status, new_status, "delivery note")
 
     if new_status == "issued":

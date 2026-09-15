@@ -34,8 +34,19 @@ def _base_query(db: Session, include_deleted: bool = False):
     return query
 
 
-def get_batch(db: Session, batch_id: int, include_deleted: bool = False) -> ProductionSchedule:
-    obj = _base_query(db, include_deleted).filter(ProductionSchedule.id == batch_id).first()
+def get_batch(
+    db: Session, batch_id: int, include_deleted: bool = False, for_update: bool = False
+) -> ProductionSchedule:
+    if for_update:
+        # Plain, unjoined lock query -- see order_service.get_order's
+        # for_update branch for why _base_query's joinedloads can't be
+        # combined with with_for_update().
+        query = db.query(ProductionSchedule).filter(ProductionSchedule.id == batch_id)
+        if not include_deleted:
+            query = query.filter(ProductionSchedule.deleted_at.is_(None))
+        obj = query.with_for_update().first()
+    else:
+        obj = _base_query(db, include_deleted).filter(ProductionSchedule.id == batch_id).first()
     if obj is None:
         raise NotFoundError("Production batch")
     return obj
@@ -152,7 +163,7 @@ def _reserve_batch_materials(db: Session, batch: ProductionSchedule) -> None:
             inventory_service.reserve_stock(db, "raw_material", raw_material_id, required_qty)
 
 
-def _release_batch_materials(db: Session, batch: ProductionSchedule) -> None:
+def _release_batch_materials(db: Session, batch: ProductionSchedule, commit: bool = True) -> None:
     """Symmetric release of _reserve_batch_materials -- called on every
     path where a batch stops holding a claim on raw materials: cancelled,
     deleted while still planned, edited to a different product/quantity
@@ -162,13 +173,17 @@ def _release_batch_materials(db: Session, batch: ProductionSchedule) -> None:
     product_id/planned_quantity rather than a stored snapshot, so it
     exactly mirrors whatever _reserve_batch_materials most recently
     reserved for this batch.
+
+    commit=False -- see inventory_service.adjust_stock's docstring; used
+    by change_status, which holds a lock on the batch row for the whole
+    call and needs every stock movement folded into its own single commit.
     """
     if not bom_service.has_bom(db, batch.product_id):
         return
     requirements = bom_service.explode_requirements(db, batch.product_id, float(batch.planned_quantity))
     for raw_material_id, required_qty in requirements.items():
         if required_qty > 0:
-            inventory_service.release_reservation(db, "raw_material", raw_material_id, required_qty)
+            inventory_service.release_reservation(db, "raw_material", raw_material_id, required_qty, commit=commit)
 
 
 def get_material_requirements(db: Session, batch_id: int) -> list[dict]:
@@ -478,6 +493,7 @@ def _complete_batch(
             reference_id=batch.id,
             notes=note,
             user_id=user_id,
+            commit=False,
         )
 
     inventory_service.adjust_stock(
@@ -490,6 +506,7 @@ def _complete_batch(
         reference_id=batch.id,
         notes=f"Produced by batch {batch.batch_number}",
         user_id=user_id,
+        commit=False,
     )
 
     # The hold placed when this batch was scheduled (_reserve_batch_materials,
@@ -498,7 +515,7 @@ def _complete_batch(
     # on planned_quantity (what was actually reserved), not produced_quantity
     # (what was actually used), since a batch can legitimately produce more
     # or less than planned.
-    _release_batch_materials(db, batch)
+    _release_batch_materials(db, batch, commit=False)
 
     batch.produced_quantity = produced_quantity
     batch.actual_end = datetime.now(timezone.utc)
@@ -516,7 +533,12 @@ def change_status(
     reason: str | None = None,
     user_id: int | None = None,
 ) -> ProductionSchedule:
-    batch = get_batch(db, batch_id)
+    # Locked for the whole call -- see order_service.change_status's
+    # comment for why this, plus commit=False on every stock call inside
+    # _complete_batch/_release_batch_materials below, is what stops a
+    # double-submitted "complete"/"cancel" from issuing/receiving stock
+    # twice for one production run.
+    batch = get_batch(db, batch_id, for_update=True)
     assert_transition_allowed(ALLOWED_TRANSITIONS, batch.status, new_status, "production batch")
 
     if new_status == "in_progress":
@@ -536,7 +558,7 @@ def change_status(
     elif new_status == "cancelled":
         assert_reason_given(reason, "A reason is required to cancel a production batch.")
         batch.cancel_reason = reason
-        _release_batch_materials(db, batch)
+        _release_batch_materials(db, batch, commit=False)
 
     old_status = batch.status
     batch.status = new_status

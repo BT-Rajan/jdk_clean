@@ -42,8 +42,19 @@ def _base_query(db: Session, include_deleted: bool = False):
     return query
 
 
-def get_purchase_order(db: Session, po_id: int, include_deleted: bool = False) -> PurchaseOrder:
-    obj = _base_query(db, include_deleted).filter(PurchaseOrder.id == po_id).first()
+def get_purchase_order(
+    db: Session, po_id: int, include_deleted: bool = False, for_update: bool = False
+) -> PurchaseOrder:
+    if for_update:
+        # Plain, unjoined lock query -- see order_service.get_order's
+        # for_update branch for why _base_query's joinedloads can't be
+        # combined with with_for_update().
+        query = db.query(PurchaseOrder).filter(PurchaseOrder.id == po_id)
+        if not include_deleted:
+            query = query.filter(PurchaseOrder.deleted_at.is_(None))
+        obj = query.with_for_update().first()
+    else:
+        obj = _base_query(db, include_deleted).filter(PurchaseOrder.id == po_id).first()
     if obj is None:
         raise NotFoundError("Purchase order")
     return obj
@@ -353,7 +364,11 @@ def receive_lines(
     date), same as a paper goods-received note would record once per
     delivery rather than once per line item.
     """
-    po = get_purchase_order(db, po_id)
+    # Locked for the whole call -- see order_service.change_status's
+    # comment for why this, plus commit=False below, is what stops a
+    # double-submitted receipt (double-click, retry) from crediting stock
+    # twice for one physical delivery.
+    po = get_purchase_order(db, po_id, for_update=True)
     if po.status not in ("confirmed", "partially_received"):
         raise ConflictError(
             f"Cannot receive goods against a purchase order in '{po.status}' status; "
@@ -400,6 +415,7 @@ def receive_lines(
             invoice_number=invoice_number,
             received_by=received_by,
             received_date=received_date,
+            commit=False,
         )
         line.received_quantity = float(line.received_quantity) + qty
 

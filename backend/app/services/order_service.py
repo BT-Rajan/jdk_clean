@@ -53,8 +53,20 @@ def _base_query(db: Session, include_deleted: bool = False):
     return query
 
 
-def get_order(db: Session, order_id: int, include_deleted: bool = False) -> Order:
-    obj = _base_query(db, include_deleted).filter(Order.id == order_id).first()
+def get_order(db: Session, order_id: int, include_deleted: bool = False, for_update: bool = False) -> Order:
+    if for_update:
+        # A plain, unjoined lock query -- with_for_update() on top of
+        # _base_query's joinedloads would try to lock every outer-joined
+        # table too, which Postgres refuses ("FOR UPDATE cannot be applied
+        # to the nullable side of an outer join"). Locking just the order
+        # row is all change_status needs: it only ever mutates the order
+        # itself and inventory rows, never a line.
+        query = db.query(Order).filter(Order.id == order_id)
+        if not include_deleted:
+            query = query.filter(Order.deleted_at.is_(None))
+        obj = query.with_for_update().first()
+    else:
+        obj = _base_query(db, include_deleted).filter(Order.id == order_id).first()
     if obj is None:
         raise NotFoundError("Order")
     return obj
@@ -294,7 +306,16 @@ def change_status(
     user_id: int | None = None,
     shipped_lines: list[tuple[int, float]] | None = None,
 ) -> Order:
-    order = get_order(db, order_id)
+    # Locks the order row for the whole call (fetch through the final
+    # commit below) so two near-simultaneous requests on the same order
+    # (double-click, retry, two people) can't both pass the status check
+    # and both apply the stock side-effects below -- the second blocks
+    # here until the first commits, then re-reads the now-changed status
+    # and gets rejected by assert_transition_allowed instead of repeating
+    # the reservation/issue. See inventory_service.adjust_stock's
+    # commit=False for why this only works together with passing
+    # commit=False to every stock call in this function.
+    order = get_order(db, order_id, for_update=True)
     assert_transition_allowed(ALLOWED_TRANSITIONS, order.status, new_status, "order")
 
     if new_status == "confirmed" and order.approved_at is None:
@@ -353,7 +374,7 @@ def change_status(
     # - cancelling from any state that had reserved stock releases it.
     if new_status == "confirmed":
         for line in order.lines:
-            inventory_service.reserve_stock(db, "product", line.product_id, float(line.quantity))
+            inventory_service.reserve_stock(db, "product", line.product_id, float(line.quantity), commit=False)
     elif new_status == "shipped":
         # Issue against what actually left the building, not what was
         # originally ordered -- delivery_note_service passes its own
@@ -381,6 +402,7 @@ def change_status(
                 reference_id=order.id,
                 notes=f"Shipped against {order.order_number}",
                 user_id=user_id,
+                commit=False,
             )
         # The reservation, however, always tracks what was originally
         # confirmed on the order -- that's the amount reserve_stock
@@ -388,10 +410,10 @@ def change_status(
         # regardless of what the delivery note ended up saying, or
         # leftover reserved stock would linger uncleared forever.
         for line in order.lines:
-            inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity))
+            inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity), commit=False)
     elif new_status == "cancelled" and old_status in RESERVED_STATUSES:
         for line in order.lines:
-            inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity))
+            inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity), commit=False)
     elif new_status == "cancelled" and old_status in ("shipped", "delivered"):
         # The goods already left the building -- cancelling here means the
         # customer is refusing or returning them, not that the order never
@@ -427,6 +449,7 @@ def change_status(
                 reference_id=order.id,
                 notes=f"Cancelled after shipment -- {order.order_number} ({reason})",
                 user_id=user_id,
+                commit=False,
             )
 
     order.status = new_status
