@@ -107,9 +107,10 @@ export function getOrder(id: number) {
   return api<Order>(`/api/orders/${id}`);
 }
 
-export function createOrder(payload: OrderPayload) {
-  return api<Order>('/api/orders', { method: 'POST', body: payload });
-}
+// Orders can no longer be created directly -- every order must come
+// from an accepted quotation (createOrderFromQuotation below), which
+// itself can't exist without a feasibility check; order_service.
+// create_order rejects a bare create for exactly that reason.
 
 // Only 'draft' orders can be edited -- see order_service.update_order.
 export function updateOrder(id: number, payload: Partial<OrderPayload>) {

@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
   Alert,
@@ -23,7 +23,11 @@ import { LogSaleModal } from './LogSaleModal'
 export function OrdersListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
-  const [logOpen, setLogOpen] = useState(false)
+  const [searchParams] = useSearchParams()
+  // Lets a "Log a sale" link elsewhere in the app (e.g. the calendar day
+  // actions modal) deep-link straight into this modal instead of needing
+  // its own duplicate log-a-sale entry point.
+  const [logOpen, setLogOpen] = useState(searchParams.get('log') === '1')
   const fetcher = useCallback(
     (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) => listOrders(params),
     [],
@@ -64,7 +68,11 @@ export function OrdersListPage() {
           </div>
           {canWriteDepartment(user, 'sales') && (
             <div className="flex gap-3">
-              <Button variant="ghost" onClick={() => navigate('/orders/new')}>New order</Button>
+              {/* An order can only be created from an accepted quotation
+                  (which itself requires a feasibility check) -- see
+                  order_service.create_order -- so this starts that flow
+                  instead of a since-removed direct "new order" form. */}
+              <Button variant="ghost" onClick={() => navigate('/quotations/new')}>New quotation</Button>
               <Button onClick={() => setLogOpen(true)}>Log a sale</Button>
             </div>
           )}

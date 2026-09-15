@@ -44,8 +44,10 @@ export type QuotationsStackParamList = {
 
 export type OrdersStackParamList = {
   OrdersList: undefined;
-  // customerId -- preset when arriving here from a Client's activity hub.
-  OrderForm: { orderId?: number; customerId?: number };
+  // Edit-only -- an order can only be created via the quotation flow
+  // (see OrderFormScreen's own comment), so this always needs an
+  // existing draft order's id.
+  OrderForm: { orderId: number };
   OrderDetail: { orderId: number };
   DeliveryNoteForm: { orderId: number; orderNumber: string };
   DeliveryNoteDetail: { deliveryNoteId: number };
@@ -222,7 +224,7 @@ const linking: LinkingOptions<any> = {
       Orders: {
         screens: {
           OrdersList: 'orders',
-          OrderForm: 'orders/edit/:orderId?',
+          OrderForm: 'orders/edit/:orderId',
           OrderDetail: 'orders/:orderId',
           DeliveryNoteForm: 'orders/:orderId/delivery-notes/new',
           DeliveryNoteDetail: 'delivery-notes/:deliveryNoteId',

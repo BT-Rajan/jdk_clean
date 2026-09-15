@@ -118,7 +118,7 @@ export function DayActionsModal({ open, date, onClose, onNavigate }: DayActionsM
               Log production
             </Link>
             <Link
-              to="/orders/new"
+              to="/orders?log=1"
               onClick={onNavigate}
               className="flex h-9 flex-1 items-center justify-center rounded-xl bg-gradient-to-b from-gold-300 to-gold-600 px-4 text-xs font-medium tracking-wide text-ink-950 shadow-glow-gold transition-colors hover:from-gold-200 hover:to-gold-500"
             >

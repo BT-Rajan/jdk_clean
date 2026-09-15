@@ -272,7 +272,6 @@ export function App() {
             <Route path="/quotations/:id/edit" element={<QuotationFormPage />} />
 
             <Route path="/orders" element={<OrdersListPage />} />
-            <Route path="/orders/new" element={<OrderFormPage />} />
             <Route path="/orders/:id" element={<OrderDetailPage />} />
             <Route path="/orders/:id/edit" element={<OrderFormPage />} />
             <Route path="/production" element={<ProductionListPage />} />

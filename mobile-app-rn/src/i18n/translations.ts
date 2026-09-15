@@ -167,7 +167,6 @@ const en = {
   },
   orderForm: {
     editTitle: 'Edit order',
-    newTitle: 'New order',
     loadError: 'Could not load this order.',
     saveError: 'Could not save this order.',
     clientLabel: 'Client',
@@ -189,7 +188,6 @@ const en = {
     invalidQuantityError: 'Enter a valid quantity for every line.',
     invalidPriceError: 'Enter a valid unit price for every line.',
     saveChanges: 'Save changes',
-    createOrder: 'Create order',
   },
   orderDetail: {
     title: 'Order',
@@ -369,7 +367,6 @@ const en = {
     emptyText: 'No activity for this client yet.',
     loadError: 'Could not load this client’s activity.',
     newQuotation: '+ Quotation',
-    newOrder: '+ Order',
     feasibilitySectionTitle: 'Feasibility checks',
     quotationSectionTitle: 'Quotations',
     orderSectionTitle: 'Orders',
@@ -593,7 +590,6 @@ const ar: typeof en = {
   },
   orderForm: {
     editTitle: 'تعديل الطلب',
-    newTitle: 'طلب جديد',
     loadError: 'تعذر تحميل هذا الطلب.',
     saveError: 'تعذر حفظ هذا الطلب.',
     clientLabel: 'العميل',
@@ -615,7 +611,6 @@ const ar: typeof en = {
     invalidQuantityError: 'أدخل كمية صحيحة لكل سطر.',
     invalidPriceError: 'أدخل سعر وحدة صحيح لكل سطر.',
     saveChanges: 'حفظ التغييرات',
-    createOrder: 'إنشاء الطلب',
   },
   orderDetail: {
     title: 'الطلب',
@@ -791,7 +786,6 @@ const ar: typeof en = {
     emptyText: 'لا يوجد نشاط لهذا العميل بعد.',
     loadError: 'تعذر تحميل نشاط هذا العميل.',
     newQuotation: '+ عرض سعر',
-    newOrder: '+ طلب',
     feasibilitySectionTitle: 'فحوصات الجدوى',
     quotationSectionTitle: 'عروض الأسعار',
     orderSectionTitle: 'الطلبات',
