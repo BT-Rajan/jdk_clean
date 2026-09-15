@@ -1,12 +1,15 @@
 from pydantic import BaseModel, ConfigDict, Field
 
+# Mirrors app/models/product.py's PRODUCT_UNITS.
+UNIT_PATTERN = "^(kg|20kg|25kg|ton|ml|litre)$"
+
 
 class ProductCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     code: str = Field(min_length=1, max_length=30)
     name: str = Field(min_length=1, max_length=150)
-    unit: str = Field(min_length=1, max_length=20)
+    unit: str = Field(pattern=UNIT_PATTERN)
     category: str | None = Field(default=None, max_length=100)
     description: str | None = None
     product_type: str = Field(default="finished_good", pattern="^(finished_good|sub_assembly)$")
@@ -33,7 +36,7 @@ class ProductUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     name: str | None = Field(default=None, min_length=1, max_length=150)
-    unit: str | None = Field(default=None, min_length=1, max_length=20)
+    unit: str | None = Field(default=None, pattern=UNIT_PATTERN)
     category: str | None = Field(default=None, max_length=100)
     description: str | None = None
     product_type: str | None = Field(default=None, pattern="^(finished_good|sub_assembly)$")

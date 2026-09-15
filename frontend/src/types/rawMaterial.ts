@@ -1,5 +1,6 @@
 /** Mirrors backend/app/schemas/raw_material.py. */
 import type { ActiveStatus } from './customer'
+import type { RawMaterialUnit } from './units'
 
 export type RawMaterialType = 'raw_material' | 'packaging' | 'consumable'
 export type RawMaterialStatus = ActiveStatus | 'blocked'
@@ -14,7 +15,7 @@ export interface RawMaterial {
   id: number
   code: string
   name: string
-  unit: string
+  unit: RawMaterialUnit
   material_type: RawMaterialType
   category: string | null
   description: string | null

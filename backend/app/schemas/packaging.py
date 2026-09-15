@@ -6,7 +6,12 @@ from pydantic import BaseModel, Field, field_validator
 class PackagingLineIn(BaseModel):
     packaging_material_id: int
     quantity_per_unit: float = Field(gt=0)
-    unit: str = Field(min_length=1, max_length=20)
+    # No `unit` here on purpose -- mirrors BomLineIn: a packaging line's
+    # unit is always the packaging material's own unit, server-derived
+    # in packaging_service._validate_line, never client-supplied. This
+    # used to be a second, independently-typed unit field that had no
+    # relationship to the material's actual unit at all -- a real
+    # source of the "which unit does this line even mean" confusion.
 
 
 class PackagingLineOut(BaseModel):

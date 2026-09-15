@@ -9,6 +9,7 @@ import { Alert, Button, FormSectionHeading, GlassCard, SelectField, Spinner, Tex
 import { createRawMaterial, getRawMaterial, updateRawMaterial } from '@/api/rawMaterials'
 import { listSuppliers } from '@/api/suppliers'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
+import { RAW_MATERIAL_UNITS, type RawMaterialUnit } from '@/types/units'
 import { getApiErrorMessage } from '@/lib/apiError'
 import {
   propertiesToInput,
@@ -44,7 +45,11 @@ function useSupplierOptions() {
 const DEFAULT_VALUES = {
   code: '',
   name: '',
-  unit: '',
+  // No sensible default -- see ProductFormPage's DEFAULT_VALUES for the
+  // same reasoning (a wrong silently-defaulted unit is worse than an
+  // empty required field). Cast needed since '' isn't a real
+  // RawMaterialUnit; rawMaterialSchema's z.enum rejects it at submit.
+  unit: '' as unknown as RawMaterialUnit,
   material_type: 'raw_material' as const,
   category: '',
   description: '',
@@ -99,7 +104,14 @@ function RawMaterialCreateForm() {
           <TextField label="Name" error={errors.name?.message} {...register('name')} />
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-          <TextField label="Unit" placeholder="pcs, kg…" error={errors.unit?.message} {...register('unit')} />
+          <SelectField label="Unit" error={errors.unit?.message} {...register('unit')}>
+            <option value="">Choose…</option>
+            {RAW_MATERIAL_UNITS.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </SelectField>
           <SelectField label="Material type" {...register('material_type')}>
             <option value="raw_material">Raw material</option>
             <option value="packaging">Packaging</option>
@@ -244,7 +256,14 @@ function RawMaterialEditForm({ id }: { id: number }) {
           <FormSectionHeading>Identity</FormSectionHeading>
           <TextField label="Name" error={errors.name?.message} {...register('name')} />
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <TextField label="Unit" placeholder="pcs, kg…" error={errors.unit?.message} {...register('unit')} />
+            <SelectField label="Unit" error={errors.unit?.message} {...register('unit')}>
+              <option value="">Choose…</option>
+              {RAW_MATERIAL_UNITS.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </SelectField>
             <SelectField label="Material type" {...register('material_type')}>
               <option value="raw_material">Raw material</option>
               <option value="packaging">Packaging</option>

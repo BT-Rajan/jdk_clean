@@ -6,6 +6,13 @@ from app.models.machine import Machine
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.user import BigPK
 
+# Fixed picklist, not free text -- mirrors raw_material.py's
+# RAW_MATERIAL_UNITS (see that constant's comment for why), minus 'pcs':
+# finished goods/sub-assemblies in this catalog are weight- or
+# volume-based, never counted in pieces -- 'pcs' is packaging-only (a
+# raw_materials row), not a product unit.
+PRODUCT_UNITS = ("kg", "20kg", "25kg", "ton", "ml", "litre")
+
 
 class Product(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "products"
@@ -13,7 +20,7 @@ class Product(Base, TimestampMixin, SoftDeleteMixin):
     id: Mapped[int] = mapped_column(BigPK, primary_key=True)
     code: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
-    unit: Mapped[str] = mapped_column(String(20), nullable=False)
+    unit: Mapped[str] = mapped_column(Enum(*PRODUCT_UNITS, name="product_unit"), nullable=False)
     # Identity fields mirroring raw_materials' own (see
     # app/models/raw_material.py) -- same free-text classification/
     # description pair, for the same reason: not read by any business

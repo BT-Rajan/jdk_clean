@@ -52,6 +52,19 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
   )
   const { options: materials } = useSelectOptions(materialsFetcher)
 
+  /** A packaging line's unit always mirrors whatever unit its material
+   * is itself stocked in -- same rule and same reason as BomEditor.tsx's
+   * defaultUnitFor (there's no unit conversion in the app, so a line's
+   * unit differing from its material's own unit would just be wrong,
+   * not a real conversion). Auto-derived and not user-editable, instead
+   * of a second free-typed field, to make that mismatch structurally
+   * impossible. The backend now enforces this itself too (see
+   * packaging_service._validate_line) -- this keeps the UI in sync with
+   * what the server will actually store. */
+  function defaultUnitFor(materialId: number): string {
+    return materials.find((m) => m.id === materialId)?.unit ?? ''
+  }
+
   function load() {
     setLoading(true)
     getPackaging(productId)
@@ -180,6 +193,11 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
           </p>
         </div>
 
+        <p className="mb-4 text-xs text-white/40">
+          A line's Unit always matches whatever unit its packaging material is itself stocked in -- there's no
+          conversion between units, so quantities here are read directly in that unit.
+        </p>
+
         {lines.length === 0 ? (
           <p className="py-6 text-center text-sm text-white/40">No packaging materials defined yet.</p>
         ) : (
@@ -191,7 +209,10 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
                     label="Packaging material"
                     value={line.packaging_material_id || ''}
                     disabled={!canEdit}
-                    onChange={(e) => updateLine(line.key, { packaging_material_id: Number(e.target.value) })}
+                    onChange={(e) => {
+                      const materialId = Number(e.target.value)
+                      updateLine(line.key, { packaging_material_id: materialId, unit: defaultUnitFor(materialId) })
+                    }}
                   >
                     <option value="">Choose…</option>
                     {materials.map((opt) => (
@@ -215,12 +236,7 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
                   />
                 </div>
                 <div className="sm:col-span-3">
-                  <TextField
-                    label="Unit"
-                    value={line.unit}
-                    disabled={!canEdit}
-                    onChange={(e) => updateLine(line.key, { unit: e.target.value })}
-                  />
+                  <TextField label="Unit" value={line.unit} disabled readOnly />
                 </div>
                 {canEdit && (
                   <div className="sm:col-span-1">
@@ -247,7 +263,10 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
                 <SelectField
                   label="Packaging material"
                   value={newLine.packaging_material_id || ''}
-                  onChange={(e) => setNewLine((prev) => ({ ...prev, packaging_material_id: Number(e.target.value) }))}
+                  onChange={(e) => {
+                    const materialId = Number(e.target.value)
+                    setNewLine((prev) => ({ ...prev, packaging_material_id: materialId, unit: defaultUnitFor(materialId) }))
+                  }}
                 >
                   <option value="">Choose…</option>
                   {materials.map((opt) => (
@@ -270,11 +289,7 @@ export function PackagingEditor({ productId, canEdit }: PackagingEditorProps) {
                 />
               </div>
               <div className="sm:col-span-3">
-                <TextField
-                  label="Unit"
-                  value={newLine.unit}
-                  onChange={(e) => setNewLine((prev) => ({ ...prev, unit: e.target.value }))}
-                />
+                <TextField label="Unit" value={newLine.unit} disabled readOnly />
               </div>
               <div className="sm:col-span-1">
                 <Button

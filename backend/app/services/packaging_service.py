@@ -24,6 +24,12 @@ class PackagingLineCRUD(ChildLineCRUD[ProductPackagingLine]):
         )
         if material is None:
             raise ValidationAppError(f"Packaging material {line['packaging_material_id']} not found.")
+        # Always the material's own unit -- see PackagingLineIn's
+        # comment. Overwritten here (not just checked) so a line's unit
+        # can never diverge from what the referenced material is
+        # actually stocked in, the same guarantee bom_service gives BOM
+        # lines.
+        line["unit"] = material.unit
 
     def _duplicate_filter(self, parent_id: int, line: dict) -> list:
         return [ProductPackagingLine.packaging_material_id == line["packaging_material_id"]]

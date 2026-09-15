@@ -1,5 +1,6 @@
 /** Mirrors backend/app/schemas/product.py. */
 import type { ActiveStatus } from './customer'
+import type { ProductUnit } from './units'
 
 export type ProductType = 'finished_good' | 'sub_assembly'
 
@@ -7,7 +8,7 @@ export interface Product {
   id: number
   code: string
   name: string
-  unit: string
+  unit: ProductUnit
   category: string | null
   description: string | null
   product_type: ProductType

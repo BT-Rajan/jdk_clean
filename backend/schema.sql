@@ -197,12 +197,24 @@ CREATE TABLE IF NOT EXISTS suppliers (
 -- ============================================================
 -- UNITS OF MEASURE
 -- ============================================================
--- Units of Measure has been removed entirely (see
--- migrations/2026-09-02_drop_units_of_measure.sql) -- raw_materials.unit
--- and bom_lines.unit are plain, unvalidated strings again, same as
--- products.unit always was. A BOM line's unit is expected to always
--- match its component's own unit (the frontend auto-derives and locks
--- it -- see BomEditor.tsx); there is no unit conversion.
+-- Units of Measure (the dedicated master table) has been removed
+-- entirely (see migrations/2026-09-02_drop_units_of_measure.sql). What
+-- replaced it isn't free text, though: raw_materials.unit and
+-- products.unit are ENUM columns -- a short, catalog-specific picklist
+-- (see migrations/2026-09-20_constrain_unit_enum.sql and
+-- app/models/raw_material.py's RAW_MATERIAL_UNITS / app/models/
+-- product.py's PRODUCT_UNITS), not an open-ended unit library.
+--
+-- bom_lines.unit and product_packaging_lines.unit stay plain VARCHAR,
+-- but are never client-supplied: a line always mirrors its own
+-- component/material's unit exactly (there is no unit conversion
+-- anywhere -- bom_service.explode_requirements just sums quantities
+-- directly), so those two are derived and overwritten server-side on
+-- every write (bom_service._validate_line / packaging_service.
+-- _validate_line). The frontend also auto-fills and locks those two
+-- fields (BomEditor.tsx, PackagingEditor.tsx) so the UI reflects what
+-- the server will actually store, but the server-side derivation is
+-- what actually makes a mismatch impossible.
 
 -- ============================================================
 -- RAW MATERIALS
@@ -222,7 +234,7 @@ CREATE TABLE IF NOT EXISTS raw_materials (
     properties      JSON NULL,
     manufacturer    VARCHAR(150) NULL,
     manufacturer_part_number VARCHAR(100) NULL,
-    unit            VARCHAR(20)  NOT NULL,          -- kg, ltr, pcs, etc.
+    unit            ENUM('kg','20kg','25kg','ton','ml','litre','pcs') NOT NULL,
     -- Stock control thresholds -- on-hand/available/reserved themselves
     -- live in raw_material_inventory (see below), never duplicated here.
     reorder_point   DECIMAL(14,4) NOT NULL DEFAULT 0,
@@ -338,8 +350,7 @@ CREATE TABLE IF NOT EXISTS products (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     code            VARCHAR(30)  NOT NULL UNIQUE,
     name            VARCHAR(150) NOT NULL,
-    unit            VARCHAR(20)  NOT NULL,
-    -- Identity fields mirroring raw_materials' own (see
+    unit            ENUM('kg','20kg','25kg','ton','ml','litre') NOT NULL,
     -- app/models/raw_material.py) -- descriptive only.
     category        VARCHAR(100) NULL,
     description     TEXT NULL,
@@ -422,7 +433,7 @@ CREATE TABLE IF NOT EXISTS bom_lines (
     component_type       ENUM('raw_material','product') NOT NULL,
     component_id          BIGINT UNSIGNED NOT NULL,        -- raw_materials.id or products.id depending on component_type
     quantity              DECIMAL(14,4) NOT NULL,
-    unit                   VARCHAR(20) NOT NULL,          -- expected to match the component's own `unit`; see bom_service
+    unit                   VARCHAR(20) NOT NULL,          -- always the component's own `unit`, server-derived; see bom_service
     scrap_percent          DECIMAL(5,2) NOT NULL DEFAULT 0,
     deleted_at             DATETIME NULL,
     created_at             DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -448,7 +459,7 @@ CREATE TABLE IF NOT EXISTS product_packaging_lines (
     product_id              BIGINT UNSIGNED NOT NULL,
     packaging_material_id   BIGINT UNSIGNED NOT NULL,  -- raw_materials.id
     quantity_per_unit       DECIMAL(14,4) NOT NULL,
-    unit                    VARCHAR(20) NOT NULL,
+    unit                    VARCHAR(20) NOT NULL,      -- always the packaging material's own `unit`, server-derived; see packaging_service
     deleted_at              DATETIME NULL,
     created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by              BIGINT UNSIGNED NULL,

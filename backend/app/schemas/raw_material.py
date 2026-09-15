@@ -2,6 +2,8 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 STATUS_PATTERN = "^(active|inactive|blocked)$"
 MATERIAL_TYPE_PATTERN = "^(raw_material|packaging|consumable)$"
+# Mirrors app/models/raw_material.py's RAW_MATERIAL_UNITS.
+UNIT_PATTERN = "^(kg|20kg|25kg|ton|ml|litre|pcs)$"
 
 
 def _check_stock_thresholds(maximum_stock: float, reorder_point: float, safety_stock: float) -> None:
@@ -20,7 +22,7 @@ class RawMaterialCreate(BaseModel):
 
     code: str = Field(min_length=1, max_length=30)
     name: str = Field(min_length=1, max_length=150)
-    unit: str = Field(min_length=1, max_length=20)
+    unit: str = Field(pattern=UNIT_PATTERN)
     material_type: str = Field(default="raw_material", pattern=MATERIAL_TYPE_PATTERN)
     category: str | None = Field(default=None, max_length=100)
     description: str | None = None
@@ -52,7 +54,7 @@ class RawMaterialUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     name: str | None = Field(default=None, min_length=1, max_length=150)
-    unit: str | None = Field(default=None, min_length=1, max_length=20)
+    unit: str | None = Field(default=None, pattern=UNIT_PATTERN)
     material_type: str | None = Field(default=None, pattern=MATERIAL_TYPE_PATTERN)
     category: str | None = Field(default=None, max_length=100)
     description: str | None = None

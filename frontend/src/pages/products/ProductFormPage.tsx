@@ -9,6 +9,7 @@ import { Alert, Button, FormSectionHeading, GlassCard, SelectField, Spinner, Tex
 import { createProduct, getProduct, updateProduct } from '@/api/products'
 import { listMachines } from '@/api/machines'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
+import { PRODUCT_UNITS, type ProductUnit } from '@/types/units'
 import { getApiErrorMessage } from '@/lib/apiError'
 import {
   productEditSchema,
@@ -45,7 +46,14 @@ function FormShell({ title, children }: { title: string; children: ReactNode }) 
 const DEFAULT_VALUES = {
   code: '',
   name: '',
-  unit: '',
+  // No sensible default -- an operator must pick deliberately (a blank
+  // "Choose..." option below), same reasoning as PackagingEditor/
+  // BomEditor's "Choose..." placeholders: silently defaulting to e.g.
+  // 'kg' risks it going unnoticed on a product that's actually sold in
+  // 20kg bags. Cast needed since '' isn't a member of the real ProductUnit
+  // union -- productSchema's z.enum rejects it at submit time, which is
+  // exactly the point.
+  unit: '' as unknown as ProductUnit,
   category: '',
   description: '',
   product_type: 'finished_good' as const,
@@ -96,7 +104,14 @@ function ProductCreateForm() {
           <TextField label="Name" error={errors.name?.message} {...register('name')} />
         </div>
         <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-          <TextField label="Unit" placeholder="pcs, kg…" error={errors.unit?.message} {...register('unit')} />
+          <SelectField label="Unit" error={errors.unit?.message} {...register('unit')}>
+            <option value="">Choose…</option>
+            {PRODUCT_UNITS.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </SelectField>
           <SelectField label="Product type" {...register('product_type')}>
             <option value="finished_good">Finished good</option>
             <option value="sub_assembly">Sub-assembly</option>
@@ -281,7 +296,14 @@ function ProductEditForm({ id }: { id: number }) {
           <FormSectionHeading>Identity</FormSectionHeading>
           <TextField label="Name" error={errors.name?.message} {...register('name')} />
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-            <TextField label="Unit" error={errors.unit?.message} {...register('unit')} />
+            <SelectField label="Unit" error={errors.unit?.message} {...register('unit')}>
+              <option value="">Choose…</option>
+              {PRODUCT_UNITS.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </SelectField>
             <SelectField label="Product type" {...register('product_type')}>
               <option value="finished_good">Finished good</option>
               <option value="sub_assembly">Sub-assembly</option>

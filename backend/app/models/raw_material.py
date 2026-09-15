@@ -7,6 +7,18 @@ from app.models.user import BigPK
 
 RAW_MATERIAL_TYPES = ("raw_material", "packaging", "consumable")
 
+# Fixed picklist, not free text (see migrations/2026-09-20_constrain_unit_
+# enum.sql for the history -- this app previously had a proper units-of-
+# measure table, it was removed in favour of free text, and free text
+# turned out to be the wrong call: "kg" kept growing "Kg"/"KGS" siblings
+# with no relationship enforced between a packaging line's unit and the
+# material it referenced. This is deliberately small and specific to
+# this catalog (weight-based raw materials/bagged product weights, plus
+# liquids and packaging counted in pieces) rather than a generic unit
+# library -- add to it here (and to the matching migration) if a new
+# unit is genuinely needed, rather than reopening free text.
+RAW_MATERIAL_UNITS = ("kg", "20kg", "25kg", "ton", "ml", "litre", "pcs")
+
 
 class RawMaterial(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "raw_materials"
@@ -14,7 +26,7 @@ class RawMaterial(Base, TimestampMixin, SoftDeleteMixin):
     id: Mapped[int] = mapped_column(BigPK, primary_key=True)
     code: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
-    unit: Mapped[str] = mapped_column(String(20), nullable=False)
+    unit: Mapped[str] = mapped_column(Enum(*RAW_MATERIAL_UNITS, name="raw_material_unit"), nullable=False)
     # What kind of material this is -- purely classification, doesn't
     # change how it's stocked/purchased/consumed anywhere downstream.
     material_type: Mapped[str] = mapped_column(
