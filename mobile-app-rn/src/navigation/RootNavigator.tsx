@@ -21,7 +21,7 @@ import { DeliveryNoteFormScreen } from '../screens/orders/DeliveryNoteFormScreen
 import { DeliveryNoteDetailScreen } from '../screens/orders/DeliveryNoteDetailScreen';
 import { MyHistoryScreen } from '../screens/MyHistoryScreen';
 import { DrawerContent } from './DrawerContent';
-import { HeaderTitle } from './HeaderTitle';
+import { HeaderTitle, DetailHeaderTitle } from './HeaderTitle';
 import { useLocale } from '../i18n/LocaleContext';
 import { colors, fonts, whiteAlpha } from '../theme';
 
@@ -71,6 +71,14 @@ const stackScreenOptions = {
   headerTitleStyle: { fontFamily: fonts.sansSemibold, fontSize: 16 },
   headerShadowVisible: false,
   contentStyle: { backgroundColor: colors.ink950 },
+  // Default for every screen in these stacks: small logo + the screen's
+  // own `title`. The three list screens below override this back to
+  // the full HeaderTitle brand lockup; every other (detail) screen in
+  // these stacks -- ClientForm, ClientHistory, NewQuotation,
+  // QuotationDetail, FeasibilityDetail, OrderForm, OrderDetail,
+  // DeliveryNoteForm, DeliveryNoteDetail -- picks this up automatically,
+  // so none of them can end up logo-less again.
+  headerTitle: (props: { children?: string }) => <DetailHeaderTitle {...props} />,
 };
 
 // Every top-level Drawer.Screen below that renders its own nested stack
