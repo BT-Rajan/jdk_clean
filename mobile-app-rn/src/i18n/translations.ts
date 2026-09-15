@@ -352,6 +352,17 @@ const en = {
     statusOnHold: 'On hold',
     statusRejected: 'Rejected',
   },
+  // Shown on the New Quotation / Order Form customer picker -- see
+  // components/CustomerStandingNotice.tsx.
+  customerStanding: {
+    onboardingPending: "This customer's onboarding is still pending — they haven't been reviewed yet.",
+    onboardingUnderReview: 'This customer is under review — onboarding isn’t finished yet.',
+    onboardingOnHold: 'This customer is on hold.',
+    onboardingRejected: "This customer's onboarding was rejected.",
+    reasonPrefix: 'Reason: {{reason}}',
+    idNotVerifiedWarning: "This customer has a credit limit set but their ID isn't verified yet — confirming an order for them will need admin approval.",
+    overLimitWarning: 'This customer already owes {{outstanding}} against a credit limit of {{limit}} — confirming a new order for them will need admin approval.',
+  },
   clientHistory: {
     title: 'Activity',
     subtitle: 'Feasibility checks, quotations, and orders for this client.',
@@ -764,6 +775,15 @@ const ar: typeof en = {
     statusActive: 'نشط',
     statusOnHold: 'معلق',
     statusRejected: 'مرفوض',
+  },
+  customerStanding: {
+    onboardingPending: 'ما زال قبول هذا العميل قيد الانتظار — لم تتم مراجعته بعد.',
+    onboardingUnderReview: 'هذا العميل قيد المراجعة — لم يكتمل القبول بعد.',
+    onboardingOnHold: 'هذا العميل معلّق.',
+    onboardingRejected: 'تم رفض قبول هذا العميل.',
+    reasonPrefix: 'السبب: {{reason}}',
+    idNotVerifiedWarning: 'تم تحديد حد ائتمان لهذا العميل، لكن هويته لم يتم التحقق منها بعد — تأكيد طلب له سيحتاج موافقة المسؤول.',
+    overLimitWarning: 'هذا العميل مدين بالفعل بمبلغ {{outstanding}} من أصل حد ائتمان قدره {{limit}} — تأكيد طلب جديد له سيحتاج موافقة المسؤول.',
   },
   clientHistory: {
     title: 'النشاط',

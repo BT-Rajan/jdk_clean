@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../../components/Alert';
 import { Button } from '../../components/Button';
+import { CustomerStandingNotice } from '../../components/CustomerStandingNotice';
 import { DateField } from '../../components/DateField';
 import { GlassCard } from '../../components/GlassCard';
 import { SelectField, SelectOption } from '../../components/SelectField';
@@ -11,6 +12,7 @@ import { TextField } from '../../components/TextField';
 import { colors, fonts, whiteAlpha } from '../../theme';
 import { useLocale } from '../../i18n/LocaleContext';
 import { toIsoDate } from '../../utils/format';
+import { customerOptionLabel } from '../../utils/customerOptionLabel';
 import { listCustomers, Customer } from '../../api/customers';
 import { listProducts, Product } from '../../api/catalog';
 import { createOrder, getOrder, updateOrder, OrderLineInput } from '../../api/orders';
@@ -93,7 +95,8 @@ export function OrderFormScreen({ route, navigation }: Props) {
     })();
   }, [orderId]);
 
-  const customerOptions: SelectOption[] = customers.map((c) => ({ label: c.name, value: String(c.id) }));
+  const customerOptions: SelectOption[] = customers.map((c) => ({ label: customerOptionLabel(t, c), value: String(c.id) }));
+  const selectedCustomer = customerId ? customers.find((c) => String(c.id) === customerId) ?? null : null;
   const productOptions: SelectOption[] = products.map((p) => ({
     label: p.code ? `${p.name} (${p.code})` : p.name,
     value: String(p.id),
@@ -171,6 +174,7 @@ export function OrderFormScreen({ route, navigation }: Props) {
             options={customerOptions}
             placeholder={customers.length ? t('orderForm', 'clientPlaceholderLoaded') : t('orderForm', 'clientPlaceholderLoading')}
           />
+          {selectedCustomer && <CustomerStandingNotice customer={selectedCustomer} />}
 
           <View style={styles.rowFields}>
             <View style={{ flex: 1 }}>

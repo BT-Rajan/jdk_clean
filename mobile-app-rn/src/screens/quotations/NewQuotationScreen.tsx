@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../../components/Alert';
 import { Button } from '../../components/Button';
+import { CustomerStandingNotice } from '../../components/CustomerStandingNotice';
 import { DateField } from '../../components/DateField';
 import { GlassCard } from '../../components/GlassCard';
 import { SelectField, SelectOption } from '../../components/SelectField';
@@ -12,6 +13,7 @@ import { colors, fonts, whiteAlpha } from '../../theme';
 import { ApiError } from '../../api/client';
 import { useLocale } from '../../i18n/LocaleContext';
 import { listCustomers, Customer } from '../../api/customers';
+import { customerOptionLabel } from '../../utils/customerOptionLabel';
 import { confirm } from '../../utils/alerts';
 import { toIsoDate } from '../../utils/format';
 import { listProducts, Product } from '../../api/catalog';
@@ -90,7 +92,8 @@ export function NewQuotationScreen({ route, navigation }: Props) {
     })();
   }, []);
 
-  const customerOptions: SelectOption[] = customers.map((c) => ({ label: c.name, value: String(c.id) }));
+  const customerOptions: SelectOption[] = customers.map((c) => ({ label: customerOptionLabel(t, c), value: String(c.id) }));
+  const selectedCustomer = customerId ? customers.find((c) => String(c.id) === customerId) ?? null : null;
   const productOptions: SelectOption[] = products.map((p) => ({
     label: p.code ? `${p.name} (${p.code})` : p.name,
     value: String(p.id),
@@ -354,6 +357,7 @@ export function NewQuotationScreen({ route, navigation }: Props) {
             options={customerOptions}
             placeholder={customers.length ? t('newQuotation', 'clientPlaceholderLoaded') : t('newQuotation', 'clientPlaceholderLoading')}
           />
+          {selectedCustomer && <CustomerStandingNotice customer={selectedCustomer} />}
 
           <View style={{ gap: 14 }}>
             {lines.map((line, index) => (
