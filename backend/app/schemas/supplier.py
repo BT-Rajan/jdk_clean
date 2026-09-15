@@ -22,6 +22,10 @@ class SupplierCreate(BaseModel):
     city: str | None = Field(default=None, max_length=80)
     country: str | None = Field(default=None, max_length=80)
     payment_terms_days: int = Field(default=30, ge=0)
+    # Overrides Settings' global approval thresholds for this supplier
+    # only -- blank/omitted means "use the global setting" for each.
+    po_approval_threshold_override: float | None = Field(default=None, ge=0)
+    discount_approval_threshold_override: float | None = Field(default=None, ge=0, le=100)
     mode_of_supply: str | None = Field(default=None, pattern=MODE_OF_SUPPLY_PATTERN)
     rating: int | None = Field(default=None, ge=1, le=5)
     status: str = Field(default="active", pattern=STATUS_PATTERN)
@@ -38,6 +42,8 @@ class SupplierUpdate(BaseModel):
     city: str | None = Field(default=None, max_length=80)
     country: str | None = Field(default=None, max_length=80)
     payment_terms_days: int | None = Field(default=None, ge=0)
+    po_approval_threshold_override: float | None = Field(default=None, ge=0)
+    discount_approval_threshold_override: float | None = Field(default=None, ge=0, le=100)
     mode_of_supply: str | None = Field(default=None, pattern=MODE_OF_SUPPLY_PATTERN)
     rating: int | None = Field(default=None, ge=1, le=5)
     status: str | None = Field(default=None, pattern=STATUS_PATTERN)
@@ -53,6 +59,8 @@ class SupplierOut(BaseModel):
     city: str | None
     country: str | None
     payment_terms_days: int
+    po_approval_threshold_override: float | None
+    discount_approval_threshold_override: float | None
     mode_of_supply: str | None
     rating: int | None
     status: str

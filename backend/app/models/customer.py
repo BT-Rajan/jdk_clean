@@ -1,5 +1,7 @@
 from datetime import datetime
 
+from decimal import Decimal
+
 from sqlalchemy import DECIMAL, Boolean, DateTime, Enum, ForeignKey, SmallInteger, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -64,6 +66,10 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     country: Mapped[str | None] = mapped_column(String(80), nullable=True)
     credit_limit: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     payment_terms_days: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=30)
+    # Overrides Settings' global large_discount_approval_threshold for
+    # this customer only -- NULL means "use the global setting". See
+    # settings_service.get_effective_discount_approval_threshold.
+    discount_approval_threshold_override: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 2), nullable=True)
     status: Mapped[str] = mapped_column(
         Enum("active", "inactive", name="customer_status"), nullable=False, default="active"
     )

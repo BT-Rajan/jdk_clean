@@ -86,6 +86,7 @@ function CustomerEditForm({ id }: { id: number }) {
           country: customer.country ?? '',
           credit_limit: customer.credit_limit,
           payment_terms_days: customer.payment_terms_days,
+          discount_approval_threshold_override: customer.discount_approval_threshold_override ?? '',
           status: customer.status,
           notes: customer.notes ?? '',
         })
@@ -113,7 +114,10 @@ function CustomerEditForm({ id }: { id: number }) {
   async function onSubmit(values: CustomerEditSubmitValues) {
     setFormError(null)
     try {
-      await updateCustomer(id, values)
+      await updateCustomer(id, {
+        ...values,
+        discount_approval_threshold_override: values.discount_approval_threshold_override || null,
+      })
       navigate(`/customers/${id}`)
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -190,6 +194,14 @@ function CustomerEditForm({ id }: { id: number }) {
               <option value="inactive">Inactive</option>
             </SelectField>
           </div>
+          <TextField
+            label="Discount approval threshold override (%)"
+            type="number"
+            step="0.01"
+            hint="Leave blank to use the factory-wide setting (Settings > Approvals). Set this to give this customer their own discount ceiling before a quotation/order needs admin sign-off."
+            error={errors.discount_approval_threshold_override?.message}
+            {...register('discount_approval_threshold_override')}
+          />
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
             <Button type="submit" isLoading={isSubmitting}>Save changes</Button>

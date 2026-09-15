@@ -1,6 +1,8 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Enum, ForeignKey, SmallInteger, String, Text
+from decimal import Decimal
+
+from sqlalchemy import DECIMAL, Boolean, DateTime, Enum, ForeignKey, SmallInteger, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -45,6 +47,12 @@ class Supplier(Base, TimestampMixin, SoftDeleteMixin):
     city: Mapped[str | None] = mapped_column(String(80), nullable=True)
     country: Mapped[str | None] = mapped_column(String(80), nullable=True)
     payment_terms_days: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=30)
+    # Overrides Settings' global large_po_approval_threshold /
+    # large_discount_approval_threshold for this supplier only -- NULL on
+    # either means "use the global setting". See settings_service.
+    # get_effective_po_approval_threshold / get_effective_discount_approval_threshold.
+    po_approval_threshold_override: Mapped[Decimal | None] = mapped_column(DECIMAL(12, 2), nullable=True)
+    discount_approval_threshold_override: Mapped[Decimal | None] = mapped_column(DECIMAL(5, 2), nullable=True)
     mode_of_supply: Mapped[str | None] = mapped_column(
         Enum(*SUPPLIER_MODES_OF_SUPPLY, name="supplier_mode_of_supply"), nullable=True
     )

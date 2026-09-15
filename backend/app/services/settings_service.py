@@ -239,6 +239,37 @@ def get_large_discount_approval_threshold(db: Session) -> float | None:
     return threshold if threshold > 0 else None
 
 
+def get_effective_po_approval_threshold(db: Session, supplier) -> float | None:
+    """A supplier's own po_approval_threshold_override (see
+    models/supplier.py), if set, takes precedence over the global
+    large_po_approval_threshold -- lets an admin trust a long-standing
+    supplier with a higher ceiling, or hold a new/risky one to a lower
+    one, without changing the setting for everyone else. Same off-by-
+    empty/zero semantics as the global setting: a supplier override of 0
+    or blank is treated as "no override", not "gate everything".
+    """
+    if supplier is not None and supplier.po_approval_threshold_override is not None:
+        override = float(supplier.po_approval_threshold_override)
+        if override > 0:
+            return override
+    return get_large_po_approval_threshold(db)
+
+
+def get_effective_discount_approval_threshold(db: Session, *, customer=None, supplier=None) -> float | None:
+    """Same override-then-global pattern as
+    get_effective_po_approval_threshold, for whichever party actually
+    carries the override on this document: the customer for a quotation
+    or order, the supplier for a purchase order. Pass whichever one
+    applies; the other stays None.
+    """
+    party = customer if customer is not None else supplier
+    if party is not None and party.discount_approval_threshold_override is not None:
+        override = float(party.discount_approval_threshold_override)
+        if override > 0:
+            return override
+    return get_large_discount_approval_threshold(db)
+
+
 def update(db: Session, data: dict) -> dict:
     """Writes only the keys present in `data`. A masked ai_api_key value
     (starting with the bullet prefix) means the caller didn't actually

@@ -321,7 +321,7 @@ def change_status(
     if new_status == "confirmed" and order.approved_at is None:
         block_reasons: list[str] = []
 
-        threshold = settings_service.get_large_discount_approval_threshold(db)
+        threshold = settings_service.get_effective_discount_approval_threshold(db, customer=order.customer)
         if threshold is not None:
             largest = max(
                 [float(order.discount_percent)] + [float(line.discount_percent) for line in order.lines],

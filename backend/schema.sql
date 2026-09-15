@@ -126,6 +126,13 @@ CREATE TABLE IF NOT EXISTS customers (
     country         VARCHAR(80)  NULL,
     credit_limit    DECIMAL(14,2) NOT NULL DEFAULT 0,
     payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+    -- Per-customer override of Settings' global large-discount approval
+    -- threshold (see app/services/settings_service.py) -- e.g. a
+    -- long-standing wholesale customer can be trusted with more discount
+    -- room than a walk-in one, without changing the threshold for
+    -- everyone. NULL means "use the global setting" -- see
+    -- get_effective_discount_approval_threshold.
+    discount_approval_threshold_override DECIMAL(5,2) NULL,
     status          ENUM('active','inactive') NOT NULL DEFAULT 'active',
     -- Onboarding workflow for a newly created customer -- see
     -- app/models/customer.py ONBOARDING_ALLOWED_TRANSITIONS. Independent
@@ -169,6 +176,14 @@ CREATE TABLE IF NOT EXISTS suppliers (
     city            VARCHAR(80)  NULL,
     country         VARCHAR(80)  NULL,
     payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+    -- Per-supplier overrides of Settings' global approval thresholds (see
+    -- app/services/settings_service.py) -- a trusted long-standing
+    -- supplier can be given a higher PO ceiling (or a new/risky one a
+    -- lower one) without changing the threshold for everyone. NULL means
+    -- "use the global setting" -- see get_effective_po_approval_threshold
+    -- / get_effective_discount_approval_threshold.
+    po_approval_threshold_override DECIMAL(12,2) NULL,
+    discount_approval_threshold_override DECIMAL(5,2) NULL,
     mode_of_supply  ENUM('direct','distributor','broker','import') NULL,
     rating          TINYINT UNSIGNED NULL,          -- 1-5 stars
     status          ENUM('active','inactive','suspended') NOT NULL DEFAULT 'active',

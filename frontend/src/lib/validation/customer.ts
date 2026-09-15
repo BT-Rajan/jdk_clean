@@ -15,6 +15,12 @@ export const customerSchema = z.object({
   country: z.string().trim().max(80, 'Max 80 characters').optional().or(z.literal('')),
   credit_limit: z.coerce.number().min(0, 'Must be 0 or more'),
   payment_terms_days: z.coerce.number().int().min(0, 'Must be 0 or more'),
+  discount_approval_threshold_override: z.coerce
+    .number()
+    .min(0, 'Must be 0 or more')
+    .max(100, 'Must be 100 or less')
+    .optional()
+    .or(z.literal('')),
   status: z.enum(['active', 'inactive']),
   notes: z.string().trim().max(5000, 'Max 5000 characters').optional().or(z.literal('')),
 })

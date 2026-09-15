@@ -348,7 +348,8 @@ export function GeneralSettingsForm({ activeSection }: GeneralSettingsFormProps)
           <h2 className="font-display text-lg font-medium text-white">Large purchase order approval</h2>
           <p className="mt-1 text-sm text-white/50">
             A purchase order at or above this amount (in KWD) can't be sent to its supplier until an admin approves
-            it. Leave blank to turn this off entirely.
+            it. Leave blank to turn this off entirely. This is the factory-wide default -- a trusted supplier can be
+            given its own ceiling instead from that supplier's own page, which then applies in place of this number.
           </p>
           <div className="mt-6">
             <TextField
@@ -367,7 +368,8 @@ export function GeneralSettingsForm({ activeSection }: GeneralSettingsFormProps)
           <p className="mt-1 text-sm text-white/50">
             A quotation, order, or purchase order with a discount (document-level or any single line's) at or
             above this percentage can't leave draft until an admin approves it. Leave blank to turn this off
-            entirely.
+            entirely. This is the factory-wide default -- an individual customer or supplier can be given its own
+            threshold instead from that customer's/supplier's own page, which then applies in place of this number.
           </p>
           <div className="mt-6">
             <TextField

@@ -227,6 +227,14 @@ export function CustomerDetailPage() {
           <Field label="Shipping address" value={customer.shipping_address} />
           <Field label="Credit limit" value={formatCurrency(customer.credit_limit)} />
           <Field label="Payment terms" value={`${customer.payment_terms_days} days`} />
+          <Field
+            label="Discount approval threshold"
+            value={
+              customer.discount_approval_threshold_override != null
+                ? `${customer.discount_approval_threshold_override}% (override)`
+                : 'Using factory default'
+            }
+          />
           <Field label="Notes" value={customer.notes} />
         </dl>
         {creditStatus && (

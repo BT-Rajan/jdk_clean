@@ -140,6 +140,12 @@ export function SupplierOnboardingWizardPage() {
         ...values,
         mode_of_supply: values.mode_of_supply || null,
         rating: values.rating || null,
+        // Not collected in the wizard -- new suppliers start on the
+        // factory-wide defaults; an override is a deliberate later
+        // decision set via SupplierFormPage once the supplier's actually
+        // been dealt with for a while.
+        po_approval_threshold_override: values.po_approval_threshold_override || null,
+        discount_approval_threshold_override: values.discount_approval_threshold_override || null,
       })
       if (idDocumentFile) {
         // Best-effort, same reasoning as the id document upload in

@@ -258,75 +258,86 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
             )
 
     # 9. Draft purchase orders at/above the large-PO approval threshold
+    # (a supplier's own override, if it has one, otherwise the global
+    # setting -- see settings_service.get_effective_po_approval_threshold)
     # that haven't been approved yet -- admin needs to sign off before
-    # this can be sent to its supplier.
+    # this can be sent to its supplier. Checked in Python rather than
+    # filtered in SQL because the threshold varies per supplier.
     if _visible(user, None):
         from app.models.purchase_order import PurchaseOrder as PO
         from app.services import settings_service
 
-        threshold = settings_service.get_large_po_approval_threshold(db)
-        if threshold is not None:
-            awaiting_approval = (
-                db.query(PO)
-                .options(joinedload(PO.supplier))
-                .filter(
-                    PO.deleted_at.is_(None),
-                    PO.status == "draft",
-                    PO.approved_at.is_(None),
-                    PO.total_amount >= threshold,
-                )
-                .all()
+        draft_pos = (
+            db.query(PO)
+            .options(joinedload(PO.supplier))
+            .filter(PO.deleted_at.is_(None), PO.status == "draft", PO.approved_at.is_(None))
+            .all()
+        )
+        for po in draft_pos:
+            threshold = settings_service.get_effective_po_approval_threshold(db, po.supplier)
+            if threshold is None or float(po.total_amount) < threshold:
+                continue
+            items.append(
+                {
+                    "id": f"po-needs-approval-{po.id}",
+                    "type": "purchase_order_needs_approval",
+                    "severity": "high",
+                    "title": f"{po.po_number} needs approval before it can be sent",
+                    "message": f"KWD {float(po.total_amount):,.2f} is at or above the large-PO threshold — {po.supplier.name if po.supplier else 'unknown supplier'}.",
+                    "link": f"/purchase-orders/{po.id}",
+                    "created_at": po.created_at,
+                }
             )
-            for po in awaiting_approval:
-                items.append(
-                    {
-                        "id": f"po-needs-approval-{po.id}",
-                        "type": "purchase_order_needs_approval",
-                        "severity": "high",
-                        "title": f"{po.po_number} needs approval before it can be sent",
-                        "message": f"KWD {float(po.total_amount):,.2f} is at or above the large-PO threshold — {po.supplier.name if po.supplier else 'unknown supplier'}.",
-                        "link": f"/purchase-orders/{po.id}",
-                        "created_at": po.created_at,
-                    }
-                )
 
     # 10. Draft documents (quotation, order, or purchase order) with a
     # discount at/above the large-discount approval threshold that
     # haven't been approved yet.
+    # Each document type's threshold is that document's own party
+    # override (customer for a quotation/order, supplier for a purchase
+    # order) if it has one, otherwise the global setting -- see
+    # settings_service.get_effective_discount_approval_threshold. Checked
+    # in Python rather than filtered in SQL because of that per-party
+    # variation.
     if _visible(user, None):
         from app.models.quotation import Quotation as Q
         from app.services import settings_service as ss
 
-        discount_threshold = ss.get_large_discount_approval_threshold(db)
-        if discount_threshold is not None:
-            for label, model, number_field, name_getter in (
-                ("quotation", Q, "quotation_number", lambda d: d.customer.name if d.customer else None),
-                ("order", Order, "order_number", lambda d: d.customer.name if d.customer else None),
-                ("purchase order", PO, "po_number", lambda d: d.supplier.name if d.supplier else None),
-            ):
-                candidates = (
-                    db.query(model)
-                    .filter(model.deleted_at.is_(None), model.status == "draft", model.approved_at.is_(None))
-                    .all()
+        for label, model, number_field, name_getter, party_attr in (
+            ("quotation", Q, "quotation_number", lambda d: d.customer.name if d.customer else None, "customer"),
+            ("order", Order, "order_number", lambda d: d.customer.name if d.customer else None, "customer"),
+            ("purchase order", PO, "po_number", lambda d: d.supplier.name if d.supplier else None, "supplier"),
+        ):
+            candidates = (
+                db.query(model)
+                .filter(model.deleted_at.is_(None), model.status == "draft", model.approved_at.is_(None))
+                .all()
+            )
+            for doc in candidates:
+                party = getattr(doc, party_attr, None)
+                discount_threshold = (
+                    ss.get_effective_discount_approval_threshold(db, customer=party)
+                    if party_attr == "customer"
+                    else ss.get_effective_discount_approval_threshold(db, supplier=party)
                 )
-                for doc in candidates:
-                    largest = max(
-                        [float(doc.discount_percent)] + [float(line.discount_percent) for line in doc.lines],
-                        default=0.0,
-                    )
-                    if largest < discount_threshold:
-                        continue
-                    items.append(
-                        {
-                            "id": f"{label.replace(' ', '-')}-needs-discount-approval-{doc.id}",
-                            "type": "document_needs_discount_approval",
-                            "severity": "high",
-                            "title": f"{getattr(doc, number_field)} needs approval before it can proceed",
-                            "message": f"{largest}% discount is at or above the large-discount threshold — {name_getter(doc) or 'unknown'}.",
-                            "link": f"/{'quotations' if label == 'quotation' else 'orders' if label == 'order' else 'purchase-orders'}/{doc.id}",
-                            "created_at": doc.created_at,
-                        }
-                    )
+                if discount_threshold is None:
+                    continue
+                largest = max(
+                    [float(doc.discount_percent)] + [float(line.discount_percent) for line in doc.lines],
+                    default=0.0,
+                )
+                if largest < discount_threshold:
+                    continue
+                items.append(
+                    {
+                        "id": f"{label.replace(' ', '-')}-needs-discount-approval-{doc.id}",
+                        "type": "document_needs_discount_approval",
+                        "severity": "high",
+                        "title": f"{getattr(doc, number_field)} needs approval before it can proceed",
+                        "message": f"{largest}% discount is at or above the large-discount threshold — {name_getter(doc) or 'unknown'}.",
+                        "link": f"/{'quotations' if label == 'quotation' else 'orders' if label == 'order' else 'purchase-orders'}/{doc.id}",
+                        "created_at": doc.created_at,
+                    }
+                )
 
     # 11. Completed production batches with a material discrepancy or
     # scrap-allowance breach (see production_service._complete_batch) --

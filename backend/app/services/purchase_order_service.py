@@ -291,14 +291,14 @@ def change_status(
     assert_transition_allowed(ALLOWED_TRANSITIONS, po.status, new_status, "purchase order")
 
     if new_status == "sent":
-        amount_threshold = settings_service.get_large_po_approval_threshold(db)
+        amount_threshold = settings_service.get_effective_po_approval_threshold(db, po.supplier)
         if amount_threshold is not None and float(po.total_amount) >= amount_threshold and po.approved_at is None:
             raise ConflictError(
                 f"This purchase order (KWD {float(po.total_amount):,.2f}) is at or above the "
                 f"large-PO approval threshold (KWD {amount_threshold:,.2f}) and needs admin approval "
                 f"before it can be sent."
             )
-        discount_threshold = settings_service.get_large_discount_approval_threshold(db)
+        discount_threshold = settings_service.get_effective_discount_approval_threshold(db, supplier=po.supplier)
         if discount_threshold is not None and po.approved_at is None:
             largest = max(
                 [float(po.discount_percent)] + [float(line.discount_percent) for line in po.lines],

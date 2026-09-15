@@ -12,6 +12,13 @@ export const supplierSchema = z.object({
   city: z.string().trim().max(80, 'Max 80 characters').optional().or(z.literal('')),
   country: z.string().trim().max(80, 'Max 80 characters').optional().or(z.literal('')),
   payment_terms_days: z.coerce.number().int().min(0, 'Must be 0 or more'),
+  po_approval_threshold_override: z.coerce.number().min(0, 'Must be 0 or more').optional().or(z.literal('')),
+  discount_approval_threshold_override: z.coerce
+    .number()
+    .min(0, 'Must be 0 or more')
+    .max(100, 'Must be 100 or less')
+    .optional()
+    .or(z.literal('')),
   mode_of_supply: z.enum(['direct', 'distributor', 'broker', 'import']).optional().or(z.literal('')),
   rating: z.coerce.number().int().min(1).max(5).optional().or(z.literal('')),
   status: z.enum(['active', 'inactive', 'suspended']),

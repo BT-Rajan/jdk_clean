@@ -29,6 +29,9 @@ export interface Customer {
   country: string | null
   credit_limit: number
   payment_terms_days: number
+  /** Overrides Settings' global large-discount approval threshold for
+   * this customer only -- null means "use the global setting". */
+  discount_approval_threshold_override: number | null
   status: ActiveStatus
   onboarding_status: CustomerOnboardingStatus
   onboarding_reason: string | null
@@ -54,6 +57,7 @@ export interface CustomerPayload {
   country?: string | null
   credit_limit?: number
   payment_terms_days?: number
+  discount_approval_threshold_override?: number | null
   status?: ActiveStatus
   notes?: string | null
 }
