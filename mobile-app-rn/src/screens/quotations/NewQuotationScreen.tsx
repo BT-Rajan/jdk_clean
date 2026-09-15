@@ -18,7 +18,7 @@ import { confirm } from '../../utils/alerts';
 import { toIsoDate } from '../../utils/format';
 import { listProducts, Product } from '../../api/catalog';
 import { createFeasibility, getFeasibility, runFeasibilityCheck, requestFeasibilityException, Feasibility } from '../../api/feasibility';
-import { createQuotation, downloadQuotationPdf, getQuotationForFeasibility } from '../../api/quotations';
+import { checkMaterialConflicts, createQuotation, downloadQuotationPdf, getQuotationForFeasibility, MaterialConflict } from '../../api/quotations';
 import { QuotationsStackParamList } from '../../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<QuotationsStackParamList, 'NewQuotation'>;
@@ -253,26 +253,31 @@ export function NewQuotationScreen({ route, navigation }: Props) {
         })),
       };
 
-      let quotation;
-      try {
-        quotation = await createQuotation(quotationPayload);
-      } catch (err) {
-        // 409 here specifically means this quotation's material needs
-        // overlap another still-open quotation/order -- an explicit
-        // acknowledgment is required to proceed anyway.
-        if (err instanceof ApiError && err.status === 409) {
-          const proceed = await confirm(
-            t('newQuotation', 'materialConflictTitle'),
-            err.message,
-            t('newQuotation', 'proceedAnyway'),
-            t('common', 'cancel'),
-          );
-          if (!proceed) return;
-          quotation = await createQuotation({ ...quotationPayload, material_conflict_acknowledged: true });
-        } else {
-          throw err;
-        }
+      // Live pre-check (same one the web app's quotation form uses) --
+      // decides up front whether these lines' material needs actually
+      // overlap another open quotation/order, rather than inferring a
+      // material conflict from a bare 409 on create. A create can 409
+      // for unrelated reasons too -- e.g. the underlying feasibility
+      // check was already marked converted by an earlier attempt whose
+      // response got lost to a dropped connection -- and treating every
+      // 409 as "materials?" showed a confusing, wrong prompt for those.
+      const conflicts = await checkMaterialConflicts(
+        quotationPayload.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity })),
+      );
+
+      let materialConflictAcknowledged = false;
+      if (conflicts.length > 0) {
+        const proceed = await confirm(
+          t('newQuotation', 'materialConflictTitle'),
+          materialConflictMessage(conflicts),
+          t('newQuotation', 'proceedAnyway'),
+          t('common', 'cancel'),
+        );
+        if (!proceed) return;
+        materialConflictAcknowledged = true;
       }
+
+      const quotation = await createQuotation({ ...quotationPayload, material_conflict_acknowledged: materialConflictAcknowledged });
 
       setResult({
         kind: 'feasible',
@@ -451,6 +456,22 @@ export function NewQuotationScreen({ route, navigation }: Props) {
         {statusLine ? <Text style={styles.statusLine}>{statusLine}</Text> : null}
       </GlassCard>
     </ScrollView>
+  );
+}
+
+// Mirrors the phrasing quotation_service.create_quotation's own 409
+// used to use for the same data, back when the client inferred a
+// conflict from that error instead of pre-checking for one.
+function materialConflictMessage(conflicts: MaterialConflict[]): string {
+  return (
+    conflicts
+      .map(
+        (c) =>
+          `${c.name} short by ${c.shortfall} ${c.unit} (also needed by ${c.competing_quotations
+            .map((cq) => cq.quotation_number)
+            .join(', ')})`,
+      )
+      .join('; ') + '.'
   );
 }
 
