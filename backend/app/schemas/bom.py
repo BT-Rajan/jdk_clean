@@ -7,7 +7,11 @@ class BomLineIn(BaseModel):
     component_type: str = Field(pattern="^(raw_material|product)$")
     component_id: int
     quantity: float = Field(gt=0)
-    unit: str = Field(min_length=1, max_length=20)
+    # No `unit` here on purpose -- a line's unit is always the
+    # component's own unit, server-derived in bom_service._validate_line,
+    # never client-supplied. See that function's docstring for why: there's
+    # no unit conversion anywhere downstream, so letting a caller set this
+    # independently could silently corrupt requirement totals.
     scrap_percent: float = Field(default=0, ge=0, le=100)
 
 

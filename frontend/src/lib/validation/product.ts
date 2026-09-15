@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { PRODUCT_UNITS } from '@/types/units'
 
 // "tag1, tag2" -> ["tag1", "tag2"]; blank -> undefined (cleared).
 function parseTags(v: string | undefined): string[] | undefined {
@@ -41,7 +42,7 @@ export function propertiesToInput(properties: Record<string, string> | null | un
 export const productSchema = z.object({
   code: z.string().trim().min(1, 'Code is required').max(30),
   name: z.string().trim().min(1, 'Name is required').max(150),
-  unit: z.string().trim().min(1, 'Unit is required').max(20),
+  unit: z.enum(PRODUCT_UNITS),
   category: z.string().trim().max(100).optional().or(z.literal('').transform(() => undefined)),
   description: z.string().optional().or(z.literal('').transform(() => undefined)),
   product_type: z.enum(['finished_good', 'sub_assembly']),

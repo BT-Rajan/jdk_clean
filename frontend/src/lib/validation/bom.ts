@@ -3,11 +3,12 @@ import { z } from 'zod'
 // Mirrors backend/app/schemas/bom.py BomLineIn. Duplicate-component
 // checking happens server-side (see BomReplace._no_duplicate_components);
 // the form still checks client-side for immediate feedback.
+// No `unit` field -- BomLineIn doesn't take one; a line's unit is always
+// server-derived from its component (see bom_service._validate_line).
 export const bomLineSchema = z.object({
   component_type: z.enum(['raw_material', 'product']),
   component_id: z.coerce.number().int().positive('Choose a component'),
   quantity: z.coerce.number().positive('Must be greater than 0'),
-  unit: z.string().trim().min(1, 'Unit is required').max(20),
   scrap_percent: z.coerce.number().min(0).max(100),
 })
 

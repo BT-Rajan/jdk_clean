@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { parseProperties } from './product'
+import { RAW_MATERIAL_UNITS } from '@/types/units'
 
 // Raw materials use the identical free-form JSON spec approach as
 // products (see backend/app/models/raw_material.py `properties`) --
@@ -21,7 +22,7 @@ import { parseProperties } from './product'
 const rawMaterialBaseSchema = z.object({
   code: z.string().trim().min(1, 'Code is required').max(30),
   name: z.string().trim().min(1, 'Name is required').max(150),
-  unit: z.string().trim().min(1, 'Unit is required').max(20),
+  unit: z.enum(RAW_MATERIAL_UNITS),
   material_type: z.enum(['raw_material', 'packaging', 'consumable']),
   category: z.string().trim().max(100).optional().or(z.literal('').transform(() => undefined)),
   description: z.string().optional().or(z.literal('').transform(() => undefined)),

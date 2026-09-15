@@ -51,7 +51,7 @@ def make_product(db: Session, **overrides) -> Product:
     product = Product(
         code=overrides.pop("code", f"TESTPROD-{n}"),
         name=overrides.pop("name", f"Test Product {n}"),
-        unit=overrides.pop("unit", "unit"),
+        unit=overrides.pop("unit", "kg"),
         **overrides,
     )
     db.add(product)

@@ -20,7 +20,7 @@ def _get_active_product(db: Session, product_id: int) -> Product:
     return product
 
 
-def _validate_component_exists(db: Session, component_type: str, component_id: int) -> None:
+def _validate_component_exists(db: Session, component_type: str, component_id: int) -> str:
     """Every component must be a real, currently-active record in its
     own master -- BOM never gets to define its own notion of a material
     or sub-assembly (see module docstring: Product/RawMaterial stay
@@ -28,6 +28,17 @@ def _validate_component_exists(db: Session, component_type: str, component_id: i
     inactive/blocked component here, not just a deleted one, is what
     keeps a discontinued material or product from being newly designed
     into a recipe.
+
+    Returns the component's own `unit` -- the one and only place a BOM
+    line's unit comes from (see _validate_line, which overwrites
+    whatever the caller sent with this). There's no unit conversion
+    anywhere downstream (explode_requirements just sums quantities), so
+    a line's unit silently drifting from its component's actual unit
+    would corrupt every requirement total reading it -- not just look
+    inconsistent. The frontend already auto-fills and locks this field
+    (see BomEditor.tsx's defaultUnitFor), but that's a UI convention
+    only; this is what actually makes a mismatch impossible, including
+    for any other caller of this API.
     """
     if component_type == "product":
         obj = (
@@ -49,6 +60,7 @@ def _validate_component_exists(db: Session, component_type: str, component_id: i
             raise ValidationAppError(f"Component raw material {component_id} not found.")
         if obj.status != "active":
             raise ValidationAppError(f"Component material {obj.code} is not active.")
+    return obj.unit
 
 
 def _reachable_product_ids(db: Session, start_product_id: int) -> set[int]:
@@ -209,7 +221,13 @@ class BomLineCRUD(ChildLineCRUD[BomLine]):
     parent_label = "Product"
 
     def _validate_line(self, db: Session, parent_id: int, line: dict) -> None:
-        _validate_component_exists(db, line["component_type"], line["component_id"])
+        # Always overwrite with the component's own unit -- see
+        # _validate_component_exists' docstring. Whatever the caller
+        # sent (the frontend sends the correct value already, since it
+        # auto-fills and locks the field) is replaced, not merely
+        # checked, so a stale/hand-crafted request can't sneak a
+        # mismatched unit past this.
+        line["unit"] = _validate_component_exists(db, line["component_type"], line["component_id"])
         _assert_no_cycle(db, parent_id, line["component_type"], line["component_id"])
 
     def _duplicate_filter(self, parent_id: int, line: dict) -> list:
