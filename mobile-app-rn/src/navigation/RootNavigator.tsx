@@ -17,6 +17,8 @@ import { FeasibilityDetailScreen } from '../screens/quotations/FeasibilityDetail
 import { OrdersListScreen } from '../screens/orders/OrdersListScreen';
 import { OrderFormScreen } from '../screens/orders/OrderFormScreen';
 import { OrderDetailScreen } from '../screens/orders/OrderDetailScreen';
+import { DeliveryNoteFormScreen } from '../screens/orders/DeliveryNoteFormScreen';
+import { DeliveryNoteDetailScreen } from '../screens/orders/DeliveryNoteDetailScreen';
 import { MyHistoryScreen } from '../screens/MyHistoryScreen';
 import { DrawerContent } from './DrawerContent';
 import { HeaderTitle } from './HeaderTitle';
@@ -45,6 +47,8 @@ export type OrdersStackParamList = {
   // customerId -- preset when arriving here from a Client's activity hub.
   OrderForm: { orderId?: number; customerId?: number };
   OrderDetail: { orderId: number };
+  DeliveryNoteForm: { orderId: number; orderNumber: string };
+  DeliveryNoteDetail: { deliveryNoteId: number };
 };
 
 const navTheme = {
@@ -148,6 +152,16 @@ function OrdersStackNavigator() {
       />
       <OrdersStack.Screen name="OrderForm" component={OrderFormScreen} />
       <OrdersStack.Screen name="OrderDetail" component={OrderDetailScreen} options={{ title: t('orderDetail', 'title') }} />
+      <OrdersStack.Screen
+        name="DeliveryNoteForm"
+        component={DeliveryNoteFormScreen}
+        options={{ title: t('deliveryNoteForm', 'title') }}
+      />
+      <OrdersStack.Screen
+        name="DeliveryNoteDetail"
+        component={DeliveryNoteDetailScreen}
+        options={{ title: t('deliveryNoteDetail', 'title') }}
+      />
     </OrdersStack.Navigator>
   );
 }
@@ -210,6 +224,8 @@ const linking: LinkingOptions<any> = {
           OrdersList: 'orders',
           OrderForm: 'orders/edit/:orderId?',
           OrderDetail: 'orders/:orderId',
+          DeliveryNoteForm: 'orders/:orderId/delivery-notes/new',
+          DeliveryNoteDetail: 'delivery-notes/:deliveryNoteId',
         },
       },
     },
