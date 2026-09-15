@@ -34,7 +34,12 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       <DrawerContentScrollView {...props} contentContainerStyle={styles.container}>
         <View style={styles.header}>
           <View style={styles.headerRow}>
-            <Logo size={40} />
+            <View style={styles.brandRow}>
+              <Logo size={40} hideWordmark />
+              <Text style={styles.brandText}>
+                JDK <Text style={{ color: colors.gold400 }}>MEA</Text>
+              </Text>
+            </View>
             {/* A plain button dispatching closeDrawer() directly, rather
                 than relying only on the swipe gesture or tap-outside
                 overlay -- both of those go through the drawer library's
@@ -99,6 +104,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  // Same logo + "JDK MEA" wordmark pairing as the drawer screens' own
+  // native header (see navigation/HeaderTitle.tsx) -- kept in sync here
+  // rather than reusing that component directly, since HeaderTitle's
+  // onPress navigates via useNavigation() assuming it's mounted under
+  // the Drawer Navigator's header slot, not the drawer content itself.
+  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  brandText: { fontFamily: fonts.display, fontSize: 17, color: colors.white },
   closeBtn: { padding: 4 },
   username: { fontFamily: fonts.sansMedium, fontSize: 13, color: whiteAlpha(0.6) },
   items: { paddingHorizontal: 12, gap: 4 },

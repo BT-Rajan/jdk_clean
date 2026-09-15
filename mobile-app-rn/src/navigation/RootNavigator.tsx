@@ -101,7 +101,11 @@ function ClientsStackNavigator() {
         name="ClientsList"
         component={ClientsListScreen}
         options={({ navigation }) => ({
-          title: t('clients', 'title'),
+          // Branded logo/wordmark header, same as the drawer's own
+          // top-level screens (Home/ProductCatalog/History) -- the
+          // screen's own name lives in ClientsListScreen's in-body
+          // PageHeader instead, same split those screens already use.
+          headerTitle: () => <HeaderTitle />,
           headerLeft: () => <DrawerMenuButton navigation={navigation} />,
         })}
       />
@@ -120,7 +124,9 @@ function QuotationsStackNavigator() {
         name="QuotationsList"
         component={QuotationsListScreen}
         options={({ navigation }) => ({
-          title: t('quotationsList', 'title'),
+          // See ClientsList's options above: branded header here, the
+          // page's own title stays in QuotationsListScreen's PageHeader.
+          headerTitle: () => <HeaderTitle />,
           headerLeft: () => <DrawerMenuButton navigation={navigation} />,
         })}
       />
@@ -148,7 +154,9 @@ function OrdersStackNavigator() {
         name="OrdersList"
         component={OrdersListScreen}
         options={({ navigation }) => ({
-          title: t('ordersList', 'title'),
+          // See ClientsList's options above: branded header here, the
+          // page's own title stays in OrdersListScreen's PageHeader.
+          headerTitle: () => <HeaderTitle />,
           headerLeft: () => <DrawerMenuButton navigation={navigation} />,
         })}
       />
