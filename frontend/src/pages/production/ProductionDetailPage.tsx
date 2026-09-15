@@ -22,6 +22,7 @@ import {
   getMaterialRequirements,
   getProductionBatch,
   getProductionReadiness,
+  logPartialProduction,
   restoreProductionBatch,
   updateProductionBatchStatus,
 } from '@/api/production'
@@ -71,7 +72,17 @@ export function ProductionDetailPage() {
   const [justDeleted, setJustDeleted] = useState(false)
   const [producedQuantity, setProducedQuantity] = useState('')
   const [materialRequirements, setMaterialRequirements] = useState<MaterialRequirement[]>([])
+  // User-entered overrides only -- a material with no entry here shows
+  // (and, on submit, uses) the BOM's planned figure scaled to whatever
+  // quantity is currently entered above, not a value frozen at whatever
+  // the full remaining quantity happened to be when this was fetched.
+  // Without that scaling, typing a smaller "this round" quantity (the
+  // whole point of partial logging) would silently submit a wildly
+  // inflated actual-used figure and flag a false discrepancy on every
+  // partial log unless someone remembered to hand-recalculate every
+  // material first.
   const [actualUsage, setActualUsage] = useState<Record<number, string>>({})
+  const [requirementsBasisQuantity, setRequirementsBasisQuantity] = useState(0)
   const [substitutions, setSubstitutions] = useState<Record<number, string>>({})
   const [activeTab, setActiveTab] = useState('summary')
 
@@ -84,7 +95,12 @@ export function ProductionDetailPage() {
     getProductionBatch(batchId)
       .then((b) => {
         setBatch(b)
-        setProducedQuantity(String(b.planned_quantity))
+        // What's actually still left to run -- not the original full
+        // plan -- now that a batch can already carry partial output from
+        // one or more "Log production" calls (e.g. paused partway
+        // through). Falls back to the full plan once nothing remains.
+        const remaining = b.planned_quantity - b.produced_quantity
+        setProducedQuantity(String(remaining > 0 ? remaining : b.planned_quantity))
       })
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
@@ -92,11 +108,15 @@ export function ProductionDetailPage() {
 
   useEffect(load, [batchId])
 
+  const isActive = batch?.status === 'planned' || batch?.status === 'in_progress' || batch?.status === 'paused'
+
   // Readiness only means something before/while a batch is running -- once
   // it's completed or cancelled, "can we start" is moot (see backend's
-  // quick_status, which stops at 'planned' the same way).
+  // quick_status, which stops at 'planned' the same way). A paused batch
+  // still counts -- it's stalled, not finished, and the Materials tab
+  // below still needs its current requirement/stock figures.
   useEffect(() => {
-    if (!batch || (batch.status !== 'planned' && batch.status !== 'in_progress')) {
+    if (!isActive) {
       setReadiness(null)
       return
     }
@@ -106,17 +126,18 @@ export function ProductionDetailPage() {
       .then(setReadiness)
       .catch((err) => setReadinessError(getApiErrorMessage(err)))
       .finally(() => setReadinessLoading(false))
-  }, [batchId, batch?.status])
+  }, [batchId, isActive])
 
   useEffect(() => {
-    if (batch?.status !== 'in_progress') return
+    if (!batch || (batch.status !== 'in_progress' && batch.status !== 'paused')) return
     getMaterialRequirements(batchId)
       .then((reqs) => {
         setMaterialRequirements(reqs)
-        // Pre-fill with the BOM's own planned (scrap-inflated) figure --
-        // production staff adjusts from there to what was actually used;
-        // leaving a field untouched deducts this same default.
-        setActualUsage(Object.fromEntries(reqs.map((r) => [r.raw_material_id, String(r.planned_required)])))
+        setRequirementsBasisQuantity(batch.planned_quantity - batch.produced_quantity)
+        // No overrides yet -- defaultActualUsed derives each field's
+        // shown value from this basis, rescaled live as the quantity
+        // field changes, until someone actually types into it.
+        setActualUsage({})
       })
       .catch(() => {
         // Best-effort: a product with no BOM has nothing to show here,
@@ -124,6 +145,30 @@ export function ProductionDetailPage() {
         // inputs at all -- same as before this existed.
       })
   }, [batchId, batch?.status])
+
+  /** The BOM's planned (scrap-inflated) figure for material `r`, scaled
+   * from whatever quantity materialRequirements was actually fetched for
+   * (requirementsBasisQuantity) down to whatever's currently entered in
+   * the quantity field -- so it always matches *this round*, not
+   * whatever the full remaining amount was at the last fetch. */
+  function defaultActualUsed(r: MaterialRequirement): number {
+    const quantity = Number(producedQuantity)
+    if (!requirementsBasisQuantity || !Number.isFinite(quantity)) return r.planned_required
+    return (r.planned_required / requirementsBasisQuantity) * quantity
+  }
+
+  function actualUsedValue(r: MaterialRequirement): string {
+    return actualUsage[r.raw_material_id] ?? String(Math.round(defaultActualUsed(r) * 10000) / 10000)
+  }
+
+  /** Same scaling as defaultActualUsed, for the net (zero-scrap) figure
+   * shown alongside it -- both come from the same BOM line and scale
+   * identically with quantity. */
+  function scaledNetRequired(r: MaterialRequirement): number {
+    const quantity = Number(producedQuantity)
+    if (!requirementsBasisQuantity || !Number.isFinite(quantity)) return r.net_required
+    return (r.net_required / requirementsBasisQuantity) * quantity
+  }
 
   async function handleStatusChange(status: SettableProductionStatus, reason?: string) {
     setBusy(true)
@@ -139,30 +184,35 @@ export function ProductionDetailPage() {
     }
   }
 
+  function buildActualMaterials(): ActualMaterialUsed[] | undefined {
+    const actualMaterials: ActualMaterialUsed[] = materialRequirements
+      .map((r): ActualMaterialUsed | null => {
+        const quantityUsed = Number(actualUsedValue(r))
+        if (!Number.isFinite(quantityUsed) || quantityUsed < 0) return null
+        const substitutedId = substitutions[r.raw_material_id]
+        return substitutedId
+          ? {
+              raw_material_id: Number(substitutedId),
+              quantity_used: quantityUsed,
+              substituted_for_raw_material_id: r.raw_material_id,
+            }
+          : { raw_material_id: r.raw_material_id, quantity_used: quantityUsed }
+      })
+      .filter((m): m is ActualMaterialUsed => m !== null)
+    return actualMaterials.length > 0 ? actualMaterials : undefined
+  }
+
   async function handleComplete() {
     setBusy(true)
     setError(null)
     try {
-      const actualMaterials: ActualMaterialUsed[] = materialRequirements
-        .map((r): ActualMaterialUsed | null => {
-          const quantityUsed = Number(actualUsage[r.raw_material_id])
-          if (!Number.isFinite(quantityUsed) || quantityUsed < 0) return null
-          const substitutedId = substitutions[r.raw_material_id]
-          return substitutedId
-            ? {
-                raw_material_id: Number(substitutedId),
-                quantity_used: quantityUsed,
-                substituted_for_raw_material_id: r.raw_material_id,
-              }
-            : { raw_material_id: r.raw_material_id, quantity_used: quantityUsed }
-        })
-        .filter((m): m is ActualMaterialUsed => m !== null)
+      const quantity = Number(producedQuantity)
       const updated = await updateProductionBatchStatus(
         batchId,
         'completed',
-        Number(producedQuantity),
+        Number.isFinite(quantity) && quantity > 0 ? quantity : undefined,
         undefined,
-        actualMaterials.length > 0 ? actualMaterials : undefined,
+        buildActualMaterials(),
       )
       setBatch(updated)
       setNotice(
@@ -170,6 +220,39 @@ export function ProductionDetailPage() {
           ? 'Batch completed, but actual material usage needs a look -- see below.'
           : 'Batch completed. Raw materials consumed and finished goods received into inventory.',
       )
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function handleLogPartial() {
+    const quantity = Number(producedQuantity)
+    if (!Number.isFinite(quantity) || quantity <= 0) {
+      setError('Enter a quantity greater than zero to log.')
+      return
+    }
+    setBusy(true)
+    setError(null)
+    try {
+      const updated = await logPartialProduction(batchId, {
+        quantity,
+        actual_materials: buildActualMaterials(),
+      })
+      setBatch(updated)
+      setNotice(
+        `Logged ${quantity} ${updated.unit ?? ''} produced so far. ${updated.batch_number} is still ${updated.status.replace(/_/g, ' ')} -- ` +
+          'pause it, or keep going and complete it once the rest is done.',
+      )
+      // Refresh the requirements/defaults against the new remaining amount.
+      const reqs = await getMaterialRequirements(batchId)
+      setMaterialRequirements(reqs)
+      setRequirementsBasisQuantity(updated.planned_quantity - updated.produced_quantity)
+      setActualUsage({})
+      setSubstitutions({})
+      const remaining = updated.planned_quantity - updated.produced_quantity
+      setProducedQuantity(String(remaining > 0 ? remaining : ''))
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -289,7 +372,7 @@ export function ProductionDetailPage() {
               <StatusTransitionButtons
                 nextStatuses={otherTransitions}
                 reasonRequiredFor={PRODUCTION_STATUSES_REQUIRING_REASON}
-                reasonLabel="Reason for cancelling"
+                reasonLabel="Reason"
                 busy={busy}
                 onChange={handleStatusChange}
               />
@@ -298,7 +381,7 @@ export function ProductionDetailPage() {
         </div>
       </GlassCard>
 
-      {(batch.status === 'planned' || batch.status === 'in_progress') && (
+      {isActive && (
         <ProductionReadinessPanel readiness={readiness} loading={readinessLoading} error={readinessError} />
       )}
 
@@ -317,6 +400,8 @@ export function ProductionDetailPage() {
             <Field label="Scheduled end" value={formatDate(batch.scheduled_end)} />
             <Field label="Actual start" value={batch.actual_start ? formatDateTime(batch.actual_start) : null} />
             <Field label="Actual end" value={batch.actual_end ? formatDateTime(batch.actual_end) : null} />
+            {batch.status === 'paused' && <Field label="Paused because" value={batch.pause_reason} />}
+            {batch.status === 'cancelled' && <Field label="Cancelled because" value={batch.cancel_reason} />}
           </dl>
           {batch.notes && (
             <div className="mt-6">
@@ -373,10 +458,19 @@ export function ProductionDetailPage() {
         <TabPanel id="execution" activeId={activeTab}>
           {canComplete ? (
             <div className="flex flex-col gap-4">
+              {batch.produced_quantity > 0 && (
+                <p className="text-xs text-white/50">
+                  {batch.produced_quantity} {batch.unit ?? ''} already recorded against this batch
+                  {batch.planned_quantity - batch.produced_quantity > 0
+                    ? ` -- ${batch.planned_quantity - batch.produced_quantity} ${batch.unit ?? ''} left of the original plan.`
+                    : '.'}
+                </p>
+              )}
               <div className="flex flex-wrap items-end gap-3">
                 <div className="w-40">
                   <TextField
-                    label="Produced quantity"
+                    label="Quantity"
+                    hint="This round's output"
                     type="number"
                     step="0.0001"
                     min="0"
@@ -384,8 +478,17 @@ export function ProductionDetailPage() {
                     onChange={(e) => setProducedQuantity(clampNonNegativeString(e.target.value))}
                   />
                 </div>
+                <Button variant="ghost" isLoading={busy} onClick={handleLogPartial}>
+                  Log production
+                </Button>
                 <Button isLoading={busy} onClick={handleComplete}>Complete batch</Button>
               </div>
+              <p className="text-xs text-white/40">
+                <strong className="text-white/60">Log production</strong> records this round's output and keeps the
+                batch running -- pause it, or come back and log more later. <strong className="text-white/60">
+                Complete batch</strong> records this round's output (if any) and closes it out for good; anything
+                still unaccounted for in the original plan is released, not carried forward.
+              </p>
 
               {materialRequirements.length > 0 && (
                 <div>
@@ -402,7 +505,7 @@ export function ProductionDetailPage() {
                               type="number"
                               step="0.0001"
                               min="0"
-                              value={actualUsage[r.raw_material_id] ?? ''}
+                              value={actualUsedValue(r)}
                               onChange={(e) =>
                                 setActualUsage((prev) => ({
                                   ...prev,
@@ -412,7 +515,9 @@ export function ProductionDetailPage() {
                             />
                           </div>
                           <span className="text-xs text-white/40">
-                            {r.unit} · planned {r.planned_required} (net {r.net_required}) · {r.current_on_hand} on hand
+                            {r.unit} · planned {Math.round(defaultActualUsed(r) * 10000) / 10000} (net{' '}
+                            {Math.round(scaledNetRequired(r) * 10000) / 10000}) for this quantity ·{' '}
+                            {r.current_on_hand} on hand
                           </span>
                           {alternatives.length > 0 && (
                             <div className="w-56">
@@ -450,8 +555,6 @@ export function ProductionDetailPage() {
             <p className="text-sm text-white/50">
               {batch.status === 'planned'
                 ? 'Start this batch to record actual material consumption and complete it.'
-                : batch.status === 'in_progress'
-                ? 'Complete this batch from here once production has finished.'
                 : `This batch is ${batch.status.replace(/_/g, ' ')}; no further execution actions apply.`}
             </p>
           )}

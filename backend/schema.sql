@@ -1006,12 +1006,14 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     machine_id      BIGINT UNSIGNED NULL,             -- which machine this batch occupies (defaults to the product's machine)
     order_id        BIGINT UNSIGNED NULL,             -- nullable: batch may be for stock, not a specific order
     planned_quantity DECIMAL(14,4) NOT NULL,
+    -- Cumulative across every recording made against this batch -- see
+    -- app/models/production_schedule.py's comment on this column.
     produced_quantity DECIMAL(14,4) NOT NULL DEFAULT 0,
     scheduled_start DATE NOT NULL,
     scheduled_end   DATE NOT NULL,
     actual_start    DATETIME NULL,
     actual_end      DATETIME NULL,
-    status          ENUM('planned','in_progress','completed','cancelled') NOT NULL DEFAULT 'planned',
+    status          ENUM('planned','in_progress','paused','completed','cancelled') NOT NULL DEFAULT 'planned',
     -- True when the system created this batch automatically on order
     -- confirmation (see order_service.py's auto-scheduling hook), false
     -- for a person-created batch. Purely informational -- an
@@ -1020,6 +1022,9 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     -- Mandatory when status becomes 'cancelled' -- same requirement as
     -- orders/quotations/feasibility, previously missing here.
     cancel_reason   TEXT NULL,
+    -- Mandatory when status becomes 'paused' -- see
+    -- app/models/production_schedule.py's comment on this column.
+    pause_reason    TEXT NULL,
     notes           TEXT NULL,
     -- Set on completion when actual raw-material usage (see
     -- app/api/production_schedules.py's actual_materials) either exceeds

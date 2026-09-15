@@ -12,7 +12,7 @@ class ProductionMaterialActual(BaseModel):
     # an approved alternative (see raw_material_alternatives) used in
     # its place. The BOM itself is never changed by this -- only the
     # batch's actual consumption record. See
-    # production_service._complete_batch.
+    # production_service._record_output.
     raw_material_id: int = Field(gt=0)
     quantity_used: float = Field(ge=0)
     substituted_for_raw_material_id: int | None = Field(default=None, gt=0)
@@ -83,18 +83,33 @@ class ProductionQuickLog(BaseModel):
 class ProductionScheduleStatusUpdate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    status: str = Field(pattern="^(in_progress|completed|cancelled)$")
-    # Only required (and only used) when status == 'completed': the real
-    # output of the batch, which may differ from planned_quantity.
+    status: str = Field(pattern="^(in_progress|paused|completed|cancelled)$")
+    # Only used when status == 'completed': this round's real output on
+    # top of whatever's already been recorded via log_partial_production
+    # (if anything) -- may be omitted entirely when closing out a batch
+    # that's already had everything it produced logged that way. See
+    # production_service.change_status.
     produced_quantity: float | None = Field(default=None, gt=0)
     # Optional, only used when status == 'completed': actual raw material
-    # consumed, per material -- any material not listed here is deducted
-    # at its BOM-calculated (scrap-inflated) figure instead, same as
-    # before this existed. Given figures drive the scrap-allowance-breach
-    # and material-discrepancy checks (see production_service._complete_batch).
+    # consumed, per material, for produced_quantity above -- any material
+    # not listed here is deducted at its BOM-calculated (scrap-inflated)
+    # figure instead, same as before this existed. Given figures drive
+    # the scrap-allowance-breach and material-discrepancy checks (see
+    # production_service._record_output).
     actual_materials: list[ProductionMaterialActual] | None = None
-    # Required when status == 'cancelled' (enforced in the service layer).
+    # Required when status == 'cancelled' or 'paused' (enforced in the
+    # service layer) -- why production is stopping/pausing.
     reason: str | None = Field(default=None, max_length=5000)
+
+
+class ProductionLogOutput(BaseModel):
+    """Records output produced so far without closing the batch out --
+    see production_service.log_partial_production."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    quantity: float = Field(gt=0)
+    actual_materials: list[ProductionMaterialActual] | None = None
 
 
 class ProductionScheduleOut(BaseModel):
@@ -117,6 +132,7 @@ class ProductionScheduleOut(BaseModel):
     status: str
     auto_scheduled: bool
     cancel_reason: str | None
+    pause_reason: str | None
     notes: str | None
     material_discrepancy_flag: bool
     # Deliberately not named material_discrepancy_notes (the ORM column

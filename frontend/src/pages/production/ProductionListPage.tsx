@@ -61,6 +61,7 @@ export function ProductionListPage() {
               <option value="">All statuses</option>
               <option value="planned">Planned</option>
               <option value="in_progress">In progress</option>
+              <option value="paused">Paused</option>
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
             </SelectField>
@@ -126,6 +127,8 @@ export function ProductionListPage() {
                     <td className="px-6 py-4 text-white/60">
                       {b.status === 'completed'
                         ? `${b.produced_quantity} ${b.unit ?? ''}`
+                        : b.produced_quantity > 0
+                        ? `${b.produced_quantity} / ${b.planned_quantity} ${b.unit ?? ''}`
                         : `${b.planned_quantity} ${b.unit ?? ''}`}
                     </td>
                     <td className="px-6 py-4">

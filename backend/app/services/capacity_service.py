@@ -13,7 +13,9 @@ from datetime import date, timedelta
 from app.models.production_schedule import ProductionSchedule
 
 # Statuses whose booked hours count against a machine's free capacity.
-BOOKED_PRODUCTION_STATUSES = ("planned", "in_progress")
+# 'paused' still occupies its scheduled slot -- it hasn't been cancelled,
+# just stalled -- so it counts the same as 'in_progress' here.
+BOOKED_PRODUCTION_STATUSES = ("planned", "in_progress", "paused")
 
 # How far forward a scan looks before giving up and reporting "not
 # achievable in the foreseeable future" rather than scanning forever.

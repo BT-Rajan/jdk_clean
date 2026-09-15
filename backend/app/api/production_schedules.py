@@ -8,6 +8,7 @@ from app.models.user import User
 from app.schemas.production_readiness import ReadinessResult
 from app.schemas.production_schedule import (
     MaterialRequirementOut,
+    ProductionLogOutput,
     ProductionQuickLog,
     ProductionScheduleCreate,
     ProductionScheduleOut,
@@ -143,6 +144,25 @@ def get_material_requirements(
     stock -- for the "Complete batch" screen to show alongside an actual-
     quantity input per material."""
     return production_service.get_material_requirements(db, batch_id)
+
+
+@router.post("/{batch_id}/log-output", response_model=ProductionScheduleOut)
+def log_partial_production(
+    batch_id: int,
+    payload: ProductionLogOutput,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """Records output produced so far without closing the batch out --
+    for a run being paused or otherwise interrupted partway through. See
+    production_service.log_partial_production."""
+    actual_materials = (
+        [m.model_dump() for m in payload.actual_materials] if payload.actual_materials else None
+    )
+    batch = production_service.log_partial_production(
+        db, batch_id, payload.quantity, actual_materials=actual_materials, user_id=user.id
+    )
+    return ProductionScheduleOut.from_model(batch)
 
 
 @router.post("/{batch_id}/status", response_model=ProductionScheduleOut)

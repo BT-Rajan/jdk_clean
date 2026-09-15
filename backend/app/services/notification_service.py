@@ -143,7 +143,7 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
             .options(joinedload(ProductionSchedule.product))
             .filter(
                 ProductionSchedule.deleted_at.is_(None),
-                ProductionSchedule.status.in_(("planned", "in_progress")),
+                ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
                 ProductionSchedule.scheduled_end < today,
             )
             .order_by(ProductionSchedule.scheduled_end)
@@ -340,7 +340,7 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
                 )
 
     # 11. Completed production batches with a material discrepancy or
-    # scrap-allowance breach (see production_service._complete_batch) --
+    # scrap-allowance breach (see production_service._record_output) --
     # admin-only, same visibility as the other admin-review items above.
     if _visible(user, None):
         flagged_batches = (

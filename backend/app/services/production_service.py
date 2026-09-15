@@ -145,12 +145,12 @@ def _reserve_batch_materials(db: Session, batch: ProductionSchedule) -> None:
     committed" guarantee. Without it, a batch could sit scheduled for
     days while its materials were freely consumed by something else, and
     the shortfall would only surface as a hard failure at the moment of
-    completion (see _complete_batch) -- too late to do anything but block
+    completion (see _record_output) -- too late to do anything but block
     a batch that was supposedly already ready to run.
 
     A product with no BOM configured has nothing to reserve -- same
     "not evaluable" stance as everywhere else this distinction matters
-    (feasibility_service's capacity check, _complete_batch's shortfall
+    (feasibility_service's capacity check, _record_output's shortfall
     check). Reservations are allowed to exceed on-hand quantity, same as
     finished-goods reservation -- a shortfall here is exactly the
     MRP/purchasing signal, not something to block batch creation over.
@@ -163,40 +163,67 @@ def _reserve_batch_materials(db: Session, batch: ProductionSchedule) -> None:
             inventory_service.reserve_stock(db, "raw_material", raw_material_id, required_qty)
 
 
-def _release_batch_materials(db: Session, batch: ProductionSchedule, commit: bool = True) -> None:
-    """Symmetric release of _reserve_batch_materials -- called on every
-    path where a batch stops holding a claim on raw materials: cancelled,
-    deleted while still planned, edited to a different product/quantity
-    (releases the old figures before the new ones are reserved), or
-    completed (the reservation is superseded by the real consumption in
-    _complete_batch). Always recomputes from the batch's own current
-    product_id/planned_quantity rather than a stored snapshot, so it
-    exactly mirrors whatever _reserve_batch_materials most recently
-    reserved for this batch.
-
-    commit=False -- see inventory_service.adjust_stock's docstring; used
-    by change_status, which holds a lock on the batch row for the whole
-    call and needs every stock movement folded into its own single commit.
+def _release_reservation_for_quantity(
+    db: Session, batch: ProductionSchedule, quantity: float, commit: bool = True
+) -> None:
+    """Releases the raw-material reservation for exactly `quantity` worth
+    of `batch`'s product -- the shared primitive both full and partial
+    release build on. `quantity` <= 0 is a no-op (e.g. a batch cancelled
+    or edited before ever reserving anything).
     """
-    if not bom_service.has_bom(db, batch.product_id):
+    if quantity <= 0 or not bom_service.has_bom(db, batch.product_id):
         return
-    requirements = bom_service.explode_requirements(db, batch.product_id, float(batch.planned_quantity))
+    requirements = bom_service.explode_requirements(db, batch.product_id, quantity)
     for raw_material_id, required_qty in requirements.items():
         if required_qty > 0:
             inventory_service.release_reservation(db, "raw_material", raw_material_id, required_qty, commit=commit)
 
 
+def _release_batch_materials(db: Session, batch: ProductionSchedule, commit: bool = True) -> None:
+    """Symmetric release of _reserve_batch_materials -- called on every
+    path where a batch stops holding a claim on raw materials outright:
+    deleted while still planned, edited to a different product/quantity
+    (releases the old figures before the new ones are reserved), or
+    finally closed out one way or another (completed or cancelled).
+    Always recomputes from the batch's own current product_id/
+    planned_quantity rather than a stored snapshot, so it exactly mirrors
+    whatever _reserve_batch_materials most recently reserved for this
+    batch.
+
+    Releases only what's still outstanding -- planned_quantity minus
+    whatever's already been produced (and had its own slice of the
+    reservation released) via log_partial_production -- not the full
+    planned_quantity every time. For a batch that's never had any partial
+    output recorded (produced_quantity is still 0, true for every caller
+    except a completion/cancellation that followed one or more pauses),
+    that's the same as releasing the full amount, exactly as before this
+    distinction existed.
+
+    commit=False -- see inventory_service.adjust_stock's docstring; used
+    by change_status, which holds a lock on the batch row for the whole
+    call and needs every stock movement folded into its own single commit.
+    """
+    remaining = float(batch.planned_quantity) - float(batch.produced_quantity)
+    _release_reservation_for_quantity(db, batch, remaining, commit=commit)
+
+
 def get_material_requirements(db: Session, batch_id: int) -> list[dict]:
-    """The per-raw-material breakdown for this batch's *planned* run --
-    net (zero-scrap) requirement, the scrap-inflated figure the BOM
-    already reserved (see _reserve_batch_materials), and current stock --
-    for the "Complete batch" screen to show alongside an actual-quantity
-    input per material. Purely a read; entering nothing for a material
-    when actually completing the batch means it's deducted at the
-    scrap-inflated figure shown here, same as before this existed.
+    """The per-raw-material breakdown for whatever this batch still has
+    left to run -- planned_quantity minus anything already recorded via
+    log_partial_production -- net (zero-scrap) requirement, the
+    scrap-inflated figure still held in reserve for it, and current
+    stock. Used by the "Log production" / "Complete batch" screen
+    alongside an actual-quantity input per material. Purely a read;
+    entering nothing for a material when actually recording output means
+    it's deducted at the scrap-inflated figure shown here, same as
+    before this existed. Falls back to planned_quantity itself once
+    nothing remains (produced_quantity caught up to or passed it),
+    e.g. for a completed batch's own history view.
     """
     batch = get_batch(db, batch_id)
-    detailed = bom_service.explode_requirements_detailed(db, batch.product_id, float(batch.planned_quantity))
+    remaining = float(batch.planned_quantity) - float(batch.produced_quantity)
+    quantity_for_display = remaining if remaining > 0 else float(batch.planned_quantity)
+    detailed = bom_service.explode_requirements_detailed(db, batch.product_id, quantity_for_display)
     if not detailed:
         return []
 
@@ -315,14 +342,24 @@ def _start_batch(db: Session, batch: ProductionSchedule, user_id: int | None) ->
         order_service.change_status(db, batch.order_id, "in_production", user_id=user_id)
 
 
-def _complete_batch(
+def _record_output(
     db: Session,
     batch: ProductionSchedule,
-    produced_quantity: float,
+    quantity: float,
     actual_materials: list[dict] | None,
     user_id: int | None,
 ) -> None:
-    """actual_materials: [{"raw_material_id":, "quantity_used":,
+    """Records one round of actual output against `batch` -- `quantity`
+    is just *this round's* amount, never the batch's running total (see
+    ProductionSchedule.produced_quantity's own comment). Called once for
+    a batch completed in a single step (the common case), or more than
+    once for a batch that's had one or more log_partial_production calls
+    before its final completion -- each call posts its own stock
+    movements and releases its own slice of the reservation, exactly like
+    a fresh completion would, just scoped to `quantity` instead of the
+    batch's full planned_quantity.
+
+    actual_materials: [{"raw_material_id":, "quantity_used":,
     "substituted_for_raw_material_id": optional}]. raw_material_id is
     whatever was *actually* consumed -- ordinarily the BOM's own
     material, but when substituted_for_raw_material_id is set, it names
@@ -330,9 +367,14 @@ def _complete_batch(
     in place of that BOM material instead. The BOM itself is never
     touched by this -- only this batch's actual consumption record and
     the resulting stock movement (see the substitution note below) show
-    what was really used.
+    what was really used. Always describes this round only, same as
+    `quantity`.
+
+    Leaves batch.status, actual_end, and any further reservation release
+    (beyond this round's own slice) to the caller -- see change_status's
+    "completed"/"paused" handling and log_partial_production.
     """
-    detailed = bom_service.explode_requirements_detailed(db, batch.product_id, produced_quantity)
+    detailed = bom_service.explode_requirements_detailed(db, batch.product_id, quantity)
     actual_materials = actual_materials or []
 
     # Each entry fulfills exactly one BOM-required material (itself,
@@ -379,7 +421,7 @@ def _complete_batch(
                 shortfalls.append(f"{label} (need {required_qty:.4f}, have {available:.4f})")
         if shortfalls:
             raise AppError(
-                "Not enough raw material on hand to complete this batch: " + "; ".join(shortfalls)
+                "Not enough raw material on hand to record this: " + "; ".join(shortfalls)
             )
 
     # Compare actual consumption against what the BOM says this material's
@@ -500,7 +542,7 @@ def _complete_batch(
         db,
         item_type="product",
         item_id=batch.product_id,
-        quantity=produced_quantity,
+        quantity=quantity,
         movement_type="receipt",
         reference_type="production_schedule",
         reference_id=batch.id,
@@ -509,19 +551,26 @@ def _complete_batch(
         commit=False,
     )
 
-    # The hold placed when this batch was scheduled (_reserve_batch_materials,
-    # called from create_batch/update_batch) is no longer needed now that
-    # the materials have actually been consumed above -- release it based
-    # on planned_quantity (what was actually reserved), not produced_quantity
-    # (what was actually used), since a batch can legitimately produce more
-    # or less than planned.
-    _release_batch_materials(db, batch, commit=False)
+    # The slice of the hold placed when this batch was scheduled
+    # (_reserve_batch_materials, called from create_batch/update_batch)
+    # that corresponds to *this round's* quantity is no longer needed now
+    # that the materials have actually been consumed above -- release
+    # just that slice, based on quantity (what was actually used this
+    # round), not the batch's full planned_quantity, since more rounds
+    # (or an early close-out that forfeits the rest -- see change_status)
+    # may still follow this one.
+    _release_reservation_for_quantity(db, batch, quantity, commit=False)
 
-    batch.produced_quantity = produced_quantity
-    batch.actual_end = datetime.now(timezone.utc)
+    # Cumulative, never overwritten -- see ProductionSchedule.
+    # produced_quantity's own comment.
+    batch.produced_quantity = float(batch.produced_quantity) + quantity
     if findings:
         batch.material_discrepancy_flag = True
-        batch.material_discrepancy_notes = json.dumps(findings)
+        # Every round's findings pile up here rather than replacing the
+        # last round's -- a discrepancy on day one doesn't stop mattering
+        # because day two's numbers happened to add up.
+        existing = json.loads(batch.material_discrepancy_notes) if batch.material_discrepancy_notes else []
+        batch.material_discrepancy_notes = json.dumps(existing + findings)
 
 
 def change_status(
@@ -535,32 +584,51 @@ def change_status(
 ) -> ProductionSchedule:
     # Locked for the whole call -- see order_service.change_status's
     # comment for why this, plus commit=False on every stock call inside
-    # _complete_batch/_release_batch_materials below, is what stops a
-    # double-submitted "complete"/"cancel" from issuing/receiving stock
-    # twice for one production run.
+    # _record_output/_release_batch_materials below, is what stops a
+    # double-submitted "complete"/"pause"/"cancel" from issuing/receiving
+    # stock twice for one production run.
     batch = get_batch(db, batch_id, for_update=True)
-    assert_transition_allowed(ALLOWED_TRANSITIONS, batch.status, new_status, "production batch")
+    old_status = batch.status
+    assert_transition_allowed(ALLOWED_TRANSITIONS, old_status, new_status, "production batch")
 
     if new_status == "in_progress":
-        # The start gate: a fresh backend readiness check, never a
-        # frontend-only one -- if anything has changed since the batch
-        # was planned (stock consumed elsewhere, the BOM deactivated, a
-        # machine slot double-booked), this is what actually stops the
-        # start, with the exact reason surfaced in the error.
-        readiness = production_readiness_service.check_batch_readiness(db, batch_id)
-        if readiness["status"] != "READY":
-            raise ConflictError(f"Cannot start production: {readiness['summary']}")
-        _start_batch(db, batch, user_id)
+        if old_status == "planned":
+            # The start gate: a fresh backend readiness check, never a
+            # frontend-only one -- if anything has changed since the batch
+            # was planned (stock consumed elsewhere, the BOM deactivated, a
+            # machine slot double-booked), this is what actually stops the
+            # start, with the exact reason surfaced in the error.
+            readiness = production_readiness_service.check_batch_readiness(db, batch_id)
+            if readiness["status"] != "READY":
+                raise ConflictError(f"Cannot start production: {readiness['summary']}")
+            _start_batch(db, batch, user_id)
+        # else old_status == "paused": resuming right where it left off --
+        # actual_start/reservation/produced_quantity are all untouched, no
+        # re-check. (A paused batch never released more than its own
+        # already-produced slice of the reservation, so what's left is
+        # still held exactly as it was before the pause.)
+    elif new_status == "paused":
+        assert_reason_given(reason, "A reason is required to pause a production batch.")
+        batch.pause_reason = reason
     elif new_status == "completed":
-        if not produced_quantity:
-            raise ValidationAppError("produced_quantity is required to complete a batch.")
-        _complete_batch(db, batch, produced_quantity, actual_materials, user_id)
+        if produced_quantity:
+            _record_output(db, batch, produced_quantity, actual_materials, user_id)
+        if float(batch.produced_quantity) <= 0:
+            raise ValidationAppError(
+                "Nothing has been produced yet -- log some output or provide produced_quantity to "
+                "complete this batch."
+            )
+        # Whatever's left of the reservation beyond what's actually been
+        # produced (across this call and any log_partial_production calls
+        # before it) is forfeit -- closing out at less than planned_quantity
+        # is a deliberate choice to stop here, not an error.
+        _release_batch_materials(db, batch, commit=False)
+        batch.actual_end = datetime.now(timezone.utc)
     elif new_status == "cancelled":
         assert_reason_given(reason, "A reason is required to cancel a production batch.")
         batch.cancel_reason = reason
         _release_batch_materials(db, batch, commit=False)
 
-    old_status = batch.status
     batch.status = new_status
     batch.updated_by = user_id
     audit_service.log_update(
@@ -572,6 +640,45 @@ def change_status(
     if new_status == "completed":
         _maybe_advance_order_to_ready_to_ship(db, batch.order_id, user_id)
 
+    return get_batch(db, batch_id)
+
+
+def log_partial_production(
+    db: Session,
+    batch_id: int,
+    quantity: float,
+    actual_materials: list[dict] | None = None,
+    user_id: int | None = None,
+) -> ProductionSchedule:
+    """Records output produced so far without closing the batch out --
+    for a run that's stopping partway through (about to be paused for a
+    breakdown, a shift change, a quality question) but has genuinely made
+    some of its planned quantity already. Callable more than once; the
+    batch stays exactly where it is (in_progress or paused) and can still
+    be paused, resumed, cancelled, or finally completed afterward --
+    change_status's "completed" handling adds in whatever's recorded here
+    plus any final increment given directly to it.
+
+    Locked the same way change_status is, for the same double-submit
+    reason -- see its own comment.
+    """
+    batch = get_batch(db, batch_id, for_update=True)
+    if batch.status not in ("in_progress", "paused"):
+        raise ConflictError(
+            f"Cannot log production against a batch in '{batch.status}' status; "
+            "it must be in progress or paused."
+        )
+    if not quantity or quantity <= 0:
+        raise ValidationAppError("quantity must be greater than zero.")
+
+    before = float(batch.produced_quantity)
+    _record_output(db, batch, quantity, actual_materials, user_id)
+    batch.updated_by = user_id
+    audit_service.log_update(
+        db, TABLE_NAME, batch_id, {"produced_quantity": (before, float(batch.produced_quantity))}, user_id
+    )
+    db.commit()
+    db.refresh(batch)
     return get_batch(db, batch_id)
 
 

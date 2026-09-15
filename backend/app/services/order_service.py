@@ -672,20 +672,23 @@ def split_order(db: Session, order_id: int, lines: list[dict], user_id: int | No
 
 def _cancel_active_production_batches(db: Session, order_id: int, user_id: int | None = None) -> None:
     """Fires when an order is cancelled: any production batch still tied
-    to it that hasn't finished -- 'planned' (auto-scheduled or not, not
-    yet started) or 'in_progress' (started, but no materials consumed or
-    finished goods produced yet -- that only happens on completion, see
-    production_service._complete_batch) -- is cancelled too, freeing the
-    machine time and worker-hours it was holding for a request that no
-    longer exists. This is the resource-freeing half of what the
-    automation needs to stay honest: it auto-schedules real capacity on
-    confirmation, so it has to auto-release that capacity on cancellation
-    too, or a cancelled order would silently leave a phantom batch
-    occupying a slot forever.
+    to it that hasn't finished -- 'planned' (not yet started), 'in_progress',
+    or 'paused' -- is cancelled too, freeing the machine time and
+    worker-hours it was holding for a request that no longer exists.
+    Cancelling only releases whatever raw-material reservation is still
+    outstanding (planned_quantity minus whatever's already been recorded
+    via production_service.log_partial_production) -- any output already
+    produced and its materials already consumed, on a batch paused or
+    partway through before this cancellation, stand: they're real and
+    aren't reversed, same reasoning as a fully completed batch below.
+    This is the resource-freeing half of what the automation needs to
+    stay honest: it auto-schedules real capacity on confirmation, so it
+    has to auto-release that capacity on cancellation too, or a cancelled
+    order would silently leave a phantom batch occupying a slot forever.
 
     A batch that already *completed* before the order was cancelled is
     deliberately left alone -- see the comment on that case in
-    _complete_batch and the note in feasibility_service's finished-goods
+    _record_output and the note in feasibility_service's finished-goods
     netting: the materials are genuinely consumed and the units genuinely
     exist, so there's nothing to reverse. The stock reservation on those
     finished units is already released above (RESERVED_STATUSES), which
@@ -702,7 +705,7 @@ def _cancel_active_production_batches(db: Session, order_id: int, user_id: int |
         .filter(
             ProductionSchedule.order_id == order_id,
             ProductionSchedule.deleted_at.is_(None),
-            ProductionSchedule.status.in_(("planned", "in_progress")),
+            ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
         )
         .all()
     )

@@ -4,6 +4,7 @@ import type {
   MaterialRequirement,
   ProductionBatch,
   ProductionBatchPayload,
+  ProductionLogOutputPayload,
   ReadinessResult,
   SettableProductionStatus,
 } from '@/types/production'
@@ -73,6 +74,20 @@ export async function updateProductionBatchStatus(
     reason,
     actual_materials: actualMaterials,
   })
+  return data
+}
+
+/** Records output produced so far without closing the batch out -- for a
+ * run being paused or otherwise interrupted partway through. See
+ * backend/app/services/production_service.py's log_partial_production. */
+export async function logPartialProduction(
+  batchId: number,
+  payload: ProductionLogOutputPayload,
+): Promise<ProductionBatch> {
+  const { data } = await apiClient.post<ProductionBatch>(
+    `/api/production-schedules/${batchId}/log-output`,
+    payload,
+  )
   return data
 }
 

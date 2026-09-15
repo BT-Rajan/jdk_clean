@@ -1,6 +1,6 @@
 /** Mirrors backend/app/schemas/production_schedule.py. */
 
-export type ProductionStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled'
+export type ProductionStatus = 'planned' | 'in_progress' | 'paused' | 'completed' | 'cancelled'
 
 export interface ProductionBatch {
   id: number
@@ -21,6 +21,10 @@ export interface ProductionBatch {
   /** True when the system created this batch automatically on order
    * confirmation, rather than a person scheduling it by hand. */
   auto_scheduled: boolean
+  cancel_reason: string | null
+  /** Why production last stopped -- only meaningful while status is
+   * 'paused' (or as history once resumed/closed out). */
+  pause_reason: string | null
   notes: string | null
   /** True when completing this batch found actual raw-material usage
    * either over a material's BOM-configured scrap allowance or below
@@ -160,3 +164,8 @@ export interface ProductionBatchPayload {
  * via the status endpoint (it's the creation default), matching
  * SettableOrderStatus's same exclusion pattern. */
 export type SettableProductionStatus = Exclude<ProductionStatus, 'planned'>
+
+export interface ProductionLogOutputPayload {
+  quantity: number
+  actual_materials?: ActualMaterialUsed[]
+}

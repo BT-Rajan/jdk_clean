@@ -382,7 +382,7 @@ def receive_lines(
 
     # Validate every receipt before applying any of them, so a bad line in
     # the batch doesn't leave earlier ones already applied (adjust_stock
-    # commits per call -- see production_service.py's _complete_batch for
+    # commits per call -- see production_service.py's _record_output for
     # the same reasoning).
     for receipt in receipts:
         line = lines_by_id.get(receipt["line_id"])
