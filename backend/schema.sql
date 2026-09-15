@@ -1033,6 +1033,12 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     -- production_service._complete_batch and notification_service.py.
     material_discrepancy_flag TINYINT(1) NOT NULL DEFAULT 0,
     material_discrepancy_notes TEXT NULL, -- JSON list of per-material findings
+    -- Same admin-review escalation pattern as orders/purchase_orders --
+    -- see app/models/production_schedule.py's comment on this column.
+    admin_review_required TINYINT(1) NOT NULL DEFAULT 0,
+    admin_reviewed_at DATETIME NULL,
+    admin_reviewed_by BIGINT UNSIGNED NULL,
+    admin_review_notes TEXT NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -1041,6 +1047,7 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     CONSTRAINT fk_ps_product FOREIGN KEY (product_id) REFERENCES products(id),
     CONSTRAINT fk_ps_machine FOREIGN KEY (machine_id) REFERENCES machines(id),
     CONSTRAINT fk_ps_order FOREIGN KEY (order_id) REFERENCES orders(id),
+    CONSTRAINT fk_ps_admin_reviewed_by FOREIGN KEY (admin_reviewed_by) REFERENCES users(id),
     INDEX idx_ps_status (status),
     INDEX idx_ps_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

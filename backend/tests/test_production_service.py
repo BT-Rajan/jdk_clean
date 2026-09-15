@@ -13,7 +13,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.core.exceptions import ConflictError, ValidationAppError
-from app.services import bom_service, inventory_service, production_service
+from app.services import inventory_service, production_service
 
 from .factories import make_bom, make_bom_line, make_machine, make_product, make_raw_material, set_stock
 
@@ -214,3 +214,124 @@ def test_discrepancy_findings_accumulate_across_rounds(db):
 
     findings = json.loads(completed.material_discrepancy_notes)
     assert len(findings) == 2  # both rounds' findings kept, not just the last
+
+
+def test_escalate_overdue_batches_flags_planned_and_in_progress_past_scheduled_end(db):
+    machine = make_machine(db, capacity_hours_per_day=800)
+    material = make_raw_material(db)
+    product = make_product(db, machine_id=machine.id, production_hours_per_unit=1)
+    make_bom(db, product.id, output_quantity=1)
+    make_bom_line(db, product.id, "raw_material", material.id, quantity=1)
+    set_stock(db, material.id, 100)
+
+    yesterday = TODAY - timedelta(days=1)
+    still_planned = production_service.create_batch(
+        db,
+        {
+            "product_id": product.id,
+            "planned_quantity": 1,
+            "scheduled_start": yesterday - timedelta(days=1),
+            "scheduled_end": yesterday,
+            "machine_id": machine.id,
+        },
+    )
+    # Not overdue -- scheduled end is still ahead.
+    not_yet_due = production_service.create_batch(
+        db,
+        {
+            "product_id": product.id,
+            "planned_quantity": 1,
+            "scheduled_start": TODAY + timedelta(days=1),
+            "scheduled_end": TODAY + timedelta(days=1),
+            "machine_id": machine.id,
+        },
+    )
+
+    flagged = production_service.escalate_overdue_batches(db, as_of=TODAY)
+
+    flagged_ids = {b.id for b in flagged}
+    assert still_planned.id in flagged_ids
+    assert not_yet_due.id not in flagged_ids
+
+    refreshed = production_service.get_batch(db, still_planned.id)
+    assert refreshed.admin_review_required is True
+
+    # Idempotent -- re-running doesn't re-flag (or duplicate-audit) what's
+    # already flagged.
+    again = production_service.escalate_overdue_batches(db, as_of=TODAY)
+    assert still_planned.id not in {b.id for b in again}
+
+
+def test_escalate_overdue_batches_skips_completed_and_cancelled(db):
+    machine = make_machine(db, capacity_hours_per_day=800)
+    material = make_raw_material(db)
+    product = make_product(db, machine_id=machine.id, production_hours_per_unit=1)
+    make_bom(db, product.id, output_quantity=1)
+    make_bom_line(db, product.id, "raw_material", material.id, quantity=1)
+    set_stock(db, material.id, 100)
+
+    yesterday = TODAY - timedelta(days=1)
+    batch = production_service.create_batch(
+        db,
+        {
+            "product_id": product.id,
+            "planned_quantity": 1,
+            "scheduled_start": yesterday,
+            "scheduled_end": yesterday,
+            "machine_id": machine.id,
+        },
+    )
+    production_service.change_status(db, batch.id, "in_progress")
+    production_service.change_status(db, batch.id, "completed", produced_quantity=1)
+
+    flagged = production_service.escalate_overdue_batches(db, as_of=TODAY)
+
+    assert batch.id not in {b.id for b in flagged}
+
+
+def test_admin_review_clears_the_flag(db):
+    machine = make_machine(db, capacity_hours_per_day=800)
+    material = make_raw_material(db)
+    product = make_product(db, machine_id=machine.id, production_hours_per_unit=1)
+    make_bom(db, product.id, output_quantity=1)
+    make_bom_line(db, product.id, "raw_material", material.id, quantity=1)
+    set_stock(db, material.id, 100)
+
+    yesterday = TODAY - timedelta(days=1)
+    batch = production_service.create_batch(
+        db,
+        {
+            "product_id": product.id,
+            "planned_quantity": 1,
+            "scheduled_start": yesterday,
+            "scheduled_end": yesterday,
+            "machine_id": machine.id,
+        },
+    )
+    production_service.escalate_overdue_batches(db, as_of=TODAY)
+
+    reviewed = production_service.admin_review(db, batch.id, "Supplier delay, rescheduled.")
+    assert reviewed.admin_review_required is False
+    assert reviewed.admin_review_notes == "Supplier delay, rescheduled."
+
+
+def test_admin_review_without_pending_review_is_rejected(db):
+    machine = make_machine(db, capacity_hours_per_day=800)
+    material = make_raw_material(db)
+    product = make_product(db, machine_id=machine.id, production_hours_per_unit=1)
+    make_bom(db, product.id, output_quantity=1)
+    make_bom_line(db, product.id, "raw_material", material.id, quantity=1)
+    set_stock(db, material.id, 100)
+
+    batch = production_service.create_batch(
+        db,
+        {
+            "product_id": product.id,
+            "planned_quantity": 1,
+            "scheduled_start": TODAY + timedelta(days=1),
+            "scheduled_end": TODAY + timedelta(days=1),
+            "machine_id": machine.id,
+        },
+    )
+    with pytest.raises(ConflictError):
+        production_service.admin_review(db, batch.id, "Nothing to review.")

@@ -779,3 +779,59 @@ def _maybe_advance_order_to_ready_to_ship(db: Session, order_id: int | None, use
         order_service.change_status(db, order_id, "ready_to_ship", user_id=user_id)
     except (ConflictError, ValidationAppError):
         pass
+
+
+def escalate_overdue_batches(db: Session, as_of: date | None = None) -> list[ProductionSchedule]:
+    """The production-side mirror of order_service.escalate_overdue_orders
+    / purchase_order_service.escalate_overdue_purchase_orders: flags every
+    batch past its scheduled_end that isn't completed or cancelled -- a
+    run behind schedule -- for admin attention. 'planned' counts too, not
+    just 'in_progress'/'paused': a batch that never even started by its
+    scheduled end date is, if anything, more concerning than one that's
+    merely running late partway through. Meant to be run periodically
+    (see core/scheduler.py); idempotent -- re-running only (re)flags
+    batches that still qualify, it never clears admin_review_required
+    itself (only admin_review does that).
+    """
+    today = as_of or datetime.now(timezone.utc).date()
+
+    candidates = (
+        db.query(ProductionSchedule)
+        .filter(
+            ProductionSchedule.deleted_at.is_(None),
+            ProductionSchedule.status.notin_(("completed", "cancelled")),
+            ProductionSchedule.admin_review_required.is_(False),
+        )
+        .all()
+    )
+
+    flagged: list[ProductionSchedule] = []
+    for batch in candidates:
+        if batch.scheduled_end < today:
+            batch.admin_review_required = True
+            audit_service.log_update(
+                db, TABLE_NAME, batch.id, {"admin_review_required": (False, True)}, None
+            )
+            flagged.append(batch)
+
+    if flagged:
+        db.commit()
+    return flagged
+
+
+def admin_review(db: Session, batch_id: int, notes: str, user_id: int | None = None) -> ProductionSchedule:
+    """Admin clears an overdue-schedule escalation, recording their decision."""
+    batch = get_batch(db, batch_id)
+    if not batch.admin_review_required:
+        raise ConflictError("This production batch has no pending admin review.")
+
+    batch.admin_review_required = False
+    batch.admin_reviewed_at = datetime.now(timezone.utc)
+    batch.admin_reviewed_by = user_id
+    batch.admin_review_notes = notes
+    batch.updated_by = user_id
+    audit_service.log_update(
+        db, TABLE_NAME, batch_id, {"admin_review_required": (True, False)}, user_id
+    )
+    db.commit()
+    return get_batch(db, batch_id)

@@ -87,6 +87,15 @@ class ProductionSchedule(Base, TimestampMixin, SoftDeleteMixin):
     # is a JSON list of the specific per-material findings.
     material_discrepancy_flag: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     material_discrepancy_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Same admin-review escalation pattern as orders/purchase orders:
+    # flagged when this batch is past scheduled_end and not yet completed
+    # or cancelled -- a run behind schedule, the production-side mirror of
+    # a customer order or purchase order running overdue. See
+    # production_service.escalate_overdue_batches / admin_review.
+    admin_review_required: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    admin_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    admin_reviewed_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+    admin_review_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     product: Mapped[Product] = relationship(foreign_keys=[product_id], lazy="joined")
     machine: Mapped[Machine | None] = relationship(foreign_keys=[machine_id], lazy="joined")

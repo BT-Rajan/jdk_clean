@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.models.purchase_order import PurchaseOrder
 from app.models.raw_material import RawMaterial
 from app.models.supplier_return import SupplierReturn, SupplierReturnLine
 from app.services import audit_service, inventory_service, number_series_service
@@ -42,11 +43,14 @@ def list_supplier_returns(
     page_size: int = 10,
     search: str | None = None,
     supplier_id: int | None = None,
+    purchase_order_id: int | None = None,
     sort: str | None = None,
 ) -> dict:
     query = _base_query(db)
     if supplier_id is not None:
         query = query.filter(SupplierReturn.supplier_id == supplier_id)
+    if purchase_order_id is not None:
+        query = query.filter(SupplierReturn.purchase_order_id == purchase_order_id)
     if search:
         query = query.filter(SupplierReturn.return_number.ilike(f"%{search}%"))
     return sort_and_paginate(query, SupplierReturn, _SORTABLE_FIELDS, sort, page, page_size)
@@ -65,6 +69,20 @@ def _validate_lines(db: Session, lines: list[dict]) -> None:
         raise ValidationAppError(f"Raw material {sorted(missing)[0]} not found.")
 
 
+def _validate_purchase_order(db: Session, purchase_order_id: int, supplier_id: int) -> None:
+    po = (
+        db.query(PurchaseOrder)
+        .filter(PurchaseOrder.id == purchase_order_id, PurchaseOrder.deleted_at.is_(None))
+        .first()
+    )
+    if po is None:
+        raise ValidationAppError(f"Purchase order {purchase_order_id} not found.")
+    if po.supplier_id != supplier_id:
+        raise ValidationAppError(
+            f"{po.po_number} was placed with a different supplier than this return names."
+        )
+
+
 def create_supplier_return(db: Session, data: dict, user_id: int | None = None) -> SupplierReturn:
     """Records raw material sent back to a supplier -- a done deal, not a
     draft: the returned quantity comes off raw-material stock on hand the
@@ -76,9 +94,16 @@ def create_supplier_return(db: Session, data: dict, user_id: int | None = None) 
     quantity exceeding what's on hand still fails naturally at adjust_stock
     (stock is never allowed to go negative), so there's no separate
     availability check here.
+
+    purchase_order_id is optional (see models/supplier_return.py's
+    comment) but when given must actually belong to this same supplier --
+    otherwise the return links to a delivery that couldn't possibly be
+    what it's returning.
     """
     lines = data.pop("lines")
     _validate_lines(db, lines)
+    if data.get("purchase_order_id"):
+        _validate_purchase_order(db, data["purchase_order_id"], data["supplier_id"])
 
     supplier_return = SupplierReturn(
         return_number=number_series_service.next_number(db, "SUPPLIER_RETURN"),

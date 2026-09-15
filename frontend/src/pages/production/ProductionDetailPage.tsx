@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
@@ -9,6 +11,7 @@ import {
   EditIcon,
   Field,
   GlassCard,
+  Modal,
   PageHeader,
   SelectField,
   Spinner,
@@ -16,8 +19,10 @@ import {
   TabPanel,
   Tabs,
   TextField,
+  TextareaField,
 } from '@/components/ui'
 import {
+  adminReviewProductionBatch,
   deleteProductionBatch,
   getMaterialRequirements,
   getProductionBatch,
@@ -38,10 +43,44 @@ import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { clampNonNegativeString } from '@/lib/number'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
-import { canWrite } from '@/lib/roles'
+import { canWrite, isAdmin } from '@/lib/roles'
 import { PRODUCTION_STATUSES_REQUIRING_REASON, PRODUCTION_TRANSITIONS } from '@/lib/statusTransitions'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
+import { productionAdminReviewSchema, type ProductionAdminReviewFormValues } from '@/lib/validation'
 import { ProductionReadinessPanel } from './ProductionReadinessPanel'
+
+function AdminReviewModal({
+  open,
+  onClose,
+  onSubmit,
+}: {
+  open: boolean
+  onClose: () => void
+  onSubmit: (notes: string) => Promise<void>
+}) {
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<ProductionAdminReviewFormValues>({ resolver: zodResolver(productionAdminReviewSchema) })
+
+  useEffect(() => {
+    if (open) reset({ notes: '' })
+  }, [open, reset])
+
+  return (
+    <Modal open={open} title="Acknowledge admin review" onClose={onClose}>
+      <form onSubmit={handleSubmit((v) => onSubmit(v.notes))} noValidate className="flex flex-col gap-4">
+        <TextareaField label="Notes" error={errors.notes?.message} {...register('notes')} />
+        <div className="mt-2 flex justify-end gap-3">
+          <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
+          <Button type="submit" isLoading={isSubmitting}>Acknowledge</Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
 
 const TABS = [
   { id: 'summary', label: 'Summary' },
@@ -62,6 +101,7 @@ export function ProductionDetailPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
   const allowWrite = canWrite(user?.role)
+  const allowAdmin = isAdmin(user?.role)
 
   const [batch, setBatch] = useState<ProductionBatch | null>(null)
   const [loading, setLoading] = useState(true)
@@ -69,6 +109,7 @@ export function ProductionDetailPage() {
   const [notice, setNotice] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const [adminReviewOpen, setAdminReviewOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
   const [producedQuantity, setProducedQuantity] = useState('')
   const [materialRequirements, setMaterialRequirements] = useState<MaterialRequirement[]>([])
@@ -359,6 +400,13 @@ export function ProductionDetailPage() {
         </div>
       )}
 
+      {batch.admin_review_required && allowAdmin && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <span>This batch is behind schedule and flagged for admin review.</span>
+          <Button variant="ghost" size="sm" onClick={() => setAdminReviewOpen(true)}>Acknowledge</Button>
+        </div>
+      )}
+
       <GlassCard className="mb-6 p-8">
         <div className="flex flex-wrap items-center gap-4">
           <StatusBadge status={batch.status} />
@@ -620,6 +668,24 @@ export function ProductionDetailPage() {
         busy={busy}
         onConfirm={handleDelete}
         onCancel={() => setConfirmOpen(false)}
+      />
+
+      <AdminReviewModal
+        open={adminReviewOpen}
+        onClose={() => setAdminReviewOpen(false)}
+        onSubmit={async (notes) => {
+          setBusy(true)
+          try {
+            const updated = await adminReviewProductionBatch(batchId, notes)
+            setBatch(updated)
+            setAdminReviewOpen(false)
+            setNotice('Admin review acknowledged.')
+          } catch (err) {
+            setError(getApiErrorMessage(err))
+          } finally {
+            setBusy(false)
+          }
+        }}
       />
     </AppLayout>
   )

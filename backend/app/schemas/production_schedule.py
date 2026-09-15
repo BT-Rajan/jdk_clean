@@ -102,6 +102,10 @@ class ProductionScheduleStatusUpdate(BaseModel):
     reason: str | None = Field(default=None, max_length=5000)
 
 
+class ProductionAdminReview(BaseModel):
+    notes: str = Field(min_length=1)
+
+
 class ProductionLogOutput(BaseModel):
     """Records output produced so far without closing the batch out --
     see production_service.log_partial_production."""
@@ -141,6 +145,9 @@ class ProductionScheduleOut(BaseModel):
     # and fail before from_model ever gets to parse it. Same reason
     # FeasibilityLineOut's `shortfalls` isn't named shortfall_json.
     material_discrepancy_findings: list[dict] | None = None
+    admin_review_required: bool
+    admin_reviewed_at: datetime | None
+    admin_review_notes: str | None
     # "Can this batch start right now" -- one of production_readiness's
     # READINESS_STATUSES, or None when the batch isn't 'planned' (the
     # question is moot once it's started/completed/cancelled). Populated

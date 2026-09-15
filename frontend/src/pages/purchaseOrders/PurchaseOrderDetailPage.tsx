@@ -16,7 +16,9 @@ import {
   restorePurchaseOrder,
   updatePurchaseOrderStatus,
 } from '@/api/purchaseOrders'
+import { listSupplierReturns } from '@/api/supplierReturns'
 import type { PurchaseOrder } from '@/types/purchaseOrder'
+import type { SupplierReturn } from '@/types/supplierReturn'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
@@ -83,6 +85,7 @@ export function PurchaseOrderDetailPage() {
     Record<number, { unit_cost: string; batch_number: string; expiry_date: string }>
   >({})
   const [receiptMeta, setReceiptMeta] = useState({ invoice_number: '', received_by: '', received_date: '' })
+  const [supplierReturns, setSupplierReturns] = useState<SupplierReturn[]>([])
 
   function defaultReceiveQuantities(data: PurchaseOrder): Record<number, string> {
     const defaults: Record<number, string> = {}
@@ -112,6 +115,14 @@ export function PurchaseOrderDetailPage() {
   }
 
   useEffect(load, [poId])
+
+  useEffect(() => {
+    listSupplierReturns({ purchase_order_id: poId, page: 1, page_size: 50 })
+      .then((result) => setSupplierReturns(result.items))
+      .catch(() => {
+        // Best-effort -- the PO page itself still works fine without this.
+      })
+  }, [poId])
 
   async function handleStatusChange(status: 'sent' | 'confirmed' | 'cancelled', reason?: string) {
     setBusy(true)
@@ -244,6 +255,9 @@ export function PurchaseOrderDetailPage() {
 
   const nextStatuses = PURCHASE_ORDER_TRANSITIONS[po.status]
   const canReceive = allowWrite && !justDeleted && (po.status === 'confirmed' || po.status === 'partially_received')
+  // Returning to the supplier only makes sense once something's actually
+  // been received -- nothing to send back before then.
+  const canReturn = allowWrite && !justDeleted && (po.status === 'partially_received' || po.status === 'received')
   const hasPendingReceipt =
     po.lines.some((l) => Number(receiveQuantities[l.id] ?? 0) > 0) &&
     !!receiptMeta.invoice_number &&
@@ -506,6 +520,49 @@ export function PurchaseOrderDetailPage() {
               <Button isLoading={busy} disabled={!hasPendingReceipt} onClick={handleReceive}>Receive goods</Button>
             </div>
           </div>
+        )}
+      </GlassCard>
+
+      <GlassCard className="mb-6 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+          <h2 className="font-display text-lg font-medium text-white">Supplier returns</h2>
+          {canReturn && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => navigate(`/supplier-returns/new?purchase_order_id=${po.id}`)}
+            >
+              Return to supplier
+            </Button>
+          )}
+        </div>
+        {supplierReturns.length > 0 ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                  <th className="px-6 py-4 font-medium">Return</th>
+                  <th className="px-6 py-4 font-medium">Date</th>
+                  <th className="px-6 py-4 font-medium">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {supplierReturns.map((r) => (
+                  <tr key={r.id} className="border-b border-white/5 last:border-0">
+                    <td className="px-6 py-4">
+                      <Link to={`/supplier-returns/${r.id}`} className="font-medium text-gold-300 hover:text-gold-200">
+                        {r.return_number}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 text-white/60">{formatDate(r.return_date)}</td>
+                    <td className="px-6 py-4 text-white/60">{r.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="px-6 py-4 text-sm text-white/50">Nothing returned to the supplier against this PO.</p>
         )}
       </GlassCard>
 

@@ -120,3 +120,10 @@ export async function restoreProductionBatch(id: number): Promise<ProductionBatc
   const { data } = await apiClient.post<ProductionBatch>(`/api/production-schedules/${id}/restore`)
   return data
 }
+
+/** Admin clears an overdue-schedule escalation, recording their decision
+ * -- see backend/app/services/production_service.py's admin_review. */
+export async function adminReviewProductionBatch(id: number, notes: string): Promise<ProductionBatch> {
+  const { data } = await apiClient.post<ProductionBatch>(`/api/production-schedules/${id}/admin-review`, { notes })
+  return data
+}

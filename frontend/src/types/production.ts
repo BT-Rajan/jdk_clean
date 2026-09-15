@@ -31,6 +31,12 @@ export interface ProductionBatch {
    * the bare zero-scrap requirement for the reported output. */
   material_discrepancy_flag: boolean
   material_discrepancy_findings: MaterialDiscrepancyFinding[] | null
+  /** Same admin-review escalation pattern as orders/purchase orders --
+   * set when this batch is past scheduled_end and not completed or
+   * cancelled. See api/production.ts's adminReviewProductionBatch. */
+  admin_review_required: boolean
+  admin_reviewed_at: string | null
+  admin_review_notes: string | null
   /** "Can this batch start right now" -- only set while status is
    * 'planned' (null once started/completed/cancelled, see
    * production_readiness_service.quick_status). Populated by the list/get
