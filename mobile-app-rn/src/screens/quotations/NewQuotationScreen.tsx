@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../../components/Alert';
 import { Button } from '../../components/Button';
+import { CustomerStandingNotice } from '../../components/CustomerStandingNotice';
 import { DateField } from '../../components/DateField';
 import { GlassCard } from '../../components/GlassCard';
 import { SelectField, SelectOption } from '../../components/SelectField';
@@ -12,11 +13,12 @@ import { colors, fonts, whiteAlpha } from '../../theme';
 import { ApiError } from '../../api/client';
 import { useLocale } from '../../i18n/LocaleContext';
 import { listCustomers, Customer } from '../../api/customers';
+import { customerOptionLabel } from '../../utils/customerOptionLabel';
 import { confirm } from '../../utils/alerts';
 import { toIsoDate } from '../../utils/format';
 import { listProducts, Product } from '../../api/catalog';
-import { createFeasibility, runFeasibilityCheck, requestFeasibilityException } from '../../api/feasibility';
-import { createQuotation, downloadQuotationPdf, getQuotationForFeasibility } from '../../api/quotations';
+import { createFeasibility, getFeasibility, runFeasibilityCheck, requestFeasibilityException, Feasibility } from '../../api/feasibility';
+import { checkMaterialConflicts, createQuotation, downloadQuotationPdf, getQuotationForFeasibility, MaterialConflict } from '../../api/quotations';
 import { QuotationsStackParamList } from '../../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<QuotationsStackParamList, 'NewQuotation'>;
@@ -77,6 +79,14 @@ export function NewQuotationScreen({ route, navigation }: Props) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   const [result, setResult] = useState<ResultState>(null);
+  // A feasibility check that's been created but not yet confirmed to
+  // have run -- set as soon as createFeasibility succeeds, cleared once
+  // run/read-back completes either way. Lets a retry (e.g. connectivity
+  // dropped between create and run) resume the same record instead of
+  // creating another orphaned draft every time "Check" is pressed --
+  // `key` guards against reusing it once the form's actual inputs have
+  // since changed.
+  const [pendingCheck, setPendingCheck] = useState<{ feasibilityId: number; key: string } | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -90,7 +100,8 @@ export function NewQuotationScreen({ route, navigation }: Props) {
     })();
   }, []);
 
-  const customerOptions: SelectOption[] = customers.map((c) => ({ label: c.name, value: String(c.id) }));
+  const customerOptions: SelectOption[] = customers.map((c) => ({ label: customerOptionLabel(t, c), value: String(c.id) }));
+  const selectedCustomer = customerId ? customers.find((c) => String(c.id) === customerId) ?? null : null;
   const productOptions: SelectOption[] = products.map((p) => ({
     label: p.code ? `${p.name} (${p.code})` : p.name,
     value: String(p.id),
@@ -102,6 +113,7 @@ export function NewQuotationScreen({ route, navigation }: Props) {
     setLines([newLine()]);
     setDate(null);
     setFormError(null);
+    setPendingCheck(null);
   }
 
   function updateLine(key: string, patch: Partial<LineDraft>) {
@@ -132,28 +144,57 @@ export function NewQuotationScreen({ route, navigation }: Props) {
       parsedLines.push({ productId: Number(line.productId), quantity: qty });
     }
 
+    // Identifies this exact set of inputs -- only reuse a pending
+    // feasibility record if the form still matches what created it;
+    // otherwise (the salesman changed something before retrying) a
+    // fresh check is the correct thing to create.
+    const checkKey = JSON.stringify({ customerId, date: toIsoDate(date), parsedLines });
+
     setIsChecking(true);
     try {
       setStatusLine(t('newQuotation', 'runningCheck'));
-      const created = await createFeasibility({
-        customer_id: Number(customerId),
-        required_by_date: toIsoDate(date),
-        lines: parsedLines.map((l) => ({ product_id: l.productId, quantity: l.quantity })),
-      });
-      const checked = await runFeasibilityCheck(created.id);
+
+      let feasibilityId: number;
+      if (pendingCheck && pendingCheck.key === checkKey) {
+        feasibilityId = pendingCheck.feasibilityId;
+      } else {
+        const created = await createFeasibility({
+          customer_id: Number(customerId),
+          required_by_date: toIsoDate(date),
+          lines: parsedLines.map((l) => ({ product_id: l.productId, quantity: l.quantity })),
+        });
+        feasibilityId = created.id;
+        setPendingCheck({ feasibilityId, key: checkKey });
+      }
+
+      let checked: Feasibility;
+      try {
+        checked = await runFeasibilityCheck(feasibilityId);
+      } catch (err) {
+        // A 409 here specifically means this check is no longer 'draft'
+        // -- i.e. an earlier attempt's run() actually went through on
+        // the server and only its response got lost (the connectivity-
+        // drop case this resume logic exists for). Read back its
+        // current state instead of treating that as a fresh failure.
+        if (err instanceof ApiError && err.status === 409) {
+          checked = await getFeasibility(feasibilityId);
+        } else {
+          throw err;
+        }
+      }
 
       if (checked.status === 'feasible') {
         const pendingLines: PendingLine[] = parsedLines.map((l) => {
           const product = products.find((p) => p.id === l.productId);
           return { productId: l.productId, quantity: l.quantity, unitPrice: product?.selling_price ?? 0 };
         });
-        setResult({ kind: 'feasible_pending', feasibilityId: created.id, customerId: Number(customerId), lines: pendingLines });
+        setResult({ kind: 'feasible_pending', feasibilityId, customerId: Number(customerId), lines: pendingLines });
       } else if (checked.status === 'converted') {
         // Backend-side "auto-create quotation on feasible" is on for
         // this org (Settings -> Sales) -- run_check itself already
         // created the quotation before this response came back.
         setStatusLine(t('newQuotation', 'generatingQuote'));
-        const quotation = await getQuotationForFeasibility(created.id);
+        const quotation = await getQuotationForFeasibility(feasibilityId);
         if (quotation) {
           setResult({
             kind: 'feasible',
@@ -167,8 +208,12 @@ export function NewQuotationScreen({ route, navigation }: Props) {
         }
       } else if (checked.status === 'exception_pending') {
         setStatusLine(t('newQuotation', 'notifyingAdmin'));
+        // Idempotent while still exception_pending (see
+        // feasibility_service.decide_exception) -- safe to send again
+        // if a first attempt's request went through but its response
+        // didn't come back.
         await requestFeasibilityException(
-          created.id,
+          feasibilityId,
           'Requested via mobile Quotations — raw material/capacity shortfall on initial check.',
         );
         const nextAvailableDate = checked.lines
@@ -180,6 +225,9 @@ export function NewQuotationScreen({ route, navigation }: Props) {
       } else {
         setFormError(t('newQuotation', 'unexpectedStatusError', { status: checked.status }));
       }
+      // The check reached a real outcome one way or another -- nothing
+      // left to resume.
+      setPendingCheck(null);
     } catch (err: any) {
       setFormError(err?.message ?? t('newQuotation', 'genericError'));
     } finally {
@@ -205,26 +253,31 @@ export function NewQuotationScreen({ route, navigation }: Props) {
         })),
       };
 
-      let quotation;
-      try {
-        quotation = await createQuotation(quotationPayload);
-      } catch (err) {
-        // 409 here specifically means this quotation's material needs
-        // overlap another still-open quotation/order -- an explicit
-        // acknowledgment is required to proceed anyway.
-        if (err instanceof ApiError && err.status === 409) {
-          const proceed = await confirm(
-            t('newQuotation', 'materialConflictTitle'),
-            err.message,
-            t('newQuotation', 'proceedAnyway'),
-            t('common', 'cancel'),
-          );
-          if (!proceed) return;
-          quotation = await createQuotation({ ...quotationPayload, material_conflict_acknowledged: true });
-        } else {
-          throw err;
-        }
+      // Live pre-check (same one the web app's quotation form uses) --
+      // decides up front whether these lines' material needs actually
+      // overlap another open quotation/order, rather than inferring a
+      // material conflict from a bare 409 on create. A create can 409
+      // for unrelated reasons too -- e.g. the underlying feasibility
+      // check was already marked converted by an earlier attempt whose
+      // response got lost to a dropped connection -- and treating every
+      // 409 as "materials?" showed a confusing, wrong prompt for those.
+      const conflicts = await checkMaterialConflicts(
+        quotationPayload.lines.map((l) => ({ product_id: l.product_id, quantity: l.quantity })),
+      );
+
+      let materialConflictAcknowledged = false;
+      if (conflicts.length > 0) {
+        const proceed = await confirm(
+          t('newQuotation', 'materialConflictTitle'),
+          materialConflictMessage(conflicts),
+          t('newQuotation', 'proceedAnyway'),
+          t('common', 'cancel'),
+        );
+        if (!proceed) return;
+        materialConflictAcknowledged = true;
       }
+
+      const quotation = await createQuotation({ ...quotationPayload, material_conflict_acknowledged: materialConflictAcknowledged });
 
       setResult({
         kind: 'feasible',
@@ -354,6 +407,7 @@ export function NewQuotationScreen({ route, navigation }: Props) {
             options={customerOptions}
             placeholder={customers.length ? t('newQuotation', 'clientPlaceholderLoaded') : t('newQuotation', 'clientPlaceholderLoading')}
           />
+          {selectedCustomer && <CustomerStandingNotice customer={selectedCustomer} />}
 
           <View style={{ gap: 14 }}>
             {lines.map((line, index) => (
@@ -402,6 +456,22 @@ export function NewQuotationScreen({ route, navigation }: Props) {
         {statusLine ? <Text style={styles.statusLine}>{statusLine}</Text> : null}
       </GlassCard>
     </ScrollView>
+  );
+}
+
+// Mirrors the phrasing quotation_service.create_quotation's own 409
+// used to use for the same data, back when the client inferred a
+// conflict from that error instead of pre-checking for one.
+function materialConflictMessage(conflicts: MaterialConflict[]): string {
+  return (
+    conflicts
+      .map(
+        (c) =>
+          `${c.name} short by ${c.shortfall} ${c.unit} (also needed by ${c.competing_quotations
+            .map((cq) => cq.quotation_number)
+            .join(', ')})`,
+      )
+      .join('; ') + '.'
   );
 }
 

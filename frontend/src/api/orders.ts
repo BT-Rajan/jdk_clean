@@ -32,10 +32,11 @@ export async function getOrderJourney(id: number): Promise<OrderJourney> {
   return data
 }
 
-export async function createOrder(payload: OrderPayload): Promise<Order> {
-  const { data } = await apiClient.post<Order>('/api/orders', payload)
-  return data
-}
+// Orders can no longer be created directly -- every order must come
+// from an accepted quotation (see api/quotations.ts's
+// convertQuotationToOrder) or a logged sale (logSale below), both of
+// which check availability up front; order_service.create_order rejects
+// a bare create for exactly that reason.
 
 export interface OrderQuickLogLinePayload {
   product_id: number

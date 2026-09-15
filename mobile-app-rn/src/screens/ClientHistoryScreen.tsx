@@ -81,10 +81,6 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
     (navigation.getParent() as any)?.navigate('Quotations', { screen: 'NewQuotation', params: { customerId } });
   }
 
-  function goToNewOrder() {
-    (navigation.getParent() as any)?.navigate('Orders', { screen: 'OrderForm', params: { customerId } });
-  }
-
   function goToFeasibility(feasibilityId: number) {
     (navigation.getParent() as any)?.navigate('Quotations', { screen: 'FeasibilityDetail', params: { feasibilityId } });
   }
@@ -111,9 +107,6 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
       <View style={styles.quickActions}>
         <Button size="sm" onPress={goToNewQuotation} style={{ flex: 1 }}>
           {t('clientHistory', 'newQuotation')}
-        </Button>
-        <Button size="sm" variant="ghost" onPress={goToNewOrder} style={{ flex: 1 }}>
-          {t('clientHistory', 'newOrder')}
         </Button>
       </View>
 

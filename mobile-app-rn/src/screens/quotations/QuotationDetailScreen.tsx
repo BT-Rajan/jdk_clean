@@ -11,7 +11,6 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { StatusTransitionButtons } from '../../components/StatusTransitionButtons';
 import { TextField } from '../../components/TextField';
 import { colors, fonts, whiteAlpha } from '../../theme';
-import { ApiError } from '../../api/client';
 import { useLocale } from '../../i18n/LocaleContext';
 import { confirm } from '../../utils/alerts';
 import { formatCurrency } from '../../utils/format';
@@ -22,9 +21,11 @@ import {
   updateQuotationStatus,
   deleteQuotation,
   downloadQuotationPdf,
+  checkMaterialConflicts,
   Quotation,
   QuotationLineInput,
   QuotationStatus,
+  MaterialConflict,
   QUOTATION_TRANSITIONS,
   QUOTATION_STATUSES_REQUIRING_REASON,
 } from '../../api/quotations';
@@ -158,28 +159,37 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
 
     setSaving(true);
     try {
+      // Live pre-check (same one the web app's quotation form uses) --
+      // decides up front whether these lines' material needs actually
+      // overlap another open quotation/order, rather than inferring a
+      // material conflict from a bare 409 on save. An update can 409
+      // for unrelated reasons too -- e.g. the quotation stopped being a
+      // draft in the meantime -- and treating every 409 as "materials?"
+      // showed a confusing, wrong prompt for those.
+      const conflicts = await checkMaterialConflicts(
+        parsedLines.map((l) => ({ product_id: l.product_id, quantity: l.quantity })),
+        quotation.id,
+      );
+
+      let materialConflictAcknowledged = false;
+      if (conflicts.length > 0) {
+        const proceed = await confirm(
+          t('quotationDetail', 'materialConflictTitle'),
+          materialConflictMessage(conflicts),
+          t('quotationDetail', 'proceedAnyway'),
+          t('common', 'cancel'),
+        );
+        if (!proceed) return;
+        materialConflictAcknowledged = true;
+      }
+
       const payload = {
         notes: notes.trim() || null,
         discount_percent: parseFloat(discountPercent) || 0,
         lines: parsedLines,
+        material_conflict_acknowledged: materialConflictAcknowledged,
       };
-      let updated: Quotation;
-      try {
-        updated = await updateQuotation(quotation.id, payload);
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 409) {
-          const proceed = await confirm(
-            t('quotationDetail', 'materialConflictTitle'),
-            err.message,
-            t('quotationDetail', 'proceedAnyway'),
-            t('common', 'cancel'),
-          );
-          if (!proceed) return;
-          updated = await updateQuotation(quotation.id, { ...payload, material_conflict_acknowledged: true });
-        } else {
-          throw err;
-        }
-      }
+      const updated = await updateQuotation(quotation.id, payload);
       setQuotation(updated);
       setEditing(false);
     } catch (err: any) {
@@ -489,6 +499,22 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
         )}
       </GlassCard>
     </ScrollView>
+  );
+}
+
+// Mirrors the phrasing quotation_service.update_quotation's own 409
+// used to use for the same data, back when the client inferred a
+// conflict from that error instead of pre-checking for one.
+function materialConflictMessage(conflicts: MaterialConflict[]): string {
+  return (
+    conflicts
+      .map(
+        (c) =>
+          `${c.name} short by ${c.shortfall} ${c.unit} (also needed by ${c.competing_quotations
+            .map((cq) => cq.quotation_number)
+            .join(', ')})`,
+      )
+      .join('; ') + '.'
   );
 }
 

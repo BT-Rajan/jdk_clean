@@ -51,6 +51,14 @@ export function OrdersListScreen({ navigation }: Props) {
     }, [load]),
   );
 
+  // An order can only be created from an accepted quotation (which
+  // itself requires a feasibility check) -- see order_service.
+  // create_order -- so this starts that flow instead of a since-removed
+  // direct "new order" screen.
+  function goToNewQuotation() {
+    (navigation.getParent() as any)?.navigate('Quotations', { screen: 'NewQuotation' });
+  }
+
   async function handleDelete(order: Order) {
     const proceed = await confirm(
       t('ordersList', 'deleteConfirmTitle'),
@@ -76,7 +84,7 @@ export function OrdersListScreen({ navigation }: Props) {
     <View style={styles.screen}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>{t('ordersList', 'title')}</Text>
-        <Pressable onPress={() => navigation.navigate('OrderForm', {})} hitSlop={10} style={styles.newBtn}>
+        <Pressable onPress={goToNewQuotation} hitSlop={10} style={styles.newBtn}>
           <Feather name="plus-circle" size={24} color={colors.gold400} />
         </Pressable>
       </View>

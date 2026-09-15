@@ -6,7 +6,7 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, Spinner, TextareaField, TextField } from '@/components/ui'
-import { createOrder, getOrder, updateOrder } from '@/api/orders'
+import { getOrder, updateOrder } from '@/api/orders'
 import { listCustomers } from '@/api/customers'
 import { listProducts } from '@/api/products'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
@@ -14,9 +14,14 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import { formatCurrency } from '@/lib/currency'
 import { orderSchema, todayDateInputMin, type OrderFormValues, type OrderSubmitValues } from '@/lib/validation'
 
+// Edit-only -- an order can no longer be created directly here. Every
+// order must come from an accepted quotation (which itself requires a
+// feasibility check) via /quotations/:id -> Convert to order, or from a
+// logged sale (Orders -> Log a sale) -- order_service.create_order now
+// rejects a bare create for exactly that reason.
 export function OrderFormPage() {
   const { id } = useParams()
-  return id ? <OrderEditForm id={Number(id)} /> : <OrderCreateForm />
+  return <OrderEditForm id={Number(id)} />
 }
 
 function useCustomerOptions() {
@@ -175,81 +180,6 @@ function LineItemsEditor({
         </div>
       </div>
     </div>
-  )
-}
-
-function OrderCreateForm() {
-  const navigate = useNavigate()
-  const [formError, setFormError] = useState<string | null>(null)
-  const { options: customers } = useCustomerOptions()
-  const { options: products } = useProductOptions()
-
-  const {
-    register,
-    control,
-    watch,
-    setValue,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<OrderFormValues, unknown, OrderSubmitValues>({
-    resolver: zodResolver(orderSchema),
-    defaultValues: {
-      customer_id: 0,
-      order_date: todayDateInputMin,
-      requested_delivery_date: '',
-      notes: '',
-      lines: [{ product_id: 0, quantity: 1, unit_price: 0 }],
-    },
-  })
-
-  async function onSubmit(values: OrderSubmitValues) {
-    setFormError(null)
-    try {
-      const created = await createOrder(values)
-      navigate(`/orders/${created.id}`)
-    } catch (err) {
-      setFormError(getApiErrorMessage(err))
-    }
-  }
-
-  return (
-    <FormShell title="New order">
-      <Alert variant="error">{formError}</Alert>
-      <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-6">
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
-          <SelectField label="Customer" error={errors.customer_id?.message} {...register('customer_id')}>
-            <option value="">Choose…</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}{c.code ? ` (${c.code})` : ' (prospective)'}</option>
-            ))}
-          </SelectField>
-          <TextField label="Order date" type="date" min={todayDateInputMin} error={errors.order_date?.message} {...register('order_date')} />
-          <TextField label="Requested delivery" type="date" min={todayDateInputMin} error={errors.requested_delivery_date?.message} {...register('requested_delivery_date')} />
-        </div>
-
-        <div className="max-w-xs">
-          <TextField
-            label="Discount (%)"
-            type="number"
-            step="0.01"
-            min="0"
-            max="100"
-            placeholder="Whole-document discount, on top of any per-line discounts"
-            error={errors.discount_percent?.message}
-            {...register('discount_percent')}
-          />
-        </div>
-
-        <LineItemsEditor control={control} register={register} watch={watch} setValue={setValue} errors={errors} products={products} />
-
-        <TextareaField label="Notes" {...register('notes')} />
-
-        <div className="mt-2 flex justify-end gap-3">
-          <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
-          <Button type="submit" isLoading={isSubmitting}>Create order</Button>
-        </div>
-      </form>
-    </FormShell>
   )
 }
 

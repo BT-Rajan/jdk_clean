@@ -24,6 +24,7 @@ import {
   ORDER_TRANSITIONS,
   ORDER_STATUSES_REQUIRING_REASON,
 } from '../../api/orders';
+import { listDeliveryNotes, DeliveryNote, DELIVERY_NOTE_ELIGIBLE_ORDER_STATUSES } from '../../api/deliveryNotes';
 import { FeasibilityStatus } from '../../api/feasibility';
 import { QuotationStatus } from '../../api/quotations';
 import { OrdersStackParamList } from '../../navigation/RootNavigator';
@@ -65,6 +66,11 @@ export function OrderDetailScreen({ route, navigation }: Props) {
   const [deleting, setDeleting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
+  // An order can be shipped across more than one delivery note (multiple
+  // trucks/dates) -- see backend delivery_note_service.py's
+  // ELIGIBLE_ORDER_STATUSES -- so this tracks every note issued against
+  // it, not just a single "the" note.
+  const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -76,6 +82,9 @@ export function OrderDetailScreen({ route, navigation }: Props) {
       // order back to the feasibility check/quotation it came from, if
       // any), not something that should block the rest of the page.
       getOrderJourney(orderId).then(setJourney).catch(() => setJourney(null));
+      listDeliveryNotes({ order_id: orderId, page_size: 50 })
+        .then((res) => setDeliveryNotes(res.items))
+        .catch(() => setDeliveryNotes([]));
     } catch (err: any) {
       setError(err?.message ?? t('orderDetail', 'loadError'));
     } finally {
@@ -147,6 +156,15 @@ export function OrderDetailScreen({ route, navigation }: Props) {
       screen: 'QuotationDetail',
       params: { quotationId: journey.quotation.id },
     });
+  }
+
+  function goToCreateDeliveryNote() {
+    if (!order) return;
+    navigation.navigate('DeliveryNoteForm', { orderId: order.id, orderNumber: order.order_number });
+  }
+
+  function goToDeliveryNote(deliveryNoteId: number) {
+    navigation.navigate('DeliveryNoteDetail', { deliveryNoteId });
   }
 
   async function handleDownloadPdf() {
@@ -293,6 +311,27 @@ export function OrderDetailScreen({ route, navigation }: Props) {
               busy={statusBusy}
               onChange={handleStatusChange}
             />
+          </View>
+        )}
+
+        {(deliveryNotes.length > 0 ||
+          (DELIVERY_NOTE_ELIGIBLE_ORDER_STATUSES as readonly string[]).includes(order.status)) && (
+          <View style={{ marginTop: 20 }}>
+            <Text style={styles.sectionTitle}>{t('orderDetail', 'deliveryNotesTitle')}</Text>
+            {deliveryNotes.map((n) => (
+              <Pressable key={n.id} onPress={() => goToDeliveryNote(n.id)} style={styles.linkRow}>
+                <Feather name="truck" size={14} color={colors.gold300} />
+                <Text style={styles.linkRowText}>
+                  {n.delivery_note_number} · {n.delivery_date}
+                </Text>
+                <Feather name="chevron-right" size={14} color={whiteAlpha(0.3)} style={{ marginLeft: 'auto' }} />
+              </Pressable>
+            ))}
+            {(DELIVERY_NOTE_ELIGIBLE_ORDER_STATUSES as readonly string[]).includes(order.status) && (
+              <Button onPress={goToCreateDeliveryNote} variant="ghost" style={{ marginTop: 4, width: '100%' }}>
+                {t('orderDetail', 'createDeliveryNote')}
+              </Button>
+            )}
           </View>
         )}
 

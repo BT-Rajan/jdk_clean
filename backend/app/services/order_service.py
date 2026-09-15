@@ -108,7 +108,30 @@ def list_orders(
     return sort_and_paginate(query, Order, _ORDER_SORTABLE_FIELDS, sort, page, page_size)
 
 
-def create_order(db: Session, data: dict, user_id: int | None = None) -> Order:
+def create_order(db: Session, data: dict, user_id: int | None = None, *, _stock_verified: bool = False) -> Order:
+    """Builds and saves a brand new order from raw customer_id/lines data --
+    NOT reachable directly from the public API. Every order a person
+    promises to a customer for future delivery must come from an accepted
+    quotation instead (create_order_from_quotation), which itself can't
+    exist without a feasibility check confirming the stock/capacity to
+    fulfill it -- creating one straight from arbitrary lines skips that
+    entirely, silently promising stock that was never actually checked.
+
+    _stock_verified is not part of any request schema and can only be set
+    by a trusted internal caller that has *already* verified availability
+    itself right before calling this -- currently only log_sale, which
+    checks finished-goods stock on hand for a sale that's already
+    physically happened (a fact being recorded, not a future commitment),
+    so the feasibility check this guard otherwise stands in for doesn't
+    apply to it the same way.
+    """
+    if not _stock_verified:
+        raise ConflictError(
+            "Orders can only be created from an accepted quotation (which itself requires a "
+            "feasibility check) -- use POST /api/orders/from-quotation/{quotation_id}, or start "
+            "from a quotation in the app, instead of creating one directly."
+        )
+
     customer = (
         db.query(Customer)
         .filter(Customer.id == data["customer_id"], Customer.deleted_at.is_(None))
@@ -275,6 +298,7 @@ def log_sale(
         db,
         {"customer_id": customer_id, "order_date": target_date, "notes": notes, "lines": lines},
         user_id=user_id,
+        _stock_verified=True,
     )
     try:
         change_status(db, order.id, "confirmed", user_id=user_id)

@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../../components/Alert';
 import { Button } from '../../components/Button';
+import { CustomerStandingNotice } from '../../components/CustomerStandingNotice';
 import { DateField } from '../../components/DateField';
 import { GlassCard } from '../../components/GlassCard';
 import { SelectField, SelectOption } from '../../components/SelectField';
@@ -11,9 +12,10 @@ import { TextField } from '../../components/TextField';
 import { colors, fonts, whiteAlpha } from '../../theme';
 import { useLocale } from '../../i18n/LocaleContext';
 import { toIsoDate } from '../../utils/format';
+import { customerOptionLabel } from '../../utils/customerOptionLabel';
 import { listCustomers, Customer } from '../../api/customers';
 import { listProducts, Product } from '../../api/catalog';
-import { createOrder, getOrder, updateOrder, OrderLineInput } from '../../api/orders';
+import { getOrder, updateOrder, OrderLineInput } from '../../api/orders';
 import { OrdersStackParamList } from '../../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<OrdersStackParamList, 'OrderForm'>;
@@ -32,22 +34,25 @@ function newLine(): LineDraft {
   return { key: `l${keySeq}`, productId: null, quantity: '', unitPrice: '', discountPercent: '0' };
 }
 
+// Edit-only -- an order can no longer be created directly from here.
+// Every order must come from an accepted quotation (create_order_from_
+// quotation), which itself can't exist without a feasibility check;
+// order_service.create_order now rejects a bare create for exactly that
+// reason. This screen still exists to edit an already-created draft
+// order's lines/dates/discount before it's confirmed (reached from
+// OrderDetailScreen's edit icon, or OrdersListScreen's per-row edit icon
+// -- both always pass an orderId).
 export function OrderFormScreen({ route, navigation }: Props) {
   const { t } = useLocale();
-  const orderId = route.params?.orderId;
-  const isEditing = Boolean(orderId);
-  // Preset when arriving here from a Client's activity hub ("+ Order"
-  // for that client) -- irrelevant once editing, since the customer
-  // then comes from the order itself.
-  const presetCustomerId = route.params?.customerId;
+  const { orderId } = route.params;
 
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(isEditing);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [customerId, setCustomerId] = useState<string | null>(presetCustomerId ? String(presetCustomerId) : null);
+  const [customerId, setCustomerId] = useState<string | null>(null);
   const [orderDate, setOrderDate] = useState<Date>(new Date());
   const [deliveryDate, setDeliveryDate] = useState<Date | null>(null);
   const [notes, setNotes] = useState('');
@@ -55,7 +60,7 @@ export function OrderFormScreen({ route, navigation }: Props) {
   const [lines, setLines] = useState<LineDraft[]>([newLine()]);
 
   useEffect(() => {
-    navigation.setOptions({ title: isEditing ? t('orderForm', 'editTitle') : t('orderForm', 'newTitle') });
+    navigation.setOptions({ title: t('orderForm', 'editTitle') });
     (async () => {
       try {
         const [c, p] = await Promise.all([listCustomers({ page_size: 200 }), listProducts()]);
@@ -64,36 +69,35 @@ export function OrderFormScreen({ route, navigation }: Props) {
       } catch (err: any) {
         setError(err?.message ?? t('orderForm', 'loadError'));
       }
-      if (orderId) {
-        try {
-          const order = await getOrder(orderId);
-          setCustomerId(String(order.customer_id));
-          setOrderDate(new Date(order.order_date));
-          setDeliveryDate(order.requested_delivery_date ? new Date(order.requested_delivery_date) : null);
-          setNotes(order.notes ?? '');
-          setDiscountPercent(String(order.discount_percent ?? 0));
-          setLines(
-            order.lines.map((l) => {
-              keySeq += 1;
-              return {
-                key: `l${keySeq}`,
-                productId: String(l.product_id),
-                quantity: String(l.quantity),
-                unitPrice: String(l.unit_price),
-                discountPercent: String(l.discount_percent ?? 0),
-              };
-            }),
-          );
-        } catch (err: any) {
-          setError(err?.message ?? t('orderForm', 'loadError'));
-        } finally {
-          setLoading(false);
-        }
+      try {
+        const order = await getOrder(orderId);
+        setCustomerId(String(order.customer_id));
+        setOrderDate(new Date(order.order_date));
+        setDeliveryDate(order.requested_delivery_date ? new Date(order.requested_delivery_date) : null);
+        setNotes(order.notes ?? '');
+        setDiscountPercent(String(order.discount_percent ?? 0));
+        setLines(
+          order.lines.map((l) => {
+            keySeq += 1;
+            return {
+              key: `l${keySeq}`,
+              productId: String(l.product_id),
+              quantity: String(l.quantity),
+              unitPrice: String(l.unit_price),
+              discountPercent: String(l.discount_percent ?? 0),
+            };
+          }),
+        );
+      } catch (err: any) {
+        setError(err?.message ?? t('orderForm', 'loadError'));
+      } finally {
+        setLoading(false);
       }
     })();
   }, [orderId]);
 
-  const customerOptions: SelectOption[] = customers.map((c) => ({ label: c.name, value: String(c.id) }));
+  const customerOptions: SelectOption[] = customers.map((c) => ({ label: customerOptionLabel(t, c), value: String(c.id) }));
+  const selectedCustomer = customerId ? customers.find((c) => String(c.id) === customerId) ?? null : null;
   const productOptions: SelectOption[] = products.map((p) => ({
     label: p.code ? `${p.name} (${p.code})` : p.name,
     value: String(p.id),
@@ -141,7 +145,7 @@ export function OrderFormScreen({ route, navigation }: Props) {
         discount_percent: parseFloat(discountPercent) || 0,
         lines: parsedLines,
       };
-      const order = isEditing ? await updateOrder(orderId!, payload) : await createOrder(payload);
+      const order = await updateOrder(orderId, payload);
       navigation.replace('OrderDetail', { orderId: order.id });
     } catch (err: any) {
       setError(err?.message ?? t('orderForm', 'saveError'));
@@ -171,6 +175,7 @@ export function OrderFormScreen({ route, navigation }: Props) {
             options={customerOptions}
             placeholder={customers.length ? t('orderForm', 'clientPlaceholderLoaded') : t('orderForm', 'clientPlaceholderLoading')}
           />
+          {selectedCustomer && <CustomerStandingNotice customer={selectedCustomer} />}
 
           <View style={styles.rowFields}>
             <View style={{ flex: 1 }}>
@@ -256,7 +261,7 @@ export function OrderFormScreen({ route, navigation }: Props) {
         </View>
 
         <Button onPress={handleSave} isLoading={saving} style={styles.saveBtn}>
-          {isEditing ? t('orderForm', 'saveChanges') : t('orderForm', 'createOrder')}
+          {t('orderForm', 'saveChanges')}
         </Button>
       </GlassCard>
     </ScrollView>
