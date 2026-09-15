@@ -32,7 +32,22 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     <View style={{ flex: 1, backgroundColor: colors.ink900 }}>
       <DrawerContentScrollView {...props} contentContainerStyle={styles.container}>
         <View style={styles.header}>
-          <Logo size={40} />
+          <View style={styles.headerRow}>
+            <Logo size={40} />
+            {/* A plain button dispatching closeDrawer() directly, rather
+                than relying only on the swipe gesture or tap-outside
+                overlay -- both of those go through the drawer library's
+                own reanimated pan-gesture/overlay-touch handling, which
+                has a known-fragile interaction with iOS + RTL (see
+                @react-navigation/drawer's modern/Drawer.tsx: it re-derives
+                its own RTL offset assuming the native view tree is
+                already laid out to match I18nManager.isRTL, which can
+                get out of sync with the JS-side flag on iOS -- this
+                button bypasses that gesture/overlay layer entirely. */}
+            <Pressable onPress={() => props.navigation.closeDrawer()} hitSlop={12} style={styles.closeBtn}>
+              <Feather name="x" size={20} color={whiteAlpha(0.6)} />
+            </Pressable>
+          </View>
           {username ? <Text style={styles.username}>{t('account', 'signedInAs', { username })}</Text> : null}
         </View>
 
@@ -76,6 +91,8 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     gap: 12,
   },
+  headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  closeBtn: { padding: 4 },
   username: { fontFamily: fonts.sansMedium, fontSize: 13, color: whiteAlpha(0.6) },
   items: { paddingHorizontal: 12, gap: 4 },
   item: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 12, paddingVertical: 12, borderRadius: 10 },
