@@ -5,6 +5,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../../components/Alert';
 import { GlassCard } from '../../components/GlassCard';
+import { PageHeader } from '../../components/PageHeader';
 import { TextField } from '../../components/TextField';
 import { colors, fonts, whiteAlpha } from '../../theme';
 import { useLocale } from '../../i18n/LocaleContext';
@@ -82,12 +83,14 @@ export function OrdersListScreen({ navigation }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t('ordersList', 'title')}</Text>
-        <Pressable onPress={goToNewQuotation} hitSlop={10} style={styles.newBtn}>
-          <Feather name="plus-circle" size={24} color={colors.gold400} />
-        </Pressable>
-      </View>
+      <PageHeader
+        title={t('ordersList', 'title')}
+        action={
+          <Pressable onPress={goToNewQuotation} hitSlop={10} style={styles.newBtn}>
+            <Feather name="plus-circle" size={24} color={colors.gold400} />
+          </Pressable>
+        }
+      />
 
       <View style={styles.searchWrap}>
         <TextField
@@ -158,8 +161,6 @@ export function OrdersListScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink950, padding: 18 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 10 },
-  headerTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.white, flex: 1 },
   newBtn: { padding: 2 },
   searchWrap: { marginBottom: 12 },
   emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center', marginTop: 30 },

@@ -1,6 +1,7 @@
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import Feather from '@expo/vector-icons/Feather';
+import { PageHeader } from '../components/PageHeader';
 import { useLocale } from '../i18n/LocaleContext';
 import { notify } from '../utils/alerts';
 import { colors, fonts, glass, radii, whiteAlpha } from '../theme';
@@ -46,6 +47,8 @@ export function HomeScreen() {
 
   return (
     <View style={styles.screen}>
+      <PageHeader title={t('home', 'title')} />
+
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}

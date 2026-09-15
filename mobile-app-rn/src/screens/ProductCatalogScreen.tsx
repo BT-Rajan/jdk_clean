@@ -4,6 +4,7 @@ import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'rea
 import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../components/Alert';
 import { GlassCard } from '../components/GlassCard';
+import { PageHeader } from '../components/PageHeader';
 import { TextField } from '../components/TextField';
 import { colors, fonts, whiteAlpha } from '../theme';
 import { useLocale } from '../i18n/LocaleContext';
@@ -55,7 +56,7 @@ export function ProductCatalogScreen() {
 
   return (
     <View style={styles.screen}>
-      <Text style={styles.headerTitle}>{t('productCatalog', 'title')}</Text>
+      <PageHeader title={t('productCatalog', 'title')} />
 
       <View style={styles.searchWrap}>
         <TextField
@@ -103,7 +104,6 @@ export function ProductCatalogScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink950, padding: 18 },
-  headerTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.white, marginBottom: 16 },
   searchWrap: { marginBottom: 12 },
   emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center', marginTop: 30 },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, padding: 16, gap: 12 },

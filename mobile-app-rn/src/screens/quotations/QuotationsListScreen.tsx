@@ -6,6 +6,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../../components/Alert';
 import { Button } from '../../components/Button';
 import { GlassCard } from '../../components/GlassCard';
+import { PageHeader } from '../../components/PageHeader';
 import { TextField } from '../../components/TextField';
 import { colors, fonts, whiteAlpha } from '../../theme';
 import { useLocale } from '../../i18n/LocaleContext';
@@ -74,12 +75,14 @@ export function QuotationsListScreen({ navigation }: Props) {
 
   return (
     <View style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t('quotationsList', 'title')}</Text>
-        <Button size="sm" onPress={() => navigation.navigate('NewQuotation')}>
-          {t('quotationsList', 'newButton')}
-        </Button>
-      </View>
+      <PageHeader
+        title={t('quotationsList', 'title')}
+        action={
+          <Button size="sm" onPress={() => navigation.navigate('NewQuotation')}>
+            {t('quotationsList', 'newButton')}
+          </Button>
+        }
+      />
 
       <View style={styles.searchWrap}>
         <TextField
@@ -150,8 +153,6 @@ export function QuotationsListScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink950, padding: 18 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 },
-  headerTitle: { fontFamily: fonts.display, fontSize: 22, color: colors.white },
   searchWrap: { marginBottom: 12 },
   emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center', marginTop: 30 },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, padding: 16 },

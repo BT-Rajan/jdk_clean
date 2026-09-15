@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -11,10 +10,10 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { useAuth } from '../context/AuthContext';
 import { useLocale } from '../i18n/LocaleContext';
-import { Locale } from '../i18n/translations';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { GlassCard } from '../components/GlassCard';
+import { LanguageToggle } from '../components/LanguageToggle';
 import { Logo } from '../components/Logo';
 import { TextField } from '../components/TextField';
 import { colors, fonts, whiteAlpha } from '../theme';
@@ -97,39 +96,6 @@ export function LoginScreen() {
     </View>
   );
 }
-
-function LanguageToggle({ locale, onChange }: { locale: Locale; onChange: (l: Locale) => void }) {
-  return (
-    <View style={toggleStyles.wrap}>
-      <ToggleOption label="EN" active={locale === 'en'} onPress={() => onChange('en')} />
-      <ToggleOption label="AR" active={locale === 'ar'} onPress={() => onChange('ar')} />
-    </View>
-  );
-}
-
-function ToggleOption({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
-  return (
-    <Pressable onPress={onPress} style={[toggleStyles.option, active && toggleStyles.optionActive]}>
-      <Text style={[toggleStyles.optionText, active && toggleStyles.optionTextActive]}>{label}</Text>
-    </Pressable>
-  );
-}
-
-const toggleStyles = StyleSheet.create({
-  wrap: {
-    flexDirection: 'row',
-    width: 76,
-    borderRadius: 999,
-    backgroundColor: whiteAlpha(0.06),
-    borderWidth: 1,
-    borderColor: whiteAlpha(0.12),
-    padding: 3,
-  },
-  option: { flex: 1, borderRadius: 999, paddingVertical: 5, alignItems: 'center' },
-  optionActive: { backgroundColor: colors.gold400 },
-  optionText: { fontFamily: fonts.sansSemibold, fontSize: 11, color: whiteAlpha(0.55) },
-  optionTextActive: { color: colors.ink950 },
-});
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink950 },

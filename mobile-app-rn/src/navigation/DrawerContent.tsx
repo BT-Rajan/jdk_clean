@@ -2,6 +2,7 @@ import { DrawerContentComponentProps, DrawerContentScrollView } from '@react-nav
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Feather from '@expo/vector-icons/Feather';
+import { LanguageToggle } from '../components/LanguageToggle';
 import { Logo } from '../components/Logo';
 import { useAuth } from '../context/AuthContext';
 import { useLocale } from '../i18n/LocaleContext';
@@ -24,7 +25,7 @@ const ITEMS: {
 
 export function DrawerContent(props: DrawerContentComponentProps) {
   const { username, logout } = useAuth();
-  const { t } = useLocale();
+  const { t, locale, setLocale } = useLocale();
   const insets = useSafeAreaInsets();
   const activeRoute = props.state.routes[props.state.index]?.name;
 
@@ -69,9 +70,15 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       </DrawerContentScrollView>
 
       {/* Pinned below the scrollable nav items, not inside them -- logout
-          should stay reachable without scrolling however long the nav
-          list grows. */}
+          (and now language) should stay reachable without scrolling
+          however long the nav list grows. Previously the only place to
+          change language was the login screen, with no way back to it
+          once signed in. */}
       <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 16) }]}>
+        <View style={styles.languageRow}>
+          <Text style={styles.itemText}>{t('drawer', 'language')}</Text>
+          <LanguageToggle locale={locale} onChange={setLocale} />
+        </View>
         <Pressable onPress={logout} style={styles.item} hitSlop={10}>
           <Feather name="log-out" size={18} color={colors.red400} />
           <Text style={[styles.itemText, { color: colors.red400 }]}>{t('common', 'logout')}</Text>
@@ -104,5 +111,12 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     borderTopWidth: 1,
     borderTopColor: whiteAlpha(0.08),
+  },
+  languageRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 12,
+    paddingVertical: 12,
   },
 });

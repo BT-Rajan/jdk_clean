@@ -22,6 +22,7 @@ const en = {
     language: 'Language',
   },
   home: {
+    title: 'Home',
     productCatalog: 'Product Catalog',
     clients: 'Clients',
     quotations: 'Quotations',
@@ -35,6 +36,7 @@ const en = {
     quotations: 'Quotations',
     orders: 'Orders',
     history: 'History',
+    language: 'Language',
   },
   productCatalog: {
     title: 'Product Catalog',
@@ -450,6 +452,7 @@ const ar: typeof en = {
     language: 'اللغة',
   },
   home: {
+    title: 'الرئيسية',
     productCatalog: 'كتالوج المنتجات',
     clients: 'العملاء',
     quotations: 'عروض الأسعار',
@@ -463,6 +466,7 @@ const ar: typeof en = {
     quotations: 'عروض الأسعار',
     orders: 'الطلبات',
     history: 'السجل',
+    language: 'اللغة',
   },
   productCatalog: {
     title: 'كتالوج المنتجات',

@@ -3,6 +3,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { FlatList, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '../components/Alert';
 import { GlassCard } from '../components/GlassCard';
+import { PageHeader } from '../components/PageHeader';
 import { colors, fonts, whiteAlpha } from '../theme';
 import { useLocale } from '../i18n/LocaleContext';
 import { getMyHistory, MyHistoryEntry } from '../api/auth';
@@ -95,7 +96,7 @@ export function MyHistoryScreen() {
 
   return (
     <View style={styles.screen}>
-      <Text style={styles.headerTitle}>{t('myHistory', 'title')}</Text>
+      <PageHeader title={t('myHistory', 'title')} style={styles.pageHeader} />
       <Text style={styles.headerSubtitle}>{monthLabel}</Text>
 
       <Alert variant="error">{error}</Alert>
@@ -124,7 +125,7 @@ export function MyHistoryScreen() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink950, padding: 18 },
-  headerTitle: { fontFamily: fonts.display, fontSize: 20, color: colors.white },
+  pageHeader: { marginBottom: 4 },
   headerSubtitle: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.45), marginBottom: 16 },
   emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center', marginTop: 30 },
   row: { flexDirection: 'row', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: 10, padding: 16 },
