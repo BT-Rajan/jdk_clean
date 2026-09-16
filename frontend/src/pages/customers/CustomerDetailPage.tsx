@@ -206,6 +206,7 @@ export function CustomerDetailPage() {
       )}
 
       <GlassCard className="p-8">
+        <h2 className="mb-4 font-display text-base font-medium text-white">Basic information</h2>
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <Field label="Customer ID" value={customer.customer_number} />
           <Field label="Status" value={<StatusBadge status={customer.status} />} />
@@ -215,15 +216,48 @@ export function CustomerDetailPage() {
             label={customer.customer_type === 'individual' ? 'Civil ID' : 'Registration number'}
             value={customer.code}
           />
+          <Field label="Legal / registered name" value={customer.name} />
+          <Field label="Display / trading name" value={customer.trade_name} />
+          <Field label="Category" value={customer.category} />
+        </dl>
+
+        <h2 className="mt-8 mb-4 border-t border-white/10 pt-6 font-display text-base font-medium text-white">
+          Primary contact
+        </h2>
+        <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <Field label="Contact person" value={customer.contact_person} />
           <Field label="Email" value={customer.email} />
           <Field label="Phone" value={customer.phone} />
+          <Field label="Alternate email" value={customer.alternate_email} />
+          <Field label="Alternate phone" value={customer.alternate_phone} />
+        </dl>
+
+        <h2 className="mt-8 mb-4 border-t border-white/10 pt-6 font-display text-base font-medium text-white">
+          Address
+        </h2>
+        <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <Field label="City" value={customer.city} />
           <Field label="Country" value={customer.country} />
-          <Field label="Billing address" value={customer.billing_address} />
-          <Field label="Shipping address" value={customer.shipping_address} />
+          <Field label="Billing / registered address" value={customer.billing_address} />
+          <Field
+            label="Delivery / site address"
+            value={
+              customer.shipping_address && customer.shipping_address === customer.billing_address
+                ? 'Same as billing address'
+                : customer.shipping_address
+            }
+          />
+        </dl>
+
+        <h2 className="mt-8 mb-4 border-t border-white/10 pt-6 font-display text-base font-medium text-white">
+          Commercial information
+        </h2>
+        <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <Field label="Credit limit" value={formatCurrency(customer.credit_limit)} />
-          <Field label="Payment terms" value={`${customer.payment_terms_days} days`} />
+          <Field
+            label="Payment terms"
+            value={`${customer.payment_terms_type[0].toUpperCase()}${customer.payment_terms_type.slice(1)} (${customer.payment_terms_days} days)`}
+          />
           <Field
             label="Discount approval threshold"
             value={
@@ -232,8 +266,22 @@ export function CustomerDetailPage() {
                 : 'Using factory default'
             }
           />
-          <Field label="Notes" value={customer.notes} />
         </dl>
+
+        <h2 className="mt-8 mb-4 border-t border-white/10 pt-6 font-display text-base font-medium text-white">
+          Internal notes
+        </h2>
+        <p className="text-sm whitespace-pre-wrap text-white/80">{customer.notes || '—'}</p>
+        <p className="mt-2 text-xs text-white/40">For internal staff use only -- never shown on customer-facing documents.</p>
+
+        <h2 className="mt-8 mb-4 border-t border-white/10 pt-6 font-display text-base font-medium text-white">
+          System information
+        </h2>
+        <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <Field label="Created" value={formatDate(customer.created_at)} />
+          <Field label="Last updated" value={formatDate(customer.updated_at)} />
+        </dl>
+
         {creditStatus && (
           <div className="mt-6 border-t border-white/10 pt-6">
             {creditStatus.limit_enforced ? (

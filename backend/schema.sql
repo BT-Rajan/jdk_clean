@@ -116,15 +116,30 @@ CREATE TABLE IF NOT EXISTS customers (
     -- locked once set, same as `name`.
     code            VARCHAR(30)  NULL UNIQUE,
     name            VARCHAR(150) NOT NULL,
+    -- Optional display/trading name shown instead of `name` where set
+    -- (e.g. a business trading under a brand different from its
+    -- registration papers) -- falls back to `name` everywhere.
+    trade_name      VARCHAR(150) NULL,
     contact_person  VARCHAR(120) NULL,
     email           VARCHAR(120) NULL,
     phone           VARCHAR(30)  NULL,
+    -- Backup contact only, used if the primary is unreachable -- not
+    -- deduplicated the way phone/email are (see app/crud/master_data.py).
+    alternate_phone VARCHAR(30)  NULL,
+    alternate_email VARCHAR(120) NULL,
     billing_address VARCHAR(255) NULL,
     shipping_address VARCHAR(255) NULL,
     city            VARCHAR(80)  NULL,
     country         VARCHAR(80)  NULL,
+    -- Free-text operational classification for filtering/reporting
+    -- only -- same shape as raw_materials.category / products.category.
+    category        VARCHAR(100) NULL,
     credit_limit    DECIMAL(14,2) NOT NULL DEFAULT 0,
     payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
+    -- Classification alongside payment_terms_days above -- 'credit'
+    -- requires payment_terms_days > 0, enforced in
+    -- app/crud/master_data.py (CustomerCRUD) and schemas/customer.py.
+    payment_terms_type ENUM('cash','advance','credit','custom') NOT NULL DEFAULT 'credit',
     -- Per-customer override of Settings' global large-discount approval
     -- threshold (see app/services/settings_service.py) -- e.g. a
     -- long-standing wholesale customer can be trusted with more discount

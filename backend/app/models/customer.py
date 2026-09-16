@@ -37,6 +37,15 @@ ONBOARDING_STATUSES_REQUIRING_REASON = {"rejected", "on_hold"}
 # identifier the rest of the app keys off of.
 CUSTOMER_TYPES = ("individual", "business")
 
+# Categorical payment terms alongside the existing numeric
+# `payment_terms_days` below -- 'credit' is the only one that actually
+# gates on days (see schemas/customer.py's cross-field check: credit
+# requires payment_terms_days > 0). 'cash'/'advance'/'custom' don't
+# change any downstream behavior (order_service's credit-limit check
+# already keys off credit_limit, not this), this is classification for
+# filtering/reporting only -- same role as `category` below.
+PAYMENT_TERMS_TYPES = ("cash", "advance", "credit", "custom")
+
 
 class Customer(Base, TimestampMixin, SoftDeleteMixin):
     __tablename__ = "customers"
@@ -56,15 +65,35 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     # once set, same as `name` (see schemas/customer.py CustomerUpdate).
     code: Mapped[str | None] = mapped_column(String(30), unique=True, nullable=True)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
+    # Display/trading name shown on quotations etc. when it differs from
+    # the legal/registered `name` above (e.g. a business trading under a
+    # brand different from its registration papers) -- optional, falls
+    # back to `name` everywhere it'd be shown. No separate "short name"
+    # field: it would just duplicate this with no distinct consumer.
+    trade_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     contact_person: Mapped[str | None] = mapped_column(String(120), nullable=True)
     email: Mapped[str | None] = mapped_column(String(120), nullable=True)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # Backup contact only, used if the primary is unreachable -- not
+    # validated against uniqueness/duplicates the way `phone`/`email` are.
+    alternate_phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    alternate_email: Mapped[str | None] = mapped_column(String(120), nullable=True)
     billing_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     shipping_address: Mapped[str | None] = mapped_column(String(255), nullable=True)
     city: Mapped[str | None] = mapped_column(String(80), nullable=True)
     country: Mapped[str | None] = mapped_column(String(80), nullable=True)
     credit_limit: Mapped[float] = mapped_column(DECIMAL(14, 2), nullable=False, default=0)
     payment_terms_days: Mapped[int] = mapped_column(SmallInteger, nullable=False, default=30)
+    # See PAYMENT_TERMS_TYPES above.
+    payment_terms_type: Mapped[str] = mapped_column(
+        Enum(*PAYMENT_TERMS_TYPES, name="customer_payment_terms_type"), nullable=False, default="credit"
+    )
+    # Free-text operational classification for filtering/reporting only --
+    # same role and shape as raw_materials.category / products.category,
+    # deliberately not a fixed picklist (varies per business) and
+    # deliberately not a broader CRM segment/industry/owner/priority set,
+    # which would have no consumer anywhere in this app.
+    category: Mapped[str | None] = mapped_column(String(100), nullable=True)
     # Overrides Settings' global large_discount_approval_threshold for
     # this customer only -- NULL means "use the global setting". See
     # settings_service.get_effective_discount_approval_threshold.

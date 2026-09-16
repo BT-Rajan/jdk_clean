@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useNavigate } from 'react-router-dom'
@@ -24,13 +24,13 @@ type StepId = 'type' | 'company' | 'contact' | 'financial' | 'review'
 
 const STEPS: { id: StepId; label: string; fields: (keyof CustomerFormValues)[] }[] = [
   { id: 'type', label: 'Type', fields: ['customer_type'] },
-  { id: 'company', label: 'Company Details', fields: ['code', 'name', 'contact_person'] },
+  { id: 'company', label: 'Company Details', fields: ['code', 'name', 'trade_name', 'category', 'contact_person'] },
   {
     id: 'contact',
     label: 'Contact & Address',
-    fields: ['email', 'phone', 'city', 'country', 'billing_address', 'shipping_address'],
+    fields: ['email', 'phone', 'alternate_email', 'alternate_phone', 'city', 'country', 'billing_address', 'shipping_address'],
   },
-  { id: 'financial', label: 'Financial Terms', fields: ['credit_limit', 'payment_terms_days', 'notes'] },
+  { id: 'financial', label: 'Financial Terms', fields: ['credit_limit', 'payment_terms_type', 'payment_terms_days', 'notes'] },
   { id: 'review', label: 'Review', fields: [] },
 ]
 
@@ -49,12 +49,17 @@ export function CustomerOnboardingWizardPage() {
   // rest of this form is JSON) -- see onSubmit below.
   const [idDocumentFile, setIdDocumentFile] = useState<File | null>(null)
   const [idDocumentError, setIdDocumentError] = useState<string | null>(null)
+  // Convenience only -- see CustomerFormPage's identical checkbox for
+  // why this mirrors billing_address into shipping_address rather than
+  // being its own stored field.
+  const [shipSameAsBilling, setShipSameAsBilling] = useState(true)
   const {
     register,
     handleSubmit,
     trigger,
     getValues,
     watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<CustomerFormValues, unknown, CustomerSubmitValues>({
     resolver: zodResolver(customerSchema),
@@ -63,15 +68,20 @@ export function CustomerOnboardingWizardPage() {
       customer_type: 'business',
       code: '',
       name: '',
+      trade_name: '',
+      category: '',
       contact_person: '',
       email: '',
       phone: '',
+      alternate_phone: '',
+      alternate_email: '',
       billing_address: '',
       shipping_address: '',
       city: '',
       country: '',
       credit_limit: 0,
       payment_terms_days: 30,
+      payment_terms_type: 'credit',
       status: 'active',
       notes: '',
     },
@@ -83,6 +93,12 @@ export function CustomerOnboardingWizardPage() {
   const customerType = watch('customer_type')
   const isIndividual = customerType === 'individual'
   const idLabel = isIndividual ? 'Civil ID' : 'Registration number'
+  const billingAddress = watch('billing_address')
+  const paymentTermsType = watch('payment_terms_type')
+
+  useEffect(() => {
+    if (shipSameAsBilling) setValue('shipping_address', billingAddress)
+  }, [shipSameAsBilling, billingAddress, setValue])
 
   async function goNext() {
     const valid = step.fields.length === 0 || (await trigger(step.fields))
@@ -159,6 +175,13 @@ export function CustomerOnboardingWizardPage() {
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <TextField label={idLabel} error={errors.code?.message} {...register('code')} />
                   <TextField label="Name" error={errors.name?.message} {...register('name')} />
+                  <TextField
+                    label="Display / trading name"
+                    hint="Shown instead of the legal name above where set. Leave blank to just use the legal name."
+                    error={errors.trade_name?.message}
+                    {...register('trade_name')}
+                  />
+                  <TextField label="Category" error={errors.category?.message} {...register('category')} />
                   <TextField label="Contact person" {...register('contact_person')} />
                 </div>
                 <IdDocumentPicker
@@ -179,11 +202,31 @@ export function CustomerOnboardingWizardPage() {
                   <TextField label="Phone" {...register('phone')} />
                 </div>
                 <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                  <TextField
+                    label="Alternate email"
+                    type="email"
+                    error={errors.alternate_email?.message}
+                    {...register('alternate_email')}
+                  />
+                  <TextField label="Alternate phone" error={errors.alternate_phone?.message} {...register('alternate_phone')} />
+                </div>
+                <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
                   <TextField label="City" {...register('city')} />
                   <TextField label="Country" {...register('country')} />
                 </div>
-                <TextareaField label="Billing address" {...register('billing_address')} />
-                <TextareaField label="Shipping address" {...register('shipping_address')} />
+                <TextareaField label="Billing / registered address" {...register('billing_address')} />
+                <label className="flex items-center gap-3 text-sm text-white/70">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-white/20 bg-transparent"
+                    checked={shipSameAsBilling}
+                    onChange={(e) => setShipSameAsBilling(e.target.checked)}
+                  />
+                  Delivery / site address same as billing address
+                </label>
+                {!shipSameAsBilling && (
+                  <TextareaField label="Delivery / site address" {...register('shipping_address')} />
+                )}
               </>
             )}
 
@@ -198,14 +241,21 @@ export function CustomerOnboardingWizardPage() {
                     error={errors.credit_limit?.message}
                     {...register('credit_limit')}
                   />
-                  <TextField
-                    label="Payment terms (days)"
-                    type="number"
-                    error={errors.payment_terms_days?.message}
-                    {...register('payment_terms_days')}
-                  />
+                  <SelectField label="Payment terms" {...register('payment_terms_type')}>
+                    <option value="cash">Cash</option>
+                    <option value="advance">Advance</option>
+                    <option value="credit">Credit</option>
+                    <option value="custom">Custom</option>
+                  </SelectField>
                 </div>
-                <TextareaField label="Notes" {...register('notes')} />
+                <TextField
+                  label="Credit days"
+                  type="number"
+                  hint={paymentTermsType === 'credit' ? 'Required when payment terms is Credit.' : undefined}
+                  error={errors.payment_terms_days?.message}
+                  {...register('payment_terms_days')}
+                />
+                <TextareaField label="Internal notes" hint="For internal staff use only." {...register('notes')} />
                 <input type="hidden" {...register('status')} />
               </>
             )}
@@ -224,15 +274,19 @@ export function CustomerOnboardingWizardPage() {
                   <ReviewField label="Type" value={isIndividual ? 'Individual' : 'Business'} />
                   <ReviewField label={idLabel} value={values.code} />
                   <ReviewField label="Name" value={values.name} />
+                  <ReviewField label="Display / trading name" value={values.trade_name} />
+                  <ReviewField label="Category" value={values.category} />
                   <ReviewField label="Contact person" value={values.contact_person} />
                   <ReviewField label="Email" value={values.email} />
                   <ReviewField label="Phone" value={values.phone} />
+                  <ReviewField label="Alternate email" value={values.alternate_email} />
+                  <ReviewField label="Alternate phone" value={values.alternate_phone} />
                   <ReviewField label="City" value={values.city} />
                   <ReviewField label="Country" value={values.country} />
                   <ReviewField label="Billing address" value={values.billing_address} />
-                  <ReviewField label="Shipping address" value={values.shipping_address} />
+                  <ReviewField label="Delivery / site address" value={values.shipping_address} />
                   <ReviewField label="Credit limit" value={formatCurrency(Number(values.credit_limit || 0))} />
-                  <ReviewField label="Payment terms" value={`${values.payment_terms_days || 0} days`} />
+                  <ReviewField label="Payment terms" value={`${values.payment_terms_type} (${values.payment_terms_days || 0} days)`} />
                   <ReviewField label="Notes" value={values.notes} />
                 </dl>
               </div>

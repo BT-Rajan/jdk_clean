@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
@@ -17,13 +17,20 @@ import { listCustomers } from '@/api/customers'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
+import { formatDate } from '@/lib/dateFormat'
 
 export function CustomersListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  // Free-text, not a picklist -- category has no fixed set of values
+  // (see models/customer.py's comment on why), so this narrows by
+  // substring the same way Search does rather than offering a dropdown
+  // of options that would need to be kept in sync with what's on file.
+  const [categoryFilter, setCategoryFilter] = useState('')
   const fetcher = useCallback(
-    (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) => listCustomers(params),
-    [],
+    (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) =>
+      listCustomers({ ...params, category: categoryFilter || undefined }),
+    [categoryFilter],
   )
   const {
     items,
@@ -52,9 +59,17 @@ export function CustomersListPage() {
           <div className="w-56">
             <TextField
               label="Search"
-              placeholder="Code, name, email…"
+              placeholder="Code, name, contact, email, mobile…"
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
+            />
+          </div>
+          <div className="w-40">
+            <TextField
+              label="Category"
+              placeholder="Any"
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
             />
           </div>
           <div className="w-44">
@@ -64,6 +79,19 @@ export function CustomersListPage() {
               <option value="inactive">Inactive</option>
             </SelectField>
           </div>
+          {(searchInput || categoryFilter || status) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchInput('')
+                setCategoryFilter('')
+                setStatus('')
+              }}
+            >
+              Clear filters
+            </Button>
+          )}
           {/* Creating a customer stays open to Sales (matches the backend's
               customers page_key write guard); editing/deleting an existing
               one is admin-only -- see CustomerDetailPage. */}
@@ -89,8 +117,13 @@ export function CustomersListPage() {
                 <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
                   <SortableHeader label="Code" field="code" sort={sort} onSort={toggleSort} />
                   <SortableHeader label="Name" field="name" sort={sort} onSort={toggleSort} />
-                  <th className="px-6 py-4 font-medium">City / Country</th>
+                  <th className="px-6 py-4 font-medium">Contact</th>
+                  <th className="px-6 py-4 font-medium">Mobile</th>
+                  <th className="px-6 py-4 font-medium">Email</th>
+                  <th className="px-6 py-4 font-medium">City</th>
+                  <th className="px-6 py-4 font-medium">Category</th>
                   <th className="px-6 py-4 font-medium">Status</th>
+                  <SortableHeader label="Created" field="created_at" sort={sort} onSort={toggleSort} />
                 </tr>
               </thead>
               <tbody>
@@ -101,13 +134,16 @@ export function CustomersListPage() {
                         {c.code ?? 'Prospective'}
                       </Link>
                     </td>
-                    <td className="px-6 py-4 text-white">{c.name}</td>
-                    <td className="px-6 py-4 text-white/60">
-                      {[c.city, c.country].filter(Boolean).join(', ') || '—'}
-                    </td>
+                    <td className="px-6 py-4 text-white">{c.trade_name || c.name}</td>
+                    <td className="px-6 py-4 text-white/60">{c.contact_person || '—'}</td>
+                    <td className="px-6 py-4 text-white/60">{c.phone || '—'}</td>
+                    <td className="px-6 py-4 text-white/60">{c.email || '—'}</td>
+                    <td className="px-6 py-4 text-white/60">{c.city || '—'}</td>
+                    <td className="px-6 py-4 text-white/60">{c.category || '—'}</td>
                     <td className="px-6 py-4">
                       <StatusBadge status={c.status} />
                     </td>
+                    <td className="px-6 py-4 text-white/60">{formatDate(c.created_at)}</td>
                   </tr>
                 ))}
               </tbody>

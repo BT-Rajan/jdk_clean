@@ -9,6 +9,7 @@ import {
   Alert,
   Button,
   Field,
+  FormSectionHeading,
   GlassCard,
   RadioGroupField,
   SelectField,
@@ -56,14 +57,24 @@ function CustomerEditForm({ id }: { id: number }) {
   const [locked, setLocked] = useState<{ name: string; code: string | null; idLabel: string } | null>(null)
   const [newCode, setNewCode] = useState('')
   const [savingCode, setSavingCode] = useState(false)
+  // Convenience only -- not a stored field. When ticked, the shipping
+  // address input is hidden and the billing address is copied over at
+  // submit time, so the two don't have to be kept in sync by hand for
+  // the common case where the delivery site is the registered address.
+  const [shipSameAsBilling, setShipSameAsBilling] = useState(false)
   const {
     register,
     handleSubmit,
     reset,
+    watch,
+    setValue,
     formState: { errors, isSubmitting },
   } = useForm<CustomerEditFormValues, unknown, CustomerEditSubmitValues>({
     resolver: zodResolver(customerEditSchema),
   })
+
+  const billingAddress = watch('billing_address')
+  const paymentTermsType = watch('payment_terms_type')
 
   useEffect(() => {
     getCustomer(id)
@@ -73,17 +84,25 @@ function CustomerEditForm({ id }: { id: number }) {
           code: customer.code,
           idLabel: customer.customer_type === 'individual' ? 'Civil ID' : 'Registration number',
         })
+        setShipSameAsBilling(
+          Boolean(customer.billing_address) && customer.billing_address === customer.shipping_address,
+        )
         reset({
           customer_type: customer.customer_type,
+          trade_name: customer.trade_name ?? '',
           contact_person: customer.contact_person ?? '',
           email: customer.email ?? '',
           phone: customer.phone ?? '',
+          alternate_phone: customer.alternate_phone ?? '',
+          alternate_email: customer.alternate_email ?? '',
           billing_address: customer.billing_address ?? '',
           shipping_address: customer.shipping_address ?? '',
           city: customer.city ?? '',
           country: customer.country ?? '',
+          category: customer.category ?? '',
           credit_limit: customer.credit_limit,
           payment_terms_days: customer.payment_terms_days,
+          payment_terms_type: customer.payment_terms_type,
           discount_approval_threshold_override: customer.discount_approval_threshold_override ?? '',
           status: customer.status,
           notes: customer.notes ?? '',
@@ -92,6 +111,13 @@ function CustomerEditForm({ id }: { id: number }) {
       .catch((err) => setFormError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
   }, [id, reset])
+
+  // Keep shipping_address mirrored live while the checkbox is on, so the
+  // value that's actually submitted is always current even though the
+  // input itself is hidden (see the JSX below).
+  useEffect(() => {
+    if (shipSameAsBilling) setValue('shipping_address', billingAddress)
+  }, [shipSameAsBilling, billingAddress, setValue])
 
   async function handleCompleteCode() {
     if (!newCode.trim()) return
@@ -129,6 +155,7 @@ function CustomerEditForm({ id }: { id: number }) {
         </div>
       ) : (
         <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
+          <FormSectionHeading>Basic information</FormSectionHeading>
           <div className="grid grid-cols-1 gap-6 rounded-xl border border-white/10 bg-white/5 p-5 sm:grid-cols-2">
             <Field label="Name" value={locked?.name} />
             {locked && locked.code === null ? (
@@ -151,7 +178,6 @@ function CustomerEditForm({ id }: { id: number }) {
             Name{locked?.code !== null && ` and ${locked?.idLabel?.toLowerCase()}`} {locked?.code !== null ? 'are' : 'is'} set at
             creation and can't be changed here.
           </p>
-
           <RadioGroupField
             label="Business or individual"
             error={errors.customer_type?.message}
@@ -161,33 +187,74 @@ function CustomerEditForm({ id }: { id: number }) {
             ]}
             {...register('customer_type')}
           />
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <TextField
+              label="Display / trading name"
+              hint="Shown instead of the legal name above where set. Leave blank to just use the legal name."
+              error={errors.trade_name?.message}
+              {...register('trade_name')}
+            />
+            <TextField label="Category" error={errors.category?.message} {...register('category')} />
+          </div>
 
+          <FormSectionHeading>Primary contact</FormSectionHeading>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <TextField label="Contact person" {...register('contact_person')} />
             <TextField label="Email" type="email" error={errors.email?.message} {...register('email')} />
           </div>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
             <TextField label="Phone" {...register('phone')} />
-            <TextField label="City" {...register('city')} />
+            <TextField label="Alternate phone" error={errors.alternate_phone?.message} {...register('alternate_phone')} />
           </div>
-          <TextField label="Country" {...register('country')} />
-          <TextareaField label="Billing address" {...register('billing_address')} />
-          <TextareaField label="Shipping address" {...register('shipping_address')} />
-          <TextareaField label="Notes" {...register('notes')} />
+          <TextField
+            label="Alternate email"
+            type="email"
+            error={errors.alternate_email?.message}
+            {...register('alternate_email')}
+          />
+
+          <FormSectionHeading>Address</FormSectionHeading>
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <TextField label="City" {...register('city')} />
+            <TextField label="Country" {...register('country')} />
+          </div>
+          <TextareaField label="Billing / registered address" {...register('billing_address')} />
+          <label className="flex items-center gap-3 text-sm text-white/70">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-white/20 bg-transparent"
+              checked={shipSameAsBilling}
+              onChange={(e) => setShipSameAsBilling(e.target.checked)}
+            />
+            Delivery / site address same as billing address
+          </label>
+          {!shipSameAsBilling && (
+            <TextareaField label="Delivery / site address" {...register('shipping_address')} />
+          )}
+
+          <FormSectionHeading>Commercial information</FormSectionHeading>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
             <TextField
-            label="Credit limit"
-            type="number"
-            step="0.01"
-            hint="0 = not enforced. Above 0, confirming a new order that would push this customer's outstanding balance over the limit needs admin approval."
-            error={errors.credit_limit?.message}
-            {...register('credit_limit')}
-          />
-            <TextField label="Payment terms (days)" type="number" error={errors.payment_terms_days?.message} {...register('payment_terms_days')} />
-            <SelectField label="Status" {...register('status')}>
-              <option value="active">Active</option>
-              <option value="inactive">Inactive</option>
+              label="Credit limit"
+              type="number"
+              step="0.01"
+              hint="0 = not enforced. Above 0, confirming a new order that would push this customer's outstanding balance over the limit needs admin approval."
+              error={errors.credit_limit?.message}
+              {...register('credit_limit')}
+            />
+            <SelectField label="Payment terms" {...register('payment_terms_type')}>
+              <option value="cash">Cash</option>
+              <option value="advance">Advance</option>
+              <option value="credit">Credit</option>
+              <option value="custom">Custom</option>
             </SelectField>
+            <TextField
+              label="Credit days"
+              type="number"
+              hint={paymentTermsType === 'credit' ? 'Required when payment terms is Credit.' : undefined}
+              error={errors.payment_terms_days?.message}
+              {...register('payment_terms_days')}
+            />
           </div>
           <TextField
             label="Discount approval threshold override (%)"
@@ -197,6 +264,20 @@ function CustomerEditForm({ id }: { id: number }) {
             error={errors.discount_approval_threshold_override?.message}
             {...register('discount_approval_threshold_override')}
           />
+
+          <FormSectionHeading>Status</FormSectionHeading>
+          <SelectField label="Status" {...register('status')}>
+            <option value="active">Active</option>
+            <option value="inactive">Inactive</option>
+          </SelectField>
+
+          <FormSectionHeading>Internal notes</FormSectionHeading>
+          <TextareaField
+            label="Internal notes"
+            hint="For internal staff use only -- never shown on quotations, orders, or customer-facing documents."
+            {...register('notes')}
+          />
+
           <div className="mt-2 flex justify-end gap-3">
             <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>
             <Button type="submit" isLoading={isSubmitting}>Save changes</Button>

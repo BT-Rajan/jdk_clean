@@ -60,9 +60,9 @@ class UserCRUD(BaseCRUD):
 class CustomerCRUD(BaseCRUD):
     model = Customer
     table_name = "customers"
-    searchable_fields = ["name", "code", "customer_number", "email"]
+    searchable_fields = ["name", "code", "customer_number", "email", "contact_person", "phone"]
     sortable_fields = ["name", "code", "customer_number", "created_at"]
-    filterable_fields = ["status", "city", "country"]
+    filterable_fields = ["status", "city", "country", "category"]
 
     def _check_duplicate_phone(self, db: Session, phone: str | None, exclude_id: int | None = None) -> None:
         if not phone:
@@ -79,8 +79,40 @@ class CustomerCRUD(BaseCRUD):
                     f"A customer with this phone number already exists: {existing.name} ({existing.customer_number})."
                 )
 
+    def _check_duplicate_email(self, db: Session, email: str | None, exclude_id: int | None = None) -> None:
+        # Same shape as _check_duplicate_phone above -- exact match
+        # (case-insensitive) on the primary email only, not
+        # alternate_email: that's a backup contact, not a second
+        # identifier worth deduplicating on.
+        if not email:
+            return
+        normalized = email.strip().lower()
+        query = db.query(Customer).filter(Customer.deleted_at.is_(None), Customer.email.isnot(None))
+        if exclude_id is not None:
+            query = query.filter(Customer.id != exclude_id)
+        for existing in query.all():
+            if existing.email.strip().lower() == normalized:
+                raise ConflictError(
+                    f"A customer with this email already exists: {existing.name} ({existing.customer_number})."
+                )
+
+    def _check_credit_terms(self, data: dict, existing: Customer | None) -> None:
+        # CustomerCreate's model_validator does this same check where
+        # both fields are always present in the payload; this covers
+        # CustomerUpdate, which commonly sends just one of the two (see
+        # schemas/customer.py CustomerUpdate's docstring) -- falls back
+        # to the existing row for whichever field the payload omits.
+        terms_type = data.get("payment_terms_type", getattr(existing, "payment_terms_type", "credit") if existing else "credit")
+        if terms_type != "credit":
+            return
+        days = data.get("payment_terms_days", getattr(existing, "payment_terms_days", 0) if existing else 0)
+        if not days or int(days) <= 0:
+            raise ValidationAppError("Credit days is required (must be greater than 0) when payment terms is Credit.")
+
     def create(self, db: Session, data: dict, user_id: int | None = None) -> Customer:
         self._check_duplicate_phone(db, data.get("phone"))
+        self._check_duplicate_email(db, data.get("email"))
+        self._check_credit_terms(data, None)
         # customer_number is an internal reference, auto-generated the
         # same way order_number/quotation_number/etc. are -- never
         # client-supplied (see schemas/customer.py CustomerCreate, which
@@ -91,6 +123,11 @@ class CustomerCRUD(BaseCRUD):
     def update(self, db: Session, id: int, data: dict, user_id: int | None = None) -> Customer:
         if "phone" in data:
             self._check_duplicate_phone(db, data["phone"], exclude_id=id)
+        if "email" in data:
+            self._check_duplicate_email(db, data["email"], exclude_id=id)
+        if "payment_terms_type" in data or "payment_terms_days" in data:
+            existing = self.read_one(db, id)
+            self._check_credit_terms(data, existing)
         if data.get("code") is not None:
             # code (civil ID / registration number) is one-directional:
             # settable only while still NULL (a prospective customer
