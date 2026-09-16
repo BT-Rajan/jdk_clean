@@ -1143,7 +1143,7 @@ CREATE TABLE IF NOT EXISTS production_orders (
 CREATE TABLE IF NOT EXISTS production_order_material_requirements (
     id                      BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     production_order_id    BIGINT UNSIGNED NOT NULL,
-    bom_id                  BIGINT UNSIGNED NULL,        -- the BOM this row was calculated from; NULL for packaging-sourced rows
+    bom_id                  BIGINT UNSIGNED NULL,        -- the BOM this row was calculated from (NULL for packaging-sourced rows)
     raw_material_id         BIGINT UNSIGNED NOT NULL,
     source                  ENUM('bom','packaging') NOT NULL,
     required_quantity       DECIMAL(14,4) NOT NULL,
