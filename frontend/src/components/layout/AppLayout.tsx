@@ -246,7 +246,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     { id: 'action:logout', label: 'Sign out', keywords: 'logout', onSelect: handleLogout },
     ...(isAdmin(user?.role)
       ? [
-          { id: 'admin:workflow-automation', label: 'Workflow Automation', hint: 'Settings', onSelect: () => navigate('/admin?section=workflow-automation') },
           { id: 'admin:approvals', label: 'Approvals', hint: 'Settings', onSelect: () => navigate('/admin?section=approvals') },
           // Master Data has its own top-level nav entry (see navEntries
           // above) -- not duplicated here.

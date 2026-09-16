@@ -37,7 +37,6 @@ const GROUPS: SectionGroup[] = [
       // this section instead of its own "Factory" group -- see the
       // `activeSection === 'company'` render below.
       { key: 'company', label: 'Company' },
-      { key: 'workflow-automation', label: 'Workflow Automation' },
       { key: 'approvals', label: 'Approvals' },
       { key: 'ai-assistant', label: 'AI Assistant' },
     ],
