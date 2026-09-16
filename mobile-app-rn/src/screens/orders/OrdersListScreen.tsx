@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
@@ -6,7 +6,7 @@ import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../../components/Alert';
 import { GlassCard } from '../../components/GlassCard';
 import { PageHeader } from '../../components/PageHeader';
-import { SelectField } from '../../components/SelectField';
+import { SelectField, SelectOption } from '../../components/SelectField';
 import { TextField } from '../../components/TextField';
 import { colors, fonts, whiteAlpha } from '../../theme';
 import { useLocale } from '../../i18n/LocaleContext';
@@ -14,6 +14,7 @@ import { confirm } from '../../utils/alerts';
 import { formatCurrency, formatDate } from '../../utils/format';
 import { usePagedList } from '../../hooks/usePagedList';
 import { listOrders, deleteOrder, Order, OrderStatus, ORDER_TRANSITIONS } from '../../api/orders';
+import { listCustomers } from '../../api/customers';
 import { OrdersStackParamList } from '../../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<OrdersStackParamList, 'OrdersList'>;
@@ -31,12 +32,14 @@ const DEFAULT_STATUS_STYLE = { bg: 'rgba(255,255,255,0.08)', text: whiteAlpha(0.
 // (draft plus every settable status) -- for the filter dropdown.
 const ORDER_STATUS_VALUES = Object.keys(ORDER_TRANSITIONS) as OrderStatus[];
 
-const fetchOrders = (params: { page: number; page_size: number; search?: string; status?: string }) =>
+const fetchOrders = (params: { page: number; page_size: number; search?: string; status?: string; customer_id?: number }) =>
   listOrders(params);
 
-export function OrdersListScreen({ navigation }: Props) {
+export function OrdersListScreen({ route, navigation }: Props) {
   const { t } = useLocale();
+  const { customerId, customerName } = route.params ?? {};
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [clientOptions, setClientOptions] = useState<SelectOption[]>([]);
 
   const {
     items: orders,
@@ -45,6 +48,8 @@ export function OrdersListScreen({ navigation }: Props) {
     setSearch,
     status,
     setStatus,
+    customerId: selectedCustomerId,
+    setCustomerId,
     loading,
     loadingMore,
     error,
@@ -55,19 +60,35 @@ export function OrdersListScreen({ navigation }: Props) {
   } = usePagedList<Order>(
     useCallback(fetchOrders, []),
     (err) => err?.message ?? t('ordersList', 'loadError'),
-    'orders',
+    customerId ? undefined : 'orders',
+    customerId,
   );
 
   useFocusEffect(
     useCallback(() => {
+      navigation.setOptions({ title: customerName ? `${t('ordersList', 'title')} · ${customerName}` : t('ordersList', 'title') });
       refresh();
-    }, [refresh]),
+    }, [refresh, navigation, customerName, t]),
   );
+
+  useEffect(() => {
+    listCustomers({ page_size: 200 })
+      .then((res) => {
+        const options = res.items.map((c) => ({ label: c.name, value: String(c.id) }));
+        if (customerId && !options.some((o) => o.value === String(customerId))) {
+          options.unshift({ label: customerName ?? String(customerId), value: String(customerId) });
+        }
+        setClientOptions(options);
+      })
+      .catch(() => {});
+  }, [customerId, customerName]);
 
   const statusOptions = [
     { label: t('ordersList', 'statusFilterAll'), value: '' },
     ...ORDER_STATUS_VALUES.map((s) => ({ label: t('orderStatus', s), value: s })),
   ];
+
+  const clientFilterOptions = [{ label: t('ordersList', 'clientFilterAll'), value: '' }, ...clientOptions];
 
   // An order can only be created from an accepted quotation (which
   // itself requires a feasibility check) -- see order_service.
@@ -101,7 +122,7 @@ export function OrdersListScreen({ navigation }: Props) {
   return (
     <View style={styles.screen}>
       <PageHeader
-        title={t('ordersList', 'title')}
+        title={customerName ? `${t('ordersList', 'title')} · ${customerName}` : t('ordersList', 'title')}
         action={
           <Pressable
             onPress={goToNewQuotation}
@@ -135,6 +156,15 @@ export function OrdersListScreen({ navigation }: Props) {
             searchable={false}
           />
         </View>
+      </View>
+
+      <View style={styles.filterRow}>
+        <SelectField
+          label={t('ordersList', 'clientFilterLabel')}
+          value={selectedCustomerId ? String(selectedCustomerId) : ''}
+          onChange={(v) => setCustomerId(v ? Number(v) : undefined)}
+          options={clientFilterOptions}
+        />
       </View>
 
       <Alert variant="error">{error}</Alert>

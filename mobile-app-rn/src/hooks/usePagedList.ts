@@ -14,6 +14,7 @@ interface FetchParams {
   page_size: number;
   search?: string;
   status?: string;
+  customer_id?: number;
 }
 
 const DEFAULT_PAGE_SIZE = 20;
@@ -55,6 +56,7 @@ export function usePagedList<T>(
   fetcher: (params: FetchParams) => Promise<PagedResponse<T>>,
   getErrorMessage: (err: any) => string = (err) => err?.message ?? 'Something went wrong.',
   cacheKey?: string,
+  initialCustomerId?: number,
 ) {
   const [items, setItemsState] = useState<T[]>([]);
   const [page, setPage] = useState(1);
@@ -62,6 +64,7 @@ export function usePagedList<T>(
   const [total, setTotal] = useState(0);
   const [search, setSearchState] = useState('');
   const [status, setStatusState] = useState('');
+  const [customerId, setCustomerIdState] = useState<number | undefined>(initialCustomerId);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -73,6 +76,7 @@ export function usePagedList<T>(
   // have something on screen" apart from stale closure state.
   const searchRef = useRef('');
   const statusRef = useRef('');
+  const customerIdRef = useRef<number | undefined>(initialCustomerId);
   const pageRef = useRef(1);
   const totalPagesRef = useRef(1);
   const itemsRef = useRef<T[]>([]);
@@ -120,6 +124,7 @@ export function usePagedList<T>(
           page_size: DEFAULT_PAGE_SIZE,
           search: searchRef.current || undefined,
           status: statusRef.current || undefined,
+          customer_id: customerIdRef.current,
         });
         if (thisRequest !== requestId.current) return;
         setItems((prev) => (replace ? res.items : [...prev, ...res.items]));
@@ -132,9 +137,9 @@ export function usePagedList<T>(
         setStale(false);
         // Only the plain, unfiltered first page is worth caching -- it's
         // the one view guaranteed to be useful again on a cold, offline
-        // launch; a cached search/status result would just as often be
-        // the wrong slice to show back.
-        if (cacheKey && targetPage === 1 && !searchRef.current && !statusRef.current) {
+        // launch; a cached search/status/client result would just as often
+        // be the wrong slice to show back.
+        if (cacheKey && targetPage === 1 && !searchRef.current && !statusRef.current && !customerIdRef.current) {
           const entry: CacheEntry<T> = { items: res.items, total: res.total, total_pages: res.total_pages };
           AsyncStorage.setItem(CACHE_KEY_PREFIX + cacheKey, JSON.stringify(entry)).catch(() => {});
         }
@@ -179,6 +184,16 @@ export function usePagedList<T>(
     [load],
   );
 
+  /** Changing the client filter re-fetches immediately, same as status. */
+  const setCustomerId = useCallback(
+    (v: number | undefined) => {
+      customerIdRef.current = v;
+      setCustomerIdState(v);
+      load(1, true);
+    },
+    [load],
+  );
+
   const loadMore = useCallback(() => {
     if (loadingMore || loading) return;
     if (pageRef.current >= totalPagesRef.current) return;
@@ -207,6 +222,8 @@ export function usePagedList<T>(
     setSearch,
     status,
     setStatus,
+    customerId,
+    setCustomerId,
     refresh,
     loadMore,
     hasMore: page < totalPages,
