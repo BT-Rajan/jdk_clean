@@ -11,6 +11,7 @@ import { ClientsListScreen } from '../screens/ClientsListScreen';
 import { ClientFormScreen } from '../screens/ClientFormScreen';
 import { ClientHistoryScreen } from '../screens/ClientHistoryScreen';
 import { QuotationsListScreen } from '../screens/quotations/QuotationsListScreen';
+import { FeasibilityListScreen } from '../screens/quotations/FeasibilityListScreen';
 import { NewQuotationScreen } from '../screens/quotations/NewQuotationScreen';
 import { QuotationDetailScreen } from '../screens/quotations/QuotationDetailScreen';
 import { FeasibilityDetailScreen } from '../screens/quotations/FeasibilityDetailScreen';
@@ -32,7 +33,11 @@ export type ClientsStackParamList = {
 };
 
 export type QuotationsStackParamList = {
-  QuotationsList: undefined;
+  // customerId/customerName -- preset when arriving here from a Client's
+  // details screen, so the list opens pre-filtered to that client instead
+  // of only reachable unfiltered from the Quotations tab itself.
+  QuotationsList: { customerId?: number; customerName?: string } | undefined;
+  FeasibilityList: { customerId?: number; customerName?: string } | undefined;
   // customerId/productId -- preset when arriving here from a Client's
   // activity hub or a Product Catalog row's "Start Quotation" action,
   // so the journey can begin from either of those screens instead of
@@ -43,7 +48,7 @@ export type QuotationsStackParamList = {
 };
 
 export type OrdersStackParamList = {
-  OrdersList: undefined;
+  OrdersList: { customerId?: number; customerName?: string } | undefined;
   // Edit-only -- an order can only be created via the quotation flow
   // (see OrderFormScreen's own comment), so this always needs an
   // existing draft order's id.
@@ -131,6 +136,11 @@ function QuotationsStackNavigator() {
           title: t('quotationsList', 'title'),
           headerLeft: () => <DrawerMenuButton navigation={navigation} />,
         })}
+      />
+      <QuotationsStack.Screen
+        name="FeasibilityList"
+        component={FeasibilityListScreen}
+        options={{ title: t('feasibilityList', 'title') }}
       />
       <QuotationsStack.Screen name="NewQuotation" component={NewQuotationScreen} options={{ title: t('newQuotation', 'title') }} />
       <QuotationsStack.Screen
@@ -250,6 +260,7 @@ const linking: LinkingOptions<any> = {
       Quotations: {
         screens: {
           QuotationsList: 'quotations',
+          FeasibilityList: 'feasibility',
           NewQuotation: 'quotations/new',
           QuotationDetail: 'quotations/:quotationId',
           FeasibilityDetail: 'feasibility/:feasibilityId',

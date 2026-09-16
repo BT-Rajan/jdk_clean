@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
@@ -7,7 +7,7 @@ import { Alert } from '../../components/Alert';
 import { Button } from '../../components/Button';
 import { GlassCard } from '../../components/GlassCard';
 import { PageHeader } from '../../components/PageHeader';
-import { SelectField } from '../../components/SelectField';
+import { SelectField, SelectOption } from '../../components/SelectField';
 import { TextField } from '../../components/TextField';
 import { colors, fonts, whiteAlpha } from '../../theme';
 import { useLocale } from '../../i18n/LocaleContext';
@@ -15,6 +15,7 @@ import { confirm } from '../../utils/alerts';
 import { formatCurrency, formatDate } from '../../utils/format';
 import { usePagedList } from '../../hooks/usePagedList';
 import { listQuotations, deleteQuotation, Quotation, QuotationStatus, QUOTATION_TRANSITIONS } from '../../api/quotations';
+import { listCustomers } from '../../api/customers';
 import { QuotationsStackParamList } from '../../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<QuotationsStackParamList, 'QuotationsList'>;
@@ -31,12 +32,14 @@ const DEFAULT_STATUS_STYLE = { bg: 'rgba(255,255,255,0.08)', text: whiteAlpha(0.
 // own keys (draft plus every settable status) -- for the filter dropdown.
 const QUOTATION_STATUS_VALUES = Object.keys(QUOTATION_TRANSITIONS) as QuotationStatus[];
 
-const fetchQuotations = (params: { page: number; page_size: number; search?: string; status?: string }) =>
+const fetchQuotations = (params: { page: number; page_size: number; search?: string; status?: string; customer_id?: number }) =>
   listQuotations(params);
 
-export function QuotationsListScreen({ navigation }: Props) {
+export function QuotationsListScreen({ route, navigation }: Props) {
   const { t } = useLocale();
+  const { customerId, customerName } = route.params ?? {};
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [clientOptions, setClientOptions] = useState<SelectOption[]>([]);
 
   const {
     items: quotations,
@@ -45,6 +48,8 @@ export function QuotationsListScreen({ navigation }: Props) {
     setSearch,
     status,
     setStatus,
+    customerId: selectedCustomerId,
+    setCustomerId,
     loading,
     loadingMore,
     error,
@@ -55,19 +60,37 @@ export function QuotationsListScreen({ navigation }: Props) {
   } = usePagedList<Quotation>(
     useCallback(fetchQuotations, []),
     (err) => err?.message ?? t('quotationsList', 'loadError'),
-    'quotations',
+    customerId ? undefined : 'quotations',
+    customerId,
   );
 
   useFocusEffect(
     useCallback(() => {
+      navigation.setOptions({
+        title: customerName ? `${t('quotationsList', 'title')} · ${customerName}` : t('quotationsList', 'title'),
+      });
       refresh();
-    }, [refresh]),
+    }, [refresh, navigation, customerName, t]),
   );
+
+  useEffect(() => {
+    listCustomers({ page_size: 200 })
+      .then((res) => {
+        const options = res.items.map((c) => ({ label: c.name, value: String(c.id) }));
+        if (customerId && !options.some((o) => o.value === String(customerId))) {
+          options.unshift({ label: customerName ?? String(customerId), value: String(customerId) });
+        }
+        setClientOptions(options);
+      })
+      .catch(() => {});
+  }, [customerId, customerName]);
 
   const statusOptions = [
     { label: t('quotationsList', 'statusFilterAll'), value: '' },
     ...QUOTATION_STATUS_VALUES.map((s) => ({ label: t('quotationStatus', s), value: s })),
   ];
+
+  const clientFilterOptions = [{ label: t('quotationsList', 'clientFilterAll'), value: '' }, ...clientOptions];
 
   async function handleDelete(quotation: Quotation) {
     const proceed = await confirm(
@@ -93,9 +116,9 @@ export function QuotationsListScreen({ navigation }: Props) {
   return (
     <View style={styles.screen}>
       <PageHeader
-        title={t('quotationsList', 'title')}
+        title={customerName ? `${t('quotationsList', 'title')} · ${customerName}` : t('quotationsList', 'title')}
         action={
-          <Button size="sm" onPress={() => navigation.navigate('NewQuotation')}>
+          <Button size="sm" onPress={() => navigation.navigate('NewQuotation', customerId ? { customerId } : undefined)}>
             {t('quotationsList', 'newButton')}
           </Button>
         }
@@ -121,6 +144,15 @@ export function QuotationsListScreen({ navigation }: Props) {
             searchable={false}
           />
         </View>
+      </View>
+
+      <View style={styles.filterRow}>
+        <SelectField
+          label={t('quotationsList', 'clientFilterLabel')}
+          value={selectedCustomerId ? String(selectedCustomerId) : ''}
+          onChange={(v) => setCustomerId(v ? Number(v) : undefined)}
+          options={clientFilterOptions}
+        />
       </View>
 
       <Alert variant="error">{error}</Alert>

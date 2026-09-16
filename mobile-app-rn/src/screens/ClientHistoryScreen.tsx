@@ -7,36 +7,16 @@ import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { GlassCard } from '../components/GlassCard';
 import { StatusBadge } from '../components/StatusBadge';
-import { colors, fonts, whiteAlpha } from '../theme';
+import { colors, fonts, radii, whiteAlpha } from '../theme';
 import { useLocale } from '../i18n/LocaleContext';
-import { formatCurrency, formatDate } from '../utils/format';
+import { formatCurrency } from '../utils/format';
 import { getCustomer, getCustomerCredit, Customer, CustomerCreditStatus } from '../api/customers';
-import { listFeasibilities, Feasibility, FeasibilityStatus } from '../api/feasibility';
-import { listQuotations, Quotation, QuotationStatus } from '../api/quotations';
-import { listOrders, Order, OrderStatus } from '../api/orders';
+import { listFeasibilities } from '../api/feasibility';
+import { listQuotations } from '../api/quotations';
+import { listOrders } from '../api/orders';
 import { ClientsStackParamList } from '../navigation/RootNavigator';
 
 type Props = NativeStackScreenProps<ClientsStackParamList, 'ClientHistory'>;
-
-const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
-  feasible: { bg: 'rgba(16,185,129,0.15)', text: colors.emerald400 },
-  accepted: { bg: 'rgba(16,185,129,0.15)', text: colors.emerald400 },
-  converted: { bg: 'rgba(16,185,129,0.15)', text: colors.emerald400 },
-  delivered: { bg: 'rgba(16,185,129,0.15)', text: colors.emerald400 },
-  shipped: { bg: 'rgba(16,185,129,0.15)', text: colors.emerald400 },
-  rejected: { bg: 'rgba(239,68,68,0.15)', text: colors.red400 },
-  expired: { bg: 'rgba(239,68,68,0.15)', text: colors.red400 },
-  exception_rejected: { bg: 'rgba(239,68,68,0.15)', text: colors.red400 },
-  cancelled: { bg: 'rgba(239,68,68,0.15)', text: colors.red400 },
-  exception_pending: { bg: 'rgba(245,158,11,0.15)', text: '#fcd34d' },
-};
-const DEFAULT_STATUS_STYLE = { bg: 'rgba(255,255,255,0.08)', text: whiteAlpha(0.6) };
-
-function statusStyleFor(status: string) {
-  return STATUS_STYLES[status] ?? DEFAULT_STATUS_STYLE;
-}
-
-type LocaleT = ReturnType<typeof useLocale>['t'];
 
 // This screen is the client's details + activity hub -- mirrors the web
 // app's CustomerDetailPage: the client's own profile fields up top, then
@@ -50,9 +30,9 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
 
   const [customer, setCustomer] = useState<Customer | null>(null);
   const [creditStatus, setCreditStatus] = useState<CustomerCreditStatus | null>(null);
-  const [feasibilities, setFeasibilities] = useState<Feasibility[]>([]);
-  const [quotations, setQuotations] = useState<Quotation[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [feasibilityCount, setFeasibilityCount] = useState(0);
+  const [quotationCount, setQuotationCount] = useState(0);
+  const [orderCount, setOrderCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,16 +40,19 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
     setLoading(true);
     setError(null);
     try {
+      // page_size: 1 -- only `.total` from each is needed here; the
+      // module buttons below link out to the real, fully paginated lists
+      // instead of duplicating them on this screen.
       const [c, f, q, o] = await Promise.all([
         getCustomer(customerId),
-        listFeasibilities({ customer_id: customerId, page_size: 10 }),
-        listQuotations({ customer_id: customerId, page_size: 10 }),
-        listOrders({ customer_id: customerId, page_size: 10 }),
+        listFeasibilities({ customer_id: customerId, page_size: 1 }),
+        listQuotations({ customer_id: customerId, page_size: 1 }),
+        listOrders({ customer_id: customerId, page_size: 1 }),
       ]);
       setCustomer(c);
-      setFeasibilities(f.items);
-      setQuotations(q.items);
-      setOrders(o.items);
+      setFeasibilityCount(f.total);
+      setQuotationCount(q.total);
+      setOrderCount(o.total);
     } catch (err: any) {
       setError(err?.message ?? t('clientHistory', 'loadError'));
     } finally {
@@ -93,19 +76,17 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
     (navigation.getParent() as any)?.navigate('Quotations', { screen: 'NewQuotation', params: { customerId } });
   }
 
-  function goToFeasibility(feasibilityId: number) {
-    (navigation.getParent() as any)?.navigate('Quotations', { screen: 'FeasibilityDetail', params: { feasibilityId } });
+  function goToFeasibilityList() {
+    (navigation.getParent() as any)?.navigate('Quotations', { screen: 'FeasibilityList', params: { customerId, customerName } });
   }
 
-  function goToQuotation(quotationId: number) {
-    (navigation.getParent() as any)?.navigate('Quotations', { screen: 'QuotationDetail', params: { quotationId } });
+  function goToQuotationsList() {
+    (navigation.getParent() as any)?.navigate('Quotations', { screen: 'QuotationsList', params: { customerId, customerName } });
   }
 
-  function goToOrder(orderId: number) {
-    (navigation.getParent() as any)?.navigate('Orders', { screen: 'OrderDetail', params: { orderId } });
+  function goToOrdersList() {
+    (navigation.getParent() as any)?.navigate('Orders', { screen: 'OrdersList', params: { customerId, customerName } });
   }
-
-  const nothingYet = !loading && feasibilities.length === 0 && quotations.length === 0 && orders.length === 0;
 
   return (
     <ScrollView contentContainerStyle={styles.screen}>
@@ -175,61 +156,21 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
 
       <Alert variant="error">{error}</Alert>
 
-      {nothingYet && <Text style={styles.emptyText}>{t('clientHistory', 'emptyText')}</Text>}
-
-      <ActivitySection title={t('clientHistory', 'feasibilitySectionTitle')} count={feasibilities.length}>
-        {feasibilities.map((f) => (
-          <Pressable
-            key={f.id}
-            onPress={() => goToFeasibility(f.id)}
-            accessibilityRole="button"
-            accessibilityLabel={`${f.feasibility_number}, ${t('feasibilityStatus', f.status as FeasibilityStatus)}`}
-          >
-            <ActivityRow
-              primary={f.feasibility_number}
-              secondary={formatDate(f.created_at)}
-              status={f.status}
-              statusLabel={t('feasibilityStatus', f.status as FeasibilityStatus)}
-            />
-          </Pressable>
-        ))}
-      </ActivitySection>
-
-      <ActivitySection title={t('clientHistory', 'quotationSectionTitle')} count={quotations.length}>
-        {quotations.map((q) => (
-          <Pressable
-            key={q.id}
-            onPress={() => goToQuotation(q.id)}
-            accessibilityRole="button"
-            accessibilityLabel={`${q.quotation_number}, ${formatCurrency(q.total_amount)}, ${t('quotationStatus', q.status as QuotationStatus)}`}
-          >
-            <ActivityRow
-              primary={q.quotation_number}
-              secondary={formatCurrency(q.total_amount)}
-              status={q.status}
-              statusLabel={t('quotationStatus', q.status as QuotationStatus)}
-            />
-          </Pressable>
-        ))}
-      </ActivitySection>
-
-      <ActivitySection title={t('clientHistory', 'orderSectionTitle')} count={orders.length}>
-        {orders.map((o) => (
-          <Pressable
-            key={o.id}
-            onPress={() => goToOrder(o.id)}
-            accessibilityRole="button"
-            accessibilityLabel={`${o.order_number}, ${formatCurrency(o.total_amount)}, ${t('orderStatus', o.status as OrderStatus)}`}
-          >
-            <ActivityRow
-              primary={o.order_number}
-              secondary={formatCurrency(o.total_amount)}
-              status={o.status}
-              statusLabel={t('orderStatus', o.status as OrderStatus)}
-            />
-          </Pressable>
-        ))}
-      </ActivitySection>
+      <View style={styles.moduleSection}>
+        <ModuleButton
+          icon="check-square"
+          label={t('clientHistory', 'feasibilitySectionTitle')}
+          count={feasibilityCount}
+          onPress={goToFeasibilityList}
+        />
+        <ModuleButton
+          icon="file-text"
+          label={t('clientHistory', 'quotationSectionTitle')}
+          count={quotationCount}
+          onPress={goToQuotationsList}
+        />
+        <ModuleButton icon="package" label={t('clientHistory', 'orderSectionTitle')} count={orderCount} onPress={goToOrdersList} />
+      </View>
     </ScrollView>
   );
 }
@@ -243,41 +184,30 @@ function DetailRow({ label, value }: { label: string; value: string | number | n
   );
 }
 
-function ActivitySection({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
-  if (count === 0) return null;
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>
-        {title} <Text style={styles.sectionCount}>({count})</Text>
-      </Text>
-      <View style={{ gap: 8 }}>{children}</View>
-    </View>
-  );
-}
-
-function ActivityRow({
-  primary,
-  secondary,
-  status,
-  statusLabel,
+function ModuleButton({
+  icon,
+  label,
+  count,
+  onPress,
 }: {
-  primary: string;
-  secondary: string;
-  status: string;
-  statusLabel: string;
+  icon: keyof typeof Feather.glyphMap;
+  label: string;
+  count: number;
+  onPress: () => void;
 }) {
-  const statusStyle = statusStyleFor(status);
   return (
-    <GlassCard style={styles.row}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowNumber}>{primary}</Text>
-        <Text style={styles.rowMeta}>{secondary}</Text>
-      </View>
-      <View style={[styles.statusBadge, { backgroundColor: statusStyle.bg }]}>
-        <Text style={[styles.statusText, { color: statusStyle.text }]}>{statusLabel}</Text>
-      </View>
-      <Feather name="chevron-right" size={16} color={whiteAlpha(0.3)} style={{ marginLeft: 8 }} />
-    </GlassCard>
+    <Pressable onPress={onPress} accessibilityRole="button" accessibilityLabel={`${label}, ${count}`}>
+      <GlassCard style={styles.moduleRow}>
+        <View style={styles.moduleIconWrap}>
+          <Feather name={icon} size={20} color={colors.gold400} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.moduleLabel}>{label}</Text>
+          <Text style={styles.moduleCount}>{count}</Text>
+        </View>
+        <Feather name="chevron-right" size={18} color={whiteAlpha(0.3)} />
+      </GlassCard>
+    </Pressable>
   );
 }
 
@@ -309,13 +239,16 @@ const styles = StyleSheet.create({
   },
   notesText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.75), lineHeight: 19 },
   quickActions: { flexDirection: 'row', gap: 10, marginBottom: 18 },
-  emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center', marginTop: 30 },
-  section: { marginBottom: 22 },
-  sectionTitle: { fontFamily: fonts.display, fontSize: 15, color: colors.white, marginBottom: 10 },
-  sectionCount: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4) },
-  row: { flexDirection: 'row', alignItems: 'center', padding: 14 },
-  rowNumber: { fontFamily: fonts.sansSemibold, fontSize: 14, color: colors.white, marginBottom: 2 },
-  rowMeta: { fontFamily: fonts.sans, fontSize: 12, color: whiteAlpha(0.45) },
-  statusBadge: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
-  statusText: { fontFamily: fonts.sansMedium, fontSize: 10, letterSpacing: 0.5, textTransform: 'uppercase' },
+  moduleSection: { gap: 10 },
+  moduleRow: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
+  moduleIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: radii.full,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(212,175,106,0.12)',
+  },
+  moduleLabel: { fontFamily: fonts.sansSemibold, fontSize: 15, color: colors.white, marginBottom: 2 },
+  moduleCount: { fontFamily: fonts.sans, fontSize: 12, color: whiteAlpha(0.45) },
 });
