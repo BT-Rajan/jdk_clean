@@ -141,13 +141,6 @@ export const HELP_CONTENT: Partial<Record<UserRole, HelpSection[]>> = {
           steps: ['Admin > Settings > General tab', 'Factory card -- total workers, workday hours'],
         },
         {
-          title: 'Turn on automation',
-          steps: [
-            'Admin > Settings > General tab',
-            'Toggle: auto-create quotation from feasibility, auto-schedule production on order confirm, auto-create delivery note, auto-draft purchase orders from MRP',
-          ],
-        },
-        {
           title: 'Require approval for large POs or discounts',
           steps: [
             'Admin > Settings > General tab',
