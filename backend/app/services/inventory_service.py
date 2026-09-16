@@ -175,6 +175,40 @@ def reserve_stock(db: Session, item_type: str, item_id: int, quantity: float, co
     return get_stock(db, item_type, item_id, commit=commit)
 
 
+def reserve_stock_within_available(
+    db: Session, item_type: str, item_id: int, quantity: float, commit: bool = True
+) -> dict:
+    """Like reserve_stock, but refuses to reserve beyond what's currently
+    available (on-hand minus everything already reserved) -- for callers
+    where over-reservation must be impossible, e.g. Production Order
+    material allocation (P4), unlike reserve_stock's own deliberately
+    permissive stance (order confirmation reserves the full line
+    regardless of stock, since a shortfall there is itself a useful
+    MRP/feasibility signal, not something to block).
+
+    Locks the row for the whole check-then-update so two concurrent
+    callers can never both pass the check against the same stale
+    available figure and jointly over-allocate the same physical stock --
+    same with_for_update() primitive reserve_stock/adjust_stock already
+    use, just with a cap enforced before the write.
+    """
+    if item_type not in _INVENTORY_MODEL:
+        raise ValidationAppError("item_type must be 'product' or 'raw_material'.")
+    if quantity <= 0:
+        raise ValidationAppError("Allocation quantity must be positive.")
+
+    row = _get_or_create_inventory_row(db, item_type, item_id, for_update=True)
+    available = float(row.quantity_on_hand) - float(row.quantity_reserved)
+    if quantity > available:
+        raise ValidationAppError(
+            f"Only {round(available, 4)} available to allocate (requested {quantity})."
+        )
+    row.quantity_reserved = float(row.quantity_reserved) + quantity
+    if commit:
+        db.commit()
+    return get_stock(db, item_type, item_id, commit=commit)
+
+
 def release_reservation(db: Session, item_type: str, item_id: int, quantity: float, commit: bool = True) -> dict:
     """Decreases quantity_reserved (e.g. order cancelled, or shipped and no
     longer just "reserved"). Clamps at zero rather than going negative in
