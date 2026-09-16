@@ -20,6 +20,8 @@ from app.models.delivery_note import DeliveryNote, DeliveryNoteLine
 from app.models.machine import Machine
 from app.models.order import Order, OrderDetail
 from app.models.product import Product
+from app.models.product_packaging import ProductPackagingLine
+from app.models.production_order import ProductionOrder
 from app.models.production_schedule import ProductionSchedule
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
 from app.models.raw_material import RawMaterial
@@ -96,6 +98,38 @@ def make_bom_line(
     db.add(line)
     db.flush()
     return line
+
+
+def make_packaging_line(
+    db: Session, product_id: int, packaging_material_id: int, quantity_per_unit: float, unit: str = "pcs"
+) -> ProductPackagingLine:
+    line = ProductPackagingLine(
+        product_id=product_id,
+        packaging_material_id=packaging_material_id,
+        quantity_per_unit=quantity_per_unit,
+        unit=unit,
+    )
+    db.add(line)
+    db.flush()
+    return line
+
+
+def make_production_order(
+    db: Session, order_id: int, order_detail_id: int, product_id: int, planned_quantity: float, due_date, **overrides
+) -> ProductionOrder:
+    n = _n()
+    po = ProductionOrder(
+        production_order_number=overrides.pop("production_order_number", f"TESTPO-{n}"),
+        order_id=order_id,
+        order_detail_id=order_detail_id,
+        product_id=product_id,
+        planned_quantity=planned_quantity,
+        due_date=due_date,
+        **overrides,
+    )
+    db.add(po)
+    db.flush()
+    return po
 
 
 def make_machine(db: Session, capacity_hours_per_day: float = 8, **overrides) -> Machine:

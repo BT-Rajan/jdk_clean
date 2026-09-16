@@ -6,7 +6,8 @@ from app.core.database import get_db
 from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.production_order import ProductionOrderCreate, ProductionOrderOut, ProductionOrderStatusUpdate
-from app.services import audit_service, production_order_service
+from app.schemas.production_order_material import MaterialRequirementSummaryOut
+from app.services import audit_service, production_order_material_service, production_order_service
 
 router = APIRouter(prefix="/api/production-orders", tags=["production"])
 # Reuses the existing "production" page key rather than introducing a
@@ -79,6 +80,26 @@ def create_production_order(
 ):
     po = production_order_service.create_production_order(db, payload.model_dump(), user_id=user.id)
     return _with_remaining(db, po, ProductionOrderOut.from_model(po))
+
+
+@router.get("/{production_order_id}/material-requirements", response_model=MaterialRequirementSummaryOut)
+def get_material_requirements(
+    production_order_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    production_order_service.get_production_order(db, production_order_id)  # 404s if missing
+    return production_order_material_service.get_requirement_summary(db, production_order_id)
+
+
+@router.post("/{production_order_id}/material-requirements/calculate", response_model=MaterialRequirementSummaryOut)
+def calculate_material_requirements(
+    production_order_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    production_order_material_service.calculate(db, production_order_id, user_id=user.id)
+    return production_order_material_service.get_requirement_summary(db, production_order_id)
 
 
 @router.post("/{production_order_id}/status", response_model=ProductionOrderOut)

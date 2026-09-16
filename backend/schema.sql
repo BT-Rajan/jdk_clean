@@ -1131,6 +1131,34 @@ CREATE TABLE IF NOT EXISTS production_orders (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- PRODUCTION ORDER MATERIAL REQUIREMENTS
+-- ============================================================
+-- Persisted "how much of this raw material does this Production Order
+-- need" -- a snapshot, not a live join, so a later BOM edit doesn't
+-- retroactively change an already-calculated requirement. Sourced from
+-- the existing bom_service (BOM explosion) and packaging_service
+-- (product_packaging_lines), never a parallel calculation engine.
+-- available/shortage are computed live from inventory at read time, not
+-- stored here -- see docs/production-lifecycle.md.
+CREATE TABLE IF NOT EXISTS production_order_material_requirements (
+    id                      BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    production_order_id    BIGINT UNSIGNED NOT NULL,
+    bom_id                  BIGINT UNSIGNED NULL,        -- the BOM this row was calculated from; NULL for packaging-sourced rows
+    raw_material_id         BIGINT UNSIGNED NOT NULL,
+    source                  ENUM('bom','packaging') NOT NULL,
+    required_quantity       DECIMAL(14,4) NOT NULL,
+    created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by              BIGINT UNSIGNED NULL,
+    updated_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by              BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_pomr_production_order FOREIGN KEY (production_order_id) REFERENCES production_orders(id),
+    CONSTRAINT fk_pomr_bom FOREIGN KEY (bom_id) REFERENCES boms(id),
+    CONSTRAINT fk_pomr_raw_material FOREIGN KEY (raw_material_id) REFERENCES raw_materials(id),
+    UNIQUE KEY uq_pomr_line (production_order_id, raw_material_id, source),
+    INDEX idx_pomr_production_order (production_order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
 -- SETTINGS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS settings (

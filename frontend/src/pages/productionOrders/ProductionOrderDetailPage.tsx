@@ -2,12 +2,19 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Badge, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
-import { getProductionOrder, updateProductionOrderStatus } from '@/api/productionOrders'
+import { Button, EmptyState } from '@/components/ui'
+import {
+  calculateMaterialRequirements,
+  getMaterialRequirements,
+  getProductionOrder,
+  updateProductionOrderStatus,
+} from '@/api/productionOrders'
 import { getOrder } from '@/api/orders'
 import type { ProductionOrder } from '@/types/productionOrder'
 import type { Order } from '@/types/order'
+import type { MaterialRequirementSummary } from '@/types/materialRequirement'
 import { getApiErrorMessage } from '@/lib/apiError'
-import { formatDate } from '@/lib/dateFormat'
+import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
@@ -16,16 +23,16 @@ import { StatusTransitionButtons } from '@/components/status/StatusTransitionBut
 
 // The rest of the pipeline this Production Order will eventually drive --
 // shown for orientation, not implemented. See docs/production-lifecycle.md;
-// none of these stages exist yet in P2, so this is deliberately just a
-// static roadmap, never fake data or a fake status.
-const FUTURE_STAGES = [
-  'Material Requirement',
-  'Material Allocation',
-  'Scheduling',
-  'Execution',
-  'Completion',
-  'Finished Goods',
-]
+// none of these stages exist yet, so this is deliberately just a static
+// roadmap, never fake data or a fake status. "Material Requirement" is
+// no longer here -- it's P3, implemented below.
+const FUTURE_STAGES = ['Material Allocation', 'Scheduling', 'Execution', 'Completion', 'Finished Goods']
+
+const OVERALL_STATUS_LABEL: Record<MaterialRequirementSummary['overall_status'], string> = {
+  not_calculated: 'Requirement not calculated',
+  available: 'Materials available',
+  short: 'Materials short',
+}
 
 export function ProductionOrderDetailPage() {
   const { id } = useParams()
@@ -36,23 +43,41 @@ export function ProductionOrderDetailPage() {
 
   const [po, setPo] = useState<ProductionOrder | null>(null)
   const [order, setOrder] = useState<Order | null>(null)
+  const [requirements, setRequirements] = useState<MaterialRequirementSummary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [calculating, setCalculating] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
     getProductionOrder(productionOrderId)
       .then((result) => {
         setPo(result)
-        return getOrder(result.order_id)
+        return Promise.all([getOrder(result.order_id), getMaterialRequirements(productionOrderId)])
       })
-      .then(setOrder)
+      .then(([orderResult, requirementsResult]) => {
+        setOrder(orderResult)
+        setRequirements(requirementsResult)
+      })
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
   }, [productionOrderId])
 
   useEffect(load, [load])
+
+  async function handleCalculate() {
+    setCalculating(true)
+    setError(null)
+    try {
+      const result = await calculateMaterialRequirements(productionOrderId)
+      setRequirements(result)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setCalculating(false)
+    }
+  }
 
   async function handleStatusChange(status: (typeof PRODUCTION_ORDER_TRANSITIONS)['planned'][number], reason?: string) {
     setBusy(true)
@@ -152,11 +177,101 @@ export function ProductionOrderDetailPage() {
       </GlassCard>
 
       <GlassCard className="mb-6 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <h2 className="font-display text-lg font-medium text-white">Material requirements</h2>
+            {requirements && (
+              <Badge
+                tone={
+                  requirements.overall_status === 'available'
+                    ? 'success'
+                    : requirements.overall_status === 'short'
+                      ? 'danger'
+                      : 'neutral'
+                }
+              >
+                {OVERALL_STATUS_LABEL[requirements.overall_status]}
+              </Badge>
+            )}
+          </div>
+          {allowWrite && po.status === 'planned' && (
+            <Button size="sm" variant="ghost" isLoading={calculating} onClick={handleCalculate}>
+              {requirements && requirements.items.length > 0 ? 'Recalculate' : 'Calculate requirements'}
+            </Button>
+          )}
+        </div>
+        {!requirements || requirements.items.length === 0 ? (
+          <EmptyState
+            title="Requirement not calculated"
+            message={
+              po.status === 'planned'
+                ? "Calculate this production order's material requirement from its product's BOM and packaging."
+                : 'No material requirement was calculated before this production order left planning.'
+            }
+          />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                  <th className="px-6 py-4 font-medium">Material</th>
+                  <th className="px-6 py-4 font-medium">Type</th>
+                  <th className="px-6 py-4 text-right font-medium">Required</th>
+                  <th className="px-6 py-4 text-right font-medium">Available</th>
+                  <th className="px-6 py-4 text-right font-medium">Shortage</th>
+                  <th className="px-6 py-4 font-medium">Unit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {requirements.items.map((item) => (
+                  <tr key={item.id} className="border-b border-white/5 last:border-0">
+                    <td className="px-6 py-4 text-white">
+                      {item.code} — {item.name}
+                    </td>
+                    <td className="px-6 py-4 text-white/60">{item.material_type_label}</td>
+                    <td className="px-6 py-4 text-right text-white/60">{item.required_quantity}</td>
+                    <td className="px-6 py-4 text-right text-white/60">{item.available_quantity}</td>
+                    <td className="px-6 py-4 text-right">
+                      {item.shortage_quantity > 0 ? (
+                        <span className="text-red-300">{item.shortage_quantity}</span>
+                      ) : (
+                        <span className="text-white/40">0</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-white/60">{item.unit}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {requirements && requirements.calculated_at && (
+          <p className="border-t border-white/10 px-6 py-3 text-xs text-white/40">
+            Last calculated {formatDateTime(requirements.calculated_at)} against {requirements.items.find((i) => i.bom_number)?.bom_number ?? 'the active BOM'}.
+          </p>
+        )}
+      </GlassCard>
+
+      <GlassCard className="mb-6 overflow-hidden">
         <div className="border-b border-white/10 px-6 py-4">
           <h2 className="font-display text-lg font-medium text-white">Production pipeline</h2>
         </div>
         <div className="flex flex-wrap items-center gap-3 px-6 py-5">
           <Badge tone={po.status === 'cancelled' ? 'danger' : 'gold'}>Production order</Badge>
+          <span className="flex items-center gap-3">
+            <span className="text-white/20">→</span>
+            <Badge
+              tone={
+                requirements?.overall_status === 'available'
+                  ? 'success'
+                  : requirements?.overall_status === 'short'
+                    ? 'danger'
+                    : 'neutral'
+              }
+            >
+              Material requirement
+            </Badge>
+          </span>
           {FUTURE_STAGES.map((stage) => (
             <span key={stage} className="flex items-center gap-3">
               <span className="text-white/20">→</span>
