@@ -441,6 +441,7 @@ const en = {
     tableQuotations: 'Quotation',
     tableFeasibilityChecks: 'Feasibility check',
     tableOrders: 'Order',
+    tableProducts: 'Product',
   },
   account: {
     signedInAs: 'Signed in as {{username}}',
@@ -913,6 +914,7 @@ const ar: typeof en = {
     tableQuotations: 'عرض سعر',
     tableFeasibilityChecks: 'فحص جدوى',
     tableOrders: 'طلب',
+    tableProducts: 'منتج',
   },
   account: {
     signedInAs: 'تم تسجيل الدخول باسم {{username}}',

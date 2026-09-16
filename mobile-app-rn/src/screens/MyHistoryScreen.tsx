@@ -30,6 +30,12 @@ function goToRecord(navigation: any, entry: MyHistoryEntry) {
     case 'orders':
       navigation.navigate('Orders', { screen: 'OrderDetail', params: { orderId: entry.record_id } });
       return;
+    case 'products':
+      // No per-product detail screen on mobile (Sales has read-only,
+      // list-only access to the catalog) -- the closest useful landing
+      // spot is the catalog itself rather than nowhere at all.
+      navigation.navigate('ProductCatalog');
+      return;
     default:
       // Unknown/unsupported table -- nothing to navigate to.
       return;
@@ -37,7 +43,7 @@ function goToRecord(navigation: any, entry: MyHistoryEntry) {
 }
 
 function isNavigable(tableName: string): boolean {
-  return ['customers', 'quotations', 'feasibility_checks', 'orders'].includes(tableName);
+  return ['customers', 'quotations', 'feasibility_checks', 'orders', 'products'].includes(tableName);
 }
 
 type LocaleT = ReturnType<typeof useLocale>['t'];
@@ -57,6 +63,8 @@ function tableLabel(t: LocaleT, tableName: string): string {
       return t('myHistory', 'tableFeasibilityChecks');
     case 'orders':
       return t('myHistory', 'tableOrders');
+    case 'products':
+      return t('myHistory', 'tableProducts');
     default: {
       const words = tableName.replace(/_/g, ' ');
       return words.charAt(0).toUpperCase() + words.slice(1);

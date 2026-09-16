@@ -1098,6 +1098,67 @@ CREATE TABLE IF NOT EXISTS production_schedules (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- PRODUCTION ORDERS
+-- ============================================================
+-- The internal manufacturing instruction created from a confirmed
+-- customer order line -- WHAT needs to be produced, how much, for which
+-- order line, and by when. Deliberately does not touch scheduling
+-- (machine/dates -- see production_schedules above) or execution
+-- (actual output) -- those are a later pass. See
+-- docs/production-lifecycle.md for the full architecture reasoning.
+CREATE TABLE IF NOT EXISTS production_orders (
+    id                          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    production_order_number    VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. PRO-00001)
+    order_id                    BIGINT UNSIGNED NOT NULL,
+    order_detail_id             BIGINT UNSIGNED NOT NULL,          -- the specific customer order line this fulfils
+    product_id                  BIGINT UNSIGNED NOT NULL,          -- mirrors order_details.product_id at creation
+    planned_quantity            DECIMAL(14,4) NOT NULL,
+    due_date                    DATE NOT NULL,
+    priority                    ENUM('low','normal','high','urgent') NOT NULL DEFAULT 'normal',
+    status                      ENUM('planned','cancelled') NOT NULL DEFAULT 'planned',
+    cancel_reason                TEXT NULL,                        -- mandatory when status becomes 'cancelled'
+    notes                        TEXT NULL,
+    created_at                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by                  BIGINT UNSIGNED NULL,
+    updated_at                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by                  BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_po_order FOREIGN KEY (order_id) REFERENCES orders(id),
+    CONSTRAINT fk_po_order_detail FOREIGN KEY (order_detail_id) REFERENCES order_details(id),
+    CONSTRAINT fk_po_product FOREIGN KEY (product_id) REFERENCES products(id),
+    INDEX idx_po_order (order_id),
+    INDEX idx_po_order_detail (order_detail_id),
+    INDEX idx_po_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- PRODUCTION ORDER MATERIAL REQUIREMENTS
+-- ============================================================
+-- Persisted "how much of this raw material does this Production Order
+-- need" -- a snapshot, not a live join, so a later BOM edit doesn't
+-- retroactively change an already-calculated requirement. Sourced from
+-- the existing bom_service (BOM explosion) and packaging_service
+-- (product_packaging_lines), never a parallel calculation engine.
+-- available/shortage are computed live from inventory at read time, not
+-- stored here -- see docs/production-lifecycle.md.
+CREATE TABLE IF NOT EXISTS production_order_material_requirements (
+    id                      BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    production_order_id    BIGINT UNSIGNED NOT NULL,
+    bom_id                  BIGINT UNSIGNED NULL,        -- the BOM this row was calculated from; NULL for packaging-sourced rows
+    raw_material_id         BIGINT UNSIGNED NOT NULL,
+    source                  ENUM('bom','packaging') NOT NULL,
+    required_quantity       DECIMAL(14,4) NOT NULL,
+    created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by              BIGINT UNSIGNED NULL,
+    updated_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by              BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_pomr_production_order FOREIGN KEY (production_order_id) REFERENCES production_orders(id),
+    CONSTRAINT fk_pomr_bom FOREIGN KEY (bom_id) REFERENCES boms(id),
+    CONSTRAINT fk_pomr_raw_material FOREIGN KEY (raw_material_id) REFERENCES raw_materials(id),
+    UNIQUE KEY uq_pomr_line (production_order_id, raw_material_id, source),
+    INDEX idx_pomr_production_order (production_order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
 -- SETTINGS
 -- ============================================================
 CREATE TABLE IF NOT EXISTS settings (
@@ -1323,6 +1384,7 @@ INSERT IGNORE INTO number_series (doc_type, prefix, next_number, padding) VALUES
     ('SUPPLIER_RETURN', 'SRN', 1, 5),
     ('CUSTOMER', 'CUST', 1, 5),
     ('SUPPLIER', 'SUP', 1, 5),
-    ('BOM', 'BOM', 1, 5);
+    ('BOM', 'BOM', 1, 5),
+    ('PRODUCTION_ORDER', 'PRO', 1, 5);
 
 SET FOREIGN_KEY_CHECKS = 1;

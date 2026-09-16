@@ -134,6 +134,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         { to: '/orders', label: 'Orders (view)' },
         { to: '/purchase-orders', label: 'Purchase orders (view)' },
         { to: '/mrp', label: 'MRP' },
+        { to: '/production-orders', label: 'Production orders' },
         { to: '/production', label: 'Production schedule' },
         { to: '/machines', label: 'Production Line' },
         { to: '/reports/production-report', label: 'Production Report' },

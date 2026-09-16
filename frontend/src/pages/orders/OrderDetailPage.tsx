@@ -3,7 +3,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, BanknoteIcon, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, Modal, MovingCartIcon, PageHeader, Spinner, StatusBadge, TextareaField, TextField, ThumbsUpIcon, TornPaperIcon } from '@/components/ui'
+import { Alert, BanknoteIcon, Badge, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, Modal, MovingCartIcon, PageHeader, Spinner, StatusBadge, TextareaField, TextField, ThumbsUpIcon, TornPaperIcon } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewOrder,
@@ -19,11 +19,14 @@ import {
   updateOrderStatus,
 } from '@/api/orders'
 import { createDeliveryNote, listDeliveryNotes } from '@/api/deliveryNotes'
+import { listProductionOrders } from '@/api/productionOrders'
 import { todayDateInputMin } from '@/lib/validation'
 import { PaymentsPanel } from './PaymentsPanel'
 import { PaymentPlansPanel } from './PaymentPlansPanel'
+import { CreateProductionOrderModal } from './CreateProductionOrderModal'
 import type { Order } from '@/types/order'
 import type { DeliveryNote } from '@/types/deliveryNote'
+import type { ProductionOrder } from '@/types/productionOrder'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
@@ -172,12 +175,14 @@ export function OrderDetailPage() {
   const [paymentEmailOpen, setPaymentEmailOpen] = useState(false)
   const [adminReviewOpen, setAdminReviewOpen] = useState(false)
   const [splitOpen, setSplitOpen] = useState(false)
+  const [productionOrderModalOpen, setProductionOrderModalOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
   // An order can now be shipped across more than one delivery note
   // (multiple trucks/dates) -- see delivery_note_service.py's
   // ELIGIBLE_ORDER_STATUSES -- so this tracks every note issued against
   // it, not just a single "the" note.
   const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([])
+  const [productionOrders, setProductionOrders] = useState<ProductionOrder[]>([])
 
   function load() {
     setLoading(true)
@@ -193,8 +198,15 @@ export function OrderDetailPage() {
       .catch(() => setDeliveryNotes([]))
   }
 
+  function loadProductionOrders() {
+    listProductionOrders({ order_id: orderId, page: 1, page_size: 50 })
+      .then((result) => setProductionOrders(result.items))
+      .catch(() => setProductionOrders([]))
+  }
+
   useEffect(load, [orderId])
   useEffect(loadDeliveryNotes, [orderId])
+  useEffect(loadProductionOrders, [orderId])
 
   async function handleStatusChange(status: (typeof ORDER_TRANSITIONS)['draft'][number], reason?: string) {
     setBusy(true)
@@ -533,6 +545,57 @@ export function OrderDetailPage() {
         </div>
       </GlassCard>
 
+      <GlassCard className="mt-6 overflow-hidden">
+        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+          <h2 className="font-display text-lg font-medium text-white">
+            Production orders {productionOrders.length > 0 && <span className="text-sm text-white/40">({productionOrders.length})</span>}
+          </h2>
+          {allowWrite && (order.status === 'confirmed' || order.status === 'in_production') && (
+            <Button variant="ghost" size="sm" onClick={() => setProductionOrderModalOpen(true)}>
+              + Production order
+            </Button>
+          )}
+        </div>
+        {productionOrders.length === 0 ? (
+          <p className="px-6 py-6 text-sm text-white/40">
+            No production orders yet -- create one to plan manufacturing for this order.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                  <th className="px-6 py-4 font-medium">Production order</th>
+                  <th className="px-6 py-4 font-medium">Product</th>
+                  <th className="px-6 py-4 font-medium">Planned qty</th>
+                  <th className="px-6 py-4 font-medium">Due date</th>
+                  <th className="px-6 py-4 font-medium">Priority</th>
+                  <th className="px-6 py-4 font-medium">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productionOrders.map((po) => (
+                  <tr key={po.id} className="border-b border-white/5 last:border-0">
+                    <td className="px-6 py-4">
+                      <Link to={`/production-orders/${po.id}`} className="font-medium text-gold-300 hover:text-gold-200">
+                        {po.production_order_number}
+                      </Link>
+                    </td>
+                    <td className="px-6 py-4 text-white">
+                      {po.product_code ? `${po.product_code} — ${po.product_name}` : `#${po.product_id}`}
+                    </td>
+                    <td className="px-6 py-4 text-white/60">{po.planned_quantity} {po.unit ?? ''}</td>
+                    <td className="px-6 py-4 text-white/60">{formatDate(po.due_date)}</td>
+                    <td className="px-6 py-4"><Badge tone="neutral">{po.priority}</Badge></td>
+                    <td className="px-6 py-4"><StatusBadge status={po.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </GlassCard>
+
       {deliveryNotes.length > 0 && (
         <GlassCard className="mt-6 overflow-hidden">
           <div className="border-b border-white/10 px-6 py-4">
@@ -654,6 +717,17 @@ export function OrderDetailPage() {
             `Split into new order ${child.order_number} (${formatCurrency(child.total_amount)}) -- delivered separately.`,
           )
           load()
+        }}
+      />
+
+      <CreateProductionOrderModal
+        open={productionOrderModalOpen}
+        order={order}
+        onClose={() => setProductionOrderModalOpen(false)}
+        onCreated={(po) => {
+          setProductionOrderModalOpen(false)
+          setNotice(`Production order ${po.production_order_number} created.`)
+          loadProductionOrders()
         }}
       />
 

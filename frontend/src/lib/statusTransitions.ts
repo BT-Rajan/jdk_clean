@@ -1,6 +1,7 @@
 import type { QuotationStatus, SettableQuotationStatus } from '@/types/quotation'
 import type { OrderStatus, SettableOrderStatus } from '@/types/order'
 import type { ProductionStatus, SettableProductionStatus } from '@/types/production'
+import type { ProductionOrderStatus, SettableProductionOrderStatus } from '@/types/productionOrder'
 import type { PurchaseOrderStatus, SettablePurchaseOrderStatus } from '@/types/purchaseOrder'
 import type { DeliveryNoteStatus, SettableDeliveryNoteStatus } from '@/types/deliveryNote'
 import type { CustomerOnboardingStatus } from '@/types/customer'
@@ -79,6 +80,18 @@ export const PRODUCTION_TRANSITIONS: Record<ProductionStatus, SettableProduction
  * cancelling/closing's same "say why" requirement everywhere else in the
  * app, since it's the one transition here that isn't self-explanatory. */
 export const PRODUCTION_STATUSES_REQUIRING_REASON: SettableProductionStatus[] = ['cancelled', 'paused']
+
+/** Mirrors ALLOWED_TRANSITIONS in backend/app/models/production_order.py.
+ * Deliberately minimal for P2 -- see docs/production-lifecycle.md --
+ * 'cancelled' is the only settable target; scheduling/execution/QC
+ * statuses belong to later passes. */
+export const PRODUCTION_ORDER_TRANSITIONS: Record<ProductionOrderStatus, SettableProductionOrderStatus[]> = {
+  planned: ['cancelled'],
+  cancelled: [],
+}
+/** Cancelling a production order requires a reason, same convention as
+ * every other cancellable module in this app. */
+export const PRODUCTION_ORDER_STATUSES_REQUIRING_REASON: SettableProductionOrderStatus[] = ['cancelled']
 
 /** Mirrors ALLOWED_TRANSITIONS in backend/app/models/purchase_order.py.
  * 'partially_received' and 'received' are reached via the dedicated

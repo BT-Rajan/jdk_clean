@@ -29,6 +29,11 @@ const PATH_PREFIX_TO_PAGE_KEY: [string, string][] = [
   ['/machines', 'machines'],
   ['/quotations', 'quotations'],
   ['/orders', 'orders'],
+  // Reuses the same 'production' page key as /production -- Production
+  // Orders are part of the same Production section the backend's
+  // department_permissions matrix already governs, not a separate
+  // permission to configure. See backend/app/api/production_orders.py.
+  ['/production-orders', 'production'],
   ['/production', 'production'],
 ]
 
