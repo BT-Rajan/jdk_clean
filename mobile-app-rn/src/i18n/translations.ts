@@ -9,6 +9,10 @@ const en = {
     confirm: 'Confirm',
     loading: 'Loading…',
     comingSoon: 'Coming soon',
+    staleDataNotice: "You're offline -- showing saved data from last sync.",
+  },
+  offline: {
+    banner: 'No internet connection',
   },
   login: {
     title: 'Welcome back',
@@ -462,6 +466,10 @@ const ar: typeof en = {
     confirm: 'تأكيد',
     loading: 'جارٍ التحميل…',
     comingSoon: 'قريبًا',
+    staleDataNotice: 'أنت غير متصل بالإنترنت -- تُعرض البيانات المحفوظة من آخر مزامنة.',
+  },
+  offline: {
+    banner: 'لا يوجد اتصال بالإنترنت',
   },
   login: {
     title: 'مرحبًا بعودتك',

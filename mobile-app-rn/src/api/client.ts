@@ -87,6 +87,14 @@ async function fetchWithTimeout(url: string, init: RequestInit, timeoutMs: numbe
     if (err instanceof Error && err.name === 'AbortError') {
       throw new ApiError('Request timed out. Check your connection and try again.', 0);
     }
+    // React Native's (and the browser's) fetch throws a bare TypeError --
+    // "Network request failed" / "Failed to fetch" -- when there's no
+    // route to the server at all (no signal, airplane mode, DNS
+    // failure), as opposed to a real HTTP error response. That message
+    // is meaningless to an end user, so give this case its own clear one.
+    if (err instanceof TypeError) {
+      throw new ApiError('No internet connection. Check your network and try again.', 0);
+    }
     throw err;
   } finally {
     clearTimeout(timer);

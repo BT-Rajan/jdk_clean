@@ -48,10 +48,15 @@ export function QuotationsListScreen({ navigation }: Props) {
     loading,
     loadingMore,
     error,
+    stale,
     setError,
     refresh,
     loadMore,
-  } = usePagedList<Quotation>(useCallback(fetchQuotations, []), (err) => err?.message ?? t('quotationsList', 'loadError'));
+  } = usePagedList<Quotation>(
+    useCallback(fetchQuotations, []),
+    (err) => err?.message ?? t('quotationsList', 'loadError'),
+    'quotations',
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -119,6 +124,7 @@ export function QuotationsListScreen({ navigation }: Props) {
       </View>
 
       <Alert variant="error">{error}</Alert>
+      {stale && !error && <Text style={styles.staleText}>{t('common', 'staleDataNotice')}</Text>}
 
       <FlatList
         data={quotations}
@@ -180,6 +186,7 @@ export function QuotationsListScreen({ navigation }: Props) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink950, padding: 18 },
   filterRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
+  staleText: { fontFamily: fonts.sans, fontSize: 12, color: '#fcd34d', marginBottom: 10 },
   emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center', marginTop: 30 },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, padding: 16 },
   rowNumber: { fontFamily: fonts.sansSemibold, fontSize: 15, color: colors.white, marginBottom: 3 },

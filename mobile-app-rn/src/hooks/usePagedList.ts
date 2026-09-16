@@ -1,4 +1,5 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export interface PagedResponse<T> {
   items: T[];
@@ -16,6 +17,13 @@ interface FetchParams {
 }
 
 const DEFAULT_PAGE_SIZE = 20;
+const CACHE_KEY_PREFIX = 'paged_list_cache:';
+
+interface CacheEntry<T> {
+  items: T[];
+  total: number;
+  total_pages: number;
+}
 
 /**
  * Infinite-scroll pagination + status filter for a FlatList-backed list
@@ -33,12 +41,22 @@ const DEFAULT_PAGE_SIZE = 20;
  * `getErrorMessage`, if given, turns a caught error into the string shown
  * to the user (e.g. `(err) => err?.message ?? t('clients', 'loadError')`);
  * defaults to the raw `err.message` with a generic fallback.
+ *
+ * `cacheKey`, if given, persists the last successful unfiltered page-1
+ * result to AsyncStorage and restores it on mount before the first live
+ * fetch resolves -- so opening the app with a dead connection shows the
+ * last-known list instead of a blank screen. If a later refresh then
+ * fails while there's already something on screen (cached or live), the
+ * failure is treated as `stale` (keep showing what's there) rather than
+ * a hard `error` (which would otherwise read as "nothing here" even
+ * though there plainly is).
  */
 export function usePagedList<T>(
   fetcher: (params: FetchParams) => Promise<PagedResponse<T>>,
   getErrorMessage: (err: any) => string = (err) => err?.message ?? 'Something went wrong.',
+  cacheKey?: string,
 ) {
-  const [items, setItems] = useState<T[]>([]);
+  const [items, setItemsState] = useState<T[]>([]);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
@@ -47,14 +65,17 @@ export function usePagedList<T>(
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
 
-  // Refs, not just state, so load() always reads the latest search/status
-  // even when called synchronously right after setSearch/setStatus (state
-  // updates aren't visible until the next render).
+  // Refs, not just state, so load() always reads the latest values even
+  // when called synchronously right after a setter (state updates aren't
+  // visible until the next render), and so it can tell "do we already
+  // have something on screen" apart from stale closure state.
   const searchRef = useRef('');
   const statusRef = useRef('');
   const pageRef = useRef(1);
   const totalPagesRef = useRef(1);
+  const itemsRef = useRef<T[]>([]);
   const requestId = useRef(0);
   // Kept out of load()'s dependency array on purpose -- callers often pass
   // an inline arrow closing over a translation function, and including it
@@ -63,12 +84,36 @@ export function usePagedList<T>(
   const getErrorMessageRef = useRef(getErrorMessage);
   getErrorMessageRef.current = getErrorMessage;
 
+  const setItems = useCallback((updater: T[] | ((prev: T[]) => T[])) => {
+    setItemsState((prev) => {
+      const next = typeof updater === 'function' ? (updater as (p: T[]) => T[])(prev) : updater;
+      itemsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  // One-time cache hydration, before anything has loaded live -- guarded
+  // by requestId so a fast live response that beats this read wins.
+  useEffect(() => {
+    if (!cacheKey) return;
+    AsyncStorage.getItem(CACHE_KEY_PREFIX + cacheKey)
+      .then((raw) => {
+        if (!raw || requestId.current !== 0) return;
+        const cached: CacheEntry<T> = JSON.parse(raw);
+        setItems(cached.items);
+        setTotal(cached.total);
+        setTotalPages(cached.total_pages);
+        totalPagesRef.current = cached.total_pages;
+        setStale(true);
+      })
+      .catch(() => {});
+  }, [cacheKey, setItems]);
+
   const load = useCallback(
     async (targetPage: number, replace: boolean) => {
       const thisRequest = ++requestId.current;
       if (replace) setLoading(true);
       else setLoadingMore(true);
-      setError(null);
       try {
         const res = await fetcher({
           page: targetPage,
@@ -83,8 +128,27 @@ export function usePagedList<T>(
         setPage(res.page);
         setTotalPages(res.total_pages);
         setTotal(res.total);
+        setError(null);
+        setStale(false);
+        // Only the plain, unfiltered first page is worth caching -- it's
+        // the one view guaranteed to be useful again on a cold, offline
+        // launch; a cached search/status result would just as often be
+        // the wrong slice to show back.
+        if (cacheKey && targetPage === 1 && !searchRef.current && !statusRef.current) {
+          const entry: CacheEntry<T> = { items: res.items, total: res.total, total_pages: res.total_pages };
+          AsyncStorage.setItem(CACHE_KEY_PREFIX + cacheKey, JSON.stringify(entry)).catch(() => {});
+        }
       } catch (err: any) {
-        if (thisRequest === requestId.current) setError(getErrorMessageRef.current(err));
+        if (thisRequest !== requestId.current) return;
+        if (itemsRef.current.length > 0) {
+          // Something is already on screen (cached or from an earlier
+          // successful fetch) -- a failed refresh/load-more shouldn't
+          // blank that out from under the user or read as "nothing
+          // here"; flag it as stale instead of a hard error.
+          setStale(true);
+        } else {
+          setError(getErrorMessageRef.current(err));
+        }
       } finally {
         if (thisRequest === requestId.current) {
           setLoading(false);
@@ -92,7 +156,7 @@ export function usePagedList<T>(
         }
       }
     },
-    [fetcher],
+    [fetcher, cacheKey],
   );
 
   /** Re-fetches from page 1 with the current search/status -- pull-to-refresh,
@@ -132,6 +196,10 @@ export function usePagedList<T>(
     loading,
     loadingMore,
     error,
+    // True when what's on screen is cached/stale rather than confirmed
+    // fresh -- e.g. no connection right now. Distinct from `error`: there
+    // IS something to show, it just might be out of date.
+    stale,
     // Exposed so a screen can surface a non-list mutation's own error
     // (e.g. a failed row action) through the same banner.
     setError,
