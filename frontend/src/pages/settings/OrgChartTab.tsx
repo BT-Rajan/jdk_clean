@@ -143,6 +143,50 @@ function Stem({ className }: { className?: string }) {
   return <div className={cn('mx-auto w-px bg-white/15', className)} />
 }
 
+const ZOOM_MIN = 0.4
+const ZOOM_MAX = 1.5
+const ZOOM_STEP = 0.1
+
+/** Zoom in / out / reset controls for the chart -- the chart's node
+ * count is unbounded (grows with headcount), so it routinely exceeds
+ * the viewport; this lets people shrink it to fit or zoom into a
+ * crowded department without the browser's own page zoom. */
+function ZoomControls({ zoom, onZoomIn, onZoomOut, onReset }: { zoom: number; onZoomIn: () => void; onZoomOut: () => void; onReset: () => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="text-xs text-white/40">Zoom</span>
+      <div className="flex items-center gap-0.5 rounded-lg border border-white/10 bg-white/5 p-1">
+        <button
+          type="button"
+          onClick={onZoomOut}
+          disabled={zoom <= ZOOM_MIN}
+          aria-label="Zoom out"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-base leading-none text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          −
+        </button>
+        <button
+          type="button"
+          onClick={onReset}
+          aria-label="Reset zoom"
+          className="min-w-[3.25rem] rounded-md px-2 py-1 text-center text-xs text-white/60 transition-colors hover:bg-white/10 hover:text-white"
+        >
+          {Math.round(zoom * 100)}%
+        </button>
+        <button
+          type="button"
+          onClick={onZoomIn}
+          disabled={zoom >= ZOOM_MAX}
+          aria-label="Zoom in"
+          className="flex h-7 w-7 items-center justify-center rounded-md text-base leading-none text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-30 disabled:hover:bg-transparent"
+        >
+          +
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export function OrgChartTab() {
   const [users, setUsers] = useState<User[] | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -150,6 +194,10 @@ export function OrgChartTab() {
   const [dragOverKey, setDragOverKey] = useState<string | null>(null)
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set())
   const [query, setQuery] = useState('')
+  const [zoom, setZoom] = useState(1)
+  const zoomIn = () => setZoom((z) => Math.min(ZOOM_MAX, Math.round((z + ZOOM_STEP) * 100) / 100))
+  const zoomOut = () => setZoom((z) => Math.max(ZOOM_MIN, Math.round((z - ZOOM_STEP) * 100) / 100))
+  const resetZoom = () => setZoom(1)
 
   const departmentsFetcher = useCallback(() => listDepartments({ page: 1, page_size: 200, status: 'active' }), [])
   const { options: departments } = useSelectOptions(departmentsFetcher)
@@ -346,13 +394,16 @@ export function OrgChartTab() {
               , not by dragging.
             </p>
           </div>
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search people..."
-            className="h-9 w-full max-w-[220px] rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:border-gold-400/60"
-          />
+          <div className="flex flex-wrap items-center gap-3">
+            <ZoomControls zoom={zoom} onZoomIn={zoomIn} onZoomOut={zoomOut} onReset={resetZoom} />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search people..."
+              className="h-9 w-full max-w-[220px] rounded-lg border border-white/10 bg-white/5 px-3 text-sm text-white placeholder:text-white/30 outline-none transition-colors focus:border-gold-400/60"
+            />
+          </div>
         </div>
 
         {/* Department legend -- the chart's color key, and the clearest
@@ -378,7 +429,11 @@ export function OrgChartTab() {
         {noSearchResults ? (
           <EmptyState title="No matches" message={`Nobody's name or username matches "${query}".`} />
         ) : (
-          <div className="mt-8 flex flex-col items-center">
+          <div className="mt-8 max-h-[75vh] overflow-auto rounded-2xl border border-white/5">
+          <div
+            className="flex min-w-full flex-col items-center px-4 py-6"
+            style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}
+          >
             {/* Owner tier */}
             <div className="flex flex-col items-center gap-3">
               <span className="text-[10px] font-medium tracking-wide text-white/30 uppercase">Owner</span>
@@ -533,6 +588,7 @@ export function OrgChartTab() {
                 </div>
               </>
             )}
+          </div>
           </div>
         )}
       </GlassCard>
