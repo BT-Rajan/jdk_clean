@@ -103,7 +103,13 @@ export function OrdersListScreen({ navigation }: Props) {
       <PageHeader
         title={t('ordersList', 'title')}
         action={
-          <Pressable onPress={goToNewQuotation} hitSlop={10} style={styles.newBtn}>
+          <Pressable
+            onPress={goToNewQuotation}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel={t('ordersList', 'startQuotationLabel')}
+            style={styles.newBtn}
+          >
             <Feather name="plus-circle" size={24} color={colors.gold400} />
           </Pressable>
         }
@@ -147,7 +153,11 @@ export function OrdersListScreen({ navigation }: Props) {
           const statusStyle = STATUS_STYLES[item.status] ?? DEFAULT_STATUS_STYLE;
           const isDraft = item.status === 'draft';
           return (
-            <Pressable onPress={() => navigation.navigate('OrderDetail', { orderId: item.id })}>
+            <Pressable
+              onPress={() => navigation.navigate('OrderDetail', { orderId: item.id })}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.order_number}, ${item.customer_name ?? ''}, ${t('orderStatus', item.status as OrderStatus)}`}
+            >
               <GlassCard style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowNumber}>{item.order_number}</Text>
@@ -169,6 +179,8 @@ export function OrdersListScreen({ navigation }: Props) {
                   <Pressable
                     onPress={() => navigation.navigate('OrderForm', { orderId: item.id })}
                     hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('common', 'edit')} ${item.order_number}`}
                     style={styles.iconBtn}
                   >
                     <Feather name="edit-2" size={16} color={whiteAlpha(0.7)} />
@@ -178,6 +190,8 @@ export function OrdersListScreen({ navigation }: Props) {
                   onPress={() => handleDelete(item)}
                   disabled={deletingId === item.id}
                   hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('common', 'delete')} ${item.order_number}`}
                   style={styles.iconBtn}
                 >
                   <Feather name="trash-2" size={16} color={colors.red400} />

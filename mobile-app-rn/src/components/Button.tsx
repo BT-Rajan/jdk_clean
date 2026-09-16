@@ -61,7 +61,14 @@ export function Button({
           ? [colors.red400, colors.red500]
           : [colors.emerald400, colors.emerald500];
     return (
-      <Pressable onPress={onPress} disabled={isDisabled} style={[{ opacity: isDisabled ? 0.5 : 1 }, style]}>
+      <Pressable
+        onPress={onPress}
+        disabled={isDisabled}
+        accessibilityRole="button"
+        accessibilityLabel={children}
+        accessibilityState={{ disabled: isDisabled, busy: isLoading }}
+        style={[{ opacity: isDisabled ? 0.5 : 1 }, style]}
+      >
         <LinearGradient
           colors={gradientColors}
           start={{ x: 0, y: 0 }}
@@ -78,6 +85,9 @@ export function Button({
     <Pressable
       onPress={onPress}
       disabled={isDisabled}
+      accessibilityRole="button"
+      accessibilityLabel={children}
+      accessibilityState={{ disabled: isDisabled, busy: isLoading }}
       style={[
         styles.base,
         { height, opacity: isDisabled ? 0.5 : 1 },

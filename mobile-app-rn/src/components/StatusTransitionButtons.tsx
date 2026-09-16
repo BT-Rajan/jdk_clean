@@ -74,7 +74,12 @@ export function StatusTransitionButtons<S extends string>({
       </View>
 
       <Modal visible={pendingStatus !== null} animationType="slide" transparent onRequestClose={() => setPendingStatus(null)}>
-        <Pressable style={styles.backdrop} onPress={() => setPendingStatus(null)} />
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => setPendingStatus(null)}
+          accessibilityRole="button"
+          accessibilityLabel={cancelLabel}
+        />
         <View style={styles.sheet}>
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>{pendingStatus ? statusLabel(pendingStatus) : ''}</Text>

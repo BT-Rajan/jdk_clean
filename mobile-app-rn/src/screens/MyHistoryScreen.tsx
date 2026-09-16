@@ -158,7 +158,17 @@ export function MyHistoryScreen() {
               {navigable && <Feather name="chevron-right" size={16} color={whiteAlpha(0.3)} style={{ marginLeft: 8 }} />}
             </GlassCard>
           );
-          return navigable ? <Pressable onPress={() => goToRecord(navigation, item)}>{row}</Pressable> : row;
+          return navigable ? (
+            <Pressable
+              onPress={() => goToRecord(navigation, item)}
+              accessibilityRole="button"
+              accessibilityLabel={`${tableLabel(t, item.table_name)} #${item.record_id}, ${describeEntry(t, item)}`}
+            >
+              {row}
+            </Pressable>
+          ) : (
+            row
+          );
         }}
       />
     </View>

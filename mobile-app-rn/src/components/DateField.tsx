@@ -73,7 +73,13 @@ export function DateField({ label, value, onChange, minimumDate, error, hint }: 
   return (
     <View style={styles.wrap}>
       <Text style={styles.label}>{label}</Text>
-      <Pressable onPress={openPicker} style={[styles.box, glass.inset, Boolean(error) && styles.boxError]}>
+      <Pressable
+        onPress={openPicker}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityValue={{ text: value ? formatDisplay(value) : 'Not set' }}
+        style={[styles.box, glass.inset, Boolean(error) && styles.boxError]}
+      >
         <Text style={[styles.valueText, !value && styles.placeholderText]}>
           {value ? formatDisplay(value) : 'Select a date…'}
         </Text>
@@ -87,7 +93,12 @@ export function DateField({ label, value, onChange, minimumDate, error, hint }: 
 
       {Platform.OS !== 'android' && (
         <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-          <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
+          <Pressable
+            style={styles.backdrop}
+            onPress={() => setOpen(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+          />
           <View style={styles.sheet}>
             <View style={styles.sheetHandle} />
             <Text style={styles.sheetTitle}>{label}</Text>
@@ -97,6 +108,8 @@ export function DateField({ label, value, onChange, minimumDate, error, hint }: 
                 <Pressable
                   key={qp.label}
                   onPress={() => handleQuickPick(qp.days)}
+                  accessibilityRole="button"
+                  accessibilityLabel={qp.label}
                   style={({ pressed }) => [styles.chip, pressed && styles.chipPressed]}
                 >
                   <Text style={styles.chipText}>{qp.label}</Text>
@@ -118,7 +131,12 @@ export function DateField({ label, value, onChange, minimumDate, error, hint }: 
               />
             </View>
 
-            <Pressable style={styles.confirmBtn} onPress={() => commit(draft)}>
+            <Pressable
+              style={styles.confirmBtn}
+              onPress={() => commit(draft)}
+              accessibilityRole="button"
+              accessibilityLabel={`Use ${formatDisplay(draft)}`}
+            >
               <Text style={styles.confirmBtnText}>Use {formatDisplay(draft)}</Text>
             </Pressable>
           </View>

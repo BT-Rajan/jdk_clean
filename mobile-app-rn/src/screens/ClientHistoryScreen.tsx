@@ -116,7 +116,12 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
 
       <ActivitySection title={t('clientHistory', 'feasibilitySectionTitle')} count={feasibilities.length}>
         {feasibilities.map((f) => (
-          <Pressable key={f.id} onPress={() => goToFeasibility(f.id)}>
+          <Pressable
+            key={f.id}
+            onPress={() => goToFeasibility(f.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`${f.feasibility_number}, ${t('feasibilityStatus', f.status as FeasibilityStatus)}`}
+          >
             <ActivityRow
               primary={f.feasibility_number}
               secondary={formatDate(f.created_at)}
@@ -129,7 +134,12 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
 
       <ActivitySection title={t('clientHistory', 'quotationSectionTitle')} count={quotations.length}>
         {quotations.map((q) => (
-          <Pressable key={q.id} onPress={() => goToQuotation(q.id)}>
+          <Pressable
+            key={q.id}
+            onPress={() => goToQuotation(q.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`${q.quotation_number}, ${formatCurrency(q.total_amount)}, ${t('quotationStatus', q.status as QuotationStatus)}`}
+          >
             <ActivityRow
               primary={q.quotation_number}
               secondary={formatCurrency(q.total_amount)}
@@ -142,7 +152,12 @@ export function ClientHistoryScreen({ route, navigation }: Props) {
 
       <ActivitySection title={t('clientHistory', 'orderSectionTitle')} count={orders.length}>
         {orders.map((o) => (
-          <Pressable key={o.id} onPress={() => goToOrder(o.id)}>
+          <Pressable
+            key={o.id}
+            onPress={() => goToOrder(o.id)}
+            accessibilityRole="button"
+            accessibilityLabel={`${o.order_number}, ${formatCurrency(o.total_amount)}, ${t('orderStatus', o.status as OrderStatus)}`}
+          >
             <ActivityRow
               primary={o.order_number}
               secondary={formatCurrency(o.total_amount)}

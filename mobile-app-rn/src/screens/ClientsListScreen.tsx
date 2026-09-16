@@ -142,6 +142,10 @@ export function ClientsListScreen({ navigation }: Props) {
         renderItem={({ item }) => (
           <Pressable
             onPress={() => navigation.navigate('ClientHistory', { customerId: item.id, customerName: item.name })}
+            accessibilityRole="button"
+            accessibilityLabel={`${item.name}, ${item.customer_number}, ${
+              item.status === 'active' ? t('clientForm', 'statusActive') : t('clientForm', 'statusInactive')
+            }`}
           >
             <GlassCard style={styles.row}>
               <View style={{ flex: 1 }}>
@@ -167,6 +171,8 @@ export function ClientsListScreen({ navigation }: Props) {
                 <Pressable
                   onPress={() => navigation.navigate('ClientForm', { customerId: item.id })}
                   hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('common', 'edit')} ${item.name}`}
                   style={styles.iconBtn}
                 >
                   <Feather name="edit-2" size={16} color={whiteAlpha(0.7)} />
@@ -178,6 +184,12 @@ export function ClientsListScreen({ navigation }: Props) {
                   onPress={() => handleToggleStatus(item)}
                   disabled={togglingId === item.id}
                   hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    item.status === 'active'
+                      ? `${t('clients', 'disableConfirm')} ${item.name}`
+                      : `${t('common', 'confirm')} ${item.name}`
+                  }
                   style={styles.iconBtn}
                 >
                   <Feather

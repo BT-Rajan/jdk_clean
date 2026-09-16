@@ -63,7 +63,13 @@ export function HomeScreen() {
         {TILE_ROWS.map((row, i) => (
           <View key={i} style={styles.gridRow}>
             {row.map((tile) => (
-              <Pressable key={tile.key} onPress={() => handlePress(tile)} style={styles.tile}>
+              <Pressable
+                key={tile.key}
+                onPress={() => handlePress(tile)}
+                accessibilityRole="button"
+                accessibilityLabel={t('home', tile.labelKey)}
+                style={styles.tile}
+              >
                 <View style={styles.iconWrap}>
                   <Feather name={tile.icon} size={26} color={colors.gold400} />
                 </View>

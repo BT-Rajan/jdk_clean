@@ -8,16 +8,32 @@ import { colors, fonts, whiteAlpha } from '../theme';
  * login). */
 export function LanguageToggle({ locale, onChange }: { locale: Locale; onChange: (l: Locale) => void }) {
   return (
-    <View style={styles.wrap}>
-      <ToggleOption label="EN" active={locale === 'en'} onPress={() => onChange('en')} />
-      <ToggleOption label="AR" active={locale === 'ar'} onPress={() => onChange('ar')} />
+    <View style={styles.wrap} accessibilityRole="radiogroup">
+      <ToggleOption label="EN" fullName="English" active={locale === 'en'} onPress={() => onChange('en')} />
+      <ToggleOption label="AR" fullName="Arabic" active={locale === 'ar'} onPress={() => onChange('ar')} />
     </View>
   );
 }
 
-function ToggleOption({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
+function ToggleOption({
+  label,
+  fullName,
+  active,
+  onPress,
+}: {
+  label: string;
+  fullName: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
-    <Pressable onPress={onPress} style={[styles.option, active && styles.optionActive]}>
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="radio"
+      accessibilityLabel={fullName}
+      accessibilityState={{ selected: active, checked: active }}
+      style={[styles.option, active && styles.optionActive]}
+    >
       <Text style={[styles.optionText, active && styles.optionTextActive]}>{label}</Text>
     </Pressable>
   );

@@ -10,6 +10,10 @@ const en = {
     loading: 'Loading…',
     comingSoon: 'Coming soon',
     staleDataNotice: "You're offline -- showing saved data from last sync.",
+    goToHome: 'Go to Home',
+    openMenu: 'Open menu',
+    close: 'Close',
+    edit: 'Edit',
   },
   offline: {
     banner: 'No internet connection',
@@ -49,6 +53,7 @@ const en = {
     emptyText: 'No products found.',
     loadError: 'Could not load products.',
     statusInactive: 'Inactive',
+    startQuotationLabel: 'Start quotation for {{name}}',
   },
   // The quotation journey: a New Quotation always starts from a
   // feasibility check (stock/capacity) before anything is quoted --
@@ -180,6 +185,7 @@ const en = {
     searchPlaceholder: 'Search by number or client…',
     statusFilterLabel: 'Status',
     statusFilterAll: 'All statuses',
+    startQuotationLabel: 'Start a new quotation',
     emptyText: 'No orders found.',
     loadError: 'Could not load orders.',
     deleteError: 'Could not delete this order.',
@@ -467,6 +473,10 @@ const ar: typeof en = {
     loading: 'جارٍ التحميل…',
     comingSoon: 'قريبًا',
     staleDataNotice: 'أنت غير متصل بالإنترنت -- تُعرض البيانات المحفوظة من آخر مزامنة.',
+    goToHome: 'الذهاب إلى الرئيسية',
+    openMenu: 'فتح القائمة',
+    close: 'إغلاق',
+    edit: 'تعديل',
   },
   offline: {
     banner: 'لا يوجد اتصال بالإنترنت',
@@ -506,6 +516,7 @@ const ar: typeof en = {
     emptyText: 'لا توجد منتجات.',
     loadError: 'تعذر تحميل المنتجات.',
     statusInactive: 'غير نشط',
+    startQuotationLabel: 'بدء عرض سعر لـ {{name}}',
   },
   newQuotation: {
     title: 'عرض سعر جديد',
@@ -632,6 +643,7 @@ const ar: typeof en = {
     searchPlaceholder: 'ابحث برقم الطلب أو العميل…',
     statusFilterLabel: 'الحالة',
     statusFilterAll: 'كل الحالات',
+    startQuotationLabel: 'بدء عرض سعر جديد',
     emptyText: 'لا توجد طلبات.',
     loadError: 'تعذر تحميل الطلبات.',
     deleteError: 'تعذر حذف هذا الطلب.',

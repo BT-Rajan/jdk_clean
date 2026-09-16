@@ -8,7 +8,7 @@ interface TextFieldProps extends TextInputProps {
   hint?: string;
 }
 
-export function TextField({ label, error, hint, style, onFocus, onBlur, ...props }: TextFieldProps) {
+export function TextField({ label, error, hint, style, onFocus, onBlur, accessibilityLabel, ...props }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
 
   return (
@@ -25,6 +25,7 @@ export function TextField({ label, error, hint, style, onFocus, onBlur, ...props
         <TextInput
           style={[styles.input, style]}
           placeholderTextColor={whiteAlpha(0.3)}
+          accessibilityLabel={accessibilityLabel ?? label}
           onFocus={(e) => {
             setFocused(true);
             onFocus?.(e);

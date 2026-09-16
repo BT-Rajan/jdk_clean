@@ -139,7 +139,11 @@ export function QuotationsListScreen({ navigation }: Props) {
           const statusStyle = STATUS_STYLES[item.status] ?? DEFAULT_STATUS_STYLE;
           const isDraft = item.status === 'draft';
           return (
-            <Pressable onPress={() => navigation.navigate('QuotationDetail', { quotationId: item.id })}>
+            <Pressable
+              onPress={() => navigation.navigate('QuotationDetail', { quotationId: item.id })}
+              accessibilityRole="button"
+              accessibilityLabel={`${item.quotation_number}, ${item.customer_name ?? ''}, ${t('quotationStatus', item.status as QuotationStatus)}`}
+            >
               <GlassCard style={styles.row}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.rowNumber}>{item.quotation_number}</Text>
@@ -161,6 +165,8 @@ export function QuotationsListScreen({ navigation }: Props) {
                   <Pressable
                     onPress={() => navigation.navigate('QuotationDetail', { quotationId: item.id, startInEdit: true })}
                     hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('common', 'edit')} ${item.quotation_number}`}
                     style={styles.iconBtn}
                   >
                     <Feather name="edit-2" size={16} color={whiteAlpha(0.7)} />
@@ -170,6 +176,8 @@ export function QuotationsListScreen({ navigation }: Props) {
                   onPress={() => handleDelete(item)}
                   disabled={deletingId === item.id}
                   hitSlop={10}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('common', 'delete')} ${item.quotation_number}`}
                   style={styles.iconBtn}
                 >
                   <Feather name="trash-2" size={16} color={colors.red400} />

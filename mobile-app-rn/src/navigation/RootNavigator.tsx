@@ -86,10 +86,13 @@ const stackScreenOptions = {
 // a screen whose header the drawer itself no longer renders. Standard
 // react-navigation pattern for a stack nested inside a drawer.
 function DrawerMenuButton({ navigation }: { navigation: any }) {
+  const { t } = useLocale();
   return (
     <Pressable
       onPress={() => navigation.getParent()?.dispatch(DrawerActions.openDrawer())}
       hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel={t('common', 'openMenu')}
       style={{ paddingHorizontal: 4 }}
     >
       <Feather name="menu" size={22} color={colors.white} />

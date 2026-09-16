@@ -231,13 +231,24 @@ export function OrderFormScreen({ route, navigation }: Props) {
                   </View>
                 </View>
                 {lines.length > 1 && (
-                  <Pressable onPress={() => removeLine(line.key)} hitSlop={10} style={styles.removeLineBtn}>
+                  <Pressable
+                    onPress={() => removeLine(line.key)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('common', 'delete')} ${t('orderForm', 'productLabel')} ${index + 1}`}
+                    style={styles.removeLineBtn}
+                  >
                     <Feather name="trash-2" size={16} color={colors.red400} />
                   </Pressable>
                 )}
               </View>
             ))}
-            <Pressable onPress={addLine} style={styles.addLineBtn}>
+            <Pressable
+              onPress={addLine}
+              accessibilityRole="button"
+              accessibilityLabel={t('orderForm', 'addLine')}
+              style={styles.addLineBtn}
+            >
               <Feather name="plus" size={14} color={colors.gold300} />
               <Text style={styles.addLineText}>{t('orderForm', 'addLine')}</Text>
             </Pressable>
