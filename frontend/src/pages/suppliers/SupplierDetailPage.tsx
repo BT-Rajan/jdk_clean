@@ -1,7 +1,23 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DeleteIcon, EditIcon, Field, GlassCard, PageHeader, RatingStars, Spinner, StatusBadge } from '@/components/ui'
+import {
+  Alert,
+  Badge,
+  Button,
+  ConfirmDialog,
+  DeleteIcon,
+  EditIcon,
+  Field,
+  GlassCard,
+  PageHeader,
+  RatingStars,
+  Spinner,
+  StatusBadge,
+  Tabs,
+  TabPanel,
+} from '@/components/ui'
+import type { TabItem } from '@/components/ui'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
 import { IdDocumentPanel } from '@/components/documents/IdDocumentPanel'
@@ -31,6 +47,14 @@ const MODE_OF_SUPPLY_LABELS: Record<string, string> = {
   import: 'Import',
 }
 
+const TABS: TabItem[] = [
+  { id: 'overview', label: 'Overview' },
+  { id: 'onboarding', label: 'Onboarding' },
+  { id: 'documents', label: 'Documents' },
+  { id: 'materials', label: 'Materials supplied' },
+  { id: 'history', label: 'History' },
+]
+
 export function SupplierDetailPage() {
   const { id } = useParams()
   const supplierId = Number(id)
@@ -45,6 +69,7 @@ export function SupplierDetailPage() {
   const [onboardingBusy, setOnboardingBusy] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState('overview')
 
   useEffect(() => {
     getSupplier(supplierId)
@@ -113,13 +138,17 @@ export function SupplierDetailPage() {
     )
   }
 
+  const canEdit = canWrite(user?.role) && !justDeleted
+  const nextOnboardingStatuses = SUPPLIER_ONBOARDING_TRANSITIONS[supplier.onboarding_status]
+  const canChangeOnboarding = canEdit && nextOnboardingStatuses.length > 0
+
   return (
     <AppLayout>
       <PageHeader
         title={supplier.name}
         subtitle={supplier.code}
         actions={
-          canWrite(user?.role) && !justDeleted ? (
+          canEdit ? (
             <>
               <Button
                 variant="primary"
@@ -156,73 +185,108 @@ export function SupplierDetailPage() {
         </div>
       )}
 
-      <GlassCard className="p-8">
-        <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-          <Field label="Status" value={<StatusBadge status={supplier.status} />} />
-          <Field label="Onboarding" value={<StatusBadge status={supplier.onboarding_status} />} />
+      {/* Compact summary strip -- same pattern as the Raw Material / Product
+          detail pages: the "useful summaries" every section below drills into. */}
+      <GlassCard className="mb-6 p-6">
+        <div className="flex flex-wrap items-center gap-2">
+          <StatusBadge status={supplier.status} />
+          <StatusBadge status={supplier.onboarding_status} />
+          {supplier.mode_of_supply && (
+            <Badge tone="info">{MODE_OF_SUPPLY_LABELS[supplier.mode_of_supply]}</Badge>
+          )}
+        </div>
+        <dl className="mt-5 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
           <Field label="Contact person" value={supplier.contact_person} />
-          <Field label="Email" value={supplier.email} />
-          <Field label="Phone" value={supplier.phone} />
-          <Field label="City" value={supplier.city} />
-          <Field label="Country" value={supplier.country} />
+          <Field label="City / Country" value={[supplier.city, supplier.country].filter(Boolean).join(', ')} />
           <Field label="Payment terms" value={`${supplier.payment_terms_days} days`} />
-          <Field
-            label="Mode of supply"
-            value={supplier.mode_of_supply ? MODE_OF_SUPPLY_LABELS[supplier.mode_of_supply] : null}
-          />
           <Field label="Rating" value={<RatingStars rating={supplier.rating} />} />
           <Field
             label="PO approval threshold"
             value={
               supplier.po_approval_threshold_override != null
                 ? `${formatCurrency(supplier.po_approval_threshold_override)} (override)`
-                : 'Using factory default'
+                : 'Factory default'
             }
           />
           <Field
-            label="Discount approval threshold"
+            label="Discount threshold"
             value={
               supplier.discount_approval_threshold_override != null
                 ? `${supplier.discount_approval_threshold_override}% (override)`
-                : 'Using factory default'
+                : 'Factory default'
             }
           />
         </dl>
       </GlassCard>
 
-      {(() => {
-        const nextOnboardingStatuses = SUPPLIER_ONBOARDING_TRANSITIONS[supplier.onboarding_status]
-        const canChangeOnboarding = canWrite(user?.role) && !justDeleted && nextOnboardingStatuses.length > 0
-        if (!supplier.onboarding_reason && !canChangeOnboarding) return null
-        return (
-          <GlassCard className="mt-6 p-8">
-            <h2 className="mb-4 font-display text-base font-medium text-white">Onboarding</h2>
-            {supplier.onboarding_reason && (
-              <p className="mb-4 text-sm text-white/60">
-                <span className="text-white/40">Reason on file: </span>
-                {supplier.onboarding_reason}
-              </p>
-            )}
-            {canChangeOnboarding && (
-              <StatusTransitionButtons
-                nextStatuses={nextOnboardingStatuses}
-                reasonRequiredFor={SUPPLIER_ONBOARDING_STATUSES_REQUIRING_REASON}
-                reasonLabel="Reason"
-                busy={onboardingBusy}
-                onChange={handleOnboardingStatusChange}
-              />
-            )}
-          </GlassCard>
-        )
-      })()}
+      <Tabs items={TABS} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
 
-      <div className="mt-6">
+      <TabPanel id="overview" activeId={activeTab}>
+        <GlassCard className="p-8">
+          <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+            <Field label="Status" value={<StatusBadge status={supplier.status} />} />
+            <Field label="Onboarding" value={<StatusBadge status={supplier.onboarding_status} />} />
+            <Field label="Contact person" value={supplier.contact_person} />
+            <Field label="Email" value={supplier.email} />
+            <Field label="Phone" value={supplier.phone} />
+            <Field label="City" value={supplier.city} />
+            <Field label="Country" value={supplier.country} />
+            <Field label="Payment terms" value={`${supplier.payment_terms_days} days`} />
+            <Field
+              label="Mode of supply"
+              value={supplier.mode_of_supply ? MODE_OF_SUPPLY_LABELS[supplier.mode_of_supply] : null}
+            />
+            <Field label="Rating" value={<RatingStars rating={supplier.rating} />} />
+            <Field
+              label="PO approval threshold"
+              value={
+                supplier.po_approval_threshold_override != null
+                  ? `${formatCurrency(supplier.po_approval_threshold_override)} (override)`
+                  : 'Using factory default'
+              }
+            />
+            <Field
+              label="Discount approval threshold"
+              value={
+                supplier.discount_approval_threshold_override != null
+                  ? `${supplier.discount_approval_threshold_override}% (override)`
+                  : 'Using factory default'
+              }
+            />
+          </dl>
+        </GlassCard>
+      </TabPanel>
+
+      <TabPanel id="onboarding" activeId={activeTab}>
+        <GlassCard className="p-8">
+          <h2 className="mb-4 font-display text-base font-medium text-white">Onboarding</h2>
+          {supplier.onboarding_reason && (
+            <p className="mb-4 text-sm text-white/60">
+              <span className="text-white/40">Reason on file: </span>
+              {supplier.onboarding_reason}
+            </p>
+          )}
+          {canChangeOnboarding ? (
+            <StatusTransitionButtons
+              nextStatuses={nextOnboardingStatuses}
+              reasonRequiredFor={SUPPLIER_ONBOARDING_STATUSES_REQUIRING_REASON}
+              reasonLabel="Reason"
+              busy={onboardingBusy}
+              onChange={handleOnboardingStatusChange}
+            />
+          ) : (
+            !supplier.onboarding_reason && <p className="text-sm text-white/40">No onboarding actions available.</p>
+          )}
+        </GlassCard>
+      </TabPanel>
+
+      <TabPanel id="documents" activeId={activeTab}>
         <IdDocumentPanel
           hasDocument={Boolean(supplier.id_document_filename)}
           verified={supplier.id_verified}
           verifiedAt={supplier.id_verified_at}
-          canEdit={canWrite(user?.role) && !justDeleted}
-          canVerify={canWrite(user?.role) && !justDeleted}
+          canEdit={canEdit}
+          canVerify={canEdit}
           onUpload={async (file) => setSupplier(await uploadSupplierIdDocument(supplierId, file))}
           onRemove={async () => setSupplier(await deleteSupplierIdDocument(supplierId))}
           onView={async () => {
@@ -232,15 +296,15 @@ export function SupplierDetailPage() {
           onVerify={async () => setSupplier(await verifySupplierId(supplierId))}
           onUnverify={async () => setSupplier(await unverifySupplierId(supplierId))}
         />
-      </div>
+      </TabPanel>
 
-      <div className="mt-6">
+      <TabPanel id="materials" activeId={activeTab} keepMounted>
         <SuppliedMaterialsEditor supplierId={supplierId} canEdit={canWrite(user?.role)} />
-      </div>
+      </TabPanel>
 
-      <div className="mt-6">
+      <TabPanel id="history" activeId={activeTab}>
         <HistoryTimeline resourcePath="/api/suppliers" id={supplierId} />
-      </div>
+      </TabPanel>
 
       <div className="mt-6">
         <Link to="/suppliers" className="text-sm text-white/50 hover:text-white">← Back to suppliers</Link>
