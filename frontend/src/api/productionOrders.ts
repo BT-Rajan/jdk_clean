@@ -52,3 +52,37 @@ export async function calculateMaterialRequirements(productionOrderId: number): 
   )
   return data
 }
+
+/** Commits up to `quantity` of currently available stock to this
+ * requirement row -- never more than what's required, never more than
+ * what's available, never against a cancelled production order. Never
+ * touches physical on-hand stock, only the shared reservation ledger
+ * (see backend/app/services/inventory_service.py's
+ * reserve_stock_within_available). */
+export async function allocateMaterial(
+  productionOrderId: number,
+  requirementId: number,
+  quantity: number,
+): Promise<MaterialRequirementSummary> {
+  const { data } = await apiClient.post<MaterialRequirementSummary>(
+    `/api/production-orders/${productionOrderId}/material-requirements/${requirementId}/allocate`,
+    { quantity },
+  )
+  return data
+}
+
+/** Reverses part or all of a prior allocation, returning the quantity to
+ * allocatable stock. Allowed even after the production order is
+ * cancelled, since cancellation itself never touches allocations -- see
+ * backend/app/services/production_order_material_service.py's release. */
+export async function releaseMaterialAllocation(
+  productionOrderId: number,
+  requirementId: number,
+  quantity: number,
+): Promise<MaterialRequirementSummary> {
+  const { data } = await apiClient.post<MaterialRequirementSummary>(
+    `/api/production-orders/${productionOrderId}/material-requirements/${requirementId}/release`,
+    { quantity },
+  )
+  return data
+}

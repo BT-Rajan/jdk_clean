@@ -6,7 +6,7 @@ from app.core.database import get_db
 from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.production_order import ProductionOrderCreate, ProductionOrderOut, ProductionOrderStatusUpdate
-from app.schemas.production_order_material import MaterialRequirementSummaryOut
+from app.schemas.production_order_material import MaterialAllocationRequest, MaterialRequirementSummaryOut
 from app.services import audit_service, production_order_material_service, production_order_service
 
 router = APIRouter(prefix="/api/production-orders", tags=["production"])
@@ -100,6 +100,38 @@ def calculate_material_requirements(
 ):
     production_order_material_service.calculate(db, production_order_id, user_id=user.id)
     return production_order_material_service.get_requirement_summary(db, production_order_id)
+
+
+@router.post(
+    "/{production_order_id}/material-requirements/{requirement_id}/allocate",
+    response_model=MaterialRequirementSummaryOut,
+)
+def allocate_material(
+    production_order_id: int,
+    requirement_id: int,
+    payload: MaterialAllocationRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    return production_order_material_service.allocate(
+        db, production_order_id, requirement_id, payload.quantity, user_id=user.id
+    )
+
+
+@router.post(
+    "/{production_order_id}/material-requirements/{requirement_id}/release",
+    response_model=MaterialRequirementSummaryOut,
+)
+def release_material(
+    production_order_id: int,
+    requirement_id: int,
+    payload: MaterialAllocationRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    return production_order_material_service.release(
+        db, production_order_id, requirement_id, payload.quantity, user_id=user.id
+    )
 
 
 @router.post("/{production_order_id}/status", response_model=ProductionOrderOut)

@@ -39,15 +39,30 @@ class ProductionOrderMaterialRequirement(Base, TimestampMixin):
     live from inventory_service.get_stock at read time (same "computed
     fresh every call" stance mrp_service.compute_requirements already
     takes), never persisted, never a second source of truth alongside
-    the real stock ledger. Allocation (a P4 concern) is likewise not a
-    column yet -- extending this table with one later is a single
-    additive migration, not a redesign.
+    the real stock ledger.
+
+    `allocated_quantity` (P4) IS persisted, unlike those -- it's not a
+    live fact about the world the way on-hand stock is, it's a decision
+    this app itself made and must remember: how much of this raw
+    material's *reservation* (inventory_service.reserve_stock/
+    release_reservation's aggregate quantity_reserved column) belongs to
+    this specific row, as opposed to some other Production Order's claim
+    on the same material. See production_order_material_service.allocate/
+    release for how the two stay in sync. Deliberately not a
+    `consumed_quantity` column yet (P4 doesn't implement material issue/
+    consumption) -- keeping "allocated" and "consumed" as genuinely
+    separate concerns, not overloaded onto one number, is what lets a
+    later pass add that column and a `release <= allocated - consumed`
+    rule without redesigning this table.
 
     (production_order_id, raw_material_id, source) is unique -- a
     recalculation deletes and reinserts this Production Order's rows in
     one transaction (see production_order_material_service.calculate),
     which is what actually guarantees no duplicates; the constraint is
-    the last-line-of-defense backstop.
+    the last-line-of-defense backstop. Recalculation is only reachable
+    while a Production Order is 'planned', which is also true of
+    allocate/release -- so an in-flight allocation is never at risk of
+    the row it's tracked against disappearing out from under it.
     """
 
     __tablename__ = "production_order_material_requirements"
@@ -62,6 +77,7 @@ class ProductionOrderMaterialRequirement(Base, TimestampMixin):
         Enum(*MATERIAL_REQUIREMENT_SOURCES, name="production_order_material_source"), nullable=False
     )
     required_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False)
+    allocated_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
 
     production_order: Mapped[ProductionOrder] = relationship(foreign_keys=[production_order_id], lazy="joined")
     bom: Mapped[Bom | None] = relationship(foreign_keys=[bom_id], lazy="joined")

@@ -1147,6 +1147,7 @@ CREATE TABLE IF NOT EXISTS production_order_material_requirements (
     raw_material_id         BIGINT UNSIGNED NOT NULL,
     source                  ENUM('bom','packaging') NOT NULL,
     required_quantity       DECIMAL(14,4) NOT NULL,
+    allocated_quantity      DECIMAL(14,4) NOT NULL DEFAULT 0, -- how much of this row is committed to this Production Order (P4)
     created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by              BIGINT UNSIGNED NULL,
     updated_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

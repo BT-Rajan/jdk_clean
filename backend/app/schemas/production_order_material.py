@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class MaterialRequirementItemOut(BaseModel):
@@ -22,13 +22,30 @@ class MaterialRequirementItemOut(BaseModel):
     # Computed live from inventory_service.get_stock, not stored --
     # see production_order_material_service.get_requirement_summary.
     available_quantity: float
+    # Persisted -- this app's own record of how much of the shared
+    # inventory reservation belongs to this Production Order (P4).
+    allocated_quantity: float
+    remaining_to_allocate: float
     shortage_quantity: float
 
 
 class MaterialRequirementSummaryOut(BaseModel):
     production_order_id: int
     # 'not_calculated' (no rows yet), 'available' (every row's shortage
-    # is 0), or 'short' (at least one row is short).
+    # is 0), or 'short' (at least one row is short). Independent of
+    # allocation_status below -- this is about whether enough stock
+    # exists at all, not whether any of it has been committed yet.
     overall_status: str
+    # 'not_calculated', 'not_allocated' (nothing allocated on any row),
+    # 'partially_allocated', or 'fully_allocated' (every row's remaining
+    # is 0). A material-readiness signal, not a replacement for the
+    # Production Order's own PLANNED/CANCELLED status (see P2).
+    allocation_status: str
     calculated_at: datetime | None
     items: list[MaterialRequirementItemOut]
+
+
+class MaterialAllocationRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    quantity: float = Field(gt=0)

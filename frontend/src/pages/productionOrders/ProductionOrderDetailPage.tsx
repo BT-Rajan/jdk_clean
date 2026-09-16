@@ -2,11 +2,13 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Badge, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
-import { Button, EmptyState } from '@/components/ui'
+import { Button, EmptyState, TextField } from '@/components/ui'
 import {
+  allocateMaterial,
   calculateMaterialRequirements,
   getMaterialRequirements,
   getProductionOrder,
+  releaseMaterialAllocation,
   updateProductionOrderStatus,
 } from '@/api/productionOrders'
 import { getOrder } from '@/api/orders'
@@ -24,14 +26,21 @@ import { StatusTransitionButtons } from '@/components/status/StatusTransitionBut
 // The rest of the pipeline this Production Order will eventually drive --
 // shown for orientation, not implemented. See docs/production-lifecycle.md;
 // none of these stages exist yet, so this is deliberately just a static
-// roadmap, never fake data or a fake status. "Material Requirement" is
-// no longer here -- it's P3, implemented below.
-const FUTURE_STAGES = ['Material Allocation', 'Scheduling', 'Execution', 'Completion', 'Finished Goods']
+// roadmap, never fake data or a fake status. "Material Requirement" and
+// "Material Allocation" are no longer here -- P3/P4, implemented below.
+const FUTURE_STAGES = ['Scheduling', 'Execution', 'Completion', 'Finished Goods']
 
 const OVERALL_STATUS_LABEL: Record<MaterialRequirementSummary['overall_status'], string> = {
   not_calculated: 'Requirement not calculated',
   available: 'Materials available',
   short: 'Materials short',
+}
+
+const ALLOCATION_STATUS_LABEL: Record<MaterialRequirementSummary['allocation_status'], string> = {
+  not_calculated: 'Requirement not calculated',
+  not_allocated: 'Not allocated',
+  partially_allocated: 'Partially allocated',
+  fully_allocated: 'Fully allocated',
 }
 
 export function ProductionOrderDetailPage() {
@@ -48,6 +57,9 @@ export function ProductionOrderDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [calculating, setCalculating] = useState(false)
+  const [allocateQty, setAllocateQty] = useState<Record<number, string>>({})
+  const [releaseQty, setReleaseQty] = useState<Record<number, string>>({})
+  const [actionBusyId, setActionBusyId] = useState<number | null>(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -89,6 +101,46 @@ export function ProductionOrderDetailPage() {
       setError(getApiErrorMessage(err))
     } finally {
       setBusy(false)
+    }
+  }
+
+  async function handleAllocate(requirementId: number) {
+    const raw = allocateQty[requirementId]
+    const quantity = Number(raw)
+    if (!raw || !Number.isFinite(quantity) || quantity <= 0) {
+      setError('Enter a quantity greater than zero to allocate.')
+      return
+    }
+    setActionBusyId(requirementId)
+    setError(null)
+    try {
+      const result = await allocateMaterial(productionOrderId, requirementId, quantity)
+      setRequirements(result)
+      setAllocateQty((prev) => ({ ...prev, [requirementId]: '' }))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setActionBusyId(null)
+    }
+  }
+
+  async function handleRelease(requirementId: number) {
+    const raw = releaseQty[requirementId]
+    const quantity = Number(raw)
+    if (!raw || !Number.isFinite(quantity) || quantity <= 0) {
+      setError('Enter a quantity greater than zero to release.')
+      return
+    }
+    setActionBusyId(requirementId)
+    setError(null)
+    try {
+      const result = await releaseMaterialAllocation(productionOrderId, requirementId, quantity)
+      setRequirements(result)
+      setReleaseQty((prev) => ({ ...prev, [requirementId]: '' }))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setActionBusyId(null)
     }
   }
 
@@ -193,6 +245,25 @@ export function ProductionOrderDetailPage() {
                 {OVERALL_STATUS_LABEL[requirements.overall_status]}
               </Badge>
             )}
+            {requirements && requirements.items.length > 0 && (
+              <Badge
+                tone={
+                  requirements.allocation_status === 'fully_allocated'
+                    ? 'success'
+                    : requirements.allocation_status === 'partially_allocated'
+                      ? 'gold'
+                      : 'neutral'
+                }
+              >
+                {`Materials: ${ALLOCATION_STATUS_LABEL[requirements.allocation_status].toUpperCase()}${
+                  requirements.allocation_status === 'partially_allocated'
+                    ? ` — ${requirements.items
+                        .reduce((sum, i) => sum + i.remaining_to_allocate, 0)
+                        .toLocaleString()} remaining`
+                    : ''
+                }`}
+              </Badge>
+            )}
           </div>
           {allowWrite && po.status === 'planned' && (
             <Button size="sm" variant="ghost" isLoading={calculating} onClick={handleCalculate}>
@@ -215,32 +286,118 @@ export function ProductionOrderDetailPage() {
               <thead>
                 <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
                   <th className="px-6 py-4 font-medium">Material</th>
-                  <th className="px-6 py-4 font-medium">Type</th>
                   <th className="px-6 py-4 text-right font-medium">Required</th>
                   <th className="px-6 py-4 text-right font-medium">Available</th>
+                  <th className="px-6 py-4 text-right font-medium">Allocated</th>
+                  <th className="px-6 py-4 text-right font-medium">Remaining</th>
                   <th className="px-6 py-4 text-right font-medium">Shortage</th>
-                  <th className="px-6 py-4 font-medium">Unit</th>
+                  <th className="px-6 py-4 font-medium">Status</th>
+                  {allowWrite && <th className="px-6 py-4 font-medium">Actions</th>}
                 </tr>
               </thead>
               <tbody>
-                {requirements.items.map((item) => (
-                  <tr key={item.id} className="border-b border-white/5 last:border-0">
-                    <td className="px-6 py-4 text-white">
-                      {item.code} — {item.name}
-                    </td>
-                    <td className="px-6 py-4 text-white/60">{item.material_type_label}</td>
-                    <td className="px-6 py-4 text-right text-white/60">{item.required_quantity}</td>
-                    <td className="px-6 py-4 text-right text-white/60">{item.available_quantity}</td>
-                    <td className="px-6 py-4 text-right">
-                      {item.shortage_quantity > 0 ? (
-                        <span className="text-red-300">{item.shortage_quantity}</span>
-                      ) : (
-                        <span className="text-white/40">0</span>
+                {requirements.items.map((item) => {
+                  const itemAllocationStatus: MaterialRequirementSummary['allocation_status'] =
+                    item.remaining_to_allocate <= 0
+                      ? 'fully_allocated'
+                      : item.allocated_quantity > 0
+                        ? 'partially_allocated'
+                        : 'not_allocated'
+                  const maxAllocatable = Math.max(
+                    Math.min(item.remaining_to_allocate, item.available_quantity),
+                    0,
+                  )
+                  return (
+                    <tr key={item.id} className="border-b border-white/5 last:border-0 align-top">
+                      <td className="px-6 py-4 text-white">
+                        {item.code} — {item.name}
+                        <div className="mt-1 text-xs text-white/40">{item.material_type_label}</div>
+                      </td>
+                      <td className="px-6 py-4 text-right text-white/60">{item.required_quantity}</td>
+                      <td className="px-6 py-4 text-right text-white/60">{item.available_quantity}</td>
+                      <td className="px-6 py-4 text-right text-white/60">{item.allocated_quantity}</td>
+                      <td className="px-6 py-4 text-right text-white/60">{item.remaining_to_allocate}</td>
+                      <td className="px-6 py-4 text-right">
+                        {item.shortage_quantity > 0 ? (
+                          <span className="text-red-300">{item.shortage_quantity}</span>
+                        ) : (
+                          <span className="text-white/40">0</span>
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge
+                          tone={
+                            itemAllocationStatus === 'fully_allocated'
+                              ? 'success'
+                              : itemAllocationStatus === 'partially_allocated'
+                                ? 'gold'
+                                : 'neutral'
+                          }
+                        >
+                          {ALLOCATION_STATUS_LABEL[itemAllocationStatus]}
+                        </Badge>
+                      </td>
+                      {allowWrite && (
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col gap-2">
+                            {po.status === 'planned' && maxAllocatable > 0 && (
+                              <div className="flex items-end gap-2">
+                                <div className="w-28">
+                                  <TextField
+                                    label="Allocate"
+                                    type="number"
+                                    min={0}
+                                    max={maxAllocatable}
+                                    step="any"
+                                    placeholder={`${maxAllocatable}`}
+                                    value={allocateQty[item.id] ?? ''}
+                                    onChange={(e) =>
+                                      setAllocateQty((prev) => ({ ...prev, [item.id]: e.target.value }))
+                                    }
+                                  />
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  isLoading={actionBusyId === item.id}
+                                  onClick={() => handleAllocate(item.id)}
+                                >
+                                  Allocate
+                                </Button>
+                              </div>
+                            )}
+                            {item.allocated_quantity > 0 && (
+                              <div className="flex items-end gap-2">
+                                <div className="w-28">
+                                  <TextField
+                                    label="Release"
+                                    type="number"
+                                    min={0}
+                                    max={item.allocated_quantity}
+                                    step="any"
+                                    placeholder={`${item.allocated_quantity}`}
+                                    value={releaseQty[item.id] ?? ''}
+                                    onChange={(e) =>
+                                      setReleaseQty((prev) => ({ ...prev, [item.id]: e.target.value }))
+                                    }
+                                  />
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  isLoading={actionBusyId === item.id}
+                                  onClick={() => handleRelease(item.id)}
+                                >
+                                  Release
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </td>
                       )}
-                    </td>
-                    <td className="px-6 py-4 text-white/60">{item.unit}</td>
-                  </tr>
-                ))}
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -270,6 +427,20 @@ export function ProductionOrderDetailPage() {
               }
             >
               Material requirement
+            </Badge>
+          </span>
+          <span className="flex items-center gap-3">
+            <span className="text-white/20">→</span>
+            <Badge
+              tone={
+                requirements?.allocation_status === 'fully_allocated'
+                  ? 'success'
+                  : requirements?.allocation_status === 'partially_allocated'
+                    ? 'gold'
+                    : 'neutral'
+              }
+            >
+              Material allocation
             </Badge>
           </span>
           {FUTURE_STAGES.map((stage) => (
