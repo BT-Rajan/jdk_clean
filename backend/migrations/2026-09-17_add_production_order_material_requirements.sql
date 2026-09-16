@@ -14,8 +14,18 @@
 -- IF NOT EXISTS and INSERT IGNORE, same pattern as every other
 -- new-table migration (e.g. 2026-09-16_add_production_orders.sql).
 --
+-- Dated the day after production_orders.sql on purpose, even though both
+-- were written the same day: migrations/*.sql are applied in plain
+-- filename-sorted order (see app/core/migrations.py), and this table's
+-- own foreign key to production_orders(id) means it must run strictly
+-- after that table exists. "2026-09-16_add_production_order_material_..."
+-- would otherwise sort *before* "2026-09-16_add_production_orders.sql"
+-- (an underscore sorts below 's'), applying this file first and failing
+-- with "Foreign key constraint is incorrectly formed" (errno 150) since
+-- production_orders wouldn't exist yet.
+--
 -- Usage:
---   mysql -u <user> -p <database> < backend/migrations/2026-09-16_add_production_order_material_requirements.sql
+--   mysql -u <user> -p <database> < backend/migrations/2026-09-17_add_production_order_material_requirements.sql
 
 CREATE TABLE IF NOT EXISTS production_order_material_requirements (
     id                      BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
