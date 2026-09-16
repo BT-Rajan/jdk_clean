@@ -76,12 +76,13 @@ interface PagedResponse<T> {
   total_pages: number;
 }
 
-export function listCustomers(params: { search?: string; page?: number; page_size?: number } = {}) {
+export function listCustomers(params: { search?: string; page?: number; page_size?: number; status?: string } = {}) {
   const query = new URLSearchParams();
   query.set('page', String(params.page ?? 1));
   query.set('page_size', String(params.page_size ?? 50));
   query.set('sort', 'name');
   if (params.search) query.set('search', params.search);
+  if (params.status) query.set('status', params.status);
   return api<PagedResponse<Customer>>(`/api/customers?${query.toString()}`);
 }
 

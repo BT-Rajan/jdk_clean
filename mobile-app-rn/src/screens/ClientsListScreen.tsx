@@ -1,16 +1,18 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, FlatList, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import Feather from '@expo/vector-icons/Feather';
 import { Alert } from '../components/Alert';
 import { Button } from '../components/Button';
 import { GlassCard } from '../components/GlassCard';
 import { PageHeader } from '../components/PageHeader';
+import { SelectField } from '../components/SelectField';
 import { TextField } from '../components/TextField';
 import { colors, fonts, whiteAlpha } from '../theme';
 import { useLocale } from '../i18n/LocaleContext';
 import { confirm } from '../utils/alerts';
+import { usePagedList } from '../hooks/usePagedList';
 import { listCustomers, activateCustomer, deactivateCustomer, Customer } from '../api/customers';
 import { ClientsStackParamList } from '../navigation/RootNavigator';
 import { useAuth } from '../context/AuthContext';
@@ -18,36 +20,46 @@ import { isAdmin } from '../utils/roles';
 
 type Props = NativeStackScreenProps<ClientsStackParamList, 'ClientsList'>;
 
+const fetchClients = (params: { page: number; page_size: number; search?: string; status?: string }) =>
+  listCustomers(params);
+
 export function ClientsListScreen({ navigation }: Props) {
   const { t } = useLocale();
   const { user } = useAuth();
   const allowAdmin = isAdmin(user?.role);
-  const [clients, setClients] = useState<Customer[]>([]);
-  const [search, setSearch] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [togglingId, setTogglingId] = useState<number | null>(null);
 
-  const load = useCallback(async (searchTerm?: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await listCustomers({ search: searchTerm ?? undefined, page_size: 100 });
-      setClients(res.items);
-    } catch (err: any) {
-      setError(err?.message ?? t('clients', 'loadError'));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const {
+    items: clients,
+    setItems,
+    search,
+    setSearch,
+    status,
+    setStatus,
+    loading,
+    loadingMore,
+    error,
+    setError,
+    refresh,
+    loadMore,
+  } = usePagedList<Customer>(
+    useCallback(fetchClients, []),
+    useCallback((err: any) => err?.message ?? t('clients', 'loadError'), [t]),
+  );
 
   // Reload every time this screen regains focus, so a create/edit on
   // ClientFormScreen is reflected immediately on the way back.
   useFocusEffect(
     useCallback(() => {
-      load(search);
-    }, [load]),
+      refresh();
+    }, [refresh]),
   );
+
+  const statusOptions = [
+    { label: t('clients', 'statusFilterAll'), value: '' },
+    { label: t('clientForm', 'statusActive'), value: 'active' },
+    { label: t('clientForm', 'statusInactive'), value: 'inactive' },
+  ];
 
   async function handleToggleStatus(client: Customer) {
     const activating = client.status === 'inactive';
@@ -70,7 +82,7 @@ export function ClientsListScreen({ navigation }: Props) {
     setTogglingId(client.id);
     try {
       const updated = client.status === 'active' ? await deactivateCustomer(client.id) : await activateCustomer(client.id);
-      setClients((prev) => prev.map((c) => (c.id === client.id ? updated : c)));
+      setItems((prev) => prev.map((c) => (c.id === client.id ? updated : c)));
     } catch (err: any) {
       setError(err?.message ?? t('clients', 'updateError'));
     } finally {
@@ -89,15 +101,26 @@ export function ClientsListScreen({ navigation }: Props) {
         }
       />
 
-      <View style={styles.searchWrap}>
-        <TextField
-          label={t('clients', 'searchLabel')}
-          value={search}
-          onChangeText={setSearch}
-          placeholder={t('clients', 'searchPlaceholder')}
-          onSubmitEditing={() => load(search)}
-          returnKeyType="search"
-        />
+      <View style={styles.filterRow}>
+        <View style={{ flex: 2 }}>
+          <TextField
+            label={t('clients', 'searchLabel')}
+            value={search}
+            onChangeText={setSearch}
+            placeholder={t('clients', 'searchPlaceholder')}
+            onSubmitEditing={refresh}
+            returnKeyType="search"
+          />
+        </View>
+        <View style={{ flex: 1 }}>
+          <SelectField
+            label={t('clients', 'statusFilterLabel')}
+            value={status}
+            onChange={setStatus}
+            options={statusOptions}
+            searchable={false}
+          />
+        </View>
       </View>
 
       <Alert variant="error">{error}</Alert>
@@ -106,10 +129,13 @@ export function ClientsListScreen({ navigation }: Props) {
         data={clients}
         keyExtractor={(item) => String(item.id)}
         contentContainerStyle={{ paddingBottom: 24 }}
-        refreshControl={<RefreshControl refreshing={loading} onRefresh={() => load(search)} tintColor={colors.gold400} />}
+        refreshControl={<RefreshControl refreshing={loading} onRefresh={refresh} tintColor={colors.gold400} />}
+        onEndReached={loadMore}
+        onEndReachedThreshold={0.4}
         ListEmptyComponent={
           !loading ? <Text style={styles.emptyText}>{t('clients', 'emptyText')}</Text> : null
         }
+        ListFooterComponent={loadingMore ? <ActivityIndicator color={colors.gold400} style={{ marginVertical: 16 }} /> : null}
         renderItem={({ item }) => (
           <Pressable
             onPress={() => navigation.navigate('ClientHistory', { customerId: item.id, customerName: item.name })}
@@ -168,7 +194,7 @@ export function ClientsListScreen({ navigation }: Props) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.ink950, padding: 18 },
-  searchWrap: { marginBottom: 12 },
+  filterRow: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   emptyText: { fontFamily: fonts.sans, fontSize: 13, color: whiteAlpha(0.4), textAlign: 'center', marginTop: 30 },
   row: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, padding: 16 },
   rowName: { fontFamily: fonts.sansSemibold, fontSize: 15, color: colors.white, marginBottom: 3 },
