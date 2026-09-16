@@ -50,7 +50,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
                 already laid out to match I18nManager.isRTL, which can
                 get out of sync with the JS-side flag on iOS -- this
                 button bypasses that gesture/overlay layer entirely. */}
-            <Pressable onPress={() => props.navigation.closeDrawer()} hitSlop={12} style={styles.closeBtn}>
+            <Pressable
+              onPress={() => props.navigation.closeDrawer()}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={t('common', 'close')}
+              style={styles.closeBtn}
+            >
               <Feather name="x" size={20} color={whiteAlpha(0.6)} />
             </Pressable>
           </View>
@@ -64,6 +70,9 @@ export function DrawerContent(props: DrawerContentComponentProps) {
               <Pressable
                 key={item.route}
                 onPress={() => props.navigation.navigate(item.route)}
+                accessibilityRole="button"
+                accessibilityLabel={t('drawer', item.labelKey)}
+                accessibilityState={{ selected: focused }}
                 style={[styles.item, focused && styles.itemActive]}
               >
                 <Feather name={item.icon} size={18} color={focused ? colors.gold400 : whiteAlpha(0.65)} />
@@ -84,7 +93,13 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           <Text style={styles.itemText}>{t('drawer', 'language')}</Text>
           <LanguageToggle locale={locale} onChange={setLocale} />
         </View>
-        <Pressable onPress={logout} style={styles.item} hitSlop={10}>
+        <Pressable
+          onPress={logout}
+          style={styles.item}
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel={t('common', 'logout')}
+        >
           <Feather name="log-out" size={18} color={colors.red400} />
           <Text style={[styles.itemText, { color: colors.red400 }]}>{t('common', 'logout')}</Text>
         </Pressable>

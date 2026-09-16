@@ -42,6 +42,9 @@ export function SelectField({
       <Text style={styles.label}>{label}</Text>
       <Pressable
         onPress={() => setOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        accessibilityValue={{ text: selectedLabel ?? placeholder }}
         style={[styles.box, glass.inset, Boolean(error) && styles.boxError]}
       >
         <Text style={[styles.valueText, !selectedLabel && styles.placeholderText]} numberOfLines={1}>
@@ -52,7 +55,12 @@ export function SelectField({
       {error ? <Text style={styles.errorText}>{error}</Text> : null}
 
       <Modal visible={open} animationType="slide" transparent onRequestClose={() => setOpen(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setOpen(false)} />
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => setOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel="Close"
+        />
         <View style={styles.sheet}>
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>{label}</Text>
@@ -81,6 +89,9 @@ export function SelectField({
                   setQuery('');
                   setOpen(false);
                 }}
+                accessibilityRole="menuitem"
+                accessibilityLabel={item.label}
+                accessibilityState={{ selected: item.value === value }}
                 style={({ pressed }) => [
                   styles.optionRow,
                   item.value === value && styles.optionRowActive,

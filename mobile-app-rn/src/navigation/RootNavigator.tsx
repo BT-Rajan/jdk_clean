@@ -86,10 +86,13 @@ const stackScreenOptions = {
 // a screen whose header the drawer itself no longer renders. Standard
 // react-navigation pattern for a stack nested inside a drawer.
 function DrawerMenuButton({ navigation }: { navigation: any }) {
+  const { t } = useLocale();
   return (
     <Pressable
       onPress={() => navigation.getParent()?.dispatch(DrawerActions.openDrawer())}
       hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel={t('common', 'openMenu')}
       style={{ paddingHorizontal: 4 }}
     >
       <Feather name="menu" size={22} color={colors.white} />
@@ -176,7 +179,7 @@ function OrdersStackNavigator() {
 const Drawer = createDrawerNavigator();
 
 function AuthenticatedShell() {
-  const { t } = useLocale();
+  const { t, isRTL } = useLocale();
   return (
     <Drawer.Navigator
       drawerContent={(props) => <DrawerContent {...props} />}
@@ -190,6 +193,24 @@ function AuthenticatedShell() {
         headerTitle: (props: { children?: string }) => <HeaderTitle {...props} />,
         drawerStyle: { backgroundColor: colors.ink900, width: 260 },
         sceneContainerStyle: { backgroundColor: colors.ink950 },
+        // Explicit, not left to @react-navigation/drawer's own default --
+        // its default reads native I18nManager.getConstants().isRTL,
+        // which is a value cached at bridge init and can only be trusted
+        // right after a real relaunch; our own isRTL (from LocaleContext)
+        // is the same source of truth the rest of the app already uses.
+        drawerPosition: isRTL ? 'right' : 'left',
+        // @react-navigation/drawer defaults to drawerType "slide" on iOS
+        // (Android gets "front"), which also translates the screen
+        // content itself while the drawer is open/closing -- that extra
+        // moving part is where the RTL position math (modern/Drawer.tsx,
+        // see DrawerContent.tsx's own comment on this library's fragile
+        // iOS+RTL interaction) goes wrong on iOS in Arabic: closing the
+        // drawer doesn't fully return the screen to its original
+        // position like it does in English. Forcing "front" everywhere
+        // -- same behavior Android already gets by default -- means the
+        // content never moves at all, so that whole class of bug can't
+        // happen; only the drawer panel itself slides.
+        drawerType: 'front',
       }}
     >
       <Drawer.Screen name="Home" component={HomeScreen} options={{ title: t('home', 'title') }} />

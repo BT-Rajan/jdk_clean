@@ -235,13 +235,24 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>{order.order_number}</Text>
-            <Pressable onPress={goToCustomer} hitSlop={6}>
+            <Pressable
+              onPress={goToCustomer}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={order.customer_name ?? undefined}
+            >
               <Text style={[styles.subtitle, styles.linkText]}>{order.customer_name ?? '—'}</Text>
             </Pressable>
           </View>
           <StatusBadge status={order.status} label={statusLabel(t, order.status)} />
           {isDraft && (
-            <Pressable onPress={() => navigation.navigate('OrderForm', { orderId: order.id })} hitSlop={10} style={styles.headerIconBtn}>
+            <Pressable
+              onPress={() => navigation.navigate('OrderForm', { orderId: order.id })}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={`${t('common', 'edit')} ${order.order_number}`}
+              style={styles.headerIconBtn}
+            >
               <Feather name="edit-2" size={18} color={whiteAlpha(0.7)} />
             </Pressable>
           )}
@@ -277,7 +288,12 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           <View style={{ marginBottom: 18 }}>
             <Text style={styles.sectionTitle}>{t('orderDetail', 'journeyTitle')}</Text>
             {journey.feasibility && (
-              <Pressable onPress={goToFeasibility} style={styles.linkRow}>
+              <Pressable
+                onPress={goToFeasibility}
+                accessibilityRole="button"
+                accessibilityLabel={`${journey.feasibility.feasibility_number}, ${journeyFeasibilityLabel(t, journey.feasibility.status)}`}
+                style={styles.linkRow}
+              >
                 <Feather name="check-circle" size={14} color={colors.gold300} />
                 <Text style={styles.linkRowText}>
                   {journey.feasibility.feasibility_number} · {journeyFeasibilityLabel(t, journey.feasibility.status)}
@@ -286,7 +302,12 @@ export function OrderDetailScreen({ route, navigation }: Props) {
               </Pressable>
             )}
             {journey.quotation && (
-              <Pressable onPress={goToQuotation} style={styles.linkRow}>
+              <Pressable
+                onPress={goToQuotation}
+                accessibilityRole="button"
+                accessibilityLabel={`${journey.quotation.quotation_number}, ${journeyQuotationLabel(t, journey.quotation.status)}`}
+                style={styles.linkRow}
+              >
                 <Feather name="file-text" size={14} color={colors.gold300} />
                 <Text style={styles.linkRowText}>
                   {journey.quotation.quotation_number} · {journeyQuotationLabel(t, journey.quotation.status)}
@@ -332,7 +353,12 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           <View style={{ marginTop: 16 }}>
             <Text style={styles.sectionTitle}>{t('orderDetail', 'childOrdersTitle')}</Text>
             {order.child_orders.map((child) => (
-              <Pressable key={child.id} onPress={() => navigation.push('OrderDetail', { orderId: child.id })}>
+              <Pressable
+                key={child.id}
+                onPress={() => navigation.push('OrderDetail', { orderId: child.id })}
+                accessibilityRole="button"
+                accessibilityLabel={`${child.order_number}, ${formatCurrency(child.total_amount)}`}
+              >
                 <View style={styles.childRow}>
                   <Text style={styles.lineName}>{child.order_number}</Text>
                   <Text style={styles.lineTotal}>{formatCurrency(child.total_amount)}</Text>
@@ -364,7 +390,13 @@ export function OrderDetailScreen({ route, navigation }: Props) {
           <View style={{ marginTop: 20 }}>
             <Text style={styles.sectionTitle}>{t('orderDetail', 'deliveryNotesTitle')}</Text>
             {deliveryNotes.map((n) => (
-              <Pressable key={n.id} onPress={() => goToDeliveryNote(n.id)} style={styles.linkRow}>
+              <Pressable
+                key={n.id}
+                onPress={() => goToDeliveryNote(n.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`${n.delivery_note_number}, ${formatDate(n.delivery_date)}`}
+                style={styles.linkRow}
+              >
                 <Feather name="truck" size={14} color={colors.gold300} />
                 <Text style={styles.linkRowText}>
                   {n.delivery_note_number} · {formatDate(n.delivery_date)}
@@ -395,7 +427,12 @@ export function OrderDetailScreen({ route, navigation }: Props) {
         transparent
         onRequestClose={() => setAdminReviewOpen(false)}
       >
-        <Pressable style={styles.backdrop} onPress={() => setAdminReviewOpen(false)} />
+        <Pressable
+          style={styles.backdrop}
+          onPress={() => setAdminReviewOpen(false)}
+          accessibilityRole="button"
+          accessibilityLabel={t('common', 'close')}
+        />
         <View style={styles.sheet}>
           <View style={styles.sheetHandle} />
           <Text style={styles.sheetTitle}>{t('orderDetail', 'acknowledgeReviewTitle')}</Text>

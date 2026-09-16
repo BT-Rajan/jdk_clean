@@ -699,6 +699,9 @@ function StepTabs({
           <Text
             key={label}
             onPress={reachable ? () => onSelect(index) : undefined}
+            accessibilityRole={reachable ? 'button' : undefined}
+            accessibilityLabel={label}
+            accessibilityState={{ selected: active, disabled: !reachable }}
             style={[styles.tab, active && styles.tabActive, !reachable && styles.tabDisabled]}
           >
             {label}

@@ -344,13 +344,24 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>{quotation.quotation_number}</Text>
-            <Pressable onPress={goToCustomer} hitSlop={6}>
+            <Pressable
+              onPress={goToCustomer}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={quotation.customer_name ?? undefined}
+            >
               <Text style={[styles.subtitle, styles.linkText]}>{quotation.customer_name ?? '—'}</Text>
             </Pressable>
           </View>
           <StatusBadge status={quotation.status} label={statusLabel(t, quotation.status)} />
           {isDraft && !editing && (
-            <Pressable onPress={startEdit} hitSlop={10} style={styles.headerIconBtn}>
+            <Pressable
+              onPress={startEdit}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={`${t('common', 'edit')} ${quotation.quotation_number}`}
+              style={styles.headerIconBtn}
+            >
               <Feather name="edit-2" size={18} color={whiteAlpha(0.7)} />
             </Pressable>
           )}
@@ -364,14 +375,24 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
         </View>
 
         {quotation.feasibility_id && (
-          <Pressable onPress={goToFeasibility} style={styles.linkRow}>
+          <Pressable
+            onPress={goToFeasibility}
+            accessibilityRole="button"
+            accessibilityLabel={t('quotationDetail', 'viewFeasibility')}
+            style={styles.linkRow}
+          >
             <Feather name="check-circle" size={14} color={colors.gold300} />
             <Text style={styles.linkRowText}>{t('quotationDetail', 'viewFeasibility')}</Text>
             <Feather name="chevron-right" size={14} color={whiteAlpha(0.3)} style={{ marginLeft: 'auto' }} />
           </Pressable>
         )}
         {quotation.converted_order_id && (
-          <Pressable onPress={goToOrder} style={styles.linkRow}>
+          <Pressable
+            onPress={goToOrder}
+            accessibilityRole="button"
+            accessibilityLabel={t('quotationDetail', 'viewOrder')}
+            style={styles.linkRow}
+          >
             <Feather name="package" size={14} color={colors.gold300} />
             <Text style={styles.linkRowText}>{t('quotationDetail', 'viewOrder')}</Text>
             <Feather name="chevron-right" size={14} color={whiteAlpha(0.3)} style={{ marginLeft: 'auto' }} />
@@ -420,13 +441,24 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
                   </View>
                 </View>
                 {lines.length > 1 && (
-                  <Pressable onPress={() => removeLine(line.key)} hitSlop={10} style={styles.removeLineBtn}>
+                  <Pressable
+                    onPress={() => removeLine(line.key)}
+                    hitSlop={10}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t('common', 'delete')} ${t('quotationDetail', 'productLabel')} ${index + 1}`}
+                    style={styles.removeLineBtn}
+                  >
                     <Feather name="trash-2" size={16} color={colors.red400} />
                   </Pressable>
                 )}
               </View>
             ))}
-            <Pressable onPress={addLine} style={styles.addLineBtn}>
+            <Pressable
+              onPress={addLine}
+              accessibilityRole="button"
+              accessibilityLabel={t('quotationDetail', 'addLine')}
+              style={styles.addLineBtn}
+            >
               <Feather name="plus" size={14} color={colors.gold300} />
               <Text style={styles.addLineText}>{t('quotationDetail', 'addLine')}</Text>
             </Pressable>

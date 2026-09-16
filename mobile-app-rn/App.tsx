@@ -14,6 +14,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import { LocaleProvider } from './src/i18n/LocaleContext';
 import { RootNavigator } from './src/navigation/RootNavigator';
 import { SplashView } from './src/components/SplashView';
+import { OfflineBanner } from './src/components/OfflineBanner';
 import { colors } from './src/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -35,6 +36,7 @@ export default function App() {
         <View style={{ flex: 1, backgroundColor: colors.ink950 }} onLayout={onLayout}>
           <LocaleProvider>
             <AuthProvider>
+              <OfflineBanner />
               <RootNavigator />
             </AuthProvider>
           </LocaleProvider>

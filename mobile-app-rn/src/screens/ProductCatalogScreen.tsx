@@ -92,7 +92,13 @@ export function ProductCatalogScreen() {
               )}
             </View>
             <Text style={styles.rowPrice}>{formatCurrency(item.selling_price)}</Text>
-            <Pressable onPress={() => startQuotation(item.id)} hitSlop={10} style={styles.quoteBtn}>
+            <Pressable
+              onPress={() => startQuotation(item.id)}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel={t('productCatalog', 'startQuotationLabel', { name: item.name })}
+              style={styles.quoteBtn}
+            >
               <Feather name="send" size={16} color={colors.gold400} />
             </Pressable>
           </GlassCard>

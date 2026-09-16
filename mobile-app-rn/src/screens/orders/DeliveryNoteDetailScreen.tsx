@@ -145,7 +145,12 @@ export function DeliveryNoteDetailScreen({ route, navigation }: Props) {
         <View style={styles.headerRow}>
           <View style={{ flex: 1 }}>
             <Text style={styles.title}>{note.delivery_note_number}</Text>
-            <Pressable onPress={goToOrder} hitSlop={6}>
+            <Pressable
+              onPress={goToOrder}
+              hitSlop={6}
+              accessibilityRole="button"
+              accessibilityLabel={note.order_number ?? undefined}
+            >
               <Text style={[styles.subtitle, styles.linkText]}>{note.order_number ?? '—'}</Text>
             </Pressable>
           </View>

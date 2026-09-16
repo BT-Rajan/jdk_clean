@@ -1,6 +1,7 @@
 import { Pressable, StyleSheet, Text } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Logo } from '../components/Logo';
+import { useLocale } from '../i18n/LocaleContext';
 import { colors, fonts } from '../theme';
 
 /** The one and only header content used across the whole app: a small
@@ -19,10 +20,13 @@ import { colors, fonts } from '../theme';
  * instruction -- there's no unsaved-changes guard on this shortcut. */
 export function HeaderTitle({ children }: { children?: string }) {
   const navigation = useNavigation();
+  const { t } = useLocale();
   return (
     <Pressable
       onPress={() => navigation.navigate('Home' as never)}
       hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel={t('common', 'goToHome')}
       style={({ pressed }) => [styles.row, pressed && styles.pressed]}
     >
       <Logo size={24} hideWordmark />
