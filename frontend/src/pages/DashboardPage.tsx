@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { GlassCard, Button, Alert } from '@/components/ui'
@@ -6,10 +6,49 @@ import { useAuth } from '@/hooks/useAuth'
 import { useCompanyName } from '@/hooks/useCompanyName'
 import { useDashboardPreferences } from '@/hooks/useDashboardPreferences'
 import { getDashboardStats } from '@/api/dashboard'
+import { listNotifications } from '@/api/notifications'
+import { getPageKeyForPath } from '@/lib/pagePermissions'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatCurrency } from '@/lib/currency'
 import type { DashboardStatsResponse } from '@/types/dashboard'
+import type { Notification, NotificationSeverity } from '@/types/notification'
 import { StatsWidget, GraphWidget, SkeletonWidget } from '@/components/dashboard/DashboardWidgets'
+
+// Reuses the exact same live, permission-scoped feed the header's
+// notification bell shows (GET /api/notifications -- see
+// NotificationsModal.tsx, which this section's card styling mirrors) --
+// not a second to-do system. Severity labels/colors intentionally match
+// the bell's modal so the same item reads the same way in both places.
+const severityColor: Record<NotificationSeverity, string> = {
+  high: 'bg-red-500/10 border-red-500/30 text-red-300',
+  medium: 'bg-amber-500/10 border-amber-500/30 text-amber-300',
+  low: 'bg-white/5 border-white/10 text-white/50',
+}
+const severityLabel: Record<NotificationSeverity, string> = {
+  high: 'Needs attention',
+  medium: 'Follow up',
+  low: 'FYI',
+}
+const severityRank: Record<NotificationSeverity, number> = { high: 0, medium: 1, low: 2 }
+const MAX_NEEDS_ATTENTION = 6
+
+// Every target already exists as a route today -- this is a fixed,
+// deliberately short list (not another menu), filtered below by the same
+// department_permissions-derived visibility AppLayout's nav uses, so a
+// user never sees a shortcut to a section they can't open. No "New
+// Order" here: orders are only ever created via quote conversion or
+// logging a sale (see api/orders.ts), there is no bare create route.
+interface QuickAction {
+  label: string
+  to: string
+}
+const QUICK_ACTIONS: QuickAction[] = [
+  { label: 'New Customer', to: '/customers/new' },
+  { label: 'New Feasibility', to: '/feasibilities/new' },
+  { label: 'New Quotation', to: '/quotations/new' },
+  { label: 'Production Planning', to: '/mrp' },
+  { label: 'Purchase Order', to: '/purchase-orders/new' },
+]
 
 // Only mapped when a stat corresponds to exactly one list page -- a few
 // stats (open/cancelled deals, auto-created this month, pending admin
@@ -35,13 +74,17 @@ const STAT_ROUTES: Record<string, string> = {
 }
 
 export function DashboardPage() {
-  const { user } = useAuth()
+  const { user, permissions } = useAuth()
   const companyName = useCompanyName()
   const { isLoading: prefsLoading, getEnabledWidgets } = useDashboardPreferences(user?.role)
 
   const [data, setData] = useState<DashboardStatsResponse | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+
+  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [notifLoading, setNotifLoading] = useState(true)
+  const [notifError, setNotifError] = useState<string | null>(null)
 
   useEffect(() => {
     getDashboardStats()
@@ -50,8 +93,38 @@ export function DashboardPage() {
       .finally(() => setStatsLoading(false))
   }, [])
 
+  useEffect(() => {
+    listNotifications()
+      .then((res) => setNotifications(res.items))
+      .catch((err) => setNotifError(getApiErrorMessage(err)))
+      .finally(() => setNotifLoading(false))
+  }, [])
+
   const enabledWidgets = getEnabledWidgets()
   const isLoading = prefsLoading || statsLoading
+
+  const topNotifications = useMemo(
+    () =>
+      [...notifications]
+        .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (a.created_at < b.created_at ? 1 : -1))
+        .slice(0, MAX_NEEDS_ATTENTION),
+    [notifications],
+  )
+
+  // Same visibility rule AppLayout's nav applies to its links -- a page
+  // with no page_key (ungoverned) or still-loading permissions shows;
+  // one explicitly set to 'none' is hidden. Keeps quick actions from
+  // ever pointing at a section this user's department can't open.
+  const visibleQuickActions = useMemo(
+    () =>
+      QUICK_ACTIONS.filter((action) => {
+        const pageKey = getPageKeyForPath(action.to)
+        if (pageKey === null) return true
+        if (!permissions) return true
+        return permissions[pageKey] !== undefined && permissions[pageKey] !== 'none'
+      }),
+    [permissions],
+  )
 
   return (
     <AppLayout>
@@ -62,9 +135,63 @@ export function DashboardPage() {
 
       <Alert variant="error">{error}</Alert>
 
+      <div className="mt-8 grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <h2 className="mb-4 font-display text-lg font-medium text-white">Needs Attention</h2>
+          {notifLoading ? (
+            <GlassCard className="p-6 text-sm text-white/40">Loading…</GlassCard>
+          ) : notifError ? (
+            <Alert variant="error">{notifError}</Alert>
+          ) : topNotifications.length === 0 ? (
+            <GlassCard className="p-6 text-sm text-white/50">You're all caught up — nothing needs action right now.</GlassCard>
+          ) : (
+            <div className="space-y-3">
+              {topNotifications.map((n) => (
+                <Link
+                  key={n.id}
+                  to={n.link}
+                  className="block rounded-lg border border-white/10 bg-white/5 p-4 transition-colors hover:border-white/20 hover:bg-white/10"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="font-medium text-white">{n.title}</p>
+                    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-xs font-medium ${severityColor[n.severity]}`}>
+                      {severityLabel[n.severity]}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-sm text-white/60">{n.message}</p>
+                </Link>
+              ))}
+              {notifications.length > topNotifications.length && (
+                <p className="text-xs text-white/40">
+                  +{notifications.length - topNotifications.length} more — see the notifications bell above.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div>
+          <h2 className="mb-4 font-display text-lg font-medium text-white">Quick Actions</h2>
+          {visibleQuickActions.length === 0 ? (
+            <GlassCard className="p-6 text-sm text-white/50">No quick actions available for your role.</GlassCard>
+          ) : (
+            <div className="flex flex-col gap-2">
+              {visibleQuickActions.map((action) => (
+                <Link key={action.to} to={action.to}>
+                  <Button variant="ghost" className="w-full">
+                    {action.label}
+                  </Button>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
       {!isLoading && !error && enabledWidgets.length > 0 && (
-        <div className="mt-8">
+        <div className="mt-10">
           <div className="mb-6 flex items-center justify-between">
+            <h2 className="font-display text-lg font-medium text-white">Overview</h2>
             <Link to="/dashboard/customize">
               <button className="text-sm font-medium text-gold-300 transition-colors hover:text-gold-200">
                 Customize →
