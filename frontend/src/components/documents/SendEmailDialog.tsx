@@ -40,7 +40,6 @@ export function SendEmailDialog({
     }
     // Only the fields that seed this dialog's initial state on open --
     // re-running on every keystroke of defaultMessage would clobber edits.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultEmail])
 
   async function handleSend() {
