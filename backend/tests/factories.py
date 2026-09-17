@@ -116,7 +116,13 @@ def make_packaging_line(
 
 
 def make_production_order(
-    db: Session, order_id: int, order_detail_id: int, product_id: int, planned_quantity: float, due_date, **overrides
+    db: Session,
+    order_id: int | None,
+    order_detail_id: int | None,
+    product_id: int,
+    planned_quantity: float,
+    due_date,
+    **overrides,
 ) -> ProductionOrder:
     n = _n()
     po = ProductionOrder(

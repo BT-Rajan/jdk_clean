@@ -128,6 +128,29 @@ class OrderChildSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class OrderFulfillmentLineOut(BaseModel):
+    """P8: per order line, how much is ordered/delivered/outstanding set
+    against what's actually released FG stock right now, plus existing
+    production already in the pipeline for the same product -- see
+    order_service.get_fulfillment for the full reasoning."""
+
+    order_detail_id: int
+    product_id: int
+    product_code: str | None
+    product_name: str | None
+    unit: str | None
+    ordered_quantity: float
+    delivered_quantity: float
+    remaining_quantity: float
+    available_fg: float
+    fulfillable_now: float
+    shortage: float
+    planned_production_quantity: float
+    in_progress_production_quantity: float
+
+    model_config = {"from_attributes": True}
+
+
 class OrderOut(BaseModel):
     id: int
     order_number: str

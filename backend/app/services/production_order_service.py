@@ -4,7 +4,10 @@ from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
 from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.order import Order, OrderDetail
+from app.models.product import Product
+from app.models.production_execution import ProductionExecution
 from app.models.production_order import ALLOWED_TRANSITIONS, ELIGIBLE_ORDER_STATUSES, ProductionOrder
+from app.models.production_schedule import ProductionSchedule
 from app.services import audit_service, deal_service, number_series_service
 
 TABLE_NAME = "production_orders"
@@ -111,7 +114,34 @@ def get_remaining_quantity(db: Session, order_detail_id: int) -> float:
     return round(float(order_detail.quantity) - _committed_quantity(db, order_detail_id), 4)
 
 
+def _get_active_product(db: Session, product_id: int) -> Product:
+    product = db.query(Product).filter(Product.id == product_id, Product.deleted_at.is_(None)).first()
+    if product is None:
+        raise ValidationAppError(f"Product {product_id} not found.")
+    if product.status != "active":
+        raise ValidationAppError(f"{product.name} is inactive and cannot be planned for production.")
+    return product
+
+
 def create_production_order(db: Session, data: dict, user_id: int | None = None) -> ProductionOrder:
+    """Two independent paths (P8 -- see models/production_order.py's own
+    docstring on why order_detail_id is now optional):
+
+    - order_detail_id given: exactly the original P2 behavior -- raised
+      against a specific, still-open customer order line, capped at
+      whatever that line has yet to commit to production.
+    - order_detail_id omitted: a stock-only Production Order, raised
+      directly against `product_id` to build/replenish general Finished
+      Goods inventory with no customer order behind it at all. No order-
+      status or committed-quantity gate applies -- there's no order line
+      to check either against.
+    """
+    if data.get("order_detail_id"):
+        return _create_order_linked_production_order(db, data, user_id)
+    return _create_stock_production_order(db, data, user_id)
+
+
+def _create_order_linked_production_order(db: Session, data: dict, user_id: int | None = None) -> ProductionOrder:
     """Transactional: locks the order line for the duration of this check
     + insert so two concurrent requests against the same line can never
     both succeed past the remaining-quantity check -- the second waits for
@@ -119,7 +149,17 @@ def create_production_order(db: Session, data: dict, user_id: int | None = None)
     Same with_for_update() pattern order_service/production_service
     already use for their own quantity-affecting writes.
     """
-    order = db.query(Order).filter(Order.id == data["order_id"], Order.deleted_at.is_(None)).first()
+    # Locked for the rest of this call -- see docstring above.
+    order_detail = (
+        db.query(OrderDetail)
+        .filter(OrderDetail.id == data["order_detail_id"])
+        .with_for_update()
+        .first()
+    )
+    if order_detail is None:
+        raise ValidationAppError("This order line does not exist.")
+
+    order = db.query(Order).filter(Order.id == order_detail.order_id, Order.deleted_at.is_(None)).first()
     if order is None:
         raise NotFoundError("Order")
     if order.status not in ELIGIBLE_ORDER_STATUSES:
@@ -128,21 +168,7 @@ def create_production_order(db: Session, data: dict, user_id: int | None = None)
             f"the order must be confirmed and still open."
         )
 
-    # Locked for the rest of this call -- see docstring above.
-    order_detail = (
-        db.query(OrderDetail)
-        .filter(OrderDetail.id == data["order_detail_id"])
-        .with_for_update()
-        .first()
-    )
-    if order_detail is None or order_detail.order_id != order.id:
-        raise ValidationAppError("This order line does not belong to the given order.")
-
-    product = order_detail.product
-    if product is None or product.deleted_at is not None:
-        raise ValidationAppError("This line's product no longer exists.")
-    if product.status != "active":
-        raise ValidationAppError(f"{product.name} is inactive and cannot be planned for production.")
+    product = _get_active_product(db, order_detail.product_id)
 
     planned_quantity = float(data["planned_quantity"])
     remaining = float(order_detail.quantity) - _committed_quantity(db, order_detail.id, for_update=True)
@@ -175,6 +201,102 @@ def create_production_order(db: Session, data: dict, user_id: int | None = None)
     deal_service.advance_stage(db, order.deal_id, "production", user_id=user_id)
     db.commit()
     return get_production_order(db, production_order.id)
+
+
+def _create_stock_production_order(db: Session, data: dict, user_id: int | None = None) -> ProductionOrder:
+    """Builds/replenishes general Finished Goods stock -- no customer
+    order, no order-status gate, no committed-quantity cap (there's no
+    order line to cap against). See create_production_order's docstring."""
+    product_id = data.get("product_id")
+    if not product_id:
+        raise ValidationAppError("Either order_detail_id or product_id is required.")
+    product = _get_active_product(db, product_id)
+
+    production_order_number = number_series_service.next_number(db, "PRODUCTION_ORDER")
+    production_order = ProductionOrder(
+        production_order_number=production_order_number,
+        order_id=None,
+        order_detail_id=None,
+        product_id=product.id,
+        planned_quantity=float(data["planned_quantity"]),
+        due_date=data["due_date"],
+        priority=data.get("priority") or "normal",
+        notes=data.get("notes"),
+        created_by=user_id,
+    )
+    db.add(production_order)
+    db.flush()
+    audit_service.log_create(db, TABLE_NAME, production_order.id, user_id)
+    db.commit()
+    return get_production_order(db, production_order.id)
+
+
+def get_pipeline_quantity(db: Session, product_id: int) -> dict:
+    """How much of `product_id` is already somewhere in the production
+    pipeline and not yet produced, split into 'planned' (not started)
+    and 'in_progress' (machine time actually running) -- across both
+    legitimate ways this app schedules production: the Production Order
+    chain (P2/P5/P6) and the older auto-scheduled batch flow (see
+    models/production_schedule.py's own note on production_order_id
+    being NULL for it). A Customer Order's shortage calculation
+    (order_service.get_fulfillment) nets this off so it never suggests
+    replenishing output that's already queued up in either pipeline --
+    P8 spec section 10.
+
+    Never counted as available FG -- that's strictly
+    FinishedGoodsInventory.quantity_on_hand, populated only by an
+    accepted QC release (see qc_service._release_execution_fg). This is
+    visibility for planning, not stock.
+    """
+    planned = 0.0
+    in_progress = 0.0
+
+    production_orders = (
+        db.query(ProductionOrder.id, ProductionOrder.planned_quantity)
+        .filter(ProductionOrder.product_id == product_id, ProductionOrder.status == "planned")
+        .all()
+    )
+    for po_id, po_planned_quantity in production_orders:
+        executions = (
+            db.query(
+                ProductionExecution.status,
+                ProductionExecution.planned_quantity,
+                ProductionExecution.produced_quantity,
+            )
+            .filter(ProductionExecution.production_order_id == po_id, ProductionExecution.status != "cancelled")
+            .all()
+        )
+        completed = sum(float(e.produced_quantity) for e in executions if e.status == "completed")
+        in_progress_planned = sum(float(e.planned_quantity) for e in executions if e.status == "in_progress")
+        in_progress += in_progress_planned
+        remaining = round(float(po_planned_quantity) - completed - in_progress_planned, 4)
+        if remaining > 0:
+            planned += remaining
+
+    legacy_batches = (
+        db.query(
+            ProductionSchedule.status,
+            ProductionSchedule.planned_quantity,
+            ProductionSchedule.produced_quantity,
+        )
+        .filter(
+            ProductionSchedule.product_id == product_id,
+            ProductionSchedule.production_order_id.is_(None),
+            ProductionSchedule.deleted_at.is_(None),
+            ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
+        )
+        .all()
+    )
+    for status, batch_planned, batch_produced in legacy_batches:
+        remaining = max(round(float(batch_planned) - float(batch_produced), 4), 0.0)
+        if remaining <= 0:
+            continue
+        if status == "planned":
+            planned += remaining
+        else:
+            in_progress += remaining
+
+    return {"planned_quantity": round(planned, 4), "in_progress_quantity": round(in_progress, 4)}
 
 
 def change_status(

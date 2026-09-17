@@ -78,8 +78,16 @@ class ProductionExecution(Base, TimestampMixin):
     # still QC-pending: production completion and QC release are
     # deliberately separate facts (see docs/production-lifecycle.md and
     # the P7 spec's own "Production Completion vs Release" section).
-    # Never exceeds produced_quantity.
+    #
+    # rejected_quantity is this column's sibling (P8) -- how much of
+    # produced_quantity a QC decision has instead rejected. The two are
+    # tracked independently (not "produced minus released" implying
+    # rejection) because a run can sit partway through QC with some
+    # accepted, some rejected, and the remainder still pending a
+    # decision: released_quantity + rejected_quantity + whatever is
+    # still undecided always sums to produced_quantity, never more.
     released_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
+    rejected_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
     started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(

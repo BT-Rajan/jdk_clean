@@ -41,14 +41,17 @@ class ProductionExecutionOut(BaseModel):
     # FinishedGoodsInventory by an accepted external QC report (P7) --
     # see app/models/production_execution.py's own comment.
     released_quantity: float = 0
+    # released_quantity's sibling (P8) -- how much a QC decision has
+    # instead rejected.
+    rejected_quantity: float = 0
     # 'not_applicable' (not completed yet) | 'not_requested' |
-    # 'pending' | 'released' | 'rejected' -- derived from this run's QC
-    # requests (qc_service), never stored here. Populated by the
-    # production-orders API, not from_model, since it needs a query
-    # across qc_requests -- see api/production_orders.py's
-    # _execution_summary_out (same "populated by the endpoint, not the
-    # model conversion" pattern production_schedules.py's
-    # readiness_status already uses).
+    # 'pending' | 'partially_released' | 'released' | 'rejected' --
+    # derived from this run's QC requests (qc_service), never stored
+    # here. Populated by the production-orders API, not from_model,
+    # since it needs a query across qc_requests -- see
+    # api/production_orders.py's _execution_summary_out (same
+    # "populated by the endpoint, not the model conversion" pattern
+    # production_schedules.py's readiness_status already uses).
     fg_release_status: str = "not_applicable"
     started_at: datetime
     ended_at: datetime | None
@@ -88,4 +91,12 @@ class ProductionExecutionSummaryOut(BaseModel):
     # means; deliberately never confused with the Production Order's own
     # planned/cancelled status (spec P6 section 3).
     execution_status: str
+    # P8: aggregate QC breakdown across every completed run under this
+    # Production Order -- see qc_service.get_qc_quantities. qc_released
+    # doubles as "FG received" (release always immediately creates the
+    # matching inventory receipt -- see qc_service._release_execution_fg
+    # -- so there is no separate figure to show).
+    qc_pending: float = 0
+    qc_released: float = 0
+    qc_rejected: float = 0
     runs: list[ProductionExecutionOut]

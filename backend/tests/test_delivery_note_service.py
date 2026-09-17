@@ -49,7 +49,10 @@ def test_single_shipment_covers_the_whole_order(db):
     assert issued.status == "issued"
 
     updated_order = order_service.get_order(db, order.id)
-    assert updated_order.status == "shipped"
+    # P8 spec section 13: the whole order is covered by this one
+    # shipment, so it goes straight to 'delivered' rather than sitting
+    # at 'shipped' for someone to close out by hand.
+    assert updated_order.status == "delivered"
     stock = _stock(db, product.id)
     assert stock["quantity_on_hand"] == 0
     assert stock["quantity_reserved"] == 0
@@ -96,7 +99,9 @@ def test_multi_shipment_across_two_notes_accounts_for_everything(db):
     delivery_note_service.change_status(db, second.id, "issued")
 
     final_order = order_service.get_order(db, order.id)
-    assert final_order.status == "shipped"
+    # P8 spec section 13: this second shipment covers what the first
+    # one didn't, so the order is now fully delivered.
+    assert final_order.status == "delivered"
     final_stock = _stock(db, product.id)
     assert final_stock["quantity_on_hand"] == on_hand_before - 10
     assert final_stock["quantity_reserved"] == reserved_before - 10

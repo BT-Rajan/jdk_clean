@@ -6,11 +6,14 @@ export type ProductionOrderPriority = 'low' | 'normal' | 'high' | 'urgent'
 export interface ProductionOrder {
   id: number
   production_order_number: string
-  order_id: number
+  /** null together with order_detail_id means a stock-only production
+   * order -- built to replenish general Finished Goods stock, not tied
+   * to any customer order (see backend/app/models/production_order.py). */
+  order_id: number | null
   order_number: string | null
   customer_id: number | null
   customer_name: string | null
-  order_detail_id: number
+  order_detail_id: number | null
   product_id: number
   product_code: string | null
   product_name: string | null
@@ -30,14 +33,27 @@ export interface ProductionOrder {
   updated_at: string
 }
 
-export interface ProductionOrderPayload {
-  order_id: number
-  order_detail_id: number
-  planned_quantity: number
-  due_date: string
-  priority?: ProductionOrderPriority
-  notes?: string | null
-}
+/** Exactly one of order_detail_id (order-linked) or product_id
+ * (stock-only) must be given -- see ProductionOrderCreate in
+ * backend/app/schemas/production_order.py. order_id is never sent: the
+ * server derives it from order_detail_id. */
+export type ProductionOrderPayload =
+  | {
+      order_detail_id: number
+      product_id?: never
+      planned_quantity: number
+      due_date: string
+      priority?: ProductionOrderPriority
+      notes?: string | null
+    }
+  | {
+      order_detail_id?: never
+      product_id: number
+      planned_quantity: number
+      due_date: string
+      priority?: ProductionOrderPriority
+      notes?: string | null
+    }
 
 /** 'planned' is the creation default and never set directly, same
  * exclusion pattern every other status type in this app uses. */

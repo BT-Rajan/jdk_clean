@@ -89,6 +89,7 @@ def _lock_request_row(db: Session, request_id: int):
             QcRequest.status,
             QcRequest.production_order_id,
             QcRequest.production_execution_id,
+            QcRequest.quantity,
         )
         .filter(QcRequest.id == request_id)
         .with_for_update()
@@ -104,9 +105,11 @@ def _lock_execution_row(db: Session, execution_id: int):
         db.query(
             ProductionExecution.id,
             ProductionExecution.status,
+            ProductionExecution.production_order_id,
             ProductionExecution.product_id,
             ProductionExecution.produced_quantity,
             ProductionExecution.released_quantity,
+            ProductionExecution.rejected_quantity,
         )
         .filter(ProductionExecution.id == execution_id)
         .with_for_update()
@@ -117,24 +120,57 @@ def _lock_execution_row(db: Session, execution_id: int):
     return row
 
 
+def _undecided_quantity(db: Session, execution_row) -> float:
+    """How much of this (already-locked) execution's produced_quantity
+    isn't yet spoken for -- not released, not rejected, and not already
+    claimed by another QC request still open (requested/sample_sent/
+    report_received -- i.e. not yet itself accepted or rejected). This
+    is the pool a new request's own `quantity` must fit inside, so two
+    requests against the same execution can never both claim the same
+    units (P8 spec section 5's partial accept/reject)."""
+    open_claimed = (
+        db.query(QcRequest.quantity)
+        .filter(
+            QcRequest.production_execution_id == execution_row.id,
+            QcRequest.status.notin_(("accepted", "rejected")),
+        )
+        .all()
+    )
+    claimed = sum(float(q) for (q,) in open_claimed)
+    return round(
+        float(execution_row.produced_quantity)
+        - float(execution_row.released_quantity)
+        - float(execution_row.rejected_quantity)
+        - claimed,
+        4,
+    )
+
+
 def create_request(db: Session, data: dict, user_id: int | None = None) -> QcRequest:
     """Creates a QC request against a specific, already-completed
     Production Execution -- QC is always execution-scoped (spec section
     11's "partial/batch-based QC"), never a whole Production Order,
     since two runs under one order can be at entirely different QC
     stages.
+
+    `quantity` (P8) is how much of the execution's produced_quantity
+    this request's eventual accept/reject decision will cover --
+    defaults to whatever is still undecided on the execution when
+    omitted (the common single-request-covers-everything case), but can
+    be given explicitly to split one execution's output across more
+    than one request (spec section 5's partial accept/reject example:
+    one request decides 700 units, a second decides the remaining 300).
+    Locks the execution row for the check, so two concurrent requests
+    against the same execution can never both claim the same units.
     """
-    execution = (
-        db.query(ProductionExecution).filter(ProductionExecution.id == data["production_execution_id"]).first()
-    )
-    if execution is None:
-        raise NotFoundError("Production execution")
-    if execution.production_order_id != data["production_order_id"]:
-        raise ValidationAppError("This execution does not belong to the given production order.")
+    execution = _lock_execution_row(db, data["production_execution_id"])
     if execution.status != "completed":
         raise ConflictError(
             f"Cannot request QC for an execution in '{execution.status}' status; it must be completed."
         )
+    production_order_id = data["production_order_id"]
+    if execution.production_order_id != production_order_id:
+        raise ValidationAppError("This execution does not belong to the given production order.")
 
     agent = db.query(QcAgent).filter(QcAgent.id == data["qc_agent_id"], QcAgent.deleted_at.is_(None)).first()
     if agent is None:
@@ -142,16 +178,27 @@ def create_request(db: Session, data: dict, user_id: int | None = None) -> QcReq
     if agent.status != "active":
         raise ValidationAppError(f"{agent.name} is inactive and cannot receive new QC requests.")
 
+    undecided = _undecided_quantity(db, execution)
+    quantity = data.get("quantity")
+    quantity = undecided if quantity is None else float(quantity)
+    if quantity <= 0 or undecided <= 0:
+        raise ValidationAppError("This execution's entire produced quantity is already decided or claimed.")
+    if quantity > undecided:
+        raise ValidationAppError(
+            f"Quantity ({quantity}) exceeds what's still undecided on this execution ({undecided})."
+        )
+
     qc_request_number = number_series_service.next_number(db, "QC_REQUEST")
     sample_reference = number_series_service.next_number(db, "QC_SAMPLE")
 
     request = QcRequest(
         qc_request_number=qc_request_number,
-        production_order_id=data["production_order_id"],
+        production_order_id=production_order_id,
         production_execution_id=execution.id,
         product_id=execution.product_id,
         qc_agent_id=agent.id,
         sample_reference=sample_reference,
+        quantity=quantity,
         sample_quantity=data.get("sample_quantity"),
         request_date=today_kuwait(),
         expected_report_date=data.get("expected_report_date"),
@@ -231,7 +278,9 @@ def record_report(
     db.query(QcRequest).filter(QcRequest.id == row.id).update(values)
 
     if result == "accepted":
-        _release_execution_fg(db, row.production_execution_id, row.id, user_id)
+        _release_execution_fg(db, row.production_execution_id, row.quantity, row.id, user_id)
+    elif result == "rejected":
+        _reject_execution_quantity(db, row.production_execution_id, row.quantity, user_id)
 
     audit_service.log_update(db, TABLE_NAME, row.id, {"status": (row.status, new_status)}, user_id)
     db.commit()
@@ -256,23 +305,30 @@ def record_result(db: Session, request_id: int, result: str, user_id: int | None
     )
 
     if result == "accepted":
-        _release_execution_fg(db, row.production_execution_id, row.id, user_id)
+        _release_execution_fg(db, row.production_execution_id, row.quantity, row.id, user_id)
+    elif result == "rejected":
+        _reject_execution_quantity(db, row.production_execution_id, row.quantity, user_id)
 
     audit_service.log_update(db, TABLE_NAME, row.id, {"status": (row.status, result)}, user_id)
     db.commit()
     return get_request(db, row.id)
 
 
-def _release_execution_fg(db: Session, execution_id: int, qc_request_id: int, user_id: int | None) -> None:
-    """Converts whatever's left of an execution's produced_quantity into
-    real, releasable FinishedGoodsInventory stock (spec section 10) --
-    the exact same adjust_stock primitive P6's material consumption and
+def _release_execution_fg(
+    db: Session, execution_id: int, quantity: float, qc_request_id: int, user_id: int | None
+) -> None:
+    """Converts `quantity` of an execution's produced_quantity into real,
+    releasable FinishedGoodsInventory stock (spec section 10) -- the
+    exact same adjust_stock primitive P6's material consumption and
     every other physical stock movement in this app already uses, never
-    a second inventory system. Only the *remaining unreleased* amount
-    moves, so a second acceptance for the same execution (a resubmitted
-    request after an earlier one was somehow still open, or any other
-    path that reaches this twice) is a safe no-op rather than a double
-    release -- see spec Test 7.
+    a second inventory system. `quantity` is the accepting QC request's
+    own decided quantity (see create_request's own docstring on why a
+    request no longer implicitly means "whatever's left of the whole
+    execution" -- P8 supports more than one request splitting a single
+    execution's output); still defensively clamped to what's actually
+    left unreleased, so a resubmitted/duplicate release attempt for the
+    same request is a safe no-op rather than a double release (spec
+    Test 9).
 
     commit=False -- the caller (record_report/record_result) holds a
     lock on the QC request row for the whole call and needs the stock
@@ -280,7 +336,7 @@ def _release_execution_fg(db: Session, execution_id: int, qc_request_id: int, us
     change folded into one commit.
     """
     row = _lock_execution_row(db, execution_id)
-    to_release = round(float(row.produced_quantity) - float(row.released_quantity), 4)
+    to_release = round(min(float(quantity), float(row.produced_quantity) - float(row.released_quantity)), 4)
     if to_release <= 0:
         return
 
@@ -306,20 +362,54 @@ def _release_execution_fg(db: Session, execution_id: int, qc_request_id: int, us
     )
 
 
+def _reject_execution_quantity(db: Session, execution_id: int, quantity: float, user_id: int | None) -> None:
+    """released_quantity's sibling operation (P8): records `quantity` of
+    an execution's produced_quantity as rejected -- no inventory
+    movement (rejected material was never releasable in the first
+    place), just the execution's own running total, so a Production
+    Order's QC breakdown can distinguish "rejected" from "still
+    pending" instead of both silently looking like "not yet released".
+    Defensively clamped the same way _release_execution_fg is, for the
+    same duplicate-decision safety.
+
+    commit=False -- see _release_execution_fg's own docstring.
+    """
+    row = _lock_execution_row(db, execution_id)
+    to_reject = round(
+        min(float(quantity), float(row.produced_quantity) - float(row.released_quantity) - float(row.rejected_quantity)),
+        4,
+    )
+    if to_reject <= 0:
+        return
+
+    new_rejected = round(float(row.rejected_quantity) + to_reject, 4)
+    db.query(ProductionExecution).filter(ProductionExecution.id == row.id).update(
+        {"rejected_quantity": new_rejected, "updated_by": user_id}
+    )
+    audit_service.log_update(
+        db, EXECUTION_TABLE_NAME, row.id, {"rejected_quantity": (float(row.rejected_quantity), new_rejected)}, user_id
+    )
+
+
 def get_fg_release_statuses(db: Session, production_order_id: int) -> dict[int, str]:
     """One rollup per execution under this Production Order --
-    'not_applicable' (not completed yet), 'not_requested', 'pending',
-    'released', or 'rejected'. Never stored -- always derived fresh from
-    this table plus the execution's own released_quantity, the same
-    "compute, don't duplicate" stance every other status rollup in this
-    app already takes (P3's overall_status, P4's allocation_status,
-    P5's schedule_status, P6's execution_status)."""
+    'not_applicable' (not completed yet), 'not_requested', 'pending'
+    (some produced quantity still undecided), 'partially_released'
+    (some released, but not the whole produced quantity, whether the
+    rest is pending or rejected), 'released' (fully released), or
+    'rejected' (fully rejected, none released). Never stored -- always
+    derived fresh from this table plus the execution's own released_/
+    rejected_quantity, the same "compute, don't duplicate" stance every
+    other status rollup in this app already takes (P3's overall_status,
+    P4's allocation_status, P5's schedule_status, P6's execution_status).
+    """
     executions = (
         db.query(
             ProductionExecution.id,
             ProductionExecution.status,
             ProductionExecution.produced_quantity,
             ProductionExecution.released_quantity,
+            ProductionExecution.rejected_quantity,
         )
         .filter(ProductionExecution.production_order_id == production_order_id)
         .all()
@@ -334,22 +424,56 @@ def get_fg_release_statuses(db: Session, production_order_id: int) -> dict[int, 
         statuses_by_execution.setdefault(execution_id, []).append(status)
 
     result: dict[int, str] = {}
-    for execution_id, exec_status, produced, released in executions:
+    for execution_id, exec_status, produced, released, rejected in executions:
         if exec_status != "completed":
             result[execution_id] = "not_applicable"
             continue
         produced = float(produced)
         released = float(released)
+        rejected = float(rejected)
+        pending = round(produced - released - rejected, 4)
         statuses = statuses_by_execution.get(execution_id, [])
-        if produced > 0 and released >= produced:
+
+        if pending <= 0 and rejected <= 0 and produced > 0:
             result[execution_id] = "released"
-        elif "rejected" in statuses and "accepted" not in statuses:
+        elif pending <= 0 and released <= 0 and rejected > 0:
             result[execution_id] = "rejected"
+        elif released > 0 or rejected > 0:
+            result[execution_id] = "partially_released"
         elif statuses:
             result[execution_id] = "pending"
         else:
             result[execution_id] = "not_requested"
     return result
+
+
+def get_qc_quantities(db: Session, production_order_id: int) -> dict:
+    """Aggregate QC breakdown across every execution under this
+    Production Order -- the numbers the P8 spec's own Production Order
+    detail bullet list asks for (Produced / QC Pending / QC Released /
+    QC Rejected), summed rather than shown per-execution the way
+    get_fg_release_statuses's per-execution labels already are."""
+    totals = (
+        db.query(
+            ProductionExecution.produced_quantity,
+            ProductionExecution.released_quantity,
+            ProductionExecution.rejected_quantity,
+        )
+        .filter(
+            ProductionExecution.production_order_id == production_order_id,
+            ProductionExecution.status == "completed",
+        )
+        .all()
+    )
+    produced = round(sum(float(p) for p, _, _ in totals), 4)
+    released = round(sum(float(r) for _, r, _ in totals), 4)
+    rejected = round(sum(float(j) for _, _, j in totals), 4)
+    return {
+        "produced": produced,
+        "released": released,
+        "rejected": rejected,
+        "pending": round(produced - released - rejected, 4),
+    }
 
 
 def admin_review(db: Session, request_id: int, notes: str, user_id: int | None = None) -> QcRequest:

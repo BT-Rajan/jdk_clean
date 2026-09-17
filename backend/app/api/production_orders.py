@@ -41,7 +41,8 @@ write_guard = require_page_access("production", "write")
 
 
 def _with_remaining(db: Session, po, out: ProductionOrderOut) -> ProductionOrderOut:
-    out.remaining_order_quantity = production_order_service.get_remaining_quantity(db, po.order_detail_id)
+    if po.order_detail_id is not None:
+        out.remaining_order_quantity = production_order_service.get_remaining_quantity(db, po.order_detail_id)
     return out
 
 
@@ -226,6 +227,7 @@ def _execution_summary_out(db: Session, summary: dict) -> ProductionExecutionSum
     # "populated by the endpoint" pattern production_schedules.py's own
     # readiness_status already uses (see that schema's own comment).
     fg_release_statuses = qc_service.get_fg_release_statuses(db, summary["production_order_id"])
+    qc_quantities = qc_service.get_qc_quantities(db, summary["production_order_id"])
     runs = []
     for r in summary["runs"]:
         out = ProductionExecutionOut.from_model(r)
@@ -237,6 +239,9 @@ def _execution_summary_out(db: Session, summary: dict) -> ProductionExecutionSum
         total_produced=summary["total_produced"],
         remaining_to_produce=summary["remaining_to_produce"],
         execution_status=summary["execution_status"],
+        qc_pending=qc_quantities["pending"],
+        qc_released=qc_quantities["released"],
+        qc_rejected=qc_quantities["rejected"],
         runs=runs,
     )
 

@@ -1,4 +1,3 @@
-from datetime import timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -9,12 +8,13 @@ from app.api.common import PagedResponse
 from app.api.deps import require_role
 from app.core.database import get_db
 from app.core.permissions import require_page_access
-from app.core.timezone import KUWAIT_TZ, today_kuwait
+from app.core.timezone import today_kuwait
 from app.models.user import User
 from app.schemas.email import SendDocumentEmailRequest
 from app.schemas.order import (
     OrderAdminReview,
     OrderCreate,
+    OrderFulfillmentLineOut,
     OrderOut,
     OrderQuickLog,
     OrderStatusUpdate,
@@ -86,6 +86,19 @@ def get_order_journey(
     delivery note issued for it. All read live off the existing foreign
     keys between those five tables; nothing new is stored."""
     return order_journey_service.get_order_journey(db, order_id)
+
+
+@router.get("/{order_id}/fulfillment", response_model=list[OrderFulfillmentLineOut])
+def get_order_fulfillment(
+    order_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    """P8: per line, ordered/delivered/remaining set against what's
+    actually released FG stock right now, plus existing planned/in-
+    progress production for the same product -- see
+    order_service.get_fulfillment."""
+    return order_service.get_fulfillment(db, order_id)
 
 
 @router.get("/{order_id}/history")
@@ -339,9 +352,7 @@ def request_payment(
     today = today_kuwait()
     days_since_order = (today - order.order_date).days
     days_since_last_request = (
-        (today - order.payment_requested_at.replace(tzinfo=timezone.utc).astimezone(KUWAIT_TZ).date()).days
-        if order.payment_requested_at
-        else None
+        (today - order.payment_requested_at.date()).days if order.payment_requested_at else None
     )
 
     subject, template_body = email_template_service.render(

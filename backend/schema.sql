@@ -1044,21 +1044,29 @@ CREATE TABLE IF NOT EXISTS quotation_details (
 -- ============================================================
 -- PRODUCTION ORDERS
 -- ============================================================
--- The internal manufacturing instruction created from a confirmed
--- customer order line -- WHAT needs to be produced, how much, for which
--- order line, and by when. Deliberately does not touch scheduling
+-- The internal manufacturing instruction -- WHAT needs to be produced,
+-- how much, and by when. Deliberately does not touch scheduling
 -- (machine/dates -- see production_schedules below) or execution
 -- (actual output) -- those are a later pass. See
 -- docs/production-lifecycle.md for the full architecture reasoning.
 -- Defined before production_schedules below because that table's
 -- production_order_id column (P5) FKs into this one -- InnoDB requires
 -- the referenced table to already exist.
+--
+-- order_id/order_detail_id are nullable (P8): JDK runs on a stock-driven
+-- model, so a Production Order may exist purely to build/replenish
+-- general Finished Goods stock with no customer order behind it at all.
+-- When order_detail_id IS set, it's the order line this Production Order
+-- was raised to help cover -- informational demand-tracking only, never
+-- a claim on the resulting stock (any released FG unit fulfils any
+-- order regardless of which Production Order produced it -- see
+-- app/services/order_service.get_fulfillment).
 CREATE TABLE IF NOT EXISTS production_orders (
     id                          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     production_order_number    VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. PRO-00001)
-    order_id                    BIGINT UNSIGNED NOT NULL,
-    order_detail_id             BIGINT UNSIGNED NOT NULL,          -- the specific customer order line this fulfils
-    product_id                  BIGINT UNSIGNED NOT NULL,          -- mirrors order_details.product_id at creation
+    order_id                    BIGINT UNSIGNED NULL,
+    order_detail_id             BIGINT UNSIGNED NULL,              -- the customer order line this was raised for, if any
+    product_id                  BIGINT UNSIGNED NOT NULL,          -- mirrors order_details.product_id at creation, or given directly for a stock-only order
     planned_quantity            DECIMAL(14,4) NOT NULL,
     due_date                    DATE NOT NULL,
     priority                    ENUM('low','normal','high','urgent') NOT NULL DEFAULT 'normal',
@@ -1201,6 +1209,7 @@ CREATE TABLE IF NOT EXISTS production_executions (
     planned_quantity    DECIMAL(14,4) NOT NULL,
     produced_quantity   DECIMAL(14,4) NOT NULL DEFAULT 0,  -- set only on completion
     released_quantity   DECIMAL(14,4) NOT NULL DEFAULT 0,  -- released into FinishedGoodsInventory by an accepted QC report (P7)
+    rejected_quantity   DECIMAL(14,4) NOT NULL DEFAULT 0,  -- rejected by a QC decision (P8); released+rejected+undecided always sums to produced_quantity
     started_at          DATETIME NOT NULL,
     ended_at            DATETIME NULL,
     status              ENUM('in_progress','completed','cancelled') NOT NULL DEFAULT 'in_progress',
@@ -1266,6 +1275,7 @@ CREATE TABLE IF NOT EXISTS qc_requests (
     product_id              BIGINT UNSIGNED NOT NULL,          -- mirrors production_executions.product_id at creation
     qc_agent_id             BIGINT UNSIGNED NOT NULL,
     sample_reference        VARCHAR(30) NOT NULL UNIQUE,       -- generated via number_series (prefix SMP-00001)
+    quantity                DECIMAL(14,4) NOT NULL,            -- how much of the execution's produced_quantity this request decides (P8; distinct from sample_quantity)
     sample_quantity         DECIMAL(14,4) NULL,
     request_date            DATE NOT NULL,
     expected_report_date    DATE NULL,

@@ -100,3 +100,23 @@ export interface OrderPayload {
 }
 
 export type SettableOrderStatus = Exclude<OrderStatus, 'draft'>
+
+/** P8: per order line, how much is ordered/delivered/outstanding set
+ * against what's actually released FG stock right now, plus existing
+ * planned/in-progress production for the same product. Mirrors
+ * backend/app/schemas/order.py's OrderFulfillmentLineOut. */
+export interface OrderFulfillmentLine {
+  order_detail_id: number
+  product_id: number
+  product_code: string | null
+  product_name: string | null
+  unit: string | null
+  ordered_quantity: number
+  delivered_quantity: number
+  remaining_quantity: number
+  available_fg: number
+  fulfillable_now: number
+  shortage: number
+  planned_production_quantity: number
+  in_progress_production_quantity: number
+}
