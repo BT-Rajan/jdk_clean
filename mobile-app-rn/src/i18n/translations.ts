@@ -446,6 +446,10 @@ const en = {
   account: {
     signedInAs: 'Signed in as {{username}}',
   },
+  restartRequired: {
+    title: 'Restart required',
+    body: 'Close the app fully and reopen it to finish switching to this language.',
+  },
   // Mirrors backend/app/models/quotation.py's QUOTATION_STATUSES exactly.
   quotationStatus: {
     draft: 'Draft',
@@ -918,6 +922,10 @@ const ar: typeof en = {
   },
   account: {
     signedInAs: 'تم تسجيل الدخول باسم {{username}}',
+  },
+  restartRequired: {
+    title: 'يلزم إعادة التشغيل',
+    body: 'أغلق التطبيق بالكامل ثم أعد فتحه لإتمام تغيير اللغة.',
   },
   quotationStatus: {
     draft: 'مسودة',

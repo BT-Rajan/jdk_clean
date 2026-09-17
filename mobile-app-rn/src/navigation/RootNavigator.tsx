@@ -23,6 +23,7 @@ import { DeliveryNoteDetailScreen } from '../screens/orders/DeliveryNoteDetailSc
 import { MyHistoryScreen } from '../screens/MyHistoryScreen';
 import { DrawerContent } from './DrawerContent';
 import { HeaderTitle } from './HeaderTitle';
+import { RestartRequiredView } from '../components/RestartRequiredView';
 import { useLocale } from '../i18n/LocaleContext';
 import { colors, fonts, whiteAlpha } from '../theme';
 
@@ -281,8 +282,16 @@ const linking: LinkingOptions<any> = {
 
 export function RootNavigator() {
   const { isReady, isAuthenticated } = useAuth();
+  const { needsRestart } = useLocale();
   const navRef = useNavigationContainerRef();
   if (!isReady) return null;
+
+  // Native-only (see LocaleContext.tsx): a locale switch changed
+  // RTL-ness but this process is still physically laid out for the old
+  // direction until a real relaunch. Block here rather than let the
+  // drawer (or anything else keyed off direction) render against a
+  // stale native flag.
+  if (needsRestart) return <RestartRequiredView />;
 
   return (
     <NavigationContainer

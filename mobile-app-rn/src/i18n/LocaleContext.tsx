@@ -6,11 +6,29 @@ import { Locale, translations } from './translations';
 const LOCALE_KEY = 'qq_locale';
 const RTL_LOCALES: Locale[] = ['ar'];
 
+// The real, physical layout direction this native process booted with --
+// unlike I18nManager.isRTL (see applyRTL's own comment), this can't
+// change during the app's lifetime, which is exactly why it's the right
+// thing to compare the *desired* direction against below: a mismatch
+// here means native views are still laid out for the old direction and
+// won't be reflown until an actual relaunch. Meaningless on web (see
+// applyRTL's web branch), so left false there.
+const nativeIsRTL = Platform.OS !== 'web' && I18nManager.getConstants().isRTL;
+
 type Dict = typeof translations.en;
 
 interface LocaleContextValue {
   locale: Locale;
   isRTL: boolean;
+  /** True on native only: the selected locale's direction doesn't match
+   * the direction this process actually booted with (I18nManager.forceRTL
+   * only takes effect on the next app launch), so anything relying on the
+   * platform's own RTL detection -- notably @react-navigation/drawer's
+   * open/close position math -- would render in the wrong place until a
+   * real relaunch happens. Screens should block on this rather than let
+   * the user reach a half-mirrored drawer. Always false on web, which
+   * re-flows instantly (see applyRTL) and never needs a relaunch. */
+  needsRestart: boolean;
   setLocale: (locale: Locale) => Promise<void>;
   t: <S extends keyof Dict>(section: S, key: keyof Dict[S], params?: Record<string, string | number>) => string;
 }
@@ -34,6 +52,23 @@ function applyRTL(locale: Locale) {
     // this function doesn't need to be async or trigger a reload on web.
     document.documentElement.dir = rtl ? 'rtl' : 'ltr';
     document.documentElement.lang = locale;
+
+    // The `dir` attribute above instantly mirrors anything laid out with
+    // ordinary flexbox -- but @react-navigation/drawer doesn't use dir at
+    // all for its own sliding panel: it asks I18nManager.getConstants()
+    // .isRTL directly (both for which side to default to and for the
+    // pixel offset it animates to/from), and that stub always says
+    // `false`. Left alone, the panel's own position math silently assumes
+    // LTR forever, no matter what `dir` says -- confirmed by hand: in
+    // Arabic the drawer rendered part-open/garbled at rest, and reading
+    // it back open landed it 160px off the right edge of the screen,
+    // clipped. I18nManager here is a plain mutable object (there's no
+    // real native bridge to protect, see the no-op methods below), so
+    // patch getConstants() to report the same direction `dir` just did --
+    // it's a synchronous function every reader calls fresh, so this
+    // takes effect on next render, no reload needed, same as `dir`.
+    (I18nManager as unknown as { getConstants: () => { isRTL: boolean; doLeftAndRightSwapInRTL: boolean } }).getConstants =
+      () => ({ isRTL: rtl, doLeftAndRightSwapInRTL: true });
     return;
   }
   // Native's I18nManager is real here (unlike the web stub above), but
@@ -83,6 +118,7 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     () => ({
       locale,
       isRTL: RTL_LOCALES.includes(locale),
+      needsRestart: Platform.OS !== 'web' && RTL_LOCALES.includes(locale) !== nativeIsRTL,
       setLocale,
       t: (section, key, params) => {
         let str: string = (translations[locale][section] as Record<string, string>)[key as string];
