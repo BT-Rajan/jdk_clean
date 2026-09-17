@@ -384,6 +384,36 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
                 }
             )
 
+    # 12. QC requests whose expected report date has passed without a
+    # decision yet (see qc_service.escalate_overdue_qc_requests) -- the
+    # QC-side mirror of #2's overdue-order escalation, same
+    # admin_review_required/admin-only pattern. QC has no list page of
+    # its own; a request only lives on its Production Order's detail
+    # page (see ProductionOrderDetailPage.tsx's QC panel), so that's
+    # where this links.
+    if _visible(user, None):
+        from app.models.qc_request import QcRequest
+
+        overdue_qc = (
+            db.query(QcRequest)
+            .options(joinedload(QcRequest.product))
+            .filter(QcRequest.admin_review_required.is_(True))
+            .order_by(QcRequest.updated_at.desc())
+            .all()
+        )
+        for req in overdue_qc:
+            items.append(
+                {
+                    "id": f"qc-request-review-{req.id}",
+                    "type": "qc_request_admin_review",
+                    "severity": "high",
+                    "title": f"{req.qc_request_number} is overdue",
+                    "message": f"Past its expected report date with no decision yet — {req.product.name if req.product else 'unknown product'}.",
+                    "link": f"/production-orders/{req.production_order_id}",
+                    "created_at": req.updated_at,
+                }
+            )
+
     def _sort_key(item: dict):
         created = item["created_at"]
         if created is None:
