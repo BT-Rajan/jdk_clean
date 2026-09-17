@@ -119,6 +119,26 @@ def _list_planned_by_readiness(
     }
 
 
+def _reject_production_order_linked(batch: ProductionSchedule) -> None:
+    """Guards every write path in this module that assumes it owns the
+    batch's raw-material reservation (update_batch/delete_batch/
+    restore_batch/change_status all call _reserve_batch_materials/
+    _release_batch_materials unconditionally) -- a schedule created
+    through the Production Order flow (P5, production_order_id set)
+    never reserved anything itself, so releasing "whatever it should
+    have reserved" here would incorrectly claw back stock that's still
+    legitimately held by that Production Order's own Material Allocation
+    (P4). Such a schedule must only be edited/rescheduled/cancelled
+    through production_order_schedule_service, which knows this and
+    never touches inventory.
+    """
+    if batch.production_order_id is not None:
+        raise ConflictError(
+            "This schedule belongs to a Production Order; manage it from the Production Order's "
+            "own schedule instead."
+        )
+
+
 def _validate_product(db: Session, product_id: int) -> Product:
     product = (
         db.query(Product).filter(Product.id == product_id, Product.deleted_at.is_(None)).first()
@@ -272,6 +292,7 @@ def create_batch(db: Session, data: dict, user_id: int | None = None) -> Product
 
 def update_batch(db: Session, batch_id: int, data: dict, user_id: int | None = None) -> ProductionSchedule:
     batch = get_batch(db, batch_id)
+    _reject_production_order_linked(batch)
     if batch.status != "planned":
         raise ConflictError("Only planned batches can be edited; cancel and recreate instead.")
 
@@ -310,6 +331,7 @@ def update_batch(db: Session, batch_id: int, data: dict, user_id: int | None = N
 
 def delete_batch(db: Session, batch_id: int, user_id: int | None = None) -> None:
     batch = get_batch(db, batch_id)
+    _reject_production_order_linked(batch)
     if batch.status != "planned":
         raise ConflictError("Only planned batches can be deleted; cancel started batches instead.")
     _release_batch_materials(db, batch)
@@ -320,6 +342,7 @@ def delete_batch(db: Session, batch_id: int, user_id: int | None = None) -> None
 
 def restore_batch(db: Session, batch_id: int, user_id: int | None = None) -> ProductionSchedule:
     batch = get_batch(db, batch_id, include_deleted=True)
+    _reject_production_order_linked(batch)
     batch.deleted_at = None
     audit_service.log_restore(db, TABLE_NAME, batch_id, user_id)
     db.commit()
@@ -588,6 +611,7 @@ def change_status(
     # double-submitted "complete"/"pause"/"cancel" from issuing/receiving
     # stock twice for one production run.
     batch = get_batch(db, batch_id, for_update=True)
+    _reject_production_order_linked(batch)
     old_status = batch.status
     assert_transition_allowed(ALLOWED_TRANSITIONS, old_status, new_status, "production batch")
 

@@ -1042,6 +1042,42 @@ CREATE TABLE IF NOT EXISTS quotation_details (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
+-- PRODUCTION ORDERS
+-- ============================================================
+-- The internal manufacturing instruction created from a confirmed
+-- customer order line -- WHAT needs to be produced, how much, for which
+-- order line, and by when. Deliberately does not touch scheduling
+-- (machine/dates -- see production_schedules below) or execution
+-- (actual output) -- those are a later pass. See
+-- docs/production-lifecycle.md for the full architecture reasoning.
+-- Defined before production_schedules below because that table's
+-- production_order_id column (P5) FKs into this one -- InnoDB requires
+-- the referenced table to already exist.
+CREATE TABLE IF NOT EXISTS production_orders (
+    id                          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    production_order_number    VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. PRO-00001)
+    order_id                    BIGINT UNSIGNED NOT NULL,
+    order_detail_id             BIGINT UNSIGNED NOT NULL,          -- the specific customer order line this fulfils
+    product_id                  BIGINT UNSIGNED NOT NULL,          -- mirrors order_details.product_id at creation
+    planned_quantity            DECIMAL(14,4) NOT NULL,
+    due_date                    DATE NOT NULL,
+    priority                    ENUM('low','normal','high','urgent') NOT NULL DEFAULT 'normal',
+    status                      ENUM('planned','cancelled') NOT NULL DEFAULT 'planned',
+    cancel_reason                TEXT NULL,                        -- mandatory when status becomes 'cancelled'
+    notes                        TEXT NULL,
+    created_at                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by                  BIGINT UNSIGNED NULL,
+    updated_at                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by                  BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_po_order FOREIGN KEY (order_id) REFERENCES orders(id),
+    CONSTRAINT fk_po_order_detail FOREIGN KEY (order_detail_id) REFERENCES order_details(id),
+    CONSTRAINT fk_po_product FOREIGN KEY (product_id) REFERENCES products(id),
+    INDEX idx_po_order (order_id),
+    INDEX idx_po_order_detail (order_detail_id),
+    INDEX idx_po_status (status)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
 -- PRODUCTION SCHEDULING
 -- ============================================================
 CREATE TABLE IF NOT EXISTS production_schedules (
@@ -1050,12 +1086,27 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     product_id      BIGINT UNSIGNED NOT NULL,
     machine_id      BIGINT UNSIGNED NULL,             -- which machine this batch occupies (defaults to the product's machine)
     order_id        BIGINT UNSIGNED NULL,             -- nullable: batch may be for stock, not a specific order
+    -- Set only for a schedule created from the new Production Order flow
+    -- (P5) -- NULL for a legacy batch auto-scheduled straight from order
+    -- confirmation (see order_service._maybe_auto_schedule_production),
+    -- which predates the Production Order entity (P2) entirely.
+    production_order_id BIGINT UNSIGNED NULL,
     planned_quantity DECIMAL(14,4) NOT NULL,
     -- Cumulative across every recording made against this batch -- see
     -- app/models/production_schedule.py's comment on this column.
     produced_quantity DECIMAL(14,4) NOT NULL DEFAULT 0,
     scheduled_start DATE NOT NULL,
     scheduled_end   DATE NOT NULL,
+    -- Time-of-day precision for the new Production Order scheduling flow
+    -- (P5) -- scheduled_start/scheduled_end above stay the calendar-day
+    -- projection of these (kept in sync on write) so every existing day-
+    -- granularity consumer (capacity_service, dashboards, reports,
+    -- notifications, the calendar view) keeps working unchanged; these
+    -- two are only what the new machine-conflict check and the
+    -- Production Order schedule UI need. NULL for a legacy batch that
+    -- was never given exact times.
+    planned_start   DATETIME NULL,
+    planned_end     DATETIME NULL,
     actual_start    DATETIME NULL,
     actual_end      DATETIME NULL,
     status          ENUM('planned','in_progress','paused','completed','cancelled') NOT NULL DEFAULT 'planned',
@@ -1092,42 +1143,12 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     CONSTRAINT fk_ps_product FOREIGN KEY (product_id) REFERENCES products(id),
     CONSTRAINT fk_ps_machine FOREIGN KEY (machine_id) REFERENCES machines(id),
     CONSTRAINT fk_ps_order FOREIGN KEY (order_id) REFERENCES orders(id),
+    CONSTRAINT fk_ps_production_order FOREIGN KEY (production_order_id) REFERENCES production_orders(id),
     CONSTRAINT fk_ps_admin_reviewed_by FOREIGN KEY (admin_reviewed_by) REFERENCES users(id),
     INDEX idx_ps_status (status),
-    INDEX idx_ps_deleted_at (deleted_at)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- ============================================================
--- PRODUCTION ORDERS
--- ============================================================
--- The internal manufacturing instruction created from a confirmed
--- customer order line -- WHAT needs to be produced, how much, for which
--- order line, and by when. Deliberately does not touch scheduling
--- (machine/dates -- see production_schedules above) or execution
--- (actual output) -- those are a later pass. See
--- docs/production-lifecycle.md for the full architecture reasoning.
-CREATE TABLE IF NOT EXISTS production_orders (
-    id                          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-    production_order_number    VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. PRO-00001)
-    order_id                    BIGINT UNSIGNED NOT NULL,
-    order_detail_id             BIGINT UNSIGNED NOT NULL,          -- the specific customer order line this fulfils
-    product_id                  BIGINT UNSIGNED NOT NULL,          -- mirrors order_details.product_id at creation
-    planned_quantity            DECIMAL(14,4) NOT NULL,
-    due_date                    DATE NOT NULL,
-    priority                    ENUM('low','normal','high','urgent') NOT NULL DEFAULT 'normal',
-    status                      ENUM('planned','cancelled') NOT NULL DEFAULT 'planned',
-    cancel_reason                TEXT NULL,                        -- mandatory when status becomes 'cancelled'
-    notes                        TEXT NULL,
-    created_at                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    created_by                  BIGINT UNSIGNED NULL,
-    updated_at                  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    updated_by                  BIGINT UNSIGNED NULL,
-    CONSTRAINT fk_po_order FOREIGN KEY (order_id) REFERENCES orders(id),
-    CONSTRAINT fk_po_order_detail FOREIGN KEY (order_detail_id) REFERENCES order_details(id),
-    CONSTRAINT fk_po_product FOREIGN KEY (product_id) REFERENCES products(id),
-    INDEX idx_po_order (order_id),
-    INDEX idx_po_order_detail (order_detail_id),
-    INDEX idx_po_status (status)
+    INDEX idx_ps_deleted_at (deleted_at),
+    INDEX idx_ps_production_order (production_order_id),
+    INDEX idx_ps_machine_planned (machine_id, planned_start, planned_end)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================

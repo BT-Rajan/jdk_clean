@@ -1,6 +1,11 @@
 import type { PagedResponse, ListQueryParams } from '@/types/common'
 import type { ProductionOrder, ProductionOrderPayload, SettableProductionOrderStatus } from '@/types/productionOrder'
 import type { MaterialRequirementSummary } from '@/types/materialRequirement'
+import type {
+  ProductionOrderScheduleCreatePayload,
+  ProductionOrderScheduleSummary,
+  ProductionOrderScheduleUpdatePayload,
+} from '@/types/productionOrderSchedule'
 import { apiClient } from './client'
 
 export interface ProductionOrderListParams extends ListQueryParams {
@@ -83,6 +88,54 @@ export async function releaseMaterialAllocation(
   const { data } = await apiClient.post<MaterialRequirementSummary>(
     `/api/production-orders/${productionOrderId}/material-requirements/${requirementId}/release`,
     { quantity },
+  )
+  return data
+}
+
+export async function getProductionOrderSchedules(productionOrderId: number): Promise<ProductionOrderScheduleSummary> {
+  const { data } = await apiClient.get<ProductionOrderScheduleSummary>(
+    `/api/production-orders/${productionOrderId}/schedules`,
+  )
+  return data
+}
+
+/** Books a machine slot for (some or all of) this Production Order's
+ * planned quantity -- never gated on material allocation (see
+ * backend/app/services/production_order_schedule_service.py's
+ * create_schedule docstring); the material-readiness figures stay
+ * visible alongside the schedule instead so the decision is informed,
+ * not blocked. */
+export async function createProductionOrderSchedule(
+  productionOrderId: number,
+  payload: ProductionOrderScheduleCreatePayload,
+): Promise<ProductionOrderScheduleSummary> {
+  const { data } = await apiClient.post<ProductionOrderScheduleSummary>(
+    `/api/production-orders/${productionOrderId}/schedules`,
+    payload,
+  )
+  return data
+}
+
+export async function updateProductionOrderSchedule(
+  productionOrderId: number,
+  scheduleId: number,
+  payload: ProductionOrderScheduleUpdatePayload,
+): Promise<ProductionOrderScheduleSummary> {
+  const { data } = await apiClient.put<ProductionOrderScheduleSummary>(
+    `/api/production-orders/${productionOrderId}/schedules/${scheduleId}`,
+    payload,
+  )
+  return data
+}
+
+export async function cancelProductionOrderSchedule(
+  productionOrderId: number,
+  scheduleId: number,
+  reason: string,
+): Promise<ProductionOrderScheduleSummary> {
+  const { data } = await apiClient.post<ProductionOrderScheduleSummary>(
+    `/api/production-orders/${productionOrderId}/schedules/${scheduleId}/cancel`,
+    { reason },
   )
   return data
 }
