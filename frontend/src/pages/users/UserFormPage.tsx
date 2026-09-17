@@ -40,9 +40,15 @@ function RoleSelect(props: Omit<ComponentProps<typeof SelectField>, 'label' | 'c
   return (
     <SelectField label="Role" {...props}>
       <option value="admin">Admin</option>
-      <option value="manager">Manager</option>
-      <option value="staff">Staff</option>
+      <option value="department_head">Department Head</option>
+      <option value="team_member">Team Member</option>
       <option value="viewer">Viewer</option>
+      {/* Legacy values -- not offered for new users, but kept selectable
+       * so an existing manager/staff row can still be viewed/edited here
+       * without the select rejecting its current value. See
+       * backend/app/models/user.py's role enum comment. */}
+      <option value="manager">Manager (legacy)</option>
+      <option value="staff">Staff (legacy)</option>
     </SelectField>
   )
 }
@@ -57,7 +63,7 @@ function DepartmentSelect(props: Omit<ComponentProps<typeof SelectField>, 'label
   return (
     <SelectField
       label="Department"
-      hint="Only affects staff -- admin/manager already have full access everywhere"
+      hint="Required for Department Head and Team Member -- admin has full access everywhere regardless"
       {...props}
     >
       <option value="">None</option>
@@ -163,7 +169,7 @@ function UserCreateForm() {
     formState: { errors, isSubmitting },
   } = useForm<UserCreateFormValues, unknown, UserCreateSubmitValues>({
     resolver: zodResolver(userCreateSchema),
-    defaultValues: { username: '', email: '', password: '', full_name: '', phone: '', role: 'staff', department_id: '' },
+    defaultValues: { username: '', email: '', password: '', full_name: '', phone: '', role: 'team_member', department_id: '' },
   })
 
   async function onSubmit(values: UserCreateSubmitValues) {
