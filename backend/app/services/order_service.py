@@ -407,6 +407,8 @@ def change_status(
     reason: str | None = None,
     user_id: int | None = None,
     shipped_lines: list[tuple[int, float]] | None = None,
+    delivery_note_id: int | None = None,
+    commit: bool = True,
 ) -> Order:
     # Locks the order row for the whole call (fetch through the final
     # commit below) so two near-simultaneous requests on the same order
@@ -417,6 +419,16 @@ def change_status(
     # the reservation/issue. See inventory_service.adjust_stock's
     # commit=False for why this only works together with passing
     # commit=False to every stock call in this function.
+    #
+    # commit=False (P9) lets delivery_note_service.change_status fold this
+    # call's own order-status-and-stock write together with its own
+    # note.status write into one single commit -- without it, issuing a
+    # delivery note was two separate commits (this function's own
+    # unconditional one, then the note's own status update moments
+    # later), so a failure in between left the order already shipped and
+    # stock already deducted while the delivery note driving it all still
+    # sat at 'draft' forever. Every other caller leaves this at its
+    # default (True) and is completely unaffected.
     order = get_order(db, order_id, for_update=True)
     assert_transition_allowed(ALLOWED_TRANSITIONS, order.status, new_status, "order")
 
@@ -493,6 +505,14 @@ def change_status(
             if shipped_lines is not None
             else [(line.product_id, float(line.quantity)) for line in order.lines]
         )
+        # Referenced to the specific delivery note driving this call when
+        # there is one (P9) -- an order can have more than one issued
+        # note, so pointing every movement at just the order would make
+        # it impossible to tell which physical shipment a given stock
+        # movement actually belongs to. Falls back to the order itself
+        # only for a force-shipped order with no delivery note involved.
+        movement_reference_type = "delivery_note" if delivery_note_id is not None else "order"
+        movement_reference_id = delivery_note_id if delivery_note_id is not None else order.id
         for product_id, quantity in lines_to_issue:
             inventory_service.adjust_stock(
                 db,
@@ -500,8 +520,8 @@ def change_status(
                 item_id=product_id,
                 quantity=-quantity,
                 movement_type="issue",
-                reference_type="order",
-                reference_id=order.id,
+                reference_type=movement_reference_type,
+                reference_id=movement_reference_id,
                 notes=f"Shipped against {order.order_number}",
                 user_id=user_id,
                 commit=False,
@@ -597,6 +617,23 @@ def change_status(
                 user_id=user_id,
                 commit=False,
             )
+        # The stock these notes moved is reversed above -- keep each
+        # note's own status honest about that (P9 spec section 14/15:
+        # a reversed delivery must not still read as a live 'issued'
+        # shipment). DeliveryNote.ALLOWED_TRANSITIONS has no user-facing
+        # 'issued' -> 'cancelled' transition (issuing one directly would
+        # need to reverse its own stock, which delivery_note_service.
+        # change_status doesn't do) -- this is the one place that
+        # transition is safe, since the reversal above is what's actually
+        # moving the stock; this just keeps the note's own record in
+        # sync with it.
+        for note in issued_notes:
+            note.status = "cancelled"
+            note.cancel_reason = f"Order {order.order_number} was cancelled after shipment: {reason}"
+            note.updated_by = user_id
+            audit_service.log_update(
+                db, "delivery_notes", note.id, {"status": ("issued", "cancelled")}, user_id
+            )
         # Whatever's shipped is reversed above; whatever was reserved but
         # never got that far (a partially-shipped order cancelled before
         # the rest went out -- only possible now that shipping can span
@@ -625,6 +662,8 @@ def change_status(
         order.admin_review_reason = None
     order.updated_by = user_id
     audit_service.log_update(db, TABLE_NAME, order_id, {"status": (old_status, new_status)}, user_id)
+    if not commit:
+        return get_order(db, order_id)
     db.commit()
 
     if new_status == "confirmed":

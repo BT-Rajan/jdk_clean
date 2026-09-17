@@ -9,6 +9,16 @@ export interface DeliveryNoteLine {
   product_name: string | null
   unit: string | null
   quantity_delivered: number
+  /** P9: this line's own product's order-wide fulfilment context, as of
+   * right now (see order_service.get_fulfillment) -- delivered_quantity/
+   * remaining_quantity are order-wide totals across every issued note
+   * for this order, not just this one note's own quantity_delivered
+   * above. null when not populated (e.g. a list-view row). */
+  ordered_quantity: number | null
+  delivered_quantity: number | null
+  remaining_quantity: number | null
+  available_fg: number | null
+  fulfillable_now: number | null
 }
 
 export interface DeliveryNote {

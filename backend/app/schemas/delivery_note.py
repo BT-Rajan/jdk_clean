@@ -17,6 +17,19 @@ class DeliveryNoteLineOut(BaseModel):
     product_name: str | None = None
     unit: str | None = None
     quantity_delivered: float
+    # P9 section 18: this line's own product's order-wide fulfilment
+    # context, as of right now -- reuses order_service.get_fulfillment
+    # (the same figures the Customer Order detail page shows) rather
+    # than a second calculation. delivered_quantity/remaining_quantity
+    # are order-wide totals (every issued note for this order, this one
+    # included once it's issued), not just this one note's own
+    # quantity_delivered above. None when not populated by the endpoint
+    # (see DeliveryNoteOut.from_model).
+    ordered_quantity: float | None = None
+    delivered_quantity: float | None = None
+    remaining_quantity: float | None = None
+    available_fg: float | None = None
+    fulfillable_now: float | None = None
 
     model_config = {"from_attributes": True}
 
@@ -75,7 +88,14 @@ class DeliveryNoteOut(BaseModel):
     model_config = {"from_attributes": True}
 
     @staticmethod
-    def from_model(obj) -> "DeliveryNoteOut":
+    def from_model(obj, fulfillment_by_product: dict[int, dict] | None = None) -> "DeliveryNoteOut":
+        """fulfillment_by_product: {product_id: order_service.get_fulfillment
+        line dict} -- populated by the endpoint (needs its own query, same
+        "populated by the endpoint, not from_model" pattern
+        ProductionExecutionOut.fg_release_status already uses), not
+        computed here. None (the default) leaves every line's fulfilment
+        field at None -- used by list endpoints that don't need the
+        per-line detail."""
         data = DeliveryNoteOut.model_validate(obj)
         data.order_number = obj.order.order_number if obj.order else None
         data.customer_name = obj.order.customer.name if obj.order and obj.order.customer else None
@@ -84,4 +104,11 @@ class DeliveryNoteOut(BaseModel):
             line_out.product_code = line_obj.product.code if line_obj.product else None
             line_out.product_name = line_obj.product.name if line_obj.product else None
             line_out.unit = line_obj.product.unit if line_obj.product else None
+            fulfillment = (fulfillment_by_product or {}).get(line_obj.product_id)
+            if fulfillment is not None:
+                line_out.ordered_quantity = fulfillment["ordered_quantity"]
+                line_out.delivered_quantity = fulfillment["delivered_quantity"]
+                line_out.remaining_quantity = fulfillment["remaining_quantity"]
+                line_out.available_fg = fulfillment["available_fg"]
+                line_out.fulfillable_now = fulfillment["fulfillable_now"]
         return data

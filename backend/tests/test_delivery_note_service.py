@@ -169,6 +169,12 @@ def test_cancelling_order_after_partial_shipment_reverses_delivered_and_releases
     # dangling now that nothing more is coming.
     assert final_stock["quantity_on_hand"] == on_hand_before  # 6 issued, 6 returned -- net zero
     assert final_stock["quantity_reserved"] == reserved_before - 10
+    # P9 section 14/15: the note's own record stays honest about the
+    # reversal too -- it must never still read as a live 'issued'
+    # shipment once the order that shipped it has been cancelled.
+    reversed_note = delivery_note_service.get_delivery_note(db, note.id)
+    assert reversed_note.status == "cancelled"
+    assert "cancelled" in reversed_note.cancel_reason.lower()
 
 
 def test_draft_note_still_counts_against_remaining_even_if_never_issued(db):
