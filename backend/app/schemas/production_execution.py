@@ -12,10 +12,29 @@ class ProductionExecutionStart(BaseModel):
     planned_quantity: float | None = Field(default=None, gt=0)
 
 
+class ProductionExecutionMaterialActual(BaseModel):
+    """P10 sections 6/7: an explicitly-reported actual consumption for
+    one raw material on this run, overriding the BOM-scaled figure
+    completion would otherwise use. No substitution field -- unlike the
+    legacy production_service._record_output flow, this chain consumes
+    by requirement row (one row per BOM material), not a free-form
+    material list."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    raw_material_id: int = Field(gt=0)
+    quantity_used: float = Field(gt=0)
+
+
 class ProductionExecutionComplete(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     produced_quantity: float = Field(gt=0)
+    # Omit to consume strictly the BOM-scaled quantity for every
+    # material (unchanged default behaviour). List only the materials
+    # whose actual usage differs from the BOM figure -- every other
+    # required material still consumes its BOM-scaled amount.
+    actual_materials: list[ProductionExecutionMaterialActual] | None = None
 
 
 class ProductionExecutionCancel(BaseModel):

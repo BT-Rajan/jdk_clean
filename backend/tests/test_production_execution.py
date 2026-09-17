@@ -199,6 +199,55 @@ def test_consumption_capped_by_allocated_quantity(db):
     assert still_in_progress.status == "in_progress"
 
 
+def test_completion_preserves_reported_material_variance(db):
+    """P10 Test 7: required (BOM-scaled) = 1,000 kg, actual reported
+    consumption = 1,050 kg. The variance must be preserved and visible
+    on the requirement row, never silently clamped back to 1,000."""
+    po, schedule, material, requirement = _po_with_schedule(db, quantity=1000, bom_quantity_per_unit=1, stock=10_000)
+    production_order_material_service.allocate(db, po.id, requirement.id, 1000)
+    execution = production_execution_service.start_execution(db, po.id, schedule.id, planned_quantity=1000)
+
+    production_execution_service.complete_execution(
+        db, execution.id, 1000, actual_materials=[{"raw_material_id": material.id, "quantity_used": 1050}]
+    )
+
+    summary = production_order_material_service.get_requirement_summary(db, po.id)
+    item = summary["items"][0]
+    assert item["required_quantity"] == 1000  # BOM figure untouched
+    assert item["consumed_quantity"] == 1050  # actual figure preserved, not clamped to 1,000
+    assert item["allocated_quantity"] == 1050  # auto-expanded to cover the extra 50
+
+    stock = inventory_service.get_stock(db, "raw_material", material.id)
+    assert stock["quantity_on_hand"] == 10_000 - 1050
+
+
+def test_actual_material_variance_still_refuses_unavailable_stock(db):
+    """The variance path is not a blank check -- it still refuses to
+    consume more than what's physically available."""
+    po, schedule, material, requirement = _po_with_schedule(db, quantity=1000, bom_quantity_per_unit=1, stock=1000)
+    production_order_material_service.allocate(db, po.id, requirement.id, 1000)
+    execution = production_execution_service.start_execution(db, po.id, schedule.id, planned_quantity=1000)
+
+    with pytest.raises(ValidationAppError):
+        production_execution_service.complete_execution(
+            db, execution.id, 1000, actual_materials=[{"raw_material_id": material.id, "quantity_used": 1050}]
+        )
+
+    stock = inventory_service.get_stock(db, "raw_material", material.id)
+    assert stock["quantity_on_hand"] == 1000  # nothing consumed -- rolled back
+
+
+def test_actual_materials_for_unknown_material_is_rejected(db):
+    po, schedule, material, requirement = _po_with_schedule(db, quantity=1000, bom_quantity_per_unit=1, stock=10_000)
+    production_order_material_service.allocate(db, po.id, requirement.id, 1000)
+    execution = production_execution_service.start_execution(db, po.id, schedule.id, planned_quantity=1000)
+
+    with pytest.raises(ValidationAppError):
+        production_execution_service.complete_execution(
+            db, execution.id, 1000, actual_materials=[{"raw_material_id": material.id + 999, "quantity_used": 10}]
+        )
+
+
 def test_scheduling_and_starting_do_not_move_stock(db):
     po, schedule, material, requirement = _po_with_schedule(db, quantity=500)
     production_order_material_service.allocate(db, po.id, requirement.id, 500)

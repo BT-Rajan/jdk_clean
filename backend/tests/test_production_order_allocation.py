@@ -169,17 +169,46 @@ def test_allocation_rejected_for_cancelled_production_order(db):
         production_order_material_service.allocate(db, po.id, requirement.id, 500)
 
 
-def test_release_still_allowed_after_cancellation(db):
+def test_cancellation_auto_releases_remaining_allocation(db):
+    """P10 Test 12: cancelling a Production Order must not leave a
+    hidden reservation behind -- change_status itself releases whatever
+    allocated_quantity hasn't been consumed yet, in the same commit as
+    the cancellation."""
     po, requirement, material = _po_with_requirement(db, quantity=1000)
     set_stock(db, material.id, quantity_on_hand=1000)
     production_order_material_service.allocate(db, po.id, requirement.id, 600)
+
     production_order_service.change_status(db, po.id, "cancelled", reason="Test cancellation.")
 
-    summary = production_order_material_service.release(db, po.id, requirement.id, 600)
-
+    summary = production_order_material_service.get_requirement_summary(db, po.id)
     assert summary["items"][0]["allocated_quantity"] == 0
     stock = inventory_service.get_stock(db, "raw_material", material.id)
     assert stock["quantity_reserved"] == 0
+    assert stock["quantity_on_hand"] == 1000  # physical stock untouched -- nothing was consumed
+
+    # A manual release afterward now finds nothing left to release.
+    with pytest.raises(ValidationAppError):
+        production_order_material_service.release(db, po.id, requirement.id, 600)
+
+
+def test_cancellation_only_releases_the_unconsumed_remainder(db):
+    """Material already physically consumed before cancellation is gone
+    -- auto-release must never try to return consumed stock to
+    allocatable, only whatever's still allocated-and-unconsumed."""
+    po, requirement, material = _po_with_requirement(db, quantity=1000)
+    set_stock(db, material.id, quantity_on_hand=1000)
+    production_order_material_service.allocate(db, po.id, requirement.id, 600)
+    production_order_material_service.consume(db, po.id, material.id, 400, execution_id=1)
+
+    production_order_service.change_status(db, po.id, "cancelled", reason="Test cancellation.")
+
+    summary = production_order_material_service.get_requirement_summary(db, po.id)
+    item = summary["items"][0]
+    assert item["allocated_quantity"] == 400  # the consumed 400 stays on the row, never released
+    assert item["consumed_quantity"] == 400
+    stock = inventory_service.get_stock(db, "raw_material", material.id)
+    assert stock["quantity_reserved"] == 0  # the other 200 (600 - 400) was released
+    assert stock["quantity_on_hand"] == 600  # 400 physically issued, not returned by cancellation
 
 
 def test_allocation_rejected_for_inactive_material(db):

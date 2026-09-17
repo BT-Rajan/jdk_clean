@@ -138,6 +138,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         { to: '/production', label: 'Production schedule' },
         { to: '/machines', label: 'Production Line' },
         { to: '/reports/production-report', label: 'Production Report' },
+        { to: '/reconciliation', label: 'Reconciliation' },
       ],
     },
     {

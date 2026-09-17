@@ -357,7 +357,12 @@ def allocate(
 
 
 def release(
-    db: Session, production_order_id: int, requirement_id: int, quantity: float, user_id: int | None = None
+    db: Session,
+    production_order_id: int,
+    requirement_id: int,
+    quantity: float,
+    user_id: int | None = None,
+    commit: bool = True,
 ) -> dict:
     """Reverses part or all of a prior allocation -- reduces this row's
     allocated_quantity and returns the same amount to allocatable stock
@@ -367,14 +372,21 @@ def release(
     a purchase transaction.
 
     Not gated on the Production Order's own status (unlike allocate) --
-    cancelling a Production Order deliberately leaves its allocations
-    alone (see production_order_service.change_status), so release is
-    the only way to free stock committed to an order that's since been
-    cancelled; there is no reason to block that.
+    a cancelled Production Order's own change_status call (P10) already
+    releases every requirement's remaining unconsumed allocation
+    automatically (via this same function, commit=False, folded into
+    its own commit) so no hidden reservation outlives the cancellation;
+    this remains callable directly too, for releasing an allocation that
+    turned out larger than actually needed on a still-'planned' order.
 
     Capped at allocated_quantity - consumed_quantity (P6): material
     that's already been physically issued to production can never be
     released back to allocatable stock -- it's gone.
+
+    commit=False lets production_order_service.change_status fold every
+    requirement's release for one cancelled Production Order into its
+    own single commit, same convention as every other multi-step
+    transaction in this app.
     """
     if quantity <= 0:
         raise ValidationAppError("Release quantity must be positive.")
@@ -397,7 +409,8 @@ def release(
     audit_service.log_update(
         db, TABLE_NAME, requirement.id, {"allocated_quantity": (allocated, new_allocated)}, user_id
     )
-    db.commit()
+    if commit:
+        db.commit()
     return get_requirement_summary(db, production_order_id)
 
 
@@ -409,17 +422,17 @@ def consume(
     execution_id: int,
     user_id: int | None = None,
     commit: bool = True,
+    allow_variance: bool = False,
 ) -> None:
-    """Issues `quantity` of this Production Order's already-allocated
-    raw material to production (P6) -- called from
-    production_execution_service.complete_execution, once per BOM-
-    required raw material, never on its own endpoint: completion (not
-    allocation, not scheduling, not starting) is this app's existing
-    material-issue transaction point, the same "materials get consumed
-    when actual output is recorded" convention the legacy
-    production_service._record_output already established for the
-    auto-scheduled-batch flow. Packaging-sourced rows are never consumed
-    here -- packaging stock deduction isn't wired at production
+    """Issues `quantity` of this Production Order's raw material to
+    production (P6) -- called from production_execution_service.
+    complete_execution, once per required raw material, never on its own
+    endpoint: completion (not allocation, not scheduling, not starting)
+    is this app's existing material-issue transaction point, the same
+    "materials get consumed when actual output is recorded" convention
+    the legacy production_service._record_output already established for
+    the auto-scheduled-batch flow. Packaging-sourced rows are never
+    consumed here -- packaging stock deduction isn't wired at production
     completion for the legacy flow either (see docs/production-audit.md);
     resolving that is a decision for a future pass, not this one.
 
@@ -429,15 +442,28 @@ def consume(
     same amount from the reservation this row's own allocation placed
     (inventory_service.release_reservation) -- the reservation's job
     (holding stock so nothing else claims it) is done the moment it's
-    actually used. allocated_quantity is left untouched (see this
-    module's own docstring on the model for why); only consumed_quantity
-    grows.
+    actually used.
 
-    Raises if `quantity` exceeds what this row still has allocated and
-    unconsumed -- the "Allocated Material Protection" rule (spec P6
-    section 8): production can never consume more of a material than
-    was legitimately committed to this Production Order, even if more
-    happens to be sitting on the shelf.
+    Default (allow_variance=False): capped at what's already allocated
+    and unconsumed -- the automatic, BOM-driven completion path
+    (production_execution_service.complete_execution's own default
+    behaviour) must still refuse to silently consume material nobody
+    allocated, exactly as before (Allocated Material Protection).
+
+    allow_variance=True (P10 spec sections 6/7) lifts that cap for a
+    specific, explicitly-reported actual quantity -- the real factory
+    process can legitimately use more or less than planned, and that
+    must be representable, not rejected merely for differing from the
+    plan. The shortfall over what's already allocated is committed as
+    additional allocation right here, through the exact same
+    availability-gated primitive allocate() itself uses (reserve_stock_
+    within_available) -- so this still refuses outright if the extra
+    amount is actually unavailable (physically absent, or already spoken
+    for by another Production Order), it just doesn't require a separate
+    manual allocate() call first. required_quantity is never touched, so
+    required vs. consumed on this same row is the variance, visible in
+    the ordinary requirement summary -- no separate variance ledger or
+    approval flow.
 
     commit=False -- the caller (complete_execution) holds a lock on the
     execution row for the whole call and needs every material's issue
@@ -450,13 +476,17 @@ def consume(
     allocated = float(requirement.allocated_quantity)
     consumed = float(requirement.consumed_quantity)
     remaining_allocated = round(allocated - consumed, 4)
-    if quantity > remaining_allocated:
-        material = db.query(RawMaterial).filter(RawMaterial.id == raw_material_id).first()
-        label = material.name if material else f"#{raw_material_id}"
-        raise ValidationAppError(
-            f"Cannot issue {quantity} of {label} -- only {remaining_allocated} is allocated and unconsumed "
-            f"for this production order. Allocate more before completing this run."
+    new_allocated = allocated
+    shortfall = round(quantity - remaining_allocated, 4)
+    if shortfall > 0:
+        if not allow_variance:
+            raise ValidationAppError(
+                f"Cannot consume {quantity} -- only {remaining_allocated} is allocated and unconsumed for this material."
+            )
+        inventory_service.reserve_stock_within_available(
+            db, "raw_material", raw_material_id, shortfall, commit=False
         )
+        new_allocated = round(allocated + shortfall, 4)
 
     inventory_service.adjust_stock(
         db,
@@ -474,10 +504,14 @@ def consume(
 
     new_consumed = round(consumed + quantity, 4)
     db.query(ProductionOrderMaterialRequirement).filter(ProductionOrderMaterialRequirement.id == requirement.id).update(
-        {"consumed_quantity": new_consumed, "updated_by": user_id}
+        {"allocated_quantity": new_allocated, "consumed_quantity": new_consumed, "updated_by": user_id}
     )
     audit_service.log_update(
-        db, TABLE_NAME, requirement.id, {"consumed_quantity": (consumed, new_consumed)}, user_id
+        db,
+        TABLE_NAME,
+        requirement.id,
+        {"allocated_quantity": (allocated, new_allocated), "consumed_quantity": (consumed, new_consumed)},
+        user_id,
     )
     if commit:
         db.commit()
