@@ -1,15 +1,21 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_role
 from app.core.database import get_db
+from app.core.permissions import require_page_access
 from app.models.supplier_material import SupplierMaterial
 from app.models.user import User
 from app.schemas.supplier_material import SupplierMaterialOut, SupplierMaterialsReplace
 from app.services import supplier_material_service
 
 router = APIRouter(prefix="/api/suppliers/{supplier_id}/materials", tags=["suppliers"])
-write_guard = require_role("admin", "manager")
+# P11: this router predated the page-permission system and was left on
+# get_current_user (any authenticated account) for reads -- a supplier's
+# per-material pricing/MOQ/lead-time is exactly the commercially sensitive
+# data the "suppliers" department permission is meant to gate, same as
+# suppliers.py's own endpoints.
+read_guard = require_page_access("suppliers", "read")
+write_guard = require_page_access("suppliers", "write")
 
 
 def _to_out(line: SupplierMaterial) -> SupplierMaterialOut:
@@ -41,7 +47,7 @@ def _to_out(line: SupplierMaterial) -> SupplierMaterialOut:
 def get_materials(
     supplier_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return [_to_out(line) for line in supplier_material_service.get_materials(db, supplier_id)]
 

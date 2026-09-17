@@ -5,6 +5,7 @@ from sqlalchemy import DateTime, Enum, ForeignKey, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.timezone import now_kuwait_naive
 from app.models.user import BigPK
 
 if TYPE_CHECKING:
@@ -22,5 +23,5 @@ class DepartmentPermission(Base):
     access_level: Mapped[str] = mapped_column(
         Enum("none", "read", "write", name="dept_perm_access_level"), nullable=False, default="none"
     )
-    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=now_kuwait_naive)
     updated_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)

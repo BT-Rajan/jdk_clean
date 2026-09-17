@@ -33,15 +33,21 @@ TABLE_NAME = "orders"
 
 def _price_lines(db: Session, lines: list[dict]) -> list[dict]:
     product_ids = {line["product_id"] for line in lines}
-    found_ids = {
-        pid
-        for (pid,) in db.query(Product.id)
+    products = (
+        db.query(Product.id, Product.status)
         .filter(Product.id.in_(product_ids), Product.deleted_at.is_(None))
         .all()
-    }
+    )
+    found_ids = {pid for pid, _ in products}
     missing = product_ids - found_ids
     if missing:
         raise ValidationAppError(f"Product {sorted(missing)[0]} not found.")
+    # P11: a product deactivated after being sold before must not be
+    # sellable again on a new order line -- mirrors production_order_
+    # service._get_active_product's own check for the production side.
+    inactive = [pid for pid, status in products if status != "active"]
+    if inactive:
+        raise ValidationAppError(f"Product {sorted(inactive)[0]} is inactive and cannot be ordered.")
 
     priced: list[dict] = []
     for line in lines:

@@ -20,6 +20,29 @@ def _get_active_product(db: Session, product_id: int) -> Product:
     return product
 
 
+def _assert_active_raw_material_component(db: Session, component_id: int) -> RawMaterial:
+    """Shared by _validate_component_exists (a BOM line's own create/edit
+    check) and explode_requirements/explode_requirements_detailed (P11):
+    a BOM line can reference a raw material that was active when the line
+    was added but has since been deactivated -- the explosion walk must
+    reject that at the point of use too, not silently build a requirement
+    for a phantom material (allocate() would refuse it downstream anyway,
+    but only after confusingly leaving the requirement permanently
+    unallocatable; failing here gives an immediate, actionable error)."""
+    material = (
+        db.query(RawMaterial)
+        .filter(RawMaterial.id == component_id, RawMaterial.deleted_at.is_(None))
+        .first()
+    )
+    if material is None:
+        raise ValidationAppError(f"Component raw material {component_id} not found.")
+    if material.status != "active":
+        raise ValidationAppError(
+            f"{material.name} is inactive and can no longer be used in a BOM -- update the BOM to remove it."
+        )
+    return material
+
+
 def _validate_component_exists(db: Session, component_type: str, component_id: int) -> str:
     """Every component must be a real, currently-active record in its
     own master -- BOM never gets to define its own notion of a material
@@ -51,15 +74,7 @@ def _validate_component_exists(db: Session, component_type: str, component_id: i
         if obj.status != "active":
             raise ValidationAppError(f"Component product {obj.code} is not active.")
     else:
-        obj = (
-            db.query(RawMaterial)
-            .filter(RawMaterial.id == component_id, RawMaterial.deleted_at.is_(None))
-            .first()
-        )
-        if obj is None:
-            raise ValidationAppError(f"Component raw material {component_id} not found.")
-        if obj.status != "active":
-            raise ValidationAppError(f"Component material {obj.code} is not active.")
+        obj = _assert_active_raw_material_component(db, component_id)
     return obj.unit
 
 
@@ -381,6 +396,7 @@ def explode_requirements(db: Session, product_id: int, quantity: float) -> dict[
             # scrap_percent% extra is consumed beyond the "net" quantity
             effective_qty = float(line.quantity) * (1 + float(line.scrap_percent) / 100) * scale
             if line.component_type == "raw_material":
+                _assert_active_raw_material_component(db, line.component_id)
                 totals[line.component_id] = totals.get(line.component_id, 0.0) + effective_qty
             else:
                 _walk(line.component_id, effective_qty, depth + 1)
@@ -427,6 +443,7 @@ def explode_requirements_detailed(db: Session, product_id: int, quantity: float)
             net_qty = float(line.quantity) * scale
             scrap_inflated_qty = net_qty * (1 + float(line.scrap_percent) / 100)
             if line.component_type == "raw_material":
+                _assert_active_raw_material_component(db, line.component_id)
                 entry = totals.setdefault(line.component_id, {"net_required": 0.0, "scrap_inflated_required": 0.0})
                 entry["net_required"] += net_qty
                 entry["scrap_inflated_required"] += scrap_inflated_qty
