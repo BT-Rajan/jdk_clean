@@ -251,7 +251,11 @@ def start_execution(
 
 
 def complete_execution(
-    db: Session, execution_id: int, produced_quantity: float, user_id: int | None = None
+    db: Session,
+    execution_id: int,
+    produced_quantity: float,
+    user_id: int | None = None,
+    actual_materials: list[dict] | None = None,
 ) -> ProductionExecution:
     """Closes out a run: records the actual quantity produced, consumes
     the BOM-scaled raw materials for that quantity from whatever's
@@ -270,6 +274,18 @@ def complete_execution(
     raises per-material; nothing here has committed yet, so the request-
     level rollback in core.database.get_db discards every partial
     adjust_stock/release_reservation call already made this loop).
+
+    `actual_materials` (P10 sections 6/7, optional): a list of
+    {"raw_material_id":, "quantity_used":} overriding the BOM-scaled
+    figure for specific materials, to represent what the factory
+    actually consumed when it legitimately differs from the plan (e.g.
+    required 1,000 kg, actually used 1,050 kg). Only these materials are
+    allowed to consume beyond what's allocated-and-unconsumed (auto-
+    expanding allocation the same way a manual allocate() call would,
+    still gated on real stock availability) -- every other material
+    keeps the strict Allocated Material Protection cap. Omitting it
+    entirely (the default) keeps completion's existing, unmodified
+    behaviour: purely BOM-driven, no variance reporting.
     """
     if produced_quantity is None or produced_quantity <= 0:
         raise ValidationAppError("Produced quantity must be positive to complete a production run.")
@@ -287,13 +303,31 @@ def complete_execution(
             f"only {remaining_to_produce} remains to produce."
         )
 
+    actual_by_material: dict[int, float] = {}
+    for actual in actual_materials or []:
+        raw_material_id = actual["raw_material_id"]
+        quantity_used = actual["quantity_used"]
+        if quantity_used <= 0:
+            raise ValidationAppError("Actual quantity used must be positive.")
+        actual_by_material[raw_material_id] = quantity_used
+
     detailed = bom_service.explode_requirements_detailed(db, row.product_id, produced_quantity)
     for raw_material_id, req in detailed.items():
-        quantity_needed = round(req["scrap_inflated_required"], 4)
+        if raw_material_id in actual_by_material:
+            quantity_needed = round(actual_by_material.pop(raw_material_id), 4)
+            allow_variance = True
+        else:
+            quantity_needed = round(req["scrap_inflated_required"], 4)
+            allow_variance = False
         if quantity_needed > 0:
             production_order_material_service.consume(
-                db, row.production_order_id, raw_material_id, quantity_needed, execution_id, user_id=user_id, commit=False
+                db, row.production_order_id, raw_material_id, quantity_needed, execution_id,
+                user_id=user_id, commit=False, allow_variance=allow_variance,
             )
+
+    if actual_by_material:
+        unknown = ", ".join(str(rid) for rid in actual_by_material)
+        raise ValidationAppError(f"Raw material(s) {unknown} are not part of this product's BOM.")
 
     ended_at = now_kuwait_naive()
     db.query(ProductionExecution).filter(ProductionExecution.id == row.id).update(

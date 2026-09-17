@@ -21,8 +21,19 @@ def _base_query(db: Session):
     )
 
 
-def get_production_order(db: Session, production_order_id: int) -> ProductionOrder:
-    obj = _base_query(db).filter(ProductionOrder.id == production_order_id).first()
+def get_production_order(db: Session, production_order_id: int, for_update: bool = False) -> ProductionOrder:
+    if for_update:
+        # A plain, unjoined lock query -- see order_service.get_order's
+        # own for_update branch for why _base_query's joinedloads can't
+        # be combined with with_for_update().
+        obj = (
+            db.query(ProductionOrder)
+            .filter(ProductionOrder.id == production_order_id)
+            .with_for_update()
+            .first()
+        )
+    else:
+        obj = _base_query(db).filter(ProductionOrder.id == production_order_id).first()
     if obj is None:
         raise NotFoundError("Production order")
     return obj
@@ -306,18 +317,39 @@ def change_status(
     reason: str | None = None,
     user_id: int | None = None,
 ) -> ProductionOrder:
-    production_order = get_production_order(db, production_order_id)
+    # Locked for the whole call (P10): without this, a concurrent
+    # allocate() could slip its own lock on this same row in between this
+    # function's read and its final write, allocating fresh material to
+    # an order that's about to be cancelled -- exactly the kind of "hidden
+    # reservation" Test 12 checks for. allocate()'s own status check
+    # (_lock_production_order_status) now correctly blocks on this lock
+    # until this transaction commits, instead of racing ahead of it.
+    production_order = get_production_order(db, production_order_id, for_update=True)
     assert_transition_allowed(ALLOWED_TRANSITIONS, production_order.status, new_status, "production order")
     if new_status == "cancelled":
         assert_reason_given(reason, "A reason is required to cancel a production order.")
         production_order.cancel_reason = reason
 
-    # Explicitly nothing else happens here -- no inventory movement, no
-    # stock adjustment, no purchase order, and the customer order itself
-    # is left untouched. See docs/production-lifecycle.md's Cancellation
-    # section: those integrations belong to the material/execution passes
-    # once a Production Order can actually hold a real material or
-    # schedule commitment.
+        # P10 spec section 8/Test 12: a cancelled Production Order must
+        # not leave a hidden reservation behind -- release whatever
+        # material is still allocated and unconsumed on every one of its
+        # requirement rows, through the exact same release() primitive a
+        # person would otherwise have to call by hand afterward. Already-
+        # consumed material is untouched (release() itself refuses to
+        # release more than allocated-minus-consumed) -- it's genuinely
+        # gone, cancellation doesn't reverse physical consumption.
+        # Local import: production_order_material_service doesn't import
+        # this module, so this is safe, but keeping it local matches this
+        # file's own existing cross-service-call convention.
+        from app.services import production_order_material_service
+
+        for requirement in production_order_material_service.get_requirements(db, production_order_id):
+            remaining_allocated = round(float(requirement.allocated_quantity) - float(requirement.consumed_quantity), 4)
+            if remaining_allocated > 0:
+                production_order_material_service.release(
+                    db, production_order_id, requirement.id, remaining_allocated, user_id=user_id, commit=False
+                )
+
     production_order.status = new_status
     production_order.updated_by = user_id
     db.flush()

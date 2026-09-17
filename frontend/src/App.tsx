@@ -158,6 +158,9 @@ const ProductionFormPage = lazy(() =>
 const ProductionDetailPage = lazy(() =>
   import('@/pages/production/ProductionDetailPage').then((m) => ({ default: m.ProductionDetailPage })),
 )
+const ReconciliationPage = lazy(() =>
+  import('@/pages/reconciliation/ReconciliationPage').then((m) => ({ default: m.ReconciliationPage })),
+)
 
 const AdminShell = lazy(() =>
   import('@/pages/admin/AdminShell').then((m) => ({ default: m.AdminShell })),
@@ -286,6 +289,7 @@ export function App() {
             <Route path="/production/new" element={<ProductionFormPage />} />
             <Route path="/production/:id" element={<ProductionDetailPage />} />
             <Route path="/production/:id/edit" element={<ProductionFormPage />} />
+            <Route path="/reconciliation" element={<ReconciliationPage />} />
 
             <Route path="/reports/sales-report" element={<SalesReportPage />} />
             <Route path="/reports/production-report" element={<ProductionReportPage />} />

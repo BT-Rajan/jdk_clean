@@ -278,8 +278,11 @@ def complete_execution(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
+    actual_materials = (
+        [m.model_dump() for m in payload.actual_materials] if payload.actual_materials else None
+    )
     production_execution_service.complete_execution(
-        db, execution_id, payload.produced_quantity, user_id=user.id
+        db, execution_id, payload.produced_quantity, user_id=user.id, actual_materials=actual_materials
     )
     return _execution_summary_out(db, production_execution_service.get_progress(db, production_order_id))
 

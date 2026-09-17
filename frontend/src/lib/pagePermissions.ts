@@ -35,6 +35,10 @@ const PATH_PREFIX_TO_PAGE_KEY: [string, string][] = [
   // permission to configure. See backend/app/api/production_orders.py.
   ['/production-orders', 'production'],
   ['/production', 'production'],
+  // Reconciliation spans production, materials, QC and delivery, but
+  // reuses the same 'production' page key rather than a new one -- see
+  // backend/app/api/reconciliation.py's own comment on the same reuse.
+  ['/reconciliation', 'production'],
 ]
 
 export function getPageKeyForPath(pathname: string): string | null {
