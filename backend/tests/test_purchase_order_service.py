@@ -115,6 +115,36 @@ def test_receive_lines_partial_then_full(db):
     assert inventory_service.get_stock(db, "raw_material", material.id)["quantity_on_hand"] == on_hand_before + 10
 
 
+def test_receive_lines_rejects_duplicate_invoice_resubmission(db):
+    """P11: a retried/double-clicked receipt (same invoice_number
+    resubmitted against the same PO) must not credit raw material stock
+    twice for one physical delivery -- especially exposed for a partial
+    receipt, where the remaining-quantity check alone would still let a
+    resubmission through."""
+    material = make_raw_material(db)
+    supplier = make_supplier(db)
+    po = make_purchase_order(
+        db, supplier.id, lines=[{"raw_material_id": material.id, "quantity": 10, "unit_price": 5}], status="confirmed"
+    )
+    on_hand_before = inventory_service.get_stock(db, "raw_material", material.id)["quantity_on_hand"]
+    line_id = po.lines[0].id
+
+    purchase_order_service.receive_lines(
+        db, po.id, [{"line_id": line_id, "quantity": 6}],
+        invoice_number="INV-DUP", received_by="Warehouse Clerk",
+    )
+
+    with pytest.raises(ConflictError):
+        purchase_order_service.receive_lines(
+            db, po.id, [{"line_id": line_id, "quantity": 6}],
+            invoice_number="INV-DUP", received_by="Warehouse Clerk",
+        )
+
+    # Not double-credited -- only the first, legitimate receipt applied.
+    assert inventory_service.get_stock(db, "raw_material", material.id)["quantity_on_hand"] == on_hand_before + 6
+    assert float(po.lines[0].received_quantity) == 6
+
+
 def test_receive_lines_rejects_over_receipt(db):
     material = make_raw_material(db)
     supplier = make_supplier(db)

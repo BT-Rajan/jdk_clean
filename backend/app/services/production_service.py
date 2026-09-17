@@ -7,6 +7,7 @@ from app.core.exceptions import AppError, ConflictError, NotFoundError, Validati
 from app.core.pagination import sort_and_paginate
 from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed, assert_within_backdate_window
+from app.models.machine import Machine
 from app.models.order import Order
 from app.models.product import Product
 from app.models.production_schedule import ALLOWED_TRANSITIONS, ProductionSchedule
@@ -146,7 +147,26 @@ def _validate_product(db: Session, product_id: int) -> Product:
     )
     if product is None:
         raise ValidationAppError(f"Product {product_id} not found.")
+    # P11: this legacy auto-scheduled-batch flow had no active-product
+    # check at all -- mirrors production_order_service._get_active_
+    # product's check for the newer Production Order flow.
+    if product.status != "active":
+        raise ValidationAppError(f"{product.name} is inactive and cannot be planned for production.")
     return product
+
+
+def _validate_machine(db: Session, machine_id: int) -> Machine:
+    """P11: create_batch/update_batch had no machine validation at all --
+    a deactivated machine could still be booked for a real batch that
+    reserves raw material. Mirrors production_order_schedule_service.
+    create_schedule's own machine check for the newer Production Order
+    flow."""
+    machine = db.query(Machine).filter(Machine.id == machine_id, Machine.deleted_at.is_(None)).first()
+    if machine is None:
+        raise ValidationAppError(f"Machine {machine_id} not found.")
+    if machine.status != "active":
+        raise ValidationAppError(f"{machine.name} is inactive and cannot be scheduled.")
+    return machine
 
 
 def _validate_order(db: Session, order_id: int) -> Order:
@@ -277,6 +297,8 @@ def create_batch(db: Session, data: dict, user_id: int | None = None) -> Product
         order = _validate_order(db, data["order_id"])
     if not data.get("machine_id"):
         data["machine_id"] = product.machine_id
+    if data.get("machine_id"):
+        _validate_machine(db, data["machine_id"])
 
     batch_number = number_series_service.next_number(db, "PRODUCTION_BATCH")
     batch = ProductionSchedule(batch_number=batch_number, created_by=user_id, **data)
@@ -301,6 +323,8 @@ def update_batch(db: Session, batch_id: int, data: dict, user_id: int | None = N
         _validate_order(db, data["order_id"])
     if "product_id" in data and data["product_id"] != batch.product_id:
         _validate_product(db, data["product_id"])
+    if "machine_id" in data and data["machine_id"] and data["machine_id"] != batch.machine_id:
+        _validate_machine(db, data["machine_id"])
 
     # Whatever's currently reserved was reserved against the batch's
     # *current* product/quantity -- if either is about to change, release

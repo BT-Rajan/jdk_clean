@@ -1,21 +1,29 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user, require_role
 from app.core.database import get_db
+from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.packaging import PackagingLineIn, PackagingLineOut, PackagingReplace
 from app.services import audit_service, packaging_service
 
 router = APIRouter(prefix="/api/products/{product_id}/packaging", tags=["packaging"])
-write_guard = require_role("admin", "manager")
+# P11: this router predated the page-permission system and was left on
+# get_current_user (any authenticated account) for reads and a bare
+# admin/manager role check for writes -- unlike a BOM's raw-material
+# formula (see bom.py's own comment), packaging composition isn't
+# sensitive enough to warrant admin-only, but it should still respect the
+# same "products" department permission every other product-related
+# endpoint already does.
+read_guard = require_page_access("products", "read")
+write_guard = require_page_access("products", "write")
 
 
 @router.get("", response_model=list[PackagingLineOut])
 def get_packaging(
     product_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return packaging_service.get_packaging(db, product_id)
 
@@ -56,6 +64,6 @@ def delete_packaging_line(
 def get_packaging_history(
     product_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    _: User = Depends(read_guard),
 ):
     return audit_service.get_history(db, "product_packaging_lines", product_id)

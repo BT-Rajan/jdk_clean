@@ -177,6 +177,11 @@ def _price_lines(db: Session, lines: list[dict]) -> list[dict]:
         )
         if product is None:
             raise ValidationAppError(f"Product {line['product_id']} not found.")
+        # P11: a quotation is the first step toward a real order -- an
+        # inactive product must not be quotable, same rule order_service.
+        # _price_lines enforces for the order itself.
+        if product.status != "active":
+            raise ValidationAppError(f"{product.name} is inactive and cannot be quoted.")
         discount_percent = float(line.get("discount_percent") or 0)
         line_total = price_line(float(line["quantity"]), float(line["unit_price"]), discount_percent)
         priced.append({**line, "discount_percent": discount_percent, "line_total": line_total})

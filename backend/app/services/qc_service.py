@@ -127,13 +127,23 @@ def _undecided_quantity(db: Session, execution_row) -> float:
     report_received -- i.e. not yet itself accepted or rejected). This
     is the pool a new request's own `quantity` must fit inside, so two
     requests against the same execution can never both claim the same
-    units (P8 spec section 5's partial accept/reject)."""
+    units (P8 spec section 5's partial accept/reject).
+
+    with_for_update() here, not a plain read (P11): the execution row
+    lock above only guarantees a fresh value for the execution row
+    itself -- under this app's REPEATABLE READ isolation, a plain read of
+    a *different* table (these sibling QcRequest rows) can still return
+    the transaction's original consistent-read snapshot, from before a
+    concurrent create_request's own QcRequest row committed. Two
+    concurrent requests could then both compute the same "undecided"
+    total and both claim it. Locking these rows too closes that gap."""
     open_claimed = (
         db.query(QcRequest.quantity)
         .filter(
             QcRequest.production_execution_id == execution_row.id,
             QcRequest.status.notin_(("accepted", "rejected")),
         )
+        .with_for_update()
         .all()
     )
     claimed = sum(float(q) for (q,) in open_claimed)

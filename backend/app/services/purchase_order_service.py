@@ -8,6 +8,7 @@ from app.core.pagination import sort_and_paginate
 from app.core.pricing import compute_document_totals, price_line
 from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed
+from app.models.inventory import StockMovement
 from app.models.purchase_order import ALLOWED_TRANSITIONS, PurchaseOrder, PurchaseOrderLine
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
@@ -27,6 +28,11 @@ def _price_lines(db: Session, lines: list[dict]) -> list[dict]:
         )
         if material is None:
             raise ValidationAppError(f"Raw material {line['raw_material_id']} not found.")
+        # P11: an inactive raw material must not be purchasable on a new
+        # PO -- mirrors production_order_material_service.allocate's own
+        # check for the consumption side.
+        if material.status != "active":
+            raise ValidationAppError(f"{material.name} is inactive and cannot be purchased.")
         discount_percent = float(line.get("discount_percent") or 0)
         line_total = price_line(float(line["quantity"]), float(line["unit_price"]), discount_percent)
         priced.append({**line, "discount_percent": discount_percent, "line_total": line_total})
@@ -102,6 +108,10 @@ def _validate_supplier(db: Session, supplier_id: int) -> Supplier:
     )
     if supplier is None:
         raise ValidationAppError(f"Supplier {supplier_id} not found.")
+    # P11: an inactive or suspended supplier must not receive a new
+    # purchase commitment.
+    if supplier.status != "active":
+        raise ValidationAppError(f"{supplier.name} is {supplier.status} and cannot receive a new purchase order.")
     return supplier
 
 
@@ -365,10 +375,10 @@ def receive_lines(
     date), same as a paper goods-received note would record once per
     delivery rather than once per line item.
     """
-    # Locked for the whole call -- see order_service.change_status's
-    # comment for why this, plus commit=False below, is what stops a
-    # double-submitted receipt (double-click, retry) from crediting stock
-    # twice for one physical delivery.
+    # Locked for the whole call -- serializes concurrent receipts against
+    # the same PO (see order_service.change_status's comment for the same
+    # pattern). This alone only protects against a *concurrent* duplicate;
+    # see the invoice_number check below for the *sequential* retry case.
     po = get_purchase_order(db, po_id, for_update=True)
     if po.status not in ("confirmed", "partially_received"):
         raise ConflictError(
@@ -379,7 +389,46 @@ def receive_lines(
         raise ValidationAppError("invoice_number and received_by are required to receive goods.")
     received_date = received_date or today_kuwait()
 
-    lines_by_id = {line.id: line for line in po.lines}
+    # P11: the row lock above only serializes *concurrent* requests within
+    # one open transaction -- it does nothing for a *sequential* retry
+    # (double-click, a client resending after a timeout) once the first
+    # call has already committed. A partial receipt is especially exposed:
+    # resubmitting it still passes the remaining-quantity check below and
+    # would credit raw material stock twice for one physical delivery. One
+    # physical delivery has exactly one invoice, so rejecting a second
+    # receipt against an invoice_number already recorded on this PO closes
+    # that gap without a new idempotency mechanism.
+    already_received = (
+        db.query(StockMovement)
+        .filter(
+            StockMovement.reference_type == "purchase_order",
+            StockMovement.reference_id == po.id,
+            StockMovement.invoice_number == invoice_number,
+        )
+        .first()
+    )
+    if already_received is not None:
+        raise ConflictError(
+            f"Invoice {invoice_number} has already been recorded as received against this purchase order."
+        )
+
+    # P11: po.lines is a plain (non-locking) lazy-loaded read. Under this
+    # app's REPEATABLE READ isolation, a plain read can still return data
+    # from the transaction's earlier consistent-read snapshot even after
+    # the PO row above is locked -- two concurrent receipts could each see
+    # received_quantity as it was before either committed and one update
+    # would silently overwrite the other (same "a lock elsewhere doesn't
+    # make a later plain read fresh" reasoning as get_order's own
+    # for_update comment). Locking each line row directly, and reading
+    # received_quantity only off that locked result, is what makes the
+    # check-then-write below immune to it.
+    lines_by_id = {
+        line.id: line
+        for line in db.query(PurchaseOrderLine)
+        .filter(PurchaseOrderLine.purchase_order_id == po.id)
+        .with_for_update()
+        .all()
+    }
 
     # Validate every receipt before applying any of them, so a bad line in
     # the batch doesn't leave earlier ones already applied (adjust_stock
