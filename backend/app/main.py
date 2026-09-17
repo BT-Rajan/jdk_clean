@@ -28,6 +28,8 @@ from app.api.payments import router as payments_router
 from app.api.products import router as products_router
 from app.api.production_orders import router as production_orders_router
 from app.api.production_schedules import router as production_schedules_router
+from app.api.qc_agents import router as qc_agents_router
+from app.api.qc_requests import router as qc_requests_router
 from app.api.purchase_orders import router as purchase_orders_router
 from app.api.quotations import router as quotations_router
 from app.api.raw_materials import router as raw_materials_router
@@ -120,6 +122,8 @@ app.include_router(payment_plans_router)
 app.include_router(delivery_notes_router)
 app.include_router(production_schedules_router)
 app.include_router(production_orders_router)
+app.include_router(qc_agents_router)
+app.include_router(qc_requests_router)
 app.include_router(purchase_orders_router)
 app.include_router(supplier_returns_router)
 app.include_router(email_templates_router)

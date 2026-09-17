@@ -27,6 +27,7 @@ from app.services import (
     production_order_material_service,
     production_order_schedule_service,
     production_order_service,
+    qc_service,
 )
 
 router = APIRouter(prefix="/api/production-orders", tags=["production"])
@@ -219,14 +220,24 @@ def cancel_schedule(
     return _schedule_summary_out(production_order_schedule_service.get_schedule_summary(db, production_order_id))
 
 
-def _execution_summary_out(summary: dict) -> ProductionExecutionSummaryOut:
+def _execution_summary_out(db: Session, summary: dict) -> ProductionExecutionSummaryOut:
+    # fg_release_status is computed here, not in ProductionExecutionOut.
+    # from_model, since it needs a query across qc_requests -- same
+    # "populated by the endpoint" pattern production_schedules.py's own
+    # readiness_status already uses (see that schema's own comment).
+    fg_release_statuses = qc_service.get_fg_release_statuses(db, summary["production_order_id"])
+    runs = []
+    for r in summary["runs"]:
+        out = ProductionExecutionOut.from_model(r)
+        out.fg_release_status = fg_release_statuses.get(r.id, "not_applicable")
+        runs.append(out)
     return ProductionExecutionSummaryOut(
         production_order_id=summary["production_order_id"],
         planned_quantity=summary["planned_quantity"],
         total_produced=summary["total_produced"],
         remaining_to_produce=summary["remaining_to_produce"],
         execution_status=summary["execution_status"],
-        runs=[ProductionExecutionOut.from_model(r) for r in summary["runs"]],
+        runs=runs,
     )
 
 
@@ -236,7 +247,7 @@ def get_executions(
     db: Session = Depends(get_db),
     _: User = Depends(read_guard),
 ):
-    return _execution_summary_out(production_execution_service.get_progress(db, production_order_id))
+    return _execution_summary_out(db, production_execution_service.get_progress(db, production_order_id))
 
 
 @router.post("/{production_order_id}/executions", response_model=ProductionExecutionSummaryOut, status_code=201)
@@ -249,7 +260,7 @@ def start_execution(
     production_execution_service.start_execution(
         db, production_order_id, payload.schedule_id, planned_quantity=payload.planned_quantity, user_id=user.id
     )
-    return _execution_summary_out(production_execution_service.get_progress(db, production_order_id))
+    return _execution_summary_out(db, production_execution_service.get_progress(db, production_order_id))
 
 
 @router.post(
@@ -265,7 +276,7 @@ def complete_execution(
     production_execution_service.complete_execution(
         db, execution_id, payload.produced_quantity, user_id=user.id
     )
-    return _execution_summary_out(production_execution_service.get_progress(db, production_order_id))
+    return _execution_summary_out(db, production_execution_service.get_progress(db, production_order_id))
 
 
 @router.post(
@@ -279,7 +290,7 @@ def cancel_execution(
     user: User = Depends(write_guard),
 ):
     production_execution_service.cancel_execution(db, execution_id, payload.reason, user_id=user.id)
-    return _execution_summary_out(production_execution_service.get_progress(db, production_order_id))
+    return _execution_summary_out(db, production_execution_service.get_progress(db, production_order_id))
 
 
 @router.post("/{production_order_id}/status", response_model=ProductionOrderOut)

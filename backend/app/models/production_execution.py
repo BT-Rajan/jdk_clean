@@ -69,6 +69,16 @@ class ProductionExecution(Base, TimestampMixin):
     # as leaving it unset would express, without needing a nullable
     # column and the None-vs-zero ambiguity that would introduce.
     produced_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
+    # How much of produced_quantity has actually been released into
+    # FinishedGoodsInventory (P7) -- 0 until an external QC report
+    # accepts this run (see qc_service._release_execution_fg). Kept as
+    # its own running total rather than inferring "released" from
+    # produced_quantity directly, so a run can sit fully produced but
+    # still QC-pending: production completion and QC release are
+    # deliberately separate facts (see docs/production-lifecycle.md and
+    # the P7 spec's own "Production Completion vs Release" section).
+    # Never exceeds produced_quantity.
+    released_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
     started_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(

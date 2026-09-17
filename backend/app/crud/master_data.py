@@ -8,6 +8,7 @@ from app.models.customer import Customer
 from app.models.department import Department
 from app.models.machine import Machine
 from app.models.product import Product
+from app.models.qc_agent import QcAgent
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
 from app.models.user import User
@@ -264,6 +265,17 @@ class MachineCRUD(BaseCRUD):
         return super().create(db, data, user_id=user_id)
 
 
+class QcAgentCRUD(BaseCRUD):
+    """External testing laboratory/agent (P7) -- see app/models/qc_agent.py
+    for why this is its own minimal master rather than reusing Supplier."""
+
+    model = QcAgent
+    table_name = "qc_agents"
+    searchable_fields = ["name", "code"]
+    sortable_fields = ["name", "code", "created_at"]
+    filterable_fields = ["status"]
+
+
 department_crud = DepartmentCRUD()
 user_crud = UserCRUD()
 customer_crud = CustomerCRUD()
@@ -271,3 +283,4 @@ supplier_crud = SupplierCRUD()
 raw_material_crud = RawMaterialCRUD()
 product_crud = ProductCRUD()
 machine_crud = MachineCRUD()
+qc_agent_crud = QcAgentCRUD()
