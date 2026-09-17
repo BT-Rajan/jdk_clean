@@ -6,12 +6,12 @@ requirements, reusing inventory_service's own reservation primitive
 (quantity_reserved) rather than a second reservation system -- see
 reserve_stock_within_available's docstring for why a *capped* variant
 was needed alongside the existing (deliberately uncapped) reserve_stock.
+P6 (consume) is where allocated stock actually leaves the warehouse --
+see consume()'s own docstring.
 
 No parallel BOM/MRP/stock engine lives here; this module only
-orchestrates those three plus the ProductionOrder itself. Still stops
-short of material issue/consumption -- allocation commits stock, it
-never physically removes it. See docs/production-lifecycle.md for the
-full P3/P4/P5 boundary.
+orchestrates those three plus the ProductionOrder itself. See
+docs/production-lifecycle.md for the full P3/P4/P5/P6 boundary.
 """
 
 from sqlalchemy.orm import Session, joinedload
@@ -168,9 +168,15 @@ def get_requirement_summary(db: Session, production_order_id: int) -> dict:
         stock = inventory_service.get_stock(db, "raw_material", req.raw_material_id)
         required = float(req.required_quantity)
         allocated = float(req.allocated_quantity)
+        consumed = float(req.consumed_quantity)
         available = stock["quantity_available"]
         remaining_to_allocate = max(round(required - allocated, 4), 0)
         shortage = max(round(required - allocated - available, 4), 0)
+        # How much of this row's own allocation is still held but not
+        # yet issued to production (P6) -- what release() may still hand
+        # back to allocatable stock; consumed material can never be
+        # released (see that function's own guard).
+        remaining_allocated = max(round(allocated - consumed, 4), 0)
         items.append(
             {
                 "id": req.id,
@@ -188,6 +194,8 @@ def get_requirement_summary(db: Session, production_order_id: int) -> dict:
                 "allocated_quantity": allocated,
                 "remaining_to_allocate": remaining_to_allocate,
                 "shortage_quantity": shortage,
+                "consumed_quantity": consumed,
+                "remaining_allocated": remaining_allocated,
             }
         )
 
@@ -231,10 +239,40 @@ def _lock_requirement_row(db: Session, production_order_id: int, requirement_id:
             ProductionOrderMaterialRequirement.raw_material_id,
             ProductionOrderMaterialRequirement.required_quantity,
             ProductionOrderMaterialRequirement.allocated_quantity,
+            ProductionOrderMaterialRequirement.consumed_quantity,
         )
         .filter(
             ProductionOrderMaterialRequirement.id == requirement_id,
             ProductionOrderMaterialRequirement.production_order_id == production_order_id,
+        )
+        .with_for_update()
+        .first()
+    )
+    if row is None:
+        raise NotFoundError("Material requirement")
+    return row
+
+
+def _lock_requirement_row_for_material(db: Session, production_order_id: int, raw_material_id: int):
+    """Same locking read as _lock_requirement_row, keyed by raw_material_id
+    instead of the row's own id -- for consume() (P6), whose caller
+    (production_execution_service, building on a BOM explosion) knows
+    which material it needs to issue, not which requirement row that is.
+    Only ever matches the 'bom'-sourced row for this material: packaging
+    isn't consumed at production completion (see consume()'s own
+    docstring)."""
+    row = (
+        db.query(
+            ProductionOrderMaterialRequirement.id,
+            ProductionOrderMaterialRequirement.raw_material_id,
+            ProductionOrderMaterialRequirement.required_quantity,
+            ProductionOrderMaterialRequirement.allocated_quantity,
+            ProductionOrderMaterialRequirement.consumed_quantity,
+        )
+        .filter(
+            ProductionOrderMaterialRequirement.production_order_id == production_order_id,
+            ProductionOrderMaterialRequirement.raw_material_id == raw_material_id,
+            ProductionOrderMaterialRequirement.source == "bom",
         )
         .with_for_update()
         .first()
@@ -334,17 +372,21 @@ def release(
     the only way to free stock committed to an order that's since been
     cancelled; there is no reason to block that.
 
-    There is no `consumed_quantity` yet (P4 doesn't implement material
-    issue) -- once a later pass adds one, this is where a `quantity <=
-    allocated_quantity - consumed_quantity` guard belongs.
+    Capped at allocated_quantity - consumed_quantity (P6): material
+    that's already been physically issued to production can never be
+    released back to allocatable stock -- it's gone.
     """
     if quantity <= 0:
         raise ValidationAppError("Release quantity must be positive.")
 
     requirement = _lock_requirement_row(db, production_order_id, requirement_id)
     allocated = float(requirement.allocated_quantity)
-    if quantity > allocated:
-        raise ValidationAppError(f"Cannot release {quantity} -- only {allocated} is currently allocated.")
+    consumed = float(requirement.consumed_quantity)
+    remaining_allocated = round(allocated - consumed, 4)
+    if quantity > remaining_allocated:
+        raise ValidationAppError(
+            f"Cannot release {quantity} -- only {remaining_allocated} is still allocated and unconsumed."
+        )
 
     inventory_service.release_reservation(db, "raw_material", requirement.raw_material_id, quantity, commit=False)
 
@@ -357,3 +399,85 @@ def release(
     )
     db.commit()
     return get_requirement_summary(db, production_order_id)
+
+
+def consume(
+    db: Session,
+    production_order_id: int,
+    raw_material_id: int,
+    quantity: float,
+    execution_id: int,
+    user_id: int | None = None,
+    commit: bool = True,
+) -> None:
+    """Issues `quantity` of this Production Order's already-allocated
+    raw material to production (P6) -- called from
+    production_execution_service.complete_execution, once per BOM-
+    required raw material, never on its own endpoint: completion (not
+    allocation, not scheduling, not starting) is this app's existing
+    material-issue transaction point, the same "materials get consumed
+    when actual output is recorded" convention the legacy
+    production_service._record_output already established for the
+    auto-scheduled-batch flow. Packaging-sourced rows are never consumed
+    here -- packaging stock deduction isn't wired at production
+    completion for the legacy flow either (see docs/production-audit.md);
+    resolving that is a decision for a future pass, not this one.
+
+    Physically deducts on-hand stock (inventory_service.adjust_stock,
+    movement_type='issue', traceable via reference_type=
+    'production_execution'/reference_id=execution_id) and releases the
+    same amount from the reservation this row's own allocation placed
+    (inventory_service.release_reservation) -- the reservation's job
+    (holding stock so nothing else claims it) is done the moment it's
+    actually used. allocated_quantity is left untouched (see this
+    module's own docstring on the model for why); only consumed_quantity
+    grows.
+
+    Raises if `quantity` exceeds what this row still has allocated and
+    unconsumed -- the "Allocated Material Protection" rule (spec P6
+    section 8): production can never consume more of a material than
+    was legitimately committed to this Production Order, even if more
+    happens to be sitting on the shelf.
+
+    commit=False -- the caller (complete_execution) holds a lock on the
+    execution row for the whole call and needs every material's issue
+    plus the execution's own status change folded into one commit.
+    """
+    if quantity <= 0:
+        raise ValidationAppError("Consumption quantity must be positive.")
+
+    requirement = _lock_requirement_row_for_material(db, production_order_id, raw_material_id)
+    allocated = float(requirement.allocated_quantity)
+    consumed = float(requirement.consumed_quantity)
+    remaining_allocated = round(allocated - consumed, 4)
+    if quantity > remaining_allocated:
+        material = db.query(RawMaterial).filter(RawMaterial.id == raw_material_id).first()
+        label = material.name if material else f"#{raw_material_id}"
+        raise ValidationAppError(
+            f"Cannot issue {quantity} of {label} -- only {remaining_allocated} is allocated and unconsumed "
+            f"for this production order. Allocate more before completing this run."
+        )
+
+    inventory_service.adjust_stock(
+        db,
+        item_type="raw_material",
+        item_id=raw_material_id,
+        quantity=-quantity,
+        movement_type="issue",
+        reference_type="production_execution",
+        reference_id=execution_id,
+        notes=f"Consumed by production execution #{execution_id}",
+        user_id=user_id,
+        commit=False,
+    )
+    inventory_service.release_reservation(db, "raw_material", raw_material_id, quantity, commit=False)
+
+    new_consumed = round(consumed + quantity, 4)
+    db.query(ProductionOrderMaterialRequirement).filter(ProductionOrderMaterialRequirement.id == requirement.id).update(
+        {"consumed_quantity": new_consumed, "updated_by": user_id}
+    )
+    audit_service.log_update(
+        db, TABLE_NAME, requirement.id, {"consumed_quantity": (consumed, new_consumed)}, user_id
+    )
+    if commit:
+        db.commit()

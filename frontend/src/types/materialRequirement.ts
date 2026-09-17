@@ -24,6 +24,12 @@ export interface MaterialRequirementItem {
   allocated_quantity: number
   remaining_to_allocate: number
   shortage_quantity: number
+  /** Persisted -- how much of allocated_quantity has actually been
+   * issued to production (P6). See productionOrderExecution.ts. */
+  consumed_quantity: number
+  /** allocated_quantity - consumed_quantity -- what can still be
+   * released back to allocatable stock. */
+  remaining_allocated: number
 }
 
 export interface MaterialRequirementSummary {

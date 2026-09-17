@@ -6,12 +6,16 @@ import { Button, EmptyState, TextField } from '@/components/ui'
 import {
   allocateMaterial,
   calculateMaterialRequirements,
+  cancelProductionExecution,
   cancelProductionOrderSchedule,
+  completeProductionExecution,
   createProductionOrderSchedule,
   getMaterialRequirements,
+  getProductionExecutions,
   getProductionOrder,
   getProductionOrderSchedules,
   releaseMaterialAllocation,
+  startProductionExecution,
   updateProductionOrderStatus,
 } from '@/api/productionOrders'
 import { getOrder } from '@/api/orders'
@@ -20,6 +24,7 @@ import type { ProductionOrder } from '@/types/productionOrder'
 import type { Order } from '@/types/order'
 import type { MaterialRequirementSummary } from '@/types/materialRequirement'
 import type { ProductionOrderScheduleSummary } from '@/types/productionOrderSchedule'
+import type { ProductionExecutionSummary } from '@/types/productionOrderExecution'
 import type { Machine } from '@/types/machine'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
@@ -33,9 +38,9 @@ import { StatusTransitionButtons } from '@/components/status/StatusTransitionBut
 // shown for orientation, not implemented. See docs/production-lifecycle.md;
 // none of these stages exist yet, so this is deliberately just a static
 // roadmap, never fake data or a fake status. "Material Requirement",
-// "Material Allocation" and "Schedule" are no longer here -- P3/P4/P5,
-// implemented below.
-const FUTURE_STAGES = ['Execution', 'Completion', 'Finished Goods']
+// "Material Allocation", "Schedule" and "Execution" are no longer here --
+// P3/P4/P5/P6, implemented below.
+const FUTURE_STAGES = ['Completion', 'Finished Goods']
 
 const OVERALL_STATUS_LABEL: Record<MaterialRequirementSummary['overall_status'], string> = {
   not_calculated: 'Requirement not calculated',
@@ -56,6 +61,21 @@ const SCHEDULE_STATUS_LABEL: Record<ProductionOrderScheduleSummary['schedule_sta
   cancelled: 'Schedule cancelled',
 }
 
+const EXECUTION_STATUS_LABEL: Record<ProductionExecutionSummary['execution_status'], string> = {
+  not_started: 'Not started',
+  in_progress: 'In progress',
+  partially_completed: 'Partially completed',
+  completed: 'Completed',
+}
+
+function formatDuration(seconds: number | null): string {
+  if (seconds === null) return '—'
+  const totalMinutes = Math.round(seconds / 60)
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
+}
+
 export function ProductionOrderDetailPage() {
   const { id } = useParams()
   const productionOrderId = Number(id)
@@ -67,6 +87,7 @@ export function ProductionOrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null)
   const [requirements, setRequirements] = useState<MaterialRequirementSummary | null>(null)
   const [schedules, setSchedules] = useState<ProductionOrderScheduleSummary | null>(null)
+  const [executions, setExecutions] = useState<ProductionExecutionSummary | null>(null)
   const [machines, setMachines] = useState<Machine[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -81,6 +102,13 @@ export function ProductionOrderDetailPage() {
   const [cancelReasonById, setCancelReasonById] = useState<Record<number, string>>({})
   const [scheduleActionBusyId, setScheduleActionBusyId] = useState<number | null>(null)
 
+  const [startScheduleId, setStartScheduleId] = useState('')
+  const [startQuantity, setStartQuantity] = useState('')
+  const [startBusy, setStartBusy] = useState(false)
+  const [producedQtyById, setProducedQtyById] = useState<Record<number, string>>({})
+  const [executionCancelReasonById, setExecutionCancelReasonById] = useState<Record<number, string>>({})
+  const [executionActionBusyId, setExecutionActionBusyId] = useState<number | null>(null)
+
   const load = useCallback(() => {
     setLoading(true)
     getProductionOrder(productionOrderId)
@@ -90,13 +118,15 @@ export function ProductionOrderDetailPage() {
           getOrder(result.order_id),
           getMaterialRequirements(productionOrderId),
           getProductionOrderSchedules(productionOrderId),
+          getProductionExecutions(productionOrderId),
           listMachines({ status: 'active', page_size: 200 }),
         ])
       })
-      .then(([orderResult, requirementsResult, scheduleResult, machinesResult]) => {
+      .then(([orderResult, requirementsResult, scheduleResult, executionResult, machinesResult]) => {
         setOrder(orderResult)
         setRequirements(requirementsResult)
         setSchedules(scheduleResult)
+        setExecutions(executionResult)
         setMachines(machinesResult.items)
       })
       .catch((err) => setError(getApiErrorMessage(err)))
@@ -210,6 +240,70 @@ export function ProductionOrderDetailPage() {
       setError(getApiErrorMessage(err))
     } finally {
       setScheduleActionBusyId(null)
+    }
+  }
+
+  async function handleStartExecution() {
+    if (!startScheduleId) {
+      setError('Choose a schedule to start production against.')
+      return
+    }
+    setStartBusy(true)
+    setError(null)
+    try {
+      const result = await startProductionExecution(
+        productionOrderId,
+        Number(startScheduleId),
+        startQuantity ? Number(startQuantity) : undefined,
+      )
+      setExecutions(result)
+      setStartScheduleId('')
+      setStartQuantity('')
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setStartBusy(false)
+    }
+  }
+
+  async function handleCompleteExecution(executionId: number) {
+    const raw = producedQtyById[executionId]
+    const quantity = Number(raw)
+    if (!raw || !Number.isFinite(quantity) || quantity <= 0) {
+      setError('Enter the actual quantity produced to complete this run.')
+      return
+    }
+    setExecutionActionBusyId(executionId)
+    setError(null)
+    try {
+      const result = await completeProductionExecution(productionOrderId, executionId, quantity)
+      setExecutions(result)
+      setProducedQtyById((prev) => ({ ...prev, [executionId]: '' }))
+      // Material allocation figures (consumed/remaining) may have changed.
+      setRequirements(await getMaterialRequirements(productionOrderId))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setExecutionActionBusyId(null)
+    }
+  }
+
+  async function handleCancelExecution(executionId: number) {
+    const reason = executionCancelReasonById[executionId]
+    if (!reason || !reason.trim()) {
+      setError('Enter a reason to cancel this run.')
+      return
+    }
+    setExecutionActionBusyId(executionId)
+    setError(null)
+    try {
+      const result = await cancelProductionExecution(productionOrderId, executionId, reason)
+      setExecutions(result)
+      setExecutionCancelReasonById((prev) => ({ ...prev, [executionId]: '' }))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setExecutionActionBusyId(null)
     }
   }
 
@@ -384,7 +478,12 @@ export function ProductionOrderDetailPage() {
                       </td>
                       <td className="px-6 py-4 text-right text-white/60">{item.required_quantity}</td>
                       <td className="px-6 py-4 text-right text-white/60">{item.available_quantity}</td>
-                      <td className="px-6 py-4 text-right text-white/60">{item.allocated_quantity}</td>
+                      <td className="px-6 py-4 text-right text-white/60">
+                        {item.allocated_quantity}
+                        {item.consumed_quantity > 0 && (
+                          <div className="mt-1 text-xs text-white/40">{`${item.consumed_quantity} consumed`}</div>
+                        )}
+                      </td>
                       <td className="px-6 py-4 text-right text-white/60">{item.remaining_to_allocate}</td>
                       <td className="px-6 py-4 text-right">
                         {item.shortage_quantity > 0 ? (
@@ -435,16 +534,16 @@ export function ProductionOrderDetailPage() {
                                 </Button>
                               </div>
                             )}
-                            {item.allocated_quantity > 0 && (
+                            {item.remaining_allocated > 0 && (
                               <div className="flex items-end gap-2">
                                 <div className="w-28">
                                   <TextField
                                     label="Release"
                                     type="number"
                                     min={0}
-                                    max={item.allocated_quantity}
+                                    max={item.remaining_allocated}
                                     step="any"
-                                    placeholder={`${item.allocated_quantity}`}
+                                    placeholder={`${item.remaining_allocated}`}
                                     value={releaseQty[item.id] ?? ''}
                                     onChange={(e) =>
                                       setReleaseQty((prev) => ({ ...prev, [item.id]: e.target.value }))
@@ -630,6 +729,168 @@ export function ProductionOrderDetailPage() {
       </GlassCard>
 
       <GlassCard className="mb-6 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <h2 className="font-display text-lg font-medium text-white">Production execution</h2>
+            {executions && (
+              <Badge
+                tone={
+                  executions.execution_status === 'completed'
+                    ? 'success'
+                    : executions.execution_status === 'in_progress' || executions.execution_status === 'partially_completed'
+                      ? 'gold'
+                      : 'neutral'
+                }
+              >
+                {`${EXECUTION_STATUS_LABEL[executions.execution_status]} -- ${executions.total_produced} / ${executions.planned_quantity} ${po.unit ?? ''} produced`}
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {executions && executions.runs.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                  <th className="px-6 py-4 font-medium">Run</th>
+                  <th className="px-6 py-4 font-medium">Machine</th>
+                  <th className="px-6 py-4 text-right font-medium">Planned</th>
+                  <th className="px-6 py-4 text-right font-medium">Actual</th>
+                  <th className="px-6 py-4 font-medium">Start</th>
+                  <th className="px-6 py-4 font-medium">End</th>
+                  <th className="px-6 py-4 font-medium">Duration</th>
+                  <th className="px-6 py-4 font-medium">Status</th>
+                  {allowWrite && <th className="px-6 py-4 font-medium">Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {executions.runs.map((run, index) => (
+                  <tr key={run.id} className="border-b border-white/5 last:border-0 align-top">
+                    <td className="px-6 py-4 text-white">#{index + 1}</td>
+                    <td className="px-6 py-4 text-white/60">{run.machine_name ?? '—'}</td>
+                    <td className="px-6 py-4 text-right text-white/60">{run.planned_quantity}</td>
+                    <td className="px-6 py-4 text-right text-white/60">
+                      {run.status === 'in_progress' ? '—' : run.produced_quantity}
+                    </td>
+                    <td className="px-6 py-4 text-white/60">{formatDateTime(run.started_at)}</td>
+                    <td className="px-6 py-4 text-white/60">{formatDateTime(run.ended_at)}</td>
+                    <td className="px-6 py-4 text-white/60">{formatDuration(run.duration_seconds)}</td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={run.status} />
+                    </td>
+                    {allowWrite && (
+                      <td className="px-6 py-4">
+                        {run.status === 'in_progress' && (
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-end gap-2">
+                              <div className="w-28">
+                                <TextField
+                                  label="Actual qty"
+                                  type="number"
+                                  min={0}
+                                  step="any"
+                                  placeholder={`${run.planned_quantity}`}
+                                  value={producedQtyById[run.id] ?? ''}
+                                  onChange={(e) =>
+                                    setProducedQtyById((prev) => ({ ...prev, [run.id]: e.target.value }))
+                                  }
+                                />
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                isLoading={executionActionBusyId === run.id}
+                                onClick={() => handleCompleteExecution(run.id)}
+                              >
+                                Complete
+                              </Button>
+                            </div>
+                            <div className="flex items-end gap-2">
+                              <div className="w-40">
+                                <TextField
+                                  label="Cancel reason"
+                                  value={executionCancelReasonById[run.id] ?? ''}
+                                  onChange={(e) =>
+                                    setExecutionCancelReasonById((prev) => ({ ...prev, [run.id]: e.target.value }))
+                                  }
+                                />
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                isLoading={executionActionBusyId === run.id}
+                                onClick={() => handleCancelExecution(run.id)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {(!executions || executions.runs.length === 0) && (
+          <EmptyState title="Not started" message="No production has been started against this production order yet." />
+        )}
+
+        {allowWrite &&
+          schedules &&
+          schedules.schedules.some(
+            (s) => s.status === 'planned' && !executions?.runs.some((r) => r.schedule_id === s.id && r.status === 'in_progress'),
+          ) &&
+          executions &&
+          executions.remaining_to_produce > 0 && (
+            <div className="border-t border-white/10 px-6 py-5">
+              <h3 className="mb-4 text-sm font-medium text-white">Start production</h3>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="w-52">
+                  <SelectField
+                    label="Schedule"
+                    value={startScheduleId}
+                    onChange={(e) => setStartScheduleId(e.target.value)}
+                  >
+                    <option value="">Choose a schedule</option>
+                    {schedules.schedules
+                      .filter(
+                        (s) =>
+                          s.status === 'planned' &&
+                          !executions.runs.some((r) => r.schedule_id === s.id && r.status === 'in_progress'),
+                      )
+                      .map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.machine_name ?? 'Machine'} — {formatDateTime(s.planned_start ?? s.scheduled_start)}
+                        </option>
+                      ))}
+                  </SelectField>
+                </div>
+                <div className="w-32">
+                  <TextField
+                    label="Planned qty"
+                    type="number"
+                    min={0}
+                    max={executions.remaining_to_produce}
+                    step="any"
+                    placeholder={`${executions.remaining_to_produce}`}
+                    value={startQuantity}
+                    onChange={(e) => setStartQuantity(e.target.value)}
+                  />
+                </div>
+                <Button isLoading={startBusy} onClick={handleStartExecution}>
+                  Start production
+                </Button>
+              </div>
+            </div>
+          )}
+      </GlassCard>
+
+      <GlassCard className="mb-6 overflow-hidden">
         <div className="border-b border-white/10 px-6 py-4">
           <h2 className="font-display text-lg font-medium text-white">Production pipeline</h2>
         </div>
@@ -675,6 +936,20 @@ export function ProductionOrderDetailPage() {
               }
             >
               Schedule
+            </Badge>
+          </span>
+          <span className="flex items-center gap-3">
+            <span className="text-white/20">→</span>
+            <Badge
+              tone={
+                executions?.execution_status === 'completed'
+                  ? 'success'
+                  : executions?.execution_status === 'in_progress' || executions?.execution_status === 'partially_completed'
+                    ? 'gold'
+                    : 'neutral'
+              }
+            >
+              Execution
             </Badge>
           </span>
           {FUTURE_STAGES.map((stage) => (

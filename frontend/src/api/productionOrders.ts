@@ -6,6 +6,7 @@ import type {
   ProductionOrderScheduleSummary,
   ProductionOrderScheduleUpdatePayload,
 } from '@/types/productionOrderSchedule'
+import type { ProductionExecutionSummary } from '@/types/productionOrderExecution'
 import { apiClient } from './client'
 
 export interface ProductionOrderListParams extends ListQueryParams {
@@ -135,6 +136,56 @@ export async function cancelProductionOrderSchedule(
 ): Promise<ProductionOrderScheduleSummary> {
   const { data } = await apiClient.post<ProductionOrderScheduleSummary>(
     `/api/production-orders/${productionOrderId}/schedules/${scheduleId}/cancel`,
+    { reason },
+  )
+  return data
+}
+
+export async function getProductionExecutions(productionOrderId: number): Promise<ProductionExecutionSummary> {
+  const { data } = await apiClient.get<ProductionExecutionSummary>(
+    `/api/production-orders/${productionOrderId}/executions`,
+  )
+  return data
+}
+
+/** Starts one manufacturing run against a scheduled slot -- never
+ * touches inventory (see backend/app/services/production_execution_service.py's
+ * start_execution). Server records the Kuwait start time; the browser
+ * never authors it. */
+export async function startProductionExecution(
+  productionOrderId: number,
+  scheduleId: number,
+  plannedQuantity?: number,
+): Promise<ProductionExecutionSummary> {
+  const { data } = await apiClient.post<ProductionExecutionSummary>(
+    `/api/production-orders/${productionOrderId}/executions`,
+    { schedule_id: scheduleId, planned_quantity: plannedQuantity },
+  )
+  return data
+}
+
+/** Closes out a run with the actual quantity produced -- consumes the
+ * BOM-scaled raw materials from whatever's allocated to this production
+ * order (P4) and locks the run against further changes. */
+export async function completeProductionExecution(
+  productionOrderId: number,
+  executionId: number,
+  producedQuantity: number,
+): Promise<ProductionExecutionSummary> {
+  const { data } = await apiClient.post<ProductionExecutionSummary>(
+    `/api/production-orders/${productionOrderId}/executions/${executionId}/complete`,
+    { produced_quantity: producedQuantity },
+  )
+  return data
+}
+
+export async function cancelProductionExecution(
+  productionOrderId: number,
+  executionId: number,
+  reason: string,
+): Promise<ProductionExecutionSummary> {
+  const { data } = await apiClient.post<ProductionExecutionSummary>(
+    `/api/production-orders/${productionOrderId}/executions/${executionId}/cancel`,
     { reason },
   )
   return data

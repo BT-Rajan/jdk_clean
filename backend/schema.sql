@@ -1169,6 +1169,7 @@ CREATE TABLE IF NOT EXISTS production_order_material_requirements (
     source                  ENUM('bom','packaging') NOT NULL,
     required_quantity       DECIMAL(14,4) NOT NULL,
     allocated_quantity      DECIMAL(14,4) NOT NULL DEFAULT 0, -- how much of this row is committed to this Production Order (P4)
+    consumed_quantity       DECIMAL(14,4) NOT NULL DEFAULT 0, -- how much of this row's allocation has actually been issued to production (P6)
     created_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by              BIGINT UNSIGNED NULL,
     updated_at              DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -1178,6 +1179,47 @@ CREATE TABLE IF NOT EXISTS production_order_material_requirements (
     CONSTRAINT fk_pomr_raw_material FOREIGN KEY (raw_material_id) REFERENCES raw_materials(id),
     UNIQUE KEY uq_pomr_line (production_order_id, raw_material_id, source),
     INDEX idx_pomr_production_order (production_order_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- PRODUCTION EXECUTIONS
+-- ============================================================
+-- One actual manufacturing run against a Production Order -- the WHAT-
+-- HAPPENED record (P6) alongside production_orders (WHAT, P2) and
+-- production_schedules (WHEN/WHERE for this flow, P5). See
+-- docs/production-lifecycle.md. A Production Order may have several of
+-- these across its lifetime (multiple runs); each is independent and,
+-- once completed/cancelled, immutable. started_at/ended_at are always
+-- server-authoritative Kuwait time (core/timezone.py's
+-- now_kuwait_naive), never client-supplied.
+CREATE TABLE IF NOT EXISTS production_executions (
+    id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    production_order_id BIGINT UNSIGNED NOT NULL,
+    schedule_id         BIGINT UNSIGNED NOT NULL,
+    product_id          BIGINT UNSIGNED NOT NULL,          -- mirrors production_orders.product_id at creation
+    machine_id          BIGINT UNSIGNED NULL,              -- mirrors production_schedules.machine_id at creation
+    planned_quantity    DECIMAL(14,4) NOT NULL,
+    produced_quantity   DECIMAL(14,4) NOT NULL DEFAULT 0,  -- set only on completion
+    started_at          DATETIME NOT NULL,
+    ended_at            DATETIME NULL,
+    status              ENUM('in_progress','completed','cancelled') NOT NULL DEFAULT 'in_progress',
+    started_by          BIGINT UNSIGNED NULL,
+    completed_by        BIGINT UNSIGNED NULL,
+    cancel_reason       TEXT NULL,
+    notes               TEXT NULL,
+    created_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by          BIGINT UNSIGNED NULL,
+    updated_at          DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by          BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_pe_production_order FOREIGN KEY (production_order_id) REFERENCES production_orders(id),
+    CONSTRAINT fk_pe_schedule FOREIGN KEY (schedule_id) REFERENCES production_schedules(id),
+    CONSTRAINT fk_pe_product FOREIGN KEY (product_id) REFERENCES products(id),
+    CONSTRAINT fk_pe_machine FOREIGN KEY (machine_id) REFERENCES machines(id),
+    CONSTRAINT fk_pe_started_by FOREIGN KEY (started_by) REFERENCES users(id),
+    CONSTRAINT fk_pe_completed_by FOREIGN KEY (completed_by) REFERENCES users(id),
+    INDEX idx_pe_production_order (production_order_id),
+    INDEX idx_pe_schedule (schedule_id),
+    INDEX idx_pe_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
