@@ -37,6 +37,7 @@ def _run_all_scans() -> None:
         order_service,
         production_service,
         purchase_order_service,
+        qc_service,
         quotation_service,
     )
 
@@ -49,6 +50,7 @@ def _run_all_scans() -> None:
             ("unpaid orders", order_service.escalate_unpaid_orders),
             ("overdue purchase orders", purchase_order_service.escalate_overdue_purchase_orders),
             ("overdue production batches", production_service.escalate_overdue_batches),
+            ("overdue QC requests", qc_service.escalate_overdue_qc_requests),
             ("expired quotations", quotation_service.escalate_expired_quotations),
         )
         for label, fn in checks:

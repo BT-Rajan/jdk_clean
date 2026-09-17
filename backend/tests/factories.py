@@ -24,6 +24,7 @@ from app.models.product_packaging import ProductPackagingLine
 from app.models.production_order import ProductionOrder
 from app.models.production_schedule import ProductionSchedule
 from app.models.purchase_order import PurchaseOrder, PurchaseOrderLine
+from app.models.qc_agent import QcAgent
 from app.models.raw_material import RawMaterial
 from app.models.raw_material_alternative import RawMaterialAlternative
 from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory
@@ -388,3 +389,15 @@ def make_production_schedule(db: Session, product_id: int, planned_quantity: flo
     db.add(batch)
     db.flush()
     return batch
+
+
+def make_qc_agent(db: Session, **overrides) -> QcAgent:
+    n = _n()
+    agent = QcAgent(
+        code=overrides.pop("code", f"TESTQCA-{n}"),
+        name=overrides.pop("name", f"Test QC Lab {n}"),
+        **overrides,
+    )
+    db.add(agent)
+    db.flush()
+    return agent

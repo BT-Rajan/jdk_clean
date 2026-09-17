@@ -20,12 +20,23 @@ import {
 } from '@/api/productionOrders'
 import { getOrder } from '@/api/orders'
 import { listMachines } from '@/api/machines'
+import { listQcAgents, createQcAgent } from '@/api/qcAgents'
+import {
+  listQcRequests,
+  createQcRequest,
+  markQcSampleSent,
+  recordQcReport,
+  recordQcResult,
+  uploadQcReportDocument,
+} from '@/api/qcRequests'
 import type { ProductionOrder } from '@/types/productionOrder'
 import type { Order } from '@/types/order'
 import type { MaterialRequirementSummary } from '@/types/materialRequirement'
 import type { ProductionOrderScheduleSummary } from '@/types/productionOrderSchedule'
-import type { ProductionExecutionSummary } from '@/types/productionOrderExecution'
+import type { ProductionExecutionRun, ProductionExecutionSummary } from '@/types/productionOrderExecution'
 import type { Machine } from '@/types/machine'
+import type { QcAgent } from '@/types/qcAgent'
+import type { QcRequest, QcRequestStatus } from '@/types/qcRequest'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
@@ -38,9 +49,9 @@ import { StatusTransitionButtons } from '@/components/status/StatusTransitionBut
 // shown for orientation, not implemented. See docs/production-lifecycle.md;
 // none of these stages exist yet, so this is deliberately just a static
 // roadmap, never fake data or a fake status. "Material Requirement",
-// "Material Allocation", "Schedule" and "Execution" are no longer here --
-// P3/P4/P5/P6, implemented below.
-const FUTURE_STAGES = ['Completion', 'Finished Goods']
+// "Material Allocation", "Schedule", "Execution" and "Quality control"
+// are no longer here -- P3/P4/P5/P6/P7, implemented below.
+const FUTURE_STAGES = ['Delivery']
 
 const OVERALL_STATUS_LABEL: Record<MaterialRequirementSummary['overall_status'], string> = {
   not_calculated: 'Requirement not calculated',
@@ -66,6 +77,24 @@ const EXECUTION_STATUS_LABEL: Record<ProductionExecutionSummary['execution_statu
   in_progress: 'In progress',
   partially_completed: 'Partially completed',
   completed: 'Completed',
+}
+
+const FG_RELEASE_STATUS_LABEL: Record<
+  Exclude<ProductionExecutionRun['fg_release_status'], 'not_applicable'>,
+  string
+> = {
+  not_requested: 'QC not requested',
+  pending: 'QC: report pending',
+  released: 'Released',
+  rejected: 'QC rejected',
+}
+
+const QC_STATUS_LABEL: Record<QcRequestStatus, string> = {
+  requested: 'Requested',
+  sample_sent: 'Sample sent — report pending',
+  report_received: 'Report received — result pending',
+  accepted: 'Accepted',
+  rejected: 'Rejected',
 }
 
 function formatDuration(seconds: number | null): string {
@@ -109,6 +138,19 @@ export function ProductionOrderDetailPage() {
   const [executionCancelReasonById, setExecutionCancelReasonById] = useState<Record<number, string>>({})
   const [executionActionBusyId, setExecutionActionBusyId] = useState<number | null>(null)
 
+  const [qcAgents, setQcAgents] = useState<QcAgent[]>([])
+  const [qcRequests, setQcRequests] = useState<QcRequest[]>([])
+  const [qcForm, setQcForm] = useState({ executionId: '', agentId: '', sampleQuantity: '', expectedDate: '' })
+  const [qcFormBusy, setQcFormBusy] = useState(false)
+  const [showNewAgent, setShowNewAgent] = useState(false)
+  const [newAgentForm, setNewAgentForm] = useState({ code: '', name: '' })
+  const [newAgentBusy, setNewAgentBusy] = useState(false)
+  const [sampleSentForm, setSampleSentForm] = useState<Record<number, { method: string; ref: string }>>({})
+  const [reportForm, setReportForm] = useState<
+    Record<number, { number: string; date: string; remarks: string; result: string }>
+  >({})
+  const [qcActionBusyId, setQcActionBusyId] = useState<number | null>(null)
+
   const load = useCallback(() => {
     setLoading(true)
     getProductionOrder(productionOrderId)
@@ -120,15 +162,29 @@ export function ProductionOrderDetailPage() {
           getProductionOrderSchedules(productionOrderId),
           getProductionExecutions(productionOrderId),
           listMachines({ status: 'active', page_size: 200 }),
+          listQcAgents({ status: 'active', page_size: 200 }),
+          listQcRequests({ production_order_id: productionOrderId, page_size: 200 }),
         ])
       })
-      .then(([orderResult, requirementsResult, scheduleResult, executionResult, machinesResult]) => {
-        setOrder(orderResult)
-        setRequirements(requirementsResult)
-        setSchedules(scheduleResult)
-        setExecutions(executionResult)
-        setMachines(machinesResult.items)
-      })
+      .then(
+        ([
+          orderResult,
+          requirementsResult,
+          scheduleResult,
+          executionResult,
+          machinesResult,
+          qcAgentsResult,
+          qcRequestsResult,
+        ]) => {
+          setOrder(orderResult)
+          setRequirements(requirementsResult)
+          setSchedules(scheduleResult)
+          setExecutions(executionResult)
+          setMachines(machinesResult.items)
+          setQcAgents(qcAgentsResult.items)
+          setQcRequests(qcRequestsResult.items)
+        },
+      )
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
   }, [productionOrderId])
@@ -307,6 +363,123 @@ export function ProductionOrderDetailPage() {
     }
   }
 
+  async function refreshQc() {
+    const [qcRequestsResult, executionResult] = await Promise.all([
+      listQcRequests({ production_order_id: productionOrderId, page_size: 200 }),
+      getProductionExecutions(productionOrderId),
+    ])
+    setQcRequests(qcRequestsResult.items)
+    setExecutions(executionResult)
+  }
+
+  async function handleCreateNewAgent() {
+    if (!newAgentForm.code.trim() || !newAgentForm.name.trim()) {
+      setError('Enter both a code and a name for the new QC agent.')
+      return
+    }
+    setNewAgentBusy(true)
+    setError(null)
+    try {
+      const agent = await createQcAgent({ code: newAgentForm.code, name: newAgentForm.name })
+      setQcAgents((prev) => [...prev, agent])
+      setQcForm((prev) => ({ ...prev, agentId: String(agent.id) }))
+      setNewAgentForm({ code: '', name: '' })
+      setShowNewAgent(false)
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setNewAgentBusy(false)
+    }
+  }
+
+  async function handleCreateQcRequest() {
+    if (!qcForm.executionId || !qcForm.agentId) {
+      setError('Choose a completed run and a QC agent to create a request.')
+      return
+    }
+    setQcFormBusy(true)
+    setError(null)
+    try {
+      await createQcRequest({
+        production_order_id: productionOrderId,
+        production_execution_id: Number(qcForm.executionId),
+        qc_agent_id: Number(qcForm.agentId),
+        sample_quantity: qcForm.sampleQuantity ? Number(qcForm.sampleQuantity) : undefined,
+        expected_report_date: qcForm.expectedDate || undefined,
+      })
+      await refreshQc()
+      setQcForm({ executionId: '', agentId: '', sampleQuantity: '', expectedDate: '' })
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setQcFormBusy(false)
+    }
+  }
+
+  async function handleMarkSampleSent(requestId: number) {
+    const form = sampleSentForm[requestId] ?? { method: '', ref: '' }
+    setQcActionBusyId(requestId)
+    setError(null)
+    try {
+      await markQcSampleSent(requestId, { dispatch_method: form.method || undefined, external_reference: form.ref || undefined })
+      await refreshQc()
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setQcActionBusyId(null)
+    }
+  }
+
+  async function handleRecordReport(requestId: number) {
+    const form = reportForm[requestId]
+    if (!form || !form.number.trim() || !form.date) {
+      setError('Enter a report number and date to record the report.')
+      return
+    }
+    setQcActionBusyId(requestId)
+    setError(null)
+    try {
+      await recordQcReport(requestId, {
+        report_number: form.number,
+        report_date: form.date,
+        remarks: form.remarks || undefined,
+        result: form.result === 'accepted' || form.result === 'rejected' ? form.result : undefined,
+      })
+      await refreshQc()
+      setReportForm((prev) => ({ ...prev, [requestId]: { number: '', date: '', remarks: '', result: '' } }))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setQcActionBusyId(null)
+    }
+  }
+
+  async function handleRecordResult(requestId: number, result: 'accepted' | 'rejected') {
+    setQcActionBusyId(requestId)
+    setError(null)
+    try {
+      await recordQcResult(requestId, { result })
+      await refreshQc()
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setQcActionBusyId(null)
+    }
+  }
+
+  async function handleUploadReportDocument(requestId: number, file: File) {
+    setQcActionBusyId(requestId)
+    setError(null)
+    try {
+      await uploadQcReportDocument(requestId, file)
+      await refreshQc()
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setQcActionBusyId(null)
+    }
+  }
+
   if (loading) {
     return (
       <AppLayout>
@@ -326,6 +499,18 @@ export function ProductionOrderDetailPage() {
   }
 
   const nextStatuses = PRODUCTION_ORDER_TRANSITIONS[po.status]
+
+  const completedRunStatuses = executions?.runs.filter((r) => r.status === 'completed').map((r) => r.fg_release_status) ?? []
+  const qcPipelineTone: 'success' | 'danger' | 'gold' | 'neutral' =
+    completedRunStatuses.length === 0
+      ? 'neutral'
+      : completedRunStatuses.every((s) => s === 'released')
+        ? 'success'
+        : completedRunStatuses.some((s) => s === 'rejected')
+          ? 'danger'
+          : completedRunStatuses.some((s) => s === 'pending' || s === 'not_requested')
+            ? 'gold'
+            : 'neutral'
 
   return (
     <AppLayout>
@@ -761,6 +946,7 @@ export function ProductionOrderDetailPage() {
                   <th className="px-6 py-4 font-medium">End</th>
                   <th className="px-6 py-4 font-medium">Duration</th>
                   <th className="px-6 py-4 font-medium">Status</th>
+                  <th className="px-6 py-4 font-medium">FG Release</th>
                   {allowWrite && <th className="px-6 py-4 font-medium">Actions</th>}
                 </tr>
               </thead>
@@ -778,6 +964,25 @@ export function ProductionOrderDetailPage() {
                     <td className="px-6 py-4 text-white/60">{formatDuration(run.duration_seconds)}</td>
                     <td className="px-6 py-4">
                       <StatusBadge status={run.status} />
+                    </td>
+                    <td className="px-6 py-4">
+                      {run.fg_release_status === 'not_applicable' ? (
+                        <span className="text-white/40">—</span>
+                      ) : (
+                        <Badge
+                          tone={
+                            run.fg_release_status === 'released'
+                              ? 'success'
+                              : run.fg_release_status === 'rejected'
+                                ? 'danger'
+                                : run.fg_release_status === 'pending'
+                                  ? 'gold'
+                                  : 'neutral'
+                          }
+                        >
+                          {FG_RELEASE_STATUS_LABEL[run.fg_release_status]}
+                        </Badge>
+                      )}
                     </td>
                     {allowWrite && (
                       <td className="px-6 py-4">
@@ -892,6 +1097,311 @@ export function ProductionOrderDetailPage() {
 
       <GlassCard className="mb-6 overflow-hidden">
         <div className="border-b border-white/10 px-6 py-4">
+          <h2 className="font-display text-lg font-medium text-white">Quality control</h2>
+          <p className="mt-1 text-xs text-white/40">
+            Testing is performed by an external laboratory/agent -- JDK only tracks the request, sample dispatch,
+            report, and result.
+          </p>
+        </div>
+
+        {qcRequests.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                  <th className="px-6 py-4 font-medium">Sample</th>
+                  <th className="px-6 py-4 font-medium">External agent</th>
+                  <th className="px-6 py-4 font-medium">Sent</th>
+                  <th className="px-6 py-4 font-medium">Report</th>
+                  <th className="px-6 py-4 font-medium">Status</th>
+                  {allowWrite && <th className="px-6 py-4 font-medium">Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {qcRequests.map((request) => {
+                  const runIndex = executions?.runs.findIndex((r) => r.id === request.production_execution_id) ?? -1
+                  return (
+                    <tr key={request.id} className="border-b border-white/5 last:border-0 align-top">
+                      <td className="px-6 py-4 text-white">
+                        {request.sample_reference}
+                        <div className="mt-1 text-xs text-white/40">
+                          {runIndex >= 0 ? `Run #${runIndex + 1}` : `Execution #${request.production_execution_id}`}
+                          {request.sample_quantity ? ` — ${request.sample_quantity} sampled` : ''}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-white/60">{request.qc_agent_name ?? '—'}</td>
+                      <td className="px-6 py-4 text-white/60">{formatDate(request.dispatch_date)}</td>
+                      <td className="px-6 py-4 text-white/60">
+                        {request.report_number ? (
+                          <>
+                            {request.report_number}
+                            <div className="mt-1 text-xs text-white/40">{formatDate(request.report_date)}</div>
+                          </>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge
+                          tone={
+                            request.status === 'accepted'
+                              ? 'success'
+                              : request.status === 'rejected'
+                                ? 'danger'
+                                : 'gold'
+                          }
+                        >
+                          {QC_STATUS_LABEL[request.status]}
+                        </Badge>
+                      </td>
+                      {allowWrite && (
+                        <td className="px-6 py-4">
+                          {request.status === 'requested' && (
+                            <div className="flex flex-col gap-2">
+                              <div className="w-40">
+                                <TextField
+                                  label="Dispatch method"
+                                  value={sampleSentForm[request.id]?.method ?? ''}
+                                  onChange={(e) =>
+                                    setSampleSentForm((prev) => ({
+                                      ...prev,
+                                      [request.id]: { ...(prev[request.id] ?? { method: '', ref: '' }), method: e.target.value },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="flex items-end gap-2">
+                                <div className="w-32">
+                                  <TextField
+                                    label="Reference"
+                                    value={sampleSentForm[request.id]?.ref ?? ''}
+                                    onChange={(e) =>
+                                      setSampleSentForm((prev) => ({
+                                        ...prev,
+                                        [request.id]: { ...(prev[request.id] ?? { method: '', ref: '' }), ref: e.target.value },
+                                      }))
+                                    }
+                                  />
+                                </div>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  isLoading={qcActionBusyId === request.id}
+                                  onClick={() => handleMarkSampleSent(request.id)}
+                                >
+                                  Mark sent
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                          {request.status === 'sample_sent' && (
+                            <div className="flex flex-col gap-2">
+                              <div className="w-36">
+                                <TextField
+                                  label="Report #"
+                                  value={reportForm[request.id]?.number ?? ''}
+                                  onChange={(e) =>
+                                    setReportForm((prev) => ({
+                                      ...prev,
+                                      [request.id]: {
+                                        ...(prev[request.id] ?? { number: '', date: '', remarks: '', result: '' }),
+                                        number: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="w-36">
+                                <TextField
+                                  label="Report date"
+                                  type="date"
+                                  value={reportForm[request.id]?.date ?? ''}
+                                  onChange={(e) =>
+                                    setReportForm((prev) => ({
+                                      ...prev,
+                                      [request.id]: {
+                                        ...(prev[request.id] ?? { number: '', date: '', remarks: '', result: '' }),
+                                        date: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                />
+                              </div>
+                              <div className="w-44">
+                                <SelectField
+                                  label="Result"
+                                  value={reportForm[request.id]?.result ?? ''}
+                                  onChange={(e) =>
+                                    setReportForm((prev) => ({
+                                      ...prev,
+                                      [request.id]: {
+                                        ...(prev[request.id] ?? { number: '', date: '', remarks: '', result: '' }),
+                                        result: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                >
+                                  <option value="">Not stated yet</option>
+                                  <option value="accepted">Accepted</option>
+                                  <option value="rejected">Rejected</option>
+                                </SelectField>
+                              </div>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                isLoading={qcActionBusyId === request.id}
+                                onClick={() => handleRecordReport(request.id)}
+                              >
+                                Record report
+                              </Button>
+                            </div>
+                          )}
+                          {request.status === 'report_received' && (
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                isLoading={qcActionBusyId === request.id}
+                                onClick={() => handleRecordResult(request.id, 'accepted')}
+                              >
+                                Accept
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                isLoading={qcActionBusyId === request.id}
+                                onClick={() => handleRecordResult(request.id, 'rejected')}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          )}
+                          {(request.status === 'sample_sent' ||
+                            request.status === 'report_received' ||
+                            request.status === 'accepted' ||
+                            request.status === 'rejected') && (
+                            <div className="mt-2">
+                              {request.has_report_document ? (
+                                <span className="text-xs text-white/40">Report attached</span>
+                              ) : (
+                                <label className="cursor-pointer text-xs text-gold-300 hover:text-gold-200">
+                                  Attach report
+                                  <input
+                                    type="file"
+                                    className="hidden"
+                                    onChange={(e) => {
+                                      const file = e.target.files?.[0]
+                                      if (file) void handleUploadReportDocument(request.id, file)
+                                    }}
+                                  />
+                                </label>
+                              )}
+                            </div>
+                          )}
+                        </td>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {qcRequests.length === 0 && (
+          <EmptyState
+            title="No QC requests yet"
+            message="Create a request once a run has completed to track its external testing."
+          />
+        )}
+
+        {allowWrite && executions && executions.runs.some((r) => r.status === 'completed') && (
+          <div className="border-t border-white/10 px-6 py-5">
+            <h3 className="mb-4 text-sm font-medium text-white">Create QC request</h3>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="w-48">
+                <SelectField
+                  label="Run"
+                  value={qcForm.executionId}
+                  onChange={(e) => setQcForm((prev) => ({ ...prev, executionId: e.target.value }))}
+                >
+                  <option value="">Choose a completed run</option>
+                  {executions.runs
+                    .map((r, i) => ({ ...r, index: i }))
+                    .filter((r) => r.status === 'completed')
+                    .map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {`Run #${r.index + 1} — ${r.produced_quantity} ${po.unit ?? ''}`}
+                      </option>
+                    ))}
+                </SelectField>
+              </div>
+              <div className="w-48">
+                <SelectField
+                  label="QC agent"
+                  value={qcForm.agentId}
+                  onChange={(e) => setQcForm((prev) => ({ ...prev, agentId: e.target.value }))}
+                >
+                  <option value="">Choose an agent</option>
+                  {qcAgents.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name}
+                    </option>
+                  ))}
+                </SelectField>
+              </div>
+              <div className="w-32">
+                <TextField
+                  label="Sample qty"
+                  type="number"
+                  min={0}
+                  step="any"
+                  value={qcForm.sampleQuantity}
+                  onChange={(e) => setQcForm((prev) => ({ ...prev, sampleQuantity: e.target.value }))}
+                />
+              </div>
+              <div className="w-40">
+                <TextField
+                  label="Expected report date"
+                  type="date"
+                  value={qcForm.expectedDate}
+                  onChange={(e) => setQcForm((prev) => ({ ...prev, expectedDate: e.target.value }))}
+                />
+              </div>
+              <Button isLoading={qcFormBusy} onClick={handleCreateQcRequest}>
+                Create request
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setShowNewAgent((v) => !v)}>
+                {showNewAgent ? 'Cancel' : '+ New agent'}
+              </Button>
+            </div>
+            {showNewAgent && (
+              <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-white/10 pt-4">
+                <div className="w-32">
+                  <TextField
+                    label="Agent code"
+                    value={newAgentForm.code}
+                    onChange={(e) => setNewAgentForm((prev) => ({ ...prev, code: e.target.value }))}
+                  />
+                </div>
+                <div className="w-52">
+                  <TextField
+                    label="Agent name"
+                    value={newAgentForm.name}
+                    onChange={(e) => setNewAgentForm((prev) => ({ ...prev, name: e.target.value }))}
+                  />
+                </div>
+                <Button size="sm" isLoading={newAgentBusy} onClick={handleCreateNewAgent}>
+                  Save agent
+                </Button>
+              </div>
+            )}
+          </div>
+        )}
+      </GlassCard>
+
+      <GlassCard className="mb-6 overflow-hidden">
+        <div className="border-b border-white/10 px-6 py-4">
           <h2 className="font-display text-lg font-medium text-white">Production pipeline</h2>
         </div>
         <div className="flex flex-wrap items-center gap-3 px-6 py-5">
@@ -951,6 +1461,10 @@ export function ProductionOrderDetailPage() {
             >
               Execution
             </Badge>
+          </span>
+          <span className="flex items-center gap-3">
+            <span className="text-white/20">→</span>
+            <Badge tone={qcPipelineTone}>Quality control</Badge>
           </span>
           {FUTURE_STAGES.map((stage) => (
             <span key={stage} className="flex items-center gap-3">
