@@ -5,11 +5,12 @@ from sqlalchemy.orm import Session
 from app.api.common import build_crud_router
 from app.api.deps import require_role
 from app.core.database import get_db
-from app.core.exceptions import NotFoundError
-from app.core.permissions import require_page_access
+from app.core.exceptions import NotFoundError, PermissionError_, ValidationAppError
+from app.core.permissions import is_admin, is_department_head, require_page_access
 from app.crud.master_data import customer_crud
 from app.models.user import User
 from app.schemas.customer import (
+    CustomerAssignUpdate,
     CustomerCreate,
     CustomerOnboardingStatusUpdate,
     CustomerOut,
@@ -44,12 +45,13 @@ router = build_crud_router(
 def get_customer_credit(
     customer_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(read_guard),
+    user: User = Depends(read_guard),
 ):
     """Credit limit, current outstanding balance (unpaid non-draft/
     non-cancelled orders), and what's left before order_service.
     change_status starts refusing to confirm a new order for this
     customer without admin approval."""
+    customer_crud.read_one(db, customer_id, user=user)  # 404s if out of scope
     return payment_service.get_customer_credit_status(db, customer_id)
 
 
@@ -60,6 +62,7 @@ def update_customer_onboarding_status(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
+    customer_crud.read_one(db, customer_id, user=user)  # 404s if out of scope
     return customer_service.change_onboarding_status(
         db, customer_id, payload.status, payload.reason, user.id
     )
@@ -72,7 +75,7 @@ async def upload_customer_id_document(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
-    customer = customer_crud.read_one(db, customer_id)
+    customer = customer_crud.read_one(db, customer_id, user=user)
     raw_bytes = await file.read()
     return id_document_service.save_document(
         db, customer, raw_bytes, subdir=ID_DOCUMENT_SUBDIR, table_name=TABLE_NAME, user_id=user.id
@@ -85,7 +88,7 @@ def delete_customer_id_document(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
-    customer = customer_crud.read_one(db, customer_id)
+    customer = customer_crud.read_one(db, customer_id, user=user)
     return id_document_service.delete_document(
         db, customer, subdir=ID_DOCUMENT_SUBDIR, table_name=TABLE_NAME, user_id=user.id
     )
@@ -95,9 +98,9 @@ def delete_customer_id_document(
 def get_customer_id_document(
     customer_id: int,
     db: Session = Depends(get_db),
-    _: User = Depends(read_guard),
+    user: User = Depends(read_guard),
 ):
-    customer = customer_crud.read_one(db, customer_id)
+    customer = customer_crud.read_one(db, customer_id, user=user)
     found = id_document_service.get_document_file(customer, subdir=ID_DOCUMENT_SUBDIR)
     if found is None:
         raise NotFoundError("Id document")
@@ -113,6 +116,7 @@ def verify_customer_id(
 ):
     """Also auto-advances onboarding_status where that's a legal single
     step -- see customer_service.verify_id."""
+    customer_crud.read_one(db, customer_id, user=user)  # 404s if out of scope
     return customer_service.verify_id(db, customer_id, user.id)
 
 
@@ -122,5 +126,42 @@ def unverify_customer_id(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
-    customer = customer_crud.read_one(db, customer_id)
+    customer = customer_crud.read_one(db, customer_id, user=user)
     return id_document_service.unverify(db, customer, table_name=TABLE_NAME, user_id=user.id)
+
+
+def _require_can_assign(db: Session = Depends(get_db), user: User = Depends(write_guard)) -> User:
+    """Assigning/reassigning a customer is a Sales Head (or admin)
+    action -- spec section 7: "Sales Team Member must NOT be able to
+    assign/reassign customers to another salesperson." write_guard
+    above already confirms page-level customers:write for the caller's
+    department; this on top of it excludes team_member specifically."""
+    if not (is_admin(user) or is_department_head(user)):
+        raise PermissionError_()
+    return user
+
+
+@router.post("/{customer_id}/assign", response_model=CustomerOut)
+def assign_customer(
+    customer_id: int,
+    payload: CustomerAssignUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(_require_can_assign),
+):
+    """Sets who currently owns the operational relationship with this
+    customer -- distinct from created_by, which never changes (spec
+    section 18). assigned_to may be null to unassign. Recorded in the
+    same audit_log every other field edit on this table goes through
+    (crud.base.BaseCRUD.update), satisfying section 7's "assignment
+    must be auditable" -- current assignee, who performed the
+    assignment, and when are all already captured there."""
+    customer_crud.read_one(db, customer_id, user=user)  # 404s if out of scope
+    if payload.assigned_to is not None:
+        target = (
+            db.query(User)
+            .filter(User.id == payload.assigned_to, User.deleted_at.is_(None), User.is_active.is_(True))
+            .first()
+        )
+        if target is None:
+            raise ValidationAppError(f"User {payload.assigned_to} is not an active user.")
+    return customer_crud.update(db, customer_id, {"assigned_to": payload.assigned_to}, user_id=user.id)

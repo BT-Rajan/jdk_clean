@@ -29,7 +29,7 @@ def build_crud_router(
     out_schema: type[BaseModel],
     prefix: str,
     tags: list[str],
-    write_roles: tuple[str, ...] = ("admin", "manager"),
+    write_roles: tuple[str, ...] = ("admin",),
     page_key: str | None = None,
     extra_routes: Callable[[APIRouter, Any, Any], None] | None = None,
     activatable: bool | None = None,
@@ -43,11 +43,12 @@ def build_crud_router(
 
     page_key, when given, gates every endpoint here through the
     department_permissions matrix (see app/core/permissions.py) instead
-    of the old fixed write_roles check -- admin/manager still always
-    pass regardless, this only changes what unlocks access for staff.
-    Leave page_key unset for resources not yet migrated to the new
-    system (falls back to the original get_current_user/write_roles
-    behavior).
+    of the fixed write_roles check -- admin still always passes
+    regardless, this only changes what unlocks access for everyone
+    else. Leave page_key unset for resources not yet migrated to the
+    new system (falls back to the original get_current_user/write_roles
+    behavior, which now defaults to admin-only write -- see
+    app/api/departments.py for the one router still on this path).
 
     extra_routes, when given, is called with (router, read_guard,
     write_guard) right after the list/create routes are registered and
@@ -95,7 +96,7 @@ def build_crud_router(
     def list_items(
         params: ListParams = Depends(),
         db: Session = Depends(get_db),
-        _: User = Depends(read_guard),
+        user: User = Depends(read_guard),
     ):
         result = crud.read_all(
             db,
@@ -104,6 +105,7 @@ def build_crud_router(
             search=params.search,
             sort=params.sort,
             filters=params.filters,
+            user=user,
         )
         result["items"] = [out_schema.model_validate(i) for i in result["items"]]
         return result
@@ -123,17 +125,17 @@ def build_crud_router(
     def get_item(
         item_id: int,
         db: Session = Depends(get_db),
-        _: User = Depends(read_guard),
+        user: User = Depends(read_guard),
     ):
-        return crud.read_one(db, item_id)
+        return crud.read_one(db, item_id, user=user)
 
     @router.get("/{item_id}/history")
     def get_item_history(
         item_id: int,
         db: Session = Depends(get_db),
-        _: User = Depends(read_guard),
+        user: User = Depends(read_guard),
     ):
-        crud.read_one(db, item_id, include_deleted=True)  # 404s if it never existed
+        crud.read_one(db, item_id, include_deleted=True, user=user)  # 404s if it never existed or is out of scope
         return audit_service.get_history(db, crud.table_name, item_id)
 
     @router.put("/{item_id}", response_model=out_schema)
@@ -143,6 +145,7 @@ def build_crud_router(
         db: Session = Depends(get_db),
         user: User = Depends(existing_record_guard),
     ):
+        crud.read_one(db, item_id, user=user)  # 404s if out of scope before applying the update
         data = payload.model_dump(exclude_unset=True)
         return crud.update(db, item_id, data, user_id=user.id)
 
@@ -152,6 +155,7 @@ def build_crud_router(
         db: Session = Depends(get_db),
         user: User = Depends(existing_record_guard),
     ):
+        crud.read_one(db, item_id, user=user)  # 404s if out of scope
         if delete_guard is not None:
             delete_guard(db, item_id)
         crud.delete(db, item_id, user_id=user.id)
@@ -163,6 +167,7 @@ def build_crud_router(
         db: Session = Depends(get_db),
         user: User = Depends(existing_record_guard),
     ):
+        crud.read_one(db, item_id, include_deleted=True, user=user)  # 404s if out of scope
         return crud.restore(db, item_id, user_id=user.id)
 
     if activatable:
@@ -173,6 +178,7 @@ def build_crud_router(
             db: Session = Depends(get_db),
             user: User = Depends(existing_record_guard),
         ):
+            crud.read_one(db, item_id, user=user)  # 404s if out of scope
             return crud.update(db, item_id, {"status": "active"}, user_id=user.id)
 
         @router.post("/{item_id}/deactivate", response_model=out_schema)
@@ -181,6 +187,7 @@ def build_crud_router(
             db: Session = Depends(get_db),
             user: User = Depends(existing_record_guard),
         ):
+            crud.read_one(db, item_id, user=user)  # 404s if out of scope
             return crud.update(db, item_id, {"status": "inactive"}, user_id=user.id)
 
     return router

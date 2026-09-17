@@ -17,6 +17,8 @@ from sqlalchemy.orm import Session
 from app.models.bom import Bom, BomLine
 from app.models.customer import Customer
 from app.models.delivery_note import DeliveryNote, DeliveryNoteLine
+from app.models.department import Department
+from app.models.department_permission import DepartmentPermission
 from app.models.machine import Machine
 from app.models.order import Order, OrderDetail
 from app.models.product import Product
@@ -31,6 +33,7 @@ from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory
 from app.models.setting import Setting
 from app.models.supplier import Supplier
 from app.models.supplier_material import SupplierMaterial
+from app.models.user import User
 
 _seq = count(1)
 
@@ -200,6 +203,44 @@ def make_alternative(
         priority=priority,
         conversion_ratio=conversion_ratio,
     )
+    db.add(row)
+    db.flush()
+    return row
+
+
+def make_department(db: Session, **overrides) -> Department:
+    n = _n()
+    department = Department(
+        code=overrides.pop("code", f"testdept{n}"),
+        name=overrides.pop("name", f"Test Department {n}"),
+        **overrides,
+    )
+    db.add(department)
+    db.flush()
+    return department
+
+
+def make_user(db: Session, role: str = "team_member", **overrides) -> User:
+    """Password hash is a fixed dummy value -- these tests never log in
+    as the user, only exercise authorization logic that reads role/
+    department_id directly, so a real bcrypt hash would be pure
+    overhead."""
+    n = _n()
+    user = User(
+        username=overrides.pop("username", f"testuser{n}"),
+        email=overrides.pop("email", f"testuser{n}@example.test"),
+        password_hash=overrides.pop("password_hash", "!"),
+        full_name=overrides.pop("full_name", f"Test User {n}"),
+        role=role,
+        **overrides,
+    )
+    db.add(user)
+    db.flush()
+    return user
+
+
+def grant_department_permission(db: Session, department_id: int, page_key: str, access_level: str = "write") -> DepartmentPermission:
+    row = DepartmentPermission(department_id=department_id, page_key=page_key, access_level=access_level)
     db.add(row)
     db.flush()
     return row

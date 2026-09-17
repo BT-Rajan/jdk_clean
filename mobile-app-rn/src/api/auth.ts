@@ -16,7 +16,10 @@ export async function login(username: string, password: string) {
   return tokens;
 }
 
-export type UserRole = 'admin' | 'manager' | 'staff';
+// 'manager'/'staff' are legacy values, kept for backward compatibility
+// with existing rows -- new users get 'department_head'/'team_member'
+// instead (see backend/app/models/user.py's role enum comment).
+export type UserRole = 'admin' | 'manager' | 'staff' | 'department_head' | 'team_member';
 
 export interface MeOut {
   id: number;

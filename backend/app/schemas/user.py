@@ -7,7 +7,15 @@ class UserCreate(BaseModel):
     password: str = Field(min_length=8)
     full_name: str = Field(min_length=1, max_length=120)
     phone: str | None = Field(default=None, max_length=30)
-    role: str = Field(default="staff", pattern="^(admin|manager|staff|viewer)$")
+    # 'manager'/'staff' accepted for backward compatibility but no
+    # longer the intended choice for a new user -- create as
+    # 'department_head'/'team_member' instead (see
+    # app/models/user.py's role enum comment). Department requirement
+    # for department_head/team_member is enforced in
+    # app/crud/master_data.py's UserCRUD, not here.
+    role: str = Field(
+        default="staff", pattern="^(admin|manager|staff|viewer|department_head|team_member)$"
+    )
     # Validated against the Department master (app/crud/master_data.py's
     # UserCRUD), not a hardcoded pattern -- see app/models/department.py.
     department_id: int | None = None
@@ -20,7 +28,7 @@ class UserUpdate(BaseModel):
     # fix a wrong or missing contact number for someone else's account
     # instead of that only ever being self-service.
     phone: str | None = Field(default=None, max_length=30)
-    role: str | None = Field(default=None, pattern="^(admin|manager|staff|viewer)$")
+    role: str | None = Field(default=None, pattern="^(admin|manager|staff|viewer|department_head|team_member)$")
     department_id: int | None = None
     is_active: bool | None = None
     # Org chart reporting line (Members only) -- see app/api/users.py

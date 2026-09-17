@@ -94,6 +94,16 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     # deliberately not a broader CRM segment/industry/owner/priority set,
     # which would have no consumer anywhere in this app.
     category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    # Who currently owns the operational relationship with this customer
+    # -- set via POST /api/customers/{id}/assign (Sales Head/admin only,
+    # see app/api/customers.py), never a plain field edit. A team_member
+    # (salesman) sees only customers where created_by or assigned_to is
+    # them (app/crud/master_data.py CustomerCRUD._scope_query); a
+    # department_head sees every customer their department's page
+    # access allows, unfiltered. Distinct from created_by (below, via
+    # TimestampMixin), which never changes once set -- reassigning a
+    # customer changes who currently owns it, not who created it.
+    assigned_to: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
     # Overrides Settings' global large_discount_approval_threshold for
     # this customer only -- NULL means "use the global setting". See
     # settings_service.get_effective_discount_approval_threshold.

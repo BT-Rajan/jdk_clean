@@ -10,7 +10,11 @@ from app.services import permission_service
 
 router = APIRouter(prefix="/api/permissions", tags=["permissions"])
 
-admin_guard = require_role("admin", "manager")
+# Admin-only: this matrix is what governs every other role (department
+# heads included), so letting anyone but admin edit it would be a
+# privilege-escalation path -- see app/services/permission_service.py's
+# module docstring.
+admin_guard = require_role("admin")
 
 
 @router.get("", response_model=list[PermissionEntry])
@@ -24,7 +28,7 @@ def list_pages(user: User = Depends(get_current_user)):
     the Access Control grid's column headers -- the single source of
     truth is PAGE_KEY_LABELS in app/core/permissions.py; the frontend
     has no hardcoded copy of this list. Any authenticated user can see
-    the list of page names (not a secret), only admin/manager can see
+    the list of page names (not a secret), only admin can see
     or change the actual matrix."""
     return [{"key": key, "label": PAGE_KEY_LABELS[key]} for key in PAGE_KEYS]
 

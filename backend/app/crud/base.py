@@ -34,8 +34,25 @@ class BaseCRUD(Generic[ModelType]):
             query = query.filter(self.model.deleted_at.is_(None))
         return query
 
-    def read_one(self, db: Session, id: int, include_deleted: bool = False) -> ModelType:
-        obj = self._base_query(db, include_deleted).filter(self.model.id == id).first()
+    def _scope_query(self, query, user: Any = None):
+        """Record-level access hook, on top of the page-level check
+        every caller already went through to get here: a no-op by
+        default, so every existing master is unaffected. A subclass
+        overrides this to restrict which rows a given user can see at
+        all -- currently only CustomerCRUD does, for team_member
+        ownership scoping (see app/core/permissions.py's module
+        docstring and can_access_owned_or_assigned_record). `user` is
+        only passed by callers that need scoping to apply; omitted (the
+        default), every module behaves exactly as before this hook
+        existed."""
+        return query
+
+    def read_one(self, db: Session, id: int, include_deleted: bool = False, user: Any = None) -> ModelType:
+        obj = (
+            self._scope_query(self._base_query(db, include_deleted), user)
+            .filter(self.model.id == id)
+            .first()
+        )
         if obj is None:
             raise NotFoundError(self.model.__name__)
         return obj
@@ -48,8 +65,9 @@ class BaseCRUD(Generic[ModelType]):
         search: str | None = None,
         sort: str | None = None,
         filters: dict[str, Any] | None = None,
+        user: Any = None,
     ) -> dict:
-        query = self._base_query(db)
+        query = self._scope_query(self._base_query(db), user)
 
         if search and self.searchable_fields:
             like = f"%{search}%"
