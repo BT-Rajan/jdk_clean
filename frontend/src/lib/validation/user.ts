@@ -10,13 +10,18 @@ import { z } from 'zod'
 // validation rule, whether it's self-service or admin-edited.
 const phoneField = z.string().trim().max(30, 'Phone number is too long').optional().or(z.literal(''))
 
+// 'manager'/'staff' kept for backward compatibility with existing rows
+// -- new users get 'department_head'/'team_member' instead (see
+// backend/app/models/user.py's role enum comment).
+const userRoleField = z.enum(['admin', 'manager', 'staff', 'viewer', 'department_head', 'team_member'])
+
 export const userCreateSchema = z.object({
   username: z.string().trim().min(3, 'At least 3 characters').max(50),
   email: z.string().trim().email('Enter a valid email'),
   password: z.string().min(8, 'At least 8 characters'),
   full_name: z.string().trim().min(1, 'Full name is required').max(120),
   phone: phoneField,
-  role: z.enum(['admin', 'manager', 'staff', 'viewer']),
+  role: userRoleField,
   department_id: z.coerce.number().int().optional().or(z.literal('')),
 })
 
@@ -30,7 +35,7 @@ export const userEditSchema = z.object({
   email: z.string().trim().email('Enter a valid email'),
   full_name: z.string().trim().min(1, 'Full name is required').max(120),
   phone: phoneField,
-  role: z.enum(['admin', 'manager', 'staff', 'viewer']),
+  role: userRoleField,
   department_id: z.coerce.number().int().optional().or(z.literal('')),
   is_active: z.boolean(),
 })

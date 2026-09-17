@@ -11,9 +11,13 @@ import type { User, UserRole } from '@/types/auth'
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
   { value: 'admin', label: 'Admin' },
-  { value: 'manager', label: 'Manager' },
-  { value: 'staff', label: 'Staff' },
+  { value: 'department_head', label: 'Department Head' },
+  { value: 'team_member', label: 'Team Member' },
   { value: 'viewer', label: 'Viewer' },
+  // Legacy values -- still filterable so an admin can find not-yet-
+  // migrated rows. See backend/app/models/user.py's role enum comment.
+  { value: 'manager', label: 'Manager (legacy)' },
+  { value: 'staff', label: 'Staff (legacy)' },
 ]
 
 function useDepartmentOptions() {
