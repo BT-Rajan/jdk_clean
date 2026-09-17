@@ -17,7 +17,7 @@ from datetime import date, datetime
 import pytest
 from pydantic import ValidationError
 
-from app.core.exceptions import AppError, ValidationAppError
+from app.core.exceptions import AppError, ConflictError, ValidationAppError
 from app.schemas.production_order import ProductionOrderCreate
 from app.services import (
     delivery_note_service,
@@ -355,14 +355,31 @@ def test_multiple_orders_cannot_jointly_over_deliver_shared_stock(db):
     delivery_note_service.change_status(db, note_a.id, "issued")
     assert inventory_service.get_stock(db, "product", product.id)["quantity_on_hand"] == 400
 
-    # Order B's own 500 units can't all come from the 400 left -- the
-    # existing adjust_stock guard blocks it outright (first-come-first-
-    # served), so total delivered can never exceed what physically
-    # existed, without any new allocation engine.
+    # Order B's own 500 units can't all come from the 400 left -- left to
+    # default its own quantity, a new delivery note simply delivers
+    # exactly what's there (400) rather than failing outright, so B
+    # still gets a partial, legitimate shipment instead of nothing.
     note_b = delivery_note_service.create_delivery_note(db, {"order_id": order_b.id, "delivery_date": date(2026, 1, 1)})
-    with pytest.raises(AppError):
-        delivery_note_service.change_status(db, note_b.id, "issued")
-    assert inventory_service.get_stock(db, "product", product.id)["quantity_on_hand"] == 400  # nothing moved
+    assert note_b.lines[0].quantity_delivered == 400
+    delivery_note_service.change_status(db, note_b.id, "issued")
+    assert inventory_service.get_stock(db, "product", product.id)["quantity_on_hand"] == 0
+    # Combined, the two orders never consumed more than the 1,000 that
+    # actually existed -- no over-delivery, no new allocation engine.
+    assert 600 + 400 == 1000
+
+    # An EXPLICIT attempt to force more than what's left (order B still
+    # has 100 outstanding, but there's 0 left in stock) is still
+    # rejected outright, at create time -- the existing adjust_stock
+    # guard is the authoritative backstop, but this is caught earlier.
+    with pytest.raises(ValidationAppError):
+        delivery_note_service.create_delivery_note(
+            db,
+            {
+                "order_id": order_b.id,
+                "delivery_date": date(2026, 1, 1),
+                "lines": [{"product_id": product.id, "quantity_delivered": 100}],
+            },
+        )
 
 
 # ---------------------------------------------------------------------
@@ -371,6 +388,9 @@ def test_multiple_orders_cannot_jointly_over_deliver_shared_stock(db):
 
 
 def test_cannot_deliver_qc_pending_stock(db):
+    """P9 section 3/6: a delivery must be rejected as early as possible
+    when nothing is actually available yet -- not silently drafted as
+    an empty/zero-line note that would later issue as a no-op."""
     customer = make_customer(db)
     machine = make_machine(db)
     product = make_product(db, machine_id=machine.id, production_hours_per_unit=0.001)
@@ -380,9 +400,8 @@ def test_cannot_deliver_qc_pending_stock(db):
     # Produced but never QC-released -- still zero on hand.
     _stock_execution(db, quantity=500, machine=machine, product=product)
 
-    note = delivery_note_service.create_delivery_note(db, {"order_id": order.id, "delivery_date": date(2026, 1, 1)})
-    with pytest.raises(AppError):
-        delivery_note_service.change_status(db, note.id, "issued")
+    with pytest.raises(ConflictError):
+        delivery_note_service.create_delivery_note(db, {"order_id": order.id, "delivery_date": date(2026, 1, 1)})
 
 
 def test_cannot_deliver_rejected_stock(db):
@@ -397,15 +416,39 @@ def test_cannot_deliver_rejected_stock(db):
     qc_service.mark_sample_sent(db, request.id, None, None)
     qc_service.record_report(db, request.id, "LAB-REJ", date(2026, 9, 26), None, result="rejected")
 
-    note = delivery_note_service.create_delivery_note(db, {"order_id": order.id, "delivery_date": date(2026, 1, 1)})
-    with pytest.raises(AppError):
-        delivery_note_service.change_status(db, note.id, "issued")
+    with pytest.raises(ConflictError):
+        delivery_note_service.create_delivery_note(db, {"order_id": order.id, "delivery_date": date(2026, 1, 1)})
 
 
 def test_cannot_deliver_more_than_available_stock(db):
+    """P9 Test 7: an explicit over-ask is rejected outright, at create
+    time, with the shortage stated plainly."""
     order, product = _ready_order_with_stock(db, ordered=1000, on_hand=600)
 
-    note = delivery_note_service.create_delivery_note(db, {"order_id": order.id, "delivery_date": date(2026, 1, 1)})
-    with pytest.raises(AppError):
-        delivery_note_service.change_status(db, note.id, "issued")
+    with pytest.raises(ValidationAppError):
+        delivery_note_service.create_delivery_note(
+            db,
+            {
+                "order_id": order.id,
+                "delivery_date": date(2026, 1, 1),
+                "lines": [{"product_id": product.id, "quantity_delivered": 1000}],
+            },
+        )
     assert inventory_service.get_stock(db, "product", product.id)["quantity_on_hand"] == 600
+
+
+def test_default_delivery_caps_at_available_stock_rather_than_failing(db):
+    """P9 Test 2: order 1,500, FG 1,000 -- a delivery note left to
+    default its own quantities delivers exactly what's actually there
+    (1,000) instead of defaulting to the full order and failing."""
+    order, product = _ready_order_with_stock(db, ordered=1500, on_hand=1000)
+
+    note = delivery_note_service.create_delivery_note(db, {"order_id": order.id, "delivery_date": date(2026, 1, 1)})
+    assert note.lines[0].quantity_delivered == 1000
+
+    delivery_note_service.change_status(db, note.id, "issued")
+
+    updated = order_service.get_order(db, order.id)
+    assert updated.status == "shipped"  # not fully delivered -- 500 still remains
+    stock = inventory_service.get_stock(db, "product", product.id)
+    assert stock["quantity_on_hand"] == 0

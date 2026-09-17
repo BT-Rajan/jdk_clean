@@ -7,7 +7,7 @@ from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.delivery_note import ALLOWED_TRANSITIONS, DeliveryNote, DeliveryNoteLine
 from app.models.order import Order
 from app.models.product import Product
-from app.services import audit_service, deal_service, number_series_service
+from app.services import audit_service, deal_service, inventory_service, number_series_service
 
 TABLE_NAME = "delivery_notes"
 
@@ -117,6 +117,30 @@ def _remaining_to_ship(db: Session, order: Order, exclude_note_id: int | None = 
     return remaining
 
 
+def _validate_stock_availability(db: Session, product: Product, quantity: float) -> None:
+    """P9 spec section 3/6: a delivery must never even be drafted for
+    more than what's actually sitting in released Finished Goods stock
+    right now. QC-pending/rejected/cancelled production was never
+    receipted into FinishedGoodsInventory in the first place (see
+    qc_service._release_execution_fg) -- quantity_on_hand here already
+    excludes all of it, so no separate QC-status check is needed.
+
+    This is a helpful, early check, not the authoritative gate: stock
+    can legitimately change between drafting and issuing (more arrives,
+    or another note issues first), so the real, final word is still
+    inventory_service.adjust_stock's own hard on-hand guard at issue
+    time -- that's what actually stops two notes drafted against the
+    same stock from both shipping more than physically exists (P9
+    section 12), not this.
+    """
+    available = inventory_service.get_stock(db, "product", product.id)["quantity_on_hand"]
+    if quantity > available:
+        raise ValidationAppError(
+            f"Cannot deliver {quantity} of {product.name}: only {round(available, 4)} is currently "
+            "available in released Finished Goods stock."
+        )
+
+
 def _get_eligible_order(db: Session, order_id: int) -> Order:
     order = db.query(Order).filter(Order.id == order_id, Order.deleted_at.is_(None)).first()
     if order is None:
@@ -151,12 +175,29 @@ def create_delivery_note(db: Session, data: dict, user_id: int | None = None) ->
                     f"Cannot deliver {line['quantity_delivered']} of {product.name}: "
                     f"only {left:.4f} remains outstanding on this order."
                 )
+            _validate_stock_availability(db, product, float(line["quantity_delivered"]))
     else:
-        # Default: whatever's still outstanding per product -- covers
-        # both the simple one-shipment case (mirrors the order's own
-        # lines exactly, as before) and a follow-up shipment against an
-        # order that's already had some of its lines delivered.
-        lines_in = [{"product_id": product_id, "quantity_delivered": qty} for product_id, qty in remaining.items()]
+        # Default: whatever's still outstanding per product, capped at
+        # what's actually available in released FG stock right now (P9
+        # section 6) -- covers both the simple one-shipment case (mirrors
+        # the order's own lines exactly, as before, when stock fully
+        # covers it) and a short-stock case (defaults to exactly what
+        # can legitimately be delivered today, e.g. 600 of a 1,000-unit
+        # order, rather than defaulting to the full 1,000 and failing
+        # outright). A product with nothing at all available is left off
+        # the draft entirely -- same "only lines with something left"
+        # convention _remaining_to_ship already uses.
+        lines_in = []
+        for product_id, qty in remaining.items():
+            available = inventory_service.get_stock(db, "product", product_id)["quantity_on_hand"]
+            deliverable = round(min(qty, available), 4)
+            if deliverable > 0:
+                lines_in.append({"product_id": product_id, "quantity_delivered": deliverable})
+        if not lines_in:
+            raise ConflictError(
+                f"Order {order.order_number} is outstanding, but none of it is currently available in "
+                "released Finished Goods stock -- nothing to deliver yet."
+            )
 
     note_number = number_series_service.next_number(db, "DELIVERY_NOTE")
     note = DeliveryNote(delivery_note_number=note_number, created_by=user_id, **data)
@@ -200,6 +241,7 @@ def update_delivery_note(db: Session, note_id: int, data: dict, user_id: int | N
                     f"Cannot deliver {line['quantity_delivered']} of {product.name}: "
                     f"only {left:.4f} remains outstanding on this order."
                 )
+            _validate_stock_availability(db, product, float(line["quantity_delivered"]))
         note.lines.clear()
         db.flush()
         note.lines = [DeliveryNoteLine(**line) for line in lines_in]
@@ -217,12 +259,12 @@ def change_status(
     # Locked for the whole call so two near-simultaneous "issue" requests
     # on the same delivery note can't both pass the status check below.
     # The actual stock issue happens inside order_service.change_status
-    # (called just below), which takes its own lock on the order row and
-    # commits on its own -- if a concurrent issue call is already mid-way
-    # through that order-level transition, this one blocks on the order
-    # lock there and then correctly fails assert_transition_allowed on
-    # the order's now-already-"shipped" status, so it never reaches the
-    # note.status write below either.
+    # (called just below), which takes its own lock on the order row --
+    # if a concurrent issue call is already mid-way through that order-
+    # level transition, this one blocks on the order lock there and then
+    # correctly fails assert_transition_allowed on the order's now-
+    # already-"shipped" status, so it never reaches the note.status write
+    # below either.
     note = get_delivery_note(db, note_id, for_update=True)
     assert_transition_allowed(ALLOWED_TRANSITIONS, note.status, new_status, "delivery note")
 
@@ -232,7 +274,25 @@ def change_status(
         from app.services import order_service
 
         shipped_lines = [(line.product_id, float(line.quantity_delivered)) for line in note.lines]
-        order_service.change_status(db, note.order_id, "shipped", user_id=user_id, shipped_lines=shipped_lines)
+        # commit=False (P9): the order-status change and its stock
+        # movements must land in the SAME commit as this note's own
+        # status write below, or a failure between the two would leave
+        # the order already shipped and stock already deducted while
+        # this delivery note driving it all still sat at 'draft' --
+        # exactly the split-transaction bug atomicity requires closing.
+        # delivery_note_id lets the resulting stock movement reference
+        # this specific note rather than just the order, so an order
+        # with more than one delivery note stays traceable to exactly
+        # which shipment moved which units.
+        order_service.change_status(
+            db,
+            note.order_id,
+            "shipped",
+            user_id=user_id,
+            shipped_lines=shipped_lines,
+            delivery_note_id=note.id,
+            commit=False,
+        )
     elif new_status == "cancelled":
         assert_reason_given(reason, "A reason is required to cancel a delivery note.")
         note.cancel_reason = reason

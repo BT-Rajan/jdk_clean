@@ -231,7 +231,12 @@ export function DeliveryNoteDetailPage() {
             <thead>
               <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
                 <th className="px-6 py-4 font-medium">Product</th>
-                <th className="px-6 py-4 font-medium">Quantity delivered</th>
+                <th className="px-6 py-4 font-medium">Ordered</th>
+                <th className="px-6 py-4 font-medium">Delivered (order-wide)</th>
+                <th className="px-6 py-4 font-medium">Remaining</th>
+                <th className="px-6 py-4 font-medium">Released FG available</th>
+                <th className="px-6 py-4 font-medium">Deliverable now</th>
+                <th className="px-6 py-4 font-medium">This delivery</th>
               </tr>
             </thead>
             <tbody>
@@ -240,6 +245,11 @@ export function DeliveryNoteDetailPage() {
                   <td className="px-6 py-4 text-white">
                     {line.product_code} — {line.product_name}
                   </td>
+                  <td className="px-6 py-4 text-white/60">{line.ordered_quantity ?? '—'} {line.unit}</td>
+                  <td className="px-6 py-4 text-white/60">{line.delivered_quantity ?? '—'} {line.unit}</td>
+                  <td className="px-6 py-4 text-white/60">{line.remaining_quantity ?? '—'} {line.unit}</td>
+                  <td className="px-6 py-4 text-white/60">{line.available_fg ?? '—'} {line.unit}</td>
+                  <td className="px-6 py-4 text-white/60">{line.fulfillable_now ?? '—'} {line.unit}</td>
                   <td className="px-6 py-4">
                     {allowWrite && isDraft ? (
                       <div className="w-32">
@@ -255,7 +265,7 @@ export function DeliveryNoteDetailPage() {
                         />
                       </div>
                     ) : (
-                      <span className="text-white/60">{line.quantity_delivered} {line.unit}</span>
+                      <span className="text-white">{line.quantity_delivered} {line.unit}</span>
                     )}
                   </td>
                 </tr>

@@ -22,12 +22,23 @@ from app.services import (
     doc_template_service,
     email_service,
     email_template_service,
+    order_service,
     pdf_generator,
 )
 
 router = APIRouter(prefix="/api/delivery-notes", tags=["delivery-notes"])
 read_guard = require_page_access("delivery_notes", "read")
 write_guard = require_page_access("delivery_notes", "write")
+
+
+def _with_fulfillment(db: Session, note) -> DeliveryNoteOut:
+    """P9 section 18: the detail view's fulfilment context (Ordered/
+    Previously Delivered/Remaining/Available Released FG/Deliverable
+    Now), reusing order_service.get_fulfillment -- never a second
+    calculation. Skipped by list_delivery_notes (a list row doesn't need
+    this much detail, and it would mean one get_fulfillment call per row)."""
+    fulfillment_by_product = {line["product_id"]: line for line in order_service.get_fulfillment(db, note.order_id)}
+    return DeliveryNoteOut.from_model(note, fulfillment_by_product)
 
 
 @router.get("", response_model=PagedResponse)
@@ -54,7 +65,7 @@ def get_delivery_note(
     db: Session = Depends(get_db),
     _: User = Depends(read_guard),
 ):
-    return DeliveryNoteOut.from_model(delivery_note_service.get_delivery_note(db, note_id))
+    return _with_fulfillment(db, delivery_note_service.get_delivery_note(db, note_id))
 
 
 @router.get("/{note_id}/history")
@@ -75,7 +86,7 @@ def create_delivery_note(
 ):
     data = payload.model_dump()
     note = delivery_note_service.create_delivery_note(db, data, user_id=user.id)
-    return DeliveryNoteOut.from_model(note)
+    return _with_fulfillment(db, note)
 
 
 @router.put("/{note_id}", response_model=DeliveryNoteOut)
@@ -87,7 +98,7 @@ def update_delivery_note(
 ):
     data = payload.model_dump(exclude_unset=True)
     note = delivery_note_service.update_delivery_note(db, note_id, data, user_id=user.id)
-    return DeliveryNoteOut.from_model(note)
+    return _with_fulfillment(db, note)
 
 
 @router.post("/{note_id}/status", response_model=DeliveryNoteOut)
@@ -98,7 +109,7 @@ def update_status(
     user: User = Depends(write_guard),
 ):
     note = delivery_note_service.change_status(db, note_id, payload.status, reason=payload.reason, user_id=user.id)
-    return DeliveryNoteOut.from_model(note)
+    return _with_fulfillment(db, note)
 
 
 @router.delete("/{note_id}")
@@ -118,7 +129,7 @@ def restore_delivery_note(
     user: User = Depends(write_guard),
 ):
     note = delivery_note_service.restore_delivery_note(db, note_id, user_id=user.id)
-    return DeliveryNoteOut.from_model(note)
+    return _with_fulfillment(db, note)
 
 
 def _render_delivery_note_pdf(db: Session, note, language: str) -> bytes:
