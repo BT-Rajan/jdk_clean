@@ -48,12 +48,20 @@ class ProductionOrderMaterialRequirement(Base, TimestampMixin):
     release_reservation's aggregate quantity_reserved column) belongs to
     this specific row, as opposed to some other Production Order's claim
     on the same material. See production_order_material_service.allocate/
-    release for how the two stay in sync. Deliberately not a
-    `consumed_quantity` column yet (P4 doesn't implement material issue/
-    consumption) -- keeping "allocated" and "consumed" as genuinely
-    separate concerns, not overloaded onto one number, is what lets a
-    later pass add that column and a `release <= allocated - consumed`
-    rule without redesigning this table.
+    release for how the two stay in sync.
+
+    `consumed_quantity` (P6) is the column P4's own docstring anticipated:
+    how much of this row's *allocation* has actually been issued to
+    production (physically deducted from on-hand stock -- see
+    production_order_material_service.consume, called from
+    production_execution_service.complete_execution). Deliberately a
+    second, independent running total rather than decrementing
+    allocated_quantity on consumption -- `allocated_quantity` stays "how
+    much was ever committed to this Production Order" and
+    `remaining_allocated = allocated_quantity - consumed_quantity` is
+    what release() now guards against going negative: consumed material
+    can never be released back to allocatable stock (it's physically
+    gone), only the still-allocated-but-unconsumed remainder can.
 
     (production_order_id, raw_material_id, source) is unique -- a
     recalculation deletes and reinserts this Production Order's rows in
@@ -78,6 +86,7 @@ class ProductionOrderMaterialRequirement(Base, TimestampMixin):
     )
     required_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False)
     allocated_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
+    consumed_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
 
     production_order: Mapped[ProductionOrder] = relationship(foreign_keys=[production_order_id], lazy="joined")
     bom: Mapped[Bom | None] = relationship(foreign_keys=[bom_id], lazy="joined")

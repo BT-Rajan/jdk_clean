@@ -19,3 +19,19 @@ def today_kuwait() -> date:
     anywhere "today" gates or defaults a date a person entered or reads
     on screen -- see core/validators.py's not_in_past/not_in_future."""
     return datetime.now(timezone.utc).astimezone(KUWAIT_TZ).date()
+
+
+def now_kuwait_naive() -> datetime:
+    """The current wall-clock instant in Kuwait, as a naive datetime (no
+    tzinfo attached) -- matches how every other timestamp already in
+    this schema is stored (DATETIME columns, e.g. actual_start/
+    actual_end, planned_start/planned_end, created_at), so comparisons
+    and arithmetic against them (subtracting two datetimes for a
+    duration, comparing against a stored planned_start) work directly
+    without either side needing conversion. This is the ONLY function
+    that should ever produce a server-authoritative execution timestamp
+    (Production Execution start/end -- see production_execution_service.py)
+    -- never `datetime.now()` (server-local, not necessarily Kuwait) and
+    never a client-supplied timestamp (see the P6 spec's Kuwait-time
+    rule: the frontend may display a time, never author one)."""
+    return datetime.now(timezone.utc).astimezone(KUWAIT_TZ).replace(tzinfo=None)

@@ -14,8 +14,16 @@ from app.schemas.production_order_schedule import (
     ProductionOrderScheduleSummaryOut,
     ProductionOrderScheduleUpdate,
 )
+from app.schemas.production_execution import (
+    ProductionExecutionCancel,
+    ProductionExecutionComplete,
+    ProductionExecutionOut,
+    ProductionExecutionStart,
+    ProductionExecutionSummaryOut,
+)
 from app.services import (
     audit_service,
+    production_execution_service,
     production_order_material_service,
     production_order_schedule_service,
     production_order_service,
@@ -209,6 +217,69 @@ def cancel_schedule(
 ):
     production_order_schedule_service.cancel_schedule(db, schedule_id, payload.reason, user_id=user.id)
     return _schedule_summary_out(production_order_schedule_service.get_schedule_summary(db, production_order_id))
+
+
+def _execution_summary_out(summary: dict) -> ProductionExecutionSummaryOut:
+    return ProductionExecutionSummaryOut(
+        production_order_id=summary["production_order_id"],
+        planned_quantity=summary["planned_quantity"],
+        total_produced=summary["total_produced"],
+        remaining_to_produce=summary["remaining_to_produce"],
+        execution_status=summary["execution_status"],
+        runs=[ProductionExecutionOut.from_model(r) for r in summary["runs"]],
+    )
+
+
+@router.get("/{production_order_id}/executions", response_model=ProductionExecutionSummaryOut)
+def get_executions(
+    production_order_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    return _execution_summary_out(production_execution_service.get_progress(db, production_order_id))
+
+
+@router.post("/{production_order_id}/executions", response_model=ProductionExecutionSummaryOut, status_code=201)
+def start_execution(
+    production_order_id: int,
+    payload: ProductionExecutionStart,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    production_execution_service.start_execution(
+        db, production_order_id, payload.schedule_id, planned_quantity=payload.planned_quantity, user_id=user.id
+    )
+    return _execution_summary_out(production_execution_service.get_progress(db, production_order_id))
+
+
+@router.post(
+    "/{production_order_id}/executions/{execution_id}/complete", response_model=ProductionExecutionSummaryOut
+)
+def complete_execution(
+    production_order_id: int,
+    execution_id: int,
+    payload: ProductionExecutionComplete,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    production_execution_service.complete_execution(
+        db, execution_id, payload.produced_quantity, user_id=user.id
+    )
+    return _execution_summary_out(production_execution_service.get_progress(db, production_order_id))
+
+
+@router.post(
+    "/{production_order_id}/executions/{execution_id}/cancel", response_model=ProductionExecutionSummaryOut
+)
+def cancel_execution(
+    production_order_id: int,
+    execution_id: int,
+    payload: ProductionExecutionCancel,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    production_execution_service.cancel_execution(db, execution_id, payload.reason, user_id=user.id)
+    return _execution_summary_out(production_execution_service.get_progress(db, production_order_id))
 
 
 @router.post("/{production_order_id}/status", response_model=ProductionOrderOut)

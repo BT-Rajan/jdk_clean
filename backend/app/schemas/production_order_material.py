@@ -27,6 +27,13 @@ class MaterialRequirementItemOut(BaseModel):
     allocated_quantity: float
     remaining_to_allocate: float
     shortage_quantity: float
+    # Persisted -- how much of allocated_quantity has actually been
+    # issued to production (P6). See production_order_material_service.
+    # consume.
+    consumed_quantity: float
+    # allocated_quantity - consumed_quantity -- what release() may still
+    # hand back to allocatable stock; consumed material can never be.
+    remaining_allocated: float
 
 
 class MaterialRequirementSummaryOut(BaseModel):
