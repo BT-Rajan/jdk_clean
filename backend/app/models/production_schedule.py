@@ -8,6 +8,7 @@ from app.models.machine import Machine
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.order import Order
 from app.models.product import Product
+from app.models.production_order import ProductionOrder
 from app.models.user import BigPK
 
 PRODUCTION_STATUSES = ("planned", "in_progress", "paused", "completed", "cancelled")
@@ -50,6 +51,18 @@ class ProductionSchedule(Base, TimestampMixin, SoftDeleteMixin):
     # different machine than the product's usual one.
     machine_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("machines.id"), nullable=True)
     order_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("orders.id"), nullable=True)
+    # Set only for a schedule created through the Production Order
+    # scheduling flow (P5) -- see production_order_schedule_service.py.
+    # NULL for a legacy batch auto-scheduled straight from order
+    # confirmation (order_service._maybe_auto_schedule_production), which
+    # predates the Production Order entity (P2) entirely. A schedule with
+    # this set never reserves or releases raw material stock itself --
+    # that's already owned by Material Allocation (P4,
+    # production_order_material_service.allocate/release); see this
+    # model's own note on planned_start/planned_end and
+    # production_service.py's guard against mutating such a row through
+    # the legacy batch endpoints.
+    production_order_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("production_orders.id"), nullable=True)
     planned_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False)
     # Cumulative across every recording made against this batch -- a
     # single completion (the common case), or several
@@ -59,6 +72,22 @@ class ProductionSchedule(Base, TimestampMixin, SoftDeleteMixin):
     produced_quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
     scheduled_start: Mapped[date] = mapped_column(DATE, nullable=False)
     scheduled_end: Mapped[date] = mapped_column(DATE, nullable=False)
+    # Time-of-day precision for the new Production Order scheduling flow
+    # (P5) -- deliberately additive, not a replacement for
+    # scheduled_start/scheduled_end above. Those two are read at day
+    # granularity by capacity_service, dashboard_service, report_service,
+    # notification_service, feasibility_service and calendar_service;
+    # widening their type to DATETIME would risk breaking every one of
+    # those (comparing a bare `date` against a `datetime` raises in
+    # Python) for a precision none of them need. A production-order-
+    # linked schedule instead populates all four: scheduled_start/
+    # scheduled_end as planned_start/planned_end's own calendar date, so
+    # every existing day-granularity consumer keeps working unchanged,
+    # while these two give the machine-conflict check and the Production
+    # Order detail page the exact time a legacy batch never recorded.
+    # NULL for a legacy batch (no production_order_id).
+    planned_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    planned_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     actual_start: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     actual_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     status: Mapped[str] = mapped_column(
@@ -100,3 +129,4 @@ class ProductionSchedule(Base, TimestampMixin, SoftDeleteMixin):
     product: Mapped[Product] = relationship(foreign_keys=[product_id], lazy="joined")
     machine: Mapped[Machine | None] = relationship(foreign_keys=[machine_id], lazy="joined")
     order: Mapped[Order | None] = relationship(foreign_keys=[order_id], lazy="joined")
+    production_order: Mapped[ProductionOrder | None] = relationship(foreign_keys=[production_order_id], lazy="joined")

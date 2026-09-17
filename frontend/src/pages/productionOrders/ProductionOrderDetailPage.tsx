@@ -1,20 +1,26 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Badge, Field, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Badge, Field, GlassCard, PageHeader, SelectField, Spinner, StatusBadge } from '@/components/ui'
 import { Button, EmptyState, TextField } from '@/components/ui'
 import {
   allocateMaterial,
   calculateMaterialRequirements,
+  cancelProductionOrderSchedule,
+  createProductionOrderSchedule,
   getMaterialRequirements,
   getProductionOrder,
+  getProductionOrderSchedules,
   releaseMaterialAllocation,
   updateProductionOrderStatus,
 } from '@/api/productionOrders'
 import { getOrder } from '@/api/orders'
+import { listMachines } from '@/api/machines'
 import type { ProductionOrder } from '@/types/productionOrder'
 import type { Order } from '@/types/order'
 import type { MaterialRequirementSummary } from '@/types/materialRequirement'
+import type { ProductionOrderScheduleSummary } from '@/types/productionOrderSchedule'
+import type { Machine } from '@/types/machine'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
@@ -26,9 +32,10 @@ import { StatusTransitionButtons } from '@/components/status/StatusTransitionBut
 // The rest of the pipeline this Production Order will eventually drive --
 // shown for orientation, not implemented. See docs/production-lifecycle.md;
 // none of these stages exist yet, so this is deliberately just a static
-// roadmap, never fake data or a fake status. "Material Requirement" and
-// "Material Allocation" are no longer here -- P3/P4, implemented below.
-const FUTURE_STAGES = ['Scheduling', 'Execution', 'Completion', 'Finished Goods']
+// roadmap, never fake data or a fake status. "Material Requirement",
+// "Material Allocation" and "Schedule" are no longer here -- P3/P4/P5,
+// implemented below.
+const FUTURE_STAGES = ['Execution', 'Completion', 'Finished Goods']
 
 const OVERALL_STATUS_LABEL: Record<MaterialRequirementSummary['overall_status'], string> = {
   not_calculated: 'Requirement not calculated',
@@ -43,6 +50,12 @@ const ALLOCATION_STATUS_LABEL: Record<MaterialRequirementSummary['allocation_sta
   fully_allocated: 'Fully allocated',
 }
 
+const SCHEDULE_STATUS_LABEL: Record<ProductionOrderScheduleSummary['schedule_status'], string> = {
+  unscheduled: 'Unscheduled',
+  scheduled: 'Scheduled',
+  cancelled: 'Schedule cancelled',
+}
+
 export function ProductionOrderDetailPage() {
   const { id } = useParams()
   const productionOrderId = Number(id)
@@ -53,6 +66,8 @@ export function ProductionOrderDetailPage() {
   const [po, setPo] = useState<ProductionOrder | null>(null)
   const [order, setOrder] = useState<Order | null>(null)
   const [requirements, setRequirements] = useState<MaterialRequirementSummary | null>(null)
+  const [schedules, setSchedules] = useState<ProductionOrderScheduleSummary | null>(null)
+  const [machines, setMachines] = useState<Machine[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -61,16 +76,28 @@ export function ProductionOrderDetailPage() {
   const [releaseQty, setReleaseQty] = useState<Record<number, string>>({})
   const [actionBusyId, setActionBusyId] = useState<number | null>(null)
 
+  const [scheduleForm, setScheduleForm] = useState({ machineId: '', quantity: '', start: '', end: '' })
+  const [schedulingBusy, setSchedulingBusy] = useState(false)
+  const [cancelReasonById, setCancelReasonById] = useState<Record<number, string>>({})
+  const [scheduleActionBusyId, setScheduleActionBusyId] = useState<number | null>(null)
+
   const load = useCallback(() => {
     setLoading(true)
     getProductionOrder(productionOrderId)
       .then((result) => {
         setPo(result)
-        return Promise.all([getOrder(result.order_id), getMaterialRequirements(productionOrderId)])
+        return Promise.all([
+          getOrder(result.order_id),
+          getMaterialRequirements(productionOrderId),
+          getProductionOrderSchedules(productionOrderId),
+          listMachines({ status: 'active', page_size: 200 }),
+        ])
       })
-      .then(([orderResult, requirementsResult]) => {
+      .then(([orderResult, requirementsResult, scheduleResult, machinesResult]) => {
         setOrder(orderResult)
         setRequirements(requirementsResult)
+        setSchedules(scheduleResult)
+        setMachines(machinesResult.items)
       })
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
@@ -141,6 +168,48 @@ export function ProductionOrderDetailPage() {
       setError(getApiErrorMessage(err))
     } finally {
       setActionBusyId(null)
+    }
+  }
+
+  async function handleCreateSchedule() {
+    if (!scheduleForm.start) {
+      setError('Enter a planned start to create a schedule.')
+      return
+    }
+    setSchedulingBusy(true)
+    setError(null)
+    try {
+      const result = await createProductionOrderSchedule(productionOrderId, {
+        machine_id: scheduleForm.machineId ? Number(scheduleForm.machineId) : undefined,
+        planned_quantity: scheduleForm.quantity ? Number(scheduleForm.quantity) : undefined,
+        planned_start: scheduleForm.start,
+        planned_end: scheduleForm.end || undefined,
+      })
+      setSchedules(result)
+      setScheduleForm({ machineId: '', quantity: '', start: '', end: '' })
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setSchedulingBusy(false)
+    }
+  }
+
+  async function handleCancelSchedule(scheduleId: number) {
+    const reason = cancelReasonById[scheduleId]
+    if (!reason || !reason.trim()) {
+      setError('Enter a reason to cancel this schedule.')
+      return
+    }
+    setScheduleActionBusyId(scheduleId)
+    setError(null)
+    try {
+      const result = await cancelProductionOrderSchedule(productionOrderId, scheduleId, reason)
+      setSchedules(result)
+      setCancelReasonById((prev) => ({ ...prev, [scheduleId]: '' }))
+    } catch (err) {
+      setError(getApiErrorMessage(err))
+    } finally {
+      setScheduleActionBusyId(null)
     }
   }
 
@@ -410,6 +479,157 @@ export function ProductionOrderDetailPage() {
       </GlassCard>
 
       <GlassCard className="mb-6 overflow-hidden">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-6 py-4">
+          <div className="flex items-center gap-3">
+            <h2 className="font-display text-lg font-medium text-white">Production schedule</h2>
+            {schedules && (
+              <Badge
+                tone={
+                  schedules.schedule_status === 'scheduled'
+                    ? 'success'
+                    : schedules.schedule_status === 'cancelled'
+                      ? 'danger'
+                      : 'neutral'
+                }
+              >
+                {schedules.schedule_status === 'scheduled'
+                  ? schedules.remaining_to_schedule > 0
+                    ? `Scheduled -- ${schedules.remaining_to_schedule} ${po.unit ?? ''} remaining`
+                    : 'Fully scheduled'
+                  : SCHEDULE_STATUS_LABEL[schedules.schedule_status]}
+              </Badge>
+            )}
+          </div>
+        </div>
+
+        {schedules && schedules.schedules.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                  <th className="px-6 py-4 font-medium">Machine</th>
+                  <th className="px-6 py-4 text-right font-medium">Qty</th>
+                  <th className="px-6 py-4 font-medium">Start</th>
+                  <th className="px-6 py-4 font-medium">End</th>
+                  <th className="px-6 py-4 font-medium">Due date</th>
+                  <th className="px-6 py-4 font-medium">Status</th>
+                  {allowWrite && <th className="px-6 py-4 font-medium">Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {schedules.schedules.map((s) => (
+                  <tr key={s.id} className="border-b border-white/5 last:border-0 align-top">
+                    <td className="px-6 py-4 text-white">{s.machine_name ?? '—'}</td>
+                    <td className="px-6 py-4 text-right text-white/60">{s.planned_quantity}</td>
+                    <td className="px-6 py-4 text-white/60">{formatDateTime(s.planned_start ?? s.scheduled_start)}</td>
+                    <td className="px-6 py-4 text-white/60">{formatDateTime(s.planned_end ?? s.scheduled_end)}</td>
+                    <td className="px-6 py-4">
+                      {s.status === 'cancelled' ? (
+                        <span className="text-white/40">—</span>
+                      ) : s.due_date_status === 'after_due' ? (
+                        <span className="text-red-300">Past due date</span>
+                      ) : (
+                        <span className="text-emerald-300">On time</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <StatusBadge status={s.status} />
+                    </td>
+                    {allowWrite && (
+                      <td className="px-6 py-4">
+                        {s.status === 'planned' && (
+                          <div className="flex items-end gap-2">
+                            <div className="w-40">
+                              <TextField
+                                label="Cancel reason"
+                                value={cancelReasonById[s.id] ?? ''}
+                                onChange={(e) =>
+                                  setCancelReasonById((prev) => ({ ...prev, [s.id]: e.target.value }))
+                                }
+                              />
+                            </div>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              isLoading={scheduleActionBusyId === s.id}
+                              onClick={() => handleCancelSchedule(s.id)}
+                            >
+                              Cancel
+                            </Button>
+                          </div>
+                        )}
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {(!schedules || schedules.schedules.length === 0) && (
+          <EmptyState
+            title="Not scheduled"
+            message="This production order hasn't been booked onto the machine calendar yet."
+          />
+        )}
+
+        {allowWrite && po.status === 'planned' && schedules && schedules.remaining_to_schedule > 0 && (
+          <div className="border-t border-white/10 px-6 py-5">
+            <h3 className="mb-4 text-sm font-medium text-white">Schedule remaining {schedules.remaining_to_schedule} {po.unit ?? ''}</h3>
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="w-48">
+                <SelectField
+                  label="Machine"
+                  value={scheduleForm.machineId}
+                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, machineId: e.target.value }))}
+                >
+                  <option value="">Product's default machine</option>
+                  {machines.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name}
+                    </option>
+                  ))}
+                </SelectField>
+              </div>
+              <div className="w-32">
+                <TextField
+                  label="Quantity"
+                  type="number"
+                  min={0}
+                  max={schedules.remaining_to_schedule}
+                  step="any"
+                  placeholder={`${schedules.remaining_to_schedule}`}
+                  value={scheduleForm.quantity}
+                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, quantity: e.target.value }))}
+                />
+              </div>
+              <div className="w-52">
+                <TextField
+                  label="Planned start"
+                  type="datetime-local"
+                  value={scheduleForm.start}
+                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, start: e.target.value }))}
+                />
+              </div>
+              <div className="w-52">
+                <TextField
+                  label="Planned end (optional)"
+                  hint="Left blank, it's computed from the product's production rate."
+                  type="datetime-local"
+                  value={scheduleForm.end}
+                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, end: e.target.value }))}
+                />
+              </div>
+              <Button isLoading={schedulingBusy} onClick={handleCreateSchedule}>
+                Schedule
+              </Button>
+            </div>
+          </div>
+        )}
+      </GlassCard>
+
+      <GlassCard className="mb-6 overflow-hidden">
         <div className="border-b border-white/10 px-6 py-4">
           <h2 className="font-display text-lg font-medium text-white">Production pipeline</h2>
         </div>
@@ -441,6 +661,20 @@ export function ProductionOrderDetailPage() {
               }
             >
               Material allocation
+            </Badge>
+          </span>
+          <span className="flex items-center gap-3">
+            <span className="text-white/20">→</span>
+            <Badge
+              tone={
+                schedules?.schedule_status === 'scheduled'
+                  ? 'success'
+                  : schedules?.schedule_status === 'cancelled'
+                    ? 'danger'
+                    : 'neutral'
+              }
+            >
+              Schedule
             </Badge>
           </span>
           {FUTURE_STAGES.map((stage) => (

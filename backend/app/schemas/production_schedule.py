@@ -131,6 +131,12 @@ class ProductionScheduleOut(BaseModel):
     produced_quantity: float
     scheduled_start: date
     scheduled_end: date
+    # Time-of-day precision -- only set for a schedule created through
+    # the Production Order flow (P5); None for a legacy batch that only
+    # ever recorded a calendar day. See app/models/production_schedule.py.
+    planned_start: datetime | None = None
+    planned_end: datetime | None = None
+    production_order_id: int | None = None
     actual_start: datetime | None
     actual_end: datetime | None
     status: str

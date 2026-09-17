@@ -7,7 +7,19 @@ from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.production_order import ProductionOrderCreate, ProductionOrderOut, ProductionOrderStatusUpdate
 from app.schemas.production_order_material import MaterialAllocationRequest, MaterialRequirementSummaryOut
-from app.services import audit_service, production_order_material_service, production_order_service
+from app.schemas.production_order_schedule import (
+    ProductionOrderScheduleCancel,
+    ProductionOrderScheduleCreate,
+    ProductionOrderScheduleItemOut,
+    ProductionOrderScheduleSummaryOut,
+    ProductionOrderScheduleUpdate,
+)
+from app.services import (
+    audit_service,
+    production_order_material_service,
+    production_order_schedule_service,
+    production_order_service,
+)
 
 router = APIRouter(prefix="/api/production-orders", tags=["production"])
 # Reuses the existing "production" page key rather than introducing a
@@ -132,6 +144,71 @@ def release_material(
     return production_order_material_service.release(
         db, production_order_id, requirement_id, payload.quantity, user_id=user.id
     )
+
+
+def _schedule_summary_out(summary: dict) -> ProductionOrderScheduleSummaryOut:
+    return ProductionOrderScheduleSummaryOut(
+        production_order_id=summary["production_order_id"],
+        due_date=summary["due_date"],
+        planned_quantity=summary["planned_quantity"],
+        scheduled_quantity=summary["scheduled_quantity"],
+        remaining_to_schedule=summary["remaining_to_schedule"],
+        schedule_status=summary["schedule_status"],
+        schedules=[
+            ProductionOrderScheduleItemOut.from_schedule(s, summary["due_date"]) for s in summary["schedules"]
+        ],
+    )
+
+
+@router.get("/{production_order_id}/schedules", response_model=ProductionOrderScheduleSummaryOut)
+def get_schedules(
+    production_order_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    summary = production_order_schedule_service.get_schedule_summary(db, production_order_id)
+    return _schedule_summary_out(summary)
+
+
+@router.post("/{production_order_id}/schedules", response_model=ProductionOrderScheduleSummaryOut, status_code=201)
+def create_schedule(
+    production_order_id: int,
+    payload: ProductionOrderScheduleCreate,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    production_order_schedule_service.create_schedule(
+        db, production_order_id, payload.model_dump(exclude_unset=True), user_id=user.id
+    )
+    return _schedule_summary_out(production_order_schedule_service.get_schedule_summary(db, production_order_id))
+
+
+@router.put("/{production_order_id}/schedules/{schedule_id}", response_model=ProductionOrderScheduleSummaryOut)
+def update_schedule(
+    production_order_id: int,
+    schedule_id: int,
+    payload: ProductionOrderScheduleUpdate,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    production_order_schedule_service.reschedule(
+        db, schedule_id, payload.model_dump(exclude_unset=True), user_id=user.id
+    )
+    return _schedule_summary_out(production_order_schedule_service.get_schedule_summary(db, production_order_id))
+
+
+@router.post(
+    "/{production_order_id}/schedules/{schedule_id}/cancel", response_model=ProductionOrderScheduleSummaryOut
+)
+def cancel_schedule(
+    production_order_id: int,
+    schedule_id: int,
+    payload: ProductionOrderScheduleCancel,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    production_order_schedule_service.cancel_schedule(db, schedule_id, payload.reason, user_id=user.id)
+    return _schedule_summary_out(production_order_schedule_service.get_schedule_summary(db, production_order_id))
 
 
 @router.post("/{production_order_id}/status", response_model=ProductionOrderOut)
