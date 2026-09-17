@@ -131,8 +131,11 @@ export function AppLayout({ children }: AppLayoutProps) {
     {
       label: 'Production',
       items: [
-        { to: '/orders', label: 'Orders (view)' },
-        { to: '/purchase-orders', label: 'Purchase orders (view)' },
+        // Orders and Purchase orders are deliberately not repeated here as
+        // "(view)" shortcuts -- they're already one click away under Sales
+        // and Purchasing respectively, so a second link to the exact same
+        // route only added nav clutter (and a duplicate command-palette
+        // entry) without reaching anywhere new.
         { to: '/mrp', label: 'MRP' },
         { to: '/production-orders', label: 'Production orders' },
         { to: '/production', label: 'Production schedule' },
