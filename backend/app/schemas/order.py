@@ -157,8 +157,22 @@ class OrderOut(BaseModel):
     customer_id: int
     customer_name: str | None = None
     customer_email: str | None = None
+    # Added for the Order Detail page's client-info block (Client ID,
+    # primary contact, mobile) so a person can see who they're dealing
+    # with without leaving the order -- not a duplicate of the Client
+    # Master, just a read-only projection of it (see
+    # customer_service/CustomerOut for the actual source of truth).
+    customer_number: str | None = None
+    customer_contact_person: str | None = None
+    customer_phone: str | None = None
     deal_id: int | None
     deal_number: str | None = None
+    # The quotation this order was converted from, if any -- read via a
+    # reverse lookup (Quotation.converted_order_id), not a column on this
+    # table. None on both list rows and single-object fetches unless the
+    # caller (api/orders.py) explicitly resolved and passed it in, since
+    # resolving this per-row here would mean one extra query per order.
+    quotation_number: str | None = None
     order_date: date
     requested_delivery_date: date | None
     confirmed_delivery_date: date | None
@@ -195,10 +209,14 @@ class OrderOut(BaseModel):
     model_config = {"from_attributes": True}
 
     @staticmethod
-    def from_model(obj) -> "OrderOut":
+    def from_model(obj, quotation_number: str | None = None) -> "OrderOut":
         data = OrderOut.model_validate(obj)
         data.customer_name = obj.customer.name if obj.customer else None
         data.customer_email = obj.customer.email if obj.customer else None
+        data.customer_number = obj.customer.customer_number if obj.customer else None
+        data.customer_contact_person = obj.customer.contact_person if obj.customer else None
+        data.customer_phone = obj.customer.phone if obj.customer else None
+        data.quotation_number = quotation_number
         data.deal_number = obj.deal.deal_number if obj.deal else None
         data.parent_order_number = obj.parent_order.order_number if obj.parent_order else None
         data.child_orders = [

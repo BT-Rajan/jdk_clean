@@ -11,6 +11,7 @@ import {
   SortableHeader,
   Spinner,
   StatusBadge,
+  TextField,
 } from '@/components/ui'
 import { listOrders } from '@/api/orders'
 import { usePagedResource } from '@/hooks/usePagedResource'
@@ -38,6 +39,8 @@ export function OrdersListPage() {
     totalPages,
     page,
     setPage,
+    searchInput,
+    setSearchInput,
     status,
     setStatus,
     sort,
@@ -53,7 +56,15 @@ export function OrdersListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Orders</h1>
           <p className="mt-2 text-sm text-white/50">{total} on file</p>
         </div>
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-64">
+            <TextField
+              label="Search"
+              placeholder="Order no., client, client ID, quotation…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+          </div>
           <div className="w-44">
             <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">All statuses</option>
@@ -66,6 +77,18 @@ export function OrdersListPage() {
               <option value="cancelled">Cancelled</option>
             </SelectField>
           </div>
+          {(searchInput || status) && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => {
+                setSearchInput('')
+                setStatus('')
+              }}
+            >
+              Clear filters
+            </Button>
+          )}
           {canWriteDepartment(user, 'sales') && (
             <div className="flex gap-3">
               {/* An order can only be created from an accepted quotation
@@ -89,7 +112,7 @@ export function OrdersListPage() {
             <Spinner size={24} className="text-gold-300" />
           </div>
         ) : items.length === 0 ? (
-          <EmptyState title="No orders found" message="Try a different status filter or create a new order." />
+          <EmptyState title="No orders found" message="Try a different search or status filter, or create a new order." />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
@@ -97,7 +120,9 @@ export function OrdersListPage() {
                 <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
                   <SortableHeader label="Number" field="order_number" sort={sort} onSort={toggleSort} />
                   <th className="px-6 py-4 font-medium">Customer</th>
+                  <th className="px-6 py-4 font-medium">Quotation</th>
                   <SortableHeader label="Date" field="order_date" sort={sort} onSort={toggleSort} />
+                  <th className="px-6 py-4 font-medium">Expected delivery</th>
                   <SortableHeader label="Total" field="total_amount" sort={sort} onSort={toggleSort} />
                   <SortableHeader label="Status" field="status" sort={sort} onSort={toggleSort} />
                 </tr>
@@ -111,7 +136,11 @@ export function OrdersListPage() {
                       </Link>
                     </td>
                     <td className="px-6 py-4 text-white">{o.customer_name ?? '—'}</td>
+                    <td className="px-6 py-4 text-white/60">{o.quotation_number ?? '—'}</td>
                     <td className="px-6 py-4 text-white/60">{formatDate(o.order_date)}</td>
+                    <td className="px-6 py-4 text-white/60">
+                      {formatDate(o.confirmed_delivery_date ?? o.requested_delivery_date) || '—'}
+                    </td>
                     <td className="px-6 py-4 text-white/60">{formatCurrency(o.total_amount)}</td>
                     <td className="px-6 py-4">
                       <StatusBadge status={o.status} />

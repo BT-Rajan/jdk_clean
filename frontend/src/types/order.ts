@@ -31,8 +31,16 @@ export interface Order {
   customer_id: number
   customer_name: string | null
   customer_email: string | null
+  /** Client ID, primary contact and mobile -- a read-only projection of
+   * the Client Master, for the order detail page's client-info block. */
+  customer_number: string | null
+  customer_contact_person: string | null
+  customer_phone: string | null
   deal_id: number | null
   deal_number: string | null
+  /** The quotation this order was converted from, if any -- only
+   * populated on GET (list and detail), null on write responses. */
+  quotation_number: string | null
   order_date: string
   requested_delivery_date: string | null
   confirmed_delivery_date: string | null

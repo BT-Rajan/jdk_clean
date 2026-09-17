@@ -506,6 +506,16 @@ export function OrderDetailPage() {
         </div>
 
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+          <Field label="Client">
+            <Link to={`/customers/${order.customer_id}`} className="text-gold-300 hover:text-gold-200">
+              {order.customer_name ?? '—'}
+            </Link>
+            {order.customer_number && <span className="ml-2 text-xs text-white/40">{order.customer_number}</span>}
+          </Field>
+          <Field label="Primary contact">
+            {order.customer_contact_person || '—'}
+            {order.customer_phone && <span className="ml-2 text-xs text-white/40">{order.customer_phone}</span>}
+          </Field>
           <Field label="Order date" value={formatDate(order.order_date)} />
           <Field label="Requested delivery" value={formatDate(order.requested_delivery_date)} />
           <Field label="Total" value={formatCurrency(order.total_amount)} />

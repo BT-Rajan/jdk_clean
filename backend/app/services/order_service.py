@@ -184,9 +184,26 @@ def list_orders(
     if admin_review_required is not None:
         query = query.filter(Order.admin_review_required == admin_review_required)
     if search:
+        # Matches Order Number, Client Name, Client ID (customer_number)
+        # and Quotation Number -- the quotation link is a reverse FK
+        # (Quotation.converted_order_id -> Order.id, same relationship
+        # order_journey_service reads), so it's an EXISTS subquery rather
+        # than a join that would otherwise duplicate an order's row once
+        # per matching quotation (there's normally only ever one, but a
+        # join is still the wrong tool for a search filter regardless).
+        from app.models.quotation import Quotation
+
         like = f"%{search}%"
+        quotation_match = (
+            db.query(Quotation.id)
+            .filter(Quotation.converted_order_id == Order.id, Quotation.quotation_number.ilike(like))
+            .exists()
+        )
         query = query.join(Customer).filter(
-            (Order.order_number.ilike(like)) | (Customer.name.ilike(like))
+            Order.order_number.ilike(like)
+            | Customer.name.ilike(like)
+            | Customer.customer_number.ilike(like)
+            | quotation_match
         )
 
     return sort_and_paginate(query, Order, _ORDER_SORTABLE_FIELDS, sort, page, page_size)

@@ -61,7 +61,22 @@ def list_orders(
         admin_review_required=admin_review_required,
         sort=sort,
     )
-    result["items"] = [OrderOut.from_model(o) for o in result["items"]]
+    # One batch lookup for the whole page rather than one query per row --
+    # see OrderOut.quotation_number's docstring for why this isn't just
+    # read inside from_model itself.
+    from app.models.quotation import Quotation
+
+    order_ids = [o.id for o in result["items"]]
+    quotation_numbers: dict[int, str] = {}
+    if order_ids:
+        quotation_numbers = dict(
+            db.query(Quotation.converted_order_id, Quotation.quotation_number)
+            .filter(Quotation.converted_order_id.in_(order_ids), Quotation.deleted_at.is_(None))
+            .all()
+        )
+    result["items"] = [
+        OrderOut.from_model(o, quotation_number=quotation_numbers.get(o.id)) for o in result["items"]
+    ]
     return result
 
 
@@ -71,7 +86,15 @@ def get_order(
     db: Session = Depends(get_db),
     _: User = Depends(read_guard),
 ):
-    return OrderOut.from_model(order_service.get_order(db, order_id))
+    from app.models.quotation import Quotation
+
+    order = order_service.get_order(db, order_id)
+    quotation_number = (
+        db.query(Quotation.quotation_number)
+        .filter(Quotation.converted_order_id == order_id, Quotation.deleted_at.is_(None))
+        .scalar()
+    )
+    return OrderOut.from_model(order, quotation_number=quotation_number)
 
 
 @router.get("/{order_id}/journey", response_model=OrderJourneyOut)
