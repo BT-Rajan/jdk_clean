@@ -1,5 +1,5 @@
 import type { PagedResponse, ListQueryParams, MessageResponse } from '@/types/common'
-import type { Order, OrderPayload, SettableOrderStatus, SplitOrderLineInput } from '@/types/order'
+import type { Order, OrderFulfillmentLine, OrderPayload, SettableOrderStatus, SplitOrderLineInput } from '@/types/order'
 import type { OrderJourney } from '@/types/orderJourney'
 import { apiClient } from './client'
 
@@ -29,6 +29,15 @@ export async function splitOrder(id: number, lines: SplitOrderLineInput[]): Prom
 
 export async function getOrderJourney(id: number): Promise<OrderJourney> {
   const { data } = await apiClient.get<OrderJourney>(`/api/orders/${id}/journey`)
+  return data
+}
+
+/** P8: per line, ordered/delivered/remaining set against what's
+ * actually released FG stock right now, plus existing planned/in-
+ * progress production for the same product -- see
+ * backend/app/services/order_service.py's get_fulfillment. */
+export async function getOrderFulfillment(id: number): Promise<OrderFulfillmentLine[]> {
+  const { data } = await apiClient.get<OrderFulfillmentLine[]>(`/api/orders/${id}/fulfillment`)
   return data
 }
 

@@ -78,6 +78,19 @@ class QcRequest(Base, TimestampMixin):
     # for, unique the same way every other document number in this app
     # is, rather than left to a person to invent and possibly collide.
     sample_reference: Mapped[str] = mapped_column(String(30), unique=True, nullable=False)
+    # How much of the execution's produced_quantity THIS request's
+    # eventual accept/reject decision will apply to -- deliberately its
+    # own field, never conflated with sample_quantity below (the much
+    # smaller physical sample actually sent to the lab, e.g. 5 units out
+    # of a 1,000-unit run). P8 (multiple/partial QC requests per
+    # execution -- see qc_service.create_request) requires this: two
+    # requests against the same execution can split its output, one
+    # deciding 700 units and another deciding the remaining 300, so
+    # there is no single "whatever's left of the execution" quantity a
+    # request could otherwise assume it's deciding. Defaults to whatever
+    # is still undecided on the execution when not given explicitly (the
+    # common single-request-covers-everything case).
+    quantity: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False)
     sample_quantity: Mapped[float | None] = mapped_column(DECIMAL(14, 4), nullable=True)
     request_date: Mapped[date] = mapped_column(DATE, nullable=False)
     expected_report_date: Mapped[date | None] = mapped_column(DATE, nullable=True)

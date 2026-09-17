@@ -23,10 +23,14 @@ export interface ProductionExecutionRun {
   /** How much of produced_quantity has been released into
    * FinishedGoodsInventory by an accepted external QC report (P7). */
   released_quantity: number
+  /** released_quantity's sibling (P8) -- how much a QC decision has
+   * instead rejected. */
+  rejected_quantity: number
   /** 'not_applicable' (not completed yet) | 'not_requested' | 'pending'
-   * | 'released' | 'rejected' -- derived from this run's QC requests,
-   * never the run's own execution status. See api/qcRequests.ts. */
-  fg_release_status: 'not_applicable' | 'not_requested' | 'pending' | 'released' | 'rejected'
+   * | 'partially_released' | 'released' | 'rejected' -- derived from
+   * this run's QC requests, never the run's own execution status. See
+   * api/qcRequests.ts. */
+  fg_release_status: 'not_applicable' | 'not_requested' | 'pending' | 'partially_released' | 'released' | 'rejected'
   /** Server-authoritative Kuwait time -- see core/timezone.py's
    * now_kuwait_naive. Never derive this from the browser's clock. */
   started_at: string
@@ -45,5 +49,11 @@ export interface ProductionExecutionSummary {
   total_produced: number
   remaining_to_produce: number
   execution_status: ProductionExecutionOverallStatus
+  /** Aggregate QC breakdown across every completed run (P8). qc_released
+   * doubles as "FG received" -- release always immediately creates the
+   * matching inventory receipt, so there's no separate figure to show. */
+  qc_pending: number
+  qc_released: number
+  qc_rejected: number
   runs: ProductionExecutionRun[]
 }

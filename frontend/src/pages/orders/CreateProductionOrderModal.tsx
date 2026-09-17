@@ -20,7 +20,10 @@ function useCommittedByLine(orderId: number, open: boolean) {
       .then((res) => {
         const totals: Record<number, number> = {}
         for (const po of res.items) {
-          if (po.status !== 'cancelled') {
+          // Every production order returned for this order_id is
+          // order-linked by definition, but order_detail_id's own type
+          // also covers the stock-only case (null) -- guard anyway.
+          if (po.status !== 'cancelled' && po.order_detail_id !== null) {
             totals[po.order_detail_id] = (totals[po.order_detail_id] ?? 0) + po.planned_quantity
           }
         }
@@ -90,7 +93,6 @@ export function CreateProductionOrderModal({
     setSubmitting(true)
     try {
       const created = await createProductionOrder({
-        order_id: order.id,
         order_detail_id: Number(orderDetailId),
         planned_quantity: quantity,
         due_date: dueDate,

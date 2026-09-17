@@ -129,14 +129,15 @@ def test_creation_rejected_for_inactive_product(db):
         )
 
 
-def test_order_detail_must_belong_to_the_given_order(db):
-    order_a, line_a, _ = _confirmed_order(db, 500)
-    order_b, _, _ = _confirmed_order(db, 500)
-
+def test_order_detail_id_must_exist(db):
+    """order_id is no longer client-supplied (P8) -- it's always derived
+    from order_detail_id server-side, so the only way to raise a
+    Production Order against the wrong order is to name an order line
+    that doesn't exist at all."""
     with pytest.raises(ValidationAppError):
         production_order_service.create_production_order(
             db,
-            {"order_id": order_b.id, "order_detail_id": line_a.id, "planned_quantity": 10, "due_date": DUE},
+            {"order_detail_id": 999999, "planned_quantity": 10, "due_date": DUE},
         )
 
 

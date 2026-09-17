@@ -1,13 +1,20 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Badge, EmptyState, GlassCard, Pagination, SelectField, SortableHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Badge, Button, EmptyState, GlassCard, Pagination, SelectField, SortableHeader, Spinner, StatusBadge } from '@/components/ui'
 import { listProductionOrders } from '@/api/productionOrders'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { formatDate } from '@/lib/dateFormat'
+import { useAuth } from '@/hooks/useAuth'
+import { canWriteDepartment } from '@/lib/roles'
+import { CreateStockProductionOrderModal } from './CreateStockProductionOrderModal'
 
 export function ProductionOrdersListPage() {
-  const { items, total, totalPages, page, setPage, status, setStatus, sort, toggleSort, loading, error } =
+  const { user } = useAuth()
+  const allowWrite = canWriteDepartment(user, 'sales')
+  const { items, total, totalPages, page, setPage, status, setStatus, sort, toggleSort, loading, error, refetch } =
     usePagedResource(listProductionOrders)
+  const [showStockModal, setShowStockModal] = useState(false)
 
   return (
     <AppLayout>
@@ -16,12 +23,15 @@ export function ProductionOrdersListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Production Orders</h1>
           <p className="mt-2 text-sm text-white/50">{total} production orders on file</p>
         </div>
-        <div className="w-44">
-          <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-            <option value="">All statuses</option>
-            <option value="planned">Planned</option>
-            <option value="cancelled">Cancelled</option>
-          </SelectField>
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="w-44">
+            <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="planned">Planned</option>
+              <option value="cancelled">Cancelled</option>
+            </SelectField>
+          </div>
+          {allowWrite && <Button onClick={() => setShowStockModal(true)}>New stock production order</Button>}
         </div>
       </div>
 
@@ -35,7 +45,7 @@ export function ProductionOrdersListPage() {
         ) : items.length === 0 ? (
           <EmptyState
             title="No production orders found"
-            message="Production orders are created from a confirmed customer order's detail page."
+            message="Raise one from a confirmed customer order's detail page, or create a stock production order above to build Finished Goods inventory directly."
           />
         ) : (
           <div className="overflow-x-auto">
@@ -92,6 +102,15 @@ export function ProductionOrdersListPage() {
       </GlassCard>
 
       <Pagination page={page} totalPages={totalPages} total={total} onPageChange={setPage} />
+
+      <CreateStockProductionOrderModal
+        open={showStockModal}
+        onClose={() => setShowStockModal(false)}
+        onCreated={() => {
+          setShowStockModal(false)
+          refetch()
+        }}
+      />
     </AppLayout>
   )
 }

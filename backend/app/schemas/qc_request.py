@@ -11,6 +11,13 @@ class QcRequestCreate(BaseModel):
     production_order_id: int = Field(gt=0)
     production_execution_id: int = Field(gt=0)
     qc_agent_id: int = Field(gt=0)
+    # How much of the execution's produced_quantity this request will
+    # decide -- distinct from sample_quantity below (the much smaller
+    # physical sample sent to the lab). Omit to default to whatever's
+    # still undecided on the execution (see qc_service.create_request);
+    # give it explicitly to split one execution's output across more
+    # than one QC request (P8 spec section 5's partial accept/reject).
+    quantity: float | None = Field(default=None, gt=0)
     sample_quantity: float | None = Field(default=None, gt=0)
     expected_report_date: date | None = None
     notes: str | None = Field(default=None, max_length=5000)
@@ -66,6 +73,7 @@ class QcRequestOut(BaseModel):
     qc_agent_id: int
     qc_agent_name: str | None = None
     sample_reference: str
+    quantity: float
     sample_quantity: float | None
     request_date: date
     expected_report_date: date | None

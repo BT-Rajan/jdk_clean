@@ -1,19 +1,34 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.production_order import PRIORITIES
 
 
 class ProductionOrderCreate(BaseModel):
+    """Two mutually exclusive ways to raise a Production Order (P8 --
+    see models/production_order.py's own docstring on why order linkage
+    is no longer mandatory): order_detail_id for one raised against a
+    specific, still-open customer order line (order_id is derived from
+    it server-side, never taken from the client), or product_id for a
+    stock-only order building/replenishing general Finished Goods
+    inventory with no customer order behind it at all. Exactly one of
+    the two must be given."""
+
     model_config = ConfigDict(str_strip_whitespace=True)
 
-    order_id: int = Field(gt=0)
-    order_detail_id: int = Field(gt=0)
+    order_detail_id: int | None = Field(default=None, gt=0)
+    product_id: int | None = Field(default=None, gt=0)
     planned_quantity: float = Field(gt=0)
     due_date: date
     priority: str = Field(default="normal", pattern=f"^({'|'.join(PRIORITIES)})$")
     notes: str | None = Field(default=None, max_length=5000)
+
+    @model_validator(mode="after")
+    def _exactly_one_target(self) -> "ProductionOrderCreate":
+        if bool(self.order_detail_id) == bool(self.product_id):
+            raise ValueError("Give exactly one of order_detail_id (order-linked) or product_id (stock-only).")
+        return self
 
 
 class ProductionOrderStatusUpdate(BaseModel):
@@ -32,11 +47,13 @@ class ProductionOrderStatusUpdate(BaseModel):
 class ProductionOrderOut(BaseModel):
     id: int
     production_order_number: str
-    order_id: int
+    # NULL/None together on both means a stock-only Production Order --
+    # see models/production_order.py's own docstring.
+    order_id: int | None
     order_number: str | None = None
     customer_id: int | None = None
     customer_name: str | None = None
-    order_detail_id: int
+    order_detail_id: int | None
     product_id: int
     product_code: str | None = None
     product_name: str | None = None
@@ -49,7 +66,8 @@ class ProductionOrderOut(BaseModel):
     # stored. Populated by the list/get endpoints, not from_model, since
     # it needs a database query -- see production_orders.py's
     # _with_remaining, mirroring production_schedules.py's own
-    # _with_readiness pattern.
+    # _with_readiness pattern. Always None for a stock-only order --
+    # there's no order line to compute it against.
     remaining_order_quantity: float | None = None
     due_date: date
     priority: str

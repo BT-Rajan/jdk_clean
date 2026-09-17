@@ -13,6 +13,7 @@ import {
   downloadOrderPdf,
   emailOrder,
   getOrder,
+  getOrderFulfillment,
   requestPayment,
   restoreOrder,
   splitOrder,
@@ -24,7 +25,7 @@ import { todayDateInputMin } from '@/lib/validation'
 import { PaymentsPanel } from './PaymentsPanel'
 import { PaymentPlansPanel } from './PaymentPlansPanel'
 import { CreateProductionOrderModal } from './CreateProductionOrderModal'
-import type { Order } from '@/types/order'
+import type { Order, OrderFulfillmentLine } from '@/types/order'
 import type { DeliveryNote } from '@/types/deliveryNote'
 import type { ProductionOrder } from '@/types/productionOrder'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -183,6 +184,7 @@ export function OrderDetailPage() {
   // it, not just a single "the" note.
   const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([])
   const [productionOrders, setProductionOrders] = useState<ProductionOrder[]>([])
+  const [fulfillment, setFulfillment] = useState<OrderFulfillmentLine[]>([])
 
   function load() {
     setLoading(true)
@@ -204,9 +206,16 @@ export function OrderDetailPage() {
       .catch(() => setProductionOrders([]))
   }
 
+  function loadFulfillment() {
+    getOrderFulfillment(orderId)
+      .then(setFulfillment)
+      .catch(() => setFulfillment([]))
+  }
+
   useEffect(load, [orderId])
   useEffect(loadDeliveryNotes, [orderId])
   useEffect(loadProductionOrders, [orderId])
+  useEffect(loadFulfillment, [orderId])
 
   async function handleStatusChange(status: (typeof ORDER_TRANSITIONS)['draft'][number], reason?: string) {
     setBusy(true)
@@ -215,6 +224,7 @@ export function OrderDetailPage() {
       const updated = await updateOrderStatus(orderId, status, reason)
       setOrder(updated)
       setNotice(`Status changed to ${status}.`)
+      loadFulfillment()
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -544,6 +554,65 @@ export function OrderDetailPage() {
           </table>
         </div>
       </GlassCard>
+
+      {fulfillment.length > 0 && (
+        <GlassCard className="mt-6 overflow-hidden">
+          <div className="border-b border-white/10 px-6 py-4">
+            <h2 className="font-display text-lg font-medium text-white">Fulfilment</h2>
+            <p className="mt-1 text-xs text-white/40">
+              Consumes released Finished Goods stock -- production is not owned by this order.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                  <th className="px-6 py-4 font-medium">Product</th>
+                  <th className="px-6 py-4 font-medium">Ordered</th>
+                  <th className="px-6 py-4 font-medium">Delivered</th>
+                  <th className="px-6 py-4 font-medium">Remaining</th>
+                  <th className="px-6 py-4 font-medium">Released FG available</th>
+                  <th className="px-6 py-4 font-medium">Fulfillable now</th>
+                  <th className="px-6 py-4 font-medium">Shortage</th>
+                  <th className="px-6 py-4 font-medium">In pipeline</th>
+                </tr>
+              </thead>
+              <tbody>
+                {fulfillment.map((line) => (
+                  <tr key={line.order_detail_id} className="border-b border-white/5 last:border-0">
+                    <td className="px-6 py-4 text-white">
+                      {line.product_code ? `${line.product_code} — ${line.product_name}` : `#${line.product_id}`}
+                    </td>
+                    <td className="px-6 py-4 text-white/60">{line.ordered_quantity} {line.unit}</td>
+                    <td className="px-6 py-4 text-white/60">{line.delivered_quantity} {line.unit}</td>
+                    <td className="px-6 py-4 text-white/60">{line.remaining_quantity} {line.unit}</td>
+                    <td className="px-6 py-4 text-white/60">{line.available_fg} {line.unit}</td>
+                    <td className="px-6 py-4 text-white">{line.fulfillable_now} {line.unit}</td>
+                    <td className="px-6 py-4">
+                      {line.shortage > 0 ? (
+                        <Badge tone="gold">{`${line.shortage} ${line.unit ?? ''} short`}</Badge>
+                      ) : (
+                        <span className="text-white/40">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-white/60">
+                      {line.planned_production_quantity > 0 || line.in_progress_production_quantity > 0 ? (
+                        <>
+                          {line.planned_production_quantity > 0 && `${line.planned_production_quantity} planned`}
+                          {line.planned_production_quantity > 0 && line.in_progress_production_quantity > 0 && ', '}
+                          {line.in_progress_production_quantity > 0 && `${line.in_progress_production_quantity} in progress`}
+                        </>
+                      ) : (
+                        '—'
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </GlassCard>
+      )}
 
       <GlassCard className="mt-6 overflow-hidden">
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">

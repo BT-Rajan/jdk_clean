@@ -9,7 +9,7 @@ from app.core.pricing import compute_document_totals, price_line
 from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed, assert_within_backdate_window
 from app.models.customer import Customer
-from app.models.delivery_note import DeliveryNote
+from app.models.delivery_note import DeliveryNote, DeliveryNoteLine
 from app.models.order import (
     ALLOWED_TRANSITIONS,
     OPEN_STATUSES,
@@ -19,7 +19,14 @@ from app.models.order import (
     OrderDetail,
 )
 from app.models.product import Product
-from app.services import audit_service, deal_service, inventory_service, number_series_service, settings_service
+from app.services import (
+    audit_service,
+    deal_service,
+    inventory_service,
+    number_series_service,
+    production_order_service,
+    settings_service,
+)
 
 TABLE_NAME = "orders"
 
@@ -71,6 +78,76 @@ def get_order(db: Session, order_id: int, include_deleted: bool = False, for_upd
     if obj is None:
         raise NotFoundError("Order")
     return obj
+
+
+def get_fulfillment(db: Session, order_id: int) -> list[dict]:
+    """Per order line: how much is ordered, delivered, and still
+    outstanding, set against what's actually sitting in released FG
+    stock right now -- the P8 spec's stock-driven fulfilment view
+    (section 7): Customer Orders consume available stock, they don't own
+    production output, so this reads plain, ordinary FinishedGoodsInventory
+    the same way every other stock question in this app does.
+
+    Deliberately reads quantity_on_hand, not quantity_available (on-hand
+    minus every order's reservation): this order's own remaining
+    quantity was already reserved in full at confirm time (see
+    change_status's 'confirmed' branch), so netting reservations again
+    here would make an already-confirmed order look short of stock that
+    is, physically, sitting on the shelf for it. Which order actually
+    gets physical stock when several compete for less than is on hand is
+    decided at delivery time, first-come-first-served, by
+    inventory_service.adjust_stock's own hard on-hand guard -- see that
+    branch's own comment on reserve_stock's deliberately permissive
+    stance. This is a display figure, not a second allocation engine.
+
+    production_order_service.get_pipeline_quantity supplies the existing
+    planned/in-progress production for the same product, so a shortage
+    here is never mistaken for a fresh, un-planned requirement (spec
+    section 10) -- it's for production planning to see, not something
+    this function acts on.
+    """
+    order = get_order(db, order_id)
+
+    delivered_by_product: dict[int, float] = {}
+    for product_id, quantity in (
+        db.query(DeliveryNoteLine.product_id, DeliveryNoteLine.quantity_delivered)
+        .join(DeliveryNote)
+        .filter(
+            DeliveryNote.order_id == order.id,
+            DeliveryNote.deleted_at.is_(None),
+            DeliveryNote.status == "issued",
+        )
+        .all()
+    ):
+        delivered_by_product[product_id] = delivered_by_product.get(product_id, 0.0) + float(quantity)
+
+    lines = []
+    for line in order.lines:
+        ordered_quantity = float(line.quantity)
+        delivered_quantity = round(delivered_by_product.get(line.product_id, 0.0), 4)
+        remaining_quantity = round(max(ordered_quantity - delivered_quantity, 0.0), 4)
+        available_fg = round(inventory_service.get_stock(db, "product", line.product_id)["quantity_on_hand"], 4)
+        fulfillable_now = round(min(remaining_quantity, available_fg), 4) if remaining_quantity > 0 else 0.0
+        shortage = round(max(remaining_quantity - available_fg, 0.0), 4)
+        pipeline = production_order_service.get_pipeline_quantity(db, line.product_id)
+        lines.append(
+            {
+                "order_detail_id": line.id,
+                "product_id": line.product_id,
+                "product_code": line.product.code if line.product else None,
+                "product_name": line.product.name if line.product else None,
+                "unit": line.product.unit if line.product else None,
+                "ordered_quantity": ordered_quantity,
+                "delivered_quantity": delivered_quantity,
+                "remaining_quantity": remaining_quantity,
+                "available_fg": available_fg,
+                "fulfillable_now": fulfillable_now,
+                "shortage": shortage,
+                "planned_production_quantity": pipeline["planned_quantity"],
+                "in_progress_production_quantity": pipeline["in_progress_quantity"],
+            }
+        )
+    return lines
 
 
 _ORDER_SORTABLE_FIELDS = {
@@ -440,6 +517,36 @@ def change_status(
         # multi-shipment existed, not a new one.
         for product_id, quantity in lines_to_issue:
             inventory_service.release_reservation(db, "product", product_id, quantity, commit=False)
+
+        # P8 spec section 13: once every line is legitimately covered by
+        # what's actually been shipped, the order is done -- move it
+        # straight to 'delivered' in this same call rather than leaving
+        # it sitting at 'shipped' for someone to close out by hand.
+        # Other already-issued delivery notes for this order are read
+        # here (status == 'issued'), but the note driving *this* call is
+        # deliberately not among them yet -- delivery_note_service.
+        # change_status calls in here before flipping its own note's
+        # status, so this call's own lines_to_issue (exactly what that
+        # note is shipping) are added in separately instead of re-querying
+        # for a status flip that hasn't happened yet.
+        delivered_by_product: dict[int, float] = {}
+        for product_id, quantity in (
+            db.query(DeliveryNoteLine.product_id, DeliveryNoteLine.quantity_delivered)
+            .join(DeliveryNote)
+            .filter(
+                DeliveryNote.order_id == order.id,
+                DeliveryNote.deleted_at.is_(None),
+                DeliveryNote.status == "issued",
+            )
+            .all()
+        ):
+            delivered_by_product[product_id] = delivered_by_product.get(product_id, 0.0) + float(quantity)
+        for product_id, quantity in lines_to_issue:
+            delivered_by_product[product_id] = delivered_by_product.get(product_id, 0.0) + float(quantity)
+        if all(
+            delivered_by_product.get(line.product_id, 0.0) + 1e-6 >= float(line.quantity) for line in order.lines
+        ):
+            new_status = "delivered"
     elif new_status == "cancelled" and old_status in RESERVED_STATUSES:
         for line in order.lines:
             inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity), commit=False)

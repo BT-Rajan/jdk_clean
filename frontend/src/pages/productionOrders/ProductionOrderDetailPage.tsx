@@ -85,6 +85,7 @@ const FG_RELEASE_STATUS_LABEL: Record<
 > = {
   not_requested: 'QC not requested',
   pending: 'QC: report pending',
+  partially_released: 'Partially released',
   released: 'Released',
   rejected: 'QC rejected',
 }
@@ -140,7 +141,7 @@ export function ProductionOrderDetailPage() {
 
   const [qcAgents, setQcAgents] = useState<QcAgent[]>([])
   const [qcRequests, setQcRequests] = useState<QcRequest[]>([])
-  const [qcForm, setQcForm] = useState({ executionId: '', agentId: '', sampleQuantity: '', expectedDate: '' })
+  const [qcForm, setQcForm] = useState({ executionId: '', agentId: '', quantity: '', sampleQuantity: '', expectedDate: '' })
   const [qcFormBusy, setQcFormBusy] = useState(false)
   const [showNewAgent, setShowNewAgent] = useState(false)
   const [newAgentForm, setNewAgentForm] = useState({ code: '', name: '' })
@@ -157,7 +158,8 @@ export function ProductionOrderDetailPage() {
       .then((result) => {
         setPo(result)
         return Promise.all([
-          getOrder(result.order_id),
+          // Stock-only production order (P8) -- no customer order to load.
+          result.order_id !== null ? getOrder(result.order_id) : Promise.resolve(null),
           getMaterialRequirements(productionOrderId),
           getProductionOrderSchedules(productionOrderId),
           getProductionExecutions(productionOrderId),
@@ -404,11 +406,12 @@ export function ProductionOrderDetailPage() {
         production_order_id: productionOrderId,
         production_execution_id: Number(qcForm.executionId),
         qc_agent_id: Number(qcForm.agentId),
+        quantity: qcForm.quantity ? Number(qcForm.quantity) : undefined,
         sample_quantity: qcForm.sampleQuantity ? Number(qcForm.sampleQuantity) : undefined,
         expected_report_date: qcForm.expectedDate || undefined,
       })
       await refreshQc()
-      setQcForm({ executionId: '', agentId: '', sampleQuantity: '', expectedDate: '' })
+      setQcForm({ executionId: '', agentId: '', quantity: '', sampleQuantity: '', expectedDate: '' })
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -508,7 +511,7 @@ export function ProductionOrderDetailPage() {
         ? 'success'
         : completedRunStatuses.some((s) => s === 'rejected')
           ? 'danger'
-          : completedRunStatuses.some((s) => s === 'pending' || s === 'not_requested')
+          : completedRunStatuses.some((s) => s === 'pending' || s === 'not_requested' || s === 'partially_released')
             ? 'gold'
             : 'neutral'
 
@@ -536,19 +539,25 @@ export function ProductionOrderDetailPage() {
         </div>
 
         <h2 className="mb-4 font-display text-base font-medium text-white">Order information</h2>
-        <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-          <Field
-            label="Customer order"
-            value={
-              <Link to={`/orders/${po.order_id}`} className="text-gold-300 hover:text-gold-200">
-                {po.order_number}
-              </Link>
-            }
-          />
-          <Field label="Customer" value={po.customer_name ?? '—'} />
-          <Field label="Order date" value={order ? formatDate(order.order_date) : '—'} />
-          <Field label="Due date" value={formatDate(po.due_date)} />
-        </dl>
+        {po.order_id !== null ? (
+          <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+            <Field
+              label="Customer order"
+              value={
+                <Link to={`/orders/${po.order_id}`} className="text-gold-300 hover:text-gold-200">
+                  {po.order_number}
+                </Link>
+              }
+            />
+            <Field label="Customer" value={po.customer_name ?? '—'} />
+            <Field label="Order date" value={order ? formatDate(order.order_date) : '—'} />
+            <Field label="Due date" value={formatDate(po.due_date)} />
+          </dl>
+        ) : (
+          <p className="text-sm text-white/50">
+            Stock production — built to replenish general Finished Goods inventory, not tied to a customer order.
+          </p>
+        )}
 
         <h2 className="mt-8 mb-4 font-display text-base font-medium text-white">Production information</h2>
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
@@ -556,12 +565,17 @@ export function ProductionOrderDetailPage() {
             label="Product"
             value={po.product_code ? `${po.product_code} — ${po.product_name}` : `#${po.product_id}`}
           />
-          <Field label="Ordered quantity" value={`${po.ordered_quantity ?? '—'} ${po.unit ?? ''}`} />
+          {po.order_id !== null && (
+            <Field label="Ordered quantity" value={`${po.ordered_quantity ?? '—'} ${po.unit ?? ''}`} />
+          )}
           <Field label="Planned production quantity" value={`${po.planned_quantity} ${po.unit ?? ''}`} />
-          <Field
-            label="Remaining order quantity"
-            value={po.remaining_order_quantity !== null ? `${po.remaining_order_quantity} ${po.unit ?? ''}` : '—'}
-          />
+          {po.order_id !== null && (
+            <Field
+              label="Remaining order quantity"
+              value={po.remaining_order_quantity !== null ? `${po.remaining_order_quantity} ${po.unit ?? ''}` : '—'}
+            />
+          )}
+          {po.order_id === null && <Field label="Due date" value={formatDate(po.due_date)} />}
         </dl>
 
         {po.status === 'cancelled' && po.cancel_reason && (
@@ -575,6 +589,20 @@ export function ProductionOrderDetailPage() {
           </div>
         )}
       </GlassCard>
+
+      {executions && (
+        <GlassCard className="mb-6 p-8">
+          <h2 className="mb-4 font-display text-base font-medium text-white">Finished-goods quantities</h2>
+          <dl className="grid grid-cols-2 gap-6 sm:grid-cols-6">
+            <Field label="Planned" value={`${executions.planned_quantity} ${po.unit ?? ''}`} />
+            <Field label="Produced" value={`${executions.total_produced} ${po.unit ?? ''}`} />
+            <Field label="QC pending" value={`${executions.qc_pending} ${po.unit ?? ''}`} />
+            <Field label="QC released" value={`${executions.qc_released} ${po.unit ?? ''}`} />
+            <Field label="QC rejected" value={`${executions.qc_rejected} ${po.unit ?? ''}`} />
+            <Field label="FG received" value={`${executions.qc_released} ${po.unit ?? ''}`} />
+          </dl>
+        </GlassCard>
+      )}
 
       <GlassCard className="mb-6 overflow-hidden">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 px-6 py-4">
@@ -1126,7 +1154,8 @@ export function ProductionOrderDetailPage() {
                         {request.sample_reference}
                         <div className="mt-1 text-xs text-white/40">
                           {runIndex >= 0 ? `Run #${runIndex + 1}` : `Execution #${request.production_execution_id}`}
-                          {request.sample_quantity ? ` — ${request.sample_quantity} sampled` : ''}
+                          {` — deciding ${request.quantity}`}
+                          {request.sample_quantity ? ` (${request.sample_quantity} sampled)` : ''}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-white/60">{request.qc_agent_name ?? '—'}</td>
@@ -1349,6 +1378,17 @@ export function ProductionOrderDetailPage() {
                     </option>
                   ))}
                 </SelectField>
+              </div>
+              <div className="w-36">
+                <TextField
+                  label="Quantity to decide"
+                  type="number"
+                  min={0}
+                  step="any"
+                  placeholder="All undecided"
+                  value={qcForm.quantity}
+                  onChange={(e) => setQcForm((prev) => ({ ...prev, quantity: e.target.value }))}
+                />
               </div>
               <div className="w-32">
                 <TextField
