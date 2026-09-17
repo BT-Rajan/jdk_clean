@@ -1,9 +1,8 @@
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.timezone import now_kuwait_naive
 from app.models.purchase_order import PurchaseOrder
 from app.models.raw_material import RawMaterial
 from app.models.supplier_return import SupplierReturn, SupplierReturnLine
@@ -162,7 +161,7 @@ def delete_supplier_return(db: Session, return_id: int, user_id: int | None = No
             notes=f"Reversed supplier return {supplier_return.return_number} (entered in error)",
             user_id=user_id,
         )
-    supplier_return.deleted_at = datetime.now(timezone.utc)
+    supplier_return.deleted_at = now_kuwait_naive()
     supplier_return.updated_by = user_id
     audit_service.log_delete(db, TABLE_NAME, return_id, user_id)
     db.commit()

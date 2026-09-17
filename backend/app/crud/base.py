@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Any, Generic, TypeVar
 
 from sqlalchemy import or_
@@ -6,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError
 from app.core.pagination import sort_and_paginate
+from app.core.timezone import now_kuwait_naive
 from app.services import audit_service
 
 ModelType = TypeVar("ModelType")
@@ -99,7 +99,7 @@ class BaseCRUD(Generic[ModelType]):
         """Soft delete: sets deleted_at rather than removing the row."""
         obj = self.read_one(db, id)
         if hasattr(obj, "deleted_at"):
-            obj.deleted_at = datetime.now(timezone.utc)
+            obj.deleted_at = now_kuwait_naive()
         else:
             db.delete(obj)
         audit_service.log_delete(db, self.table_name, id, user_id)

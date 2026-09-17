@@ -13,12 +13,12 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt_secret, encrypt_secret
 from app.core.exceptions import ValidationAppError
+from app.core.timezone import now_kuwait_naive
 from app.models.sms_account import SmsAccount
 
 # Known operator presets -- the frontend shows these as picker options
@@ -258,7 +258,7 @@ def test_connection(db: Session, phone_number: str) -> dict:
     real and will use SMS credit)."""
     result = send_sms(db, phone_number, "Test message from your ERP's Communication settings.")
     row = _row(db)
-    row.last_tested_at = datetime.now(timezone.utc)
+    row.last_tested_at = now_kuwait_naive()
     row.last_test_ok = result["ok"]
     row.last_test_error = None if result["ok"] else result["message"]
     db.commit()

@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.core.exceptions import ConflictError
-from app.services import production_service
+from app.services import production_service, settings_service
 
 from .factories import (
     make_alternative,
@@ -26,8 +26,18 @@ from .factories import (
 TODAY = datetime.now(timezone.utc).date()
 
 
+def _next_working_day(db):
+    """See test_production_service.py's identical helper -- the
+    readiness/capacity gate zeroes out a non-working day's capacity
+    regardless of capacity_hours_per_day, so a batch meant to actually
+    be startable must land on a real working day, not just "tomorrow"."""
+    return settings_service.next_working_day(TODAY, settings_service.get_working_days(db))
+
+
 def _create_batch(db, product_id, planned_quantity=1, machine_id=None, start_offset=1, duration=1):
-    start = TODAY + timedelta(days=start_offset)
+    start = TODAY
+    for _ in range(start_offset):
+        start = settings_service.next_working_day(start, settings_service.get_working_days(db))
     end = start + timedelta(days=duration - 1)
     return production_service.create_batch(
         db,
@@ -62,7 +72,7 @@ def test_machine_capacity_failure_blocks_start(db):
     make_bom_line(db, product.id, "raw_material", material.id, quantity=1)
     set_stock(db, material.id, 100)  # materials never the issue here
 
-    window_start = TODAY + timedelta(days=1)
+    window_start = _next_working_day(db)
     # Someone else already has this machine's entire day booked.
     make_production_schedule(
         db, product_id=product.id, machine_id=machine.id, planned_quantity=1,
@@ -88,7 +98,7 @@ def test_worker_capacity_failure_blocks_start(db):
         make_bom_line(db, p.id, "raw_material", m.id, quantity=1)
         set_stock(db, m.id, 100)
 
-    window_start = TODAY + timedelta(days=1)
+    window_start = _next_working_day(db)
     # Someone else already has the entire worker pool booked that day
     # (2 workers required * 8h = the whole 2-worker/8h-day pool).
     make_production_schedule(

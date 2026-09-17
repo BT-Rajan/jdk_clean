@@ -1,8 +1,7 @@
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import NotFoundError, ValidationAppError
+from app.core.timezone import now_kuwait_naive
 from app.models.order import Order
 from app.models.payment_plan import PaymentPlan
 from app.services import audit_service
@@ -67,7 +66,7 @@ def delete_payment_plan(db: Session, order_id: int, payment_plan_id: int, user_i
     plan = get_payment_plan(db, payment_plan_id)
     if plan.order_id != order_id:
         raise NotFoundError("Payment plan")
-    plan.deleted_at = datetime.now(timezone.utc)
+    plan.deleted_at = now_kuwait_naive()
     plan.updated_by = user_id
     audit_service.log_delete(db, TABLE_NAME, payment_plan_id, user_id)
     db.commit()

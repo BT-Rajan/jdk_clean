@@ -2,9 +2,9 @@ from datetime import date, datetime
 
 from sqlalchemy import DATE, DECIMAL, BigInteger, DateTime, Enum, ForeignKey, String
 from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql import func
 
 from app.core.database import Base
+from app.core.timezone import now_kuwait_naive
 from app.models.user import BigPK
 
 
@@ -18,7 +18,7 @@ class FinishedGoodsInventory(Base):
     quantity_on_hand: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
     quantity_reserved: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
+        DateTime, default=now_kuwait_naive, onupdate=now_kuwait_naive
     )
 
 
@@ -32,7 +32,7 @@ class RawMaterialInventory(Base):
     quantity_on_hand: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
     quantity_reserved: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now(), onupdate=func.now()
+        DateTime, default=now_kuwait_naive, onupdate=now_kuwait_naive
     )
 
 
@@ -67,5 +67,5 @@ class StockMovement(Base):
     received_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     received_date: Mapped[date | None] = mapped_column(DATE, nullable=True)
     notes: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=now_kuwait_naive)
     created_by: Mapped[int | None] = mapped_column(BigInteger, ForeignKey("users.id"), nullable=True)

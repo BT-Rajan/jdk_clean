@@ -8,12 +8,12 @@ which is deliberate: one org mailbox, not a per-user inbox.
 import imaplib
 import poplib
 import smtplib
-from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt_secret, encrypt_secret
 from app.core.exceptions import ValidationAppError
+from app.core.timezone import now_kuwait_naive
 from app.models.email_account import EmailAccount
 
 # Known-host presets, keyed by provider id -- the frontend shows these as
@@ -228,7 +228,7 @@ def test_connection(db: Session) -> dict:
 
 
 def _record_test(db: Session, row: EmailAccount, ok: bool, message: str) -> dict:
-    row.last_tested_at = datetime.now(timezone.utc)
+    row.last_tested_at = now_kuwait_naive()
     row.last_test_ok = ok
     row.last_test_error = None if ok else message
     db.commit()

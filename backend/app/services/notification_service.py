@@ -1,7 +1,8 @@
-from datetime import date, datetime, timezone
+from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.timezone import today_kuwait
 from app.models.feasibility import FeasibilityCheck
 from app.models.inventory import RawMaterialInventory
 from app.models.order import Order
@@ -137,7 +138,7 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
 
     # 5. Production batches past their scheduled end without being completed.
     if _visible(user, ("warehouse",)):
-        today = date.today()
+        today = today_kuwait()
         delayed = (
             db.query(ProductionSchedule)
             .options(joinedload(ProductionSchedule.product))

@@ -154,14 +154,18 @@ def test_case_d_existing_bookings_affect_the_date(db):
     baseline_date = baseline_line.estimated_ready_date
 
     # A second, identical product/check on a machine that already has a
-    # full day booked tomorrow should land later than the baseline.
+    # full day booked on the next working day should land later than the
+    # baseline -- must be an actual working day, or that day already
+    # contributes zero capacity on its own and booking it changes nothing
+    # (see capacity_service.capacity_available_in_window).
+    booked_day = settings_service.next_working_day(TODAY, settings_service.get_working_days(db))
     make_production_schedule(
         db,
         product_id=product.id,
         machine_id=machine.id,
         planned_quantity=1,  # 1 unit * 8h/unit = the whole day's 8h capacity
-        scheduled_start=TODAY + timedelta(days=1),
-        scheduled_end=TODAY + timedelta(days=1),
+        scheduled_start=booked_day,
+        scheduled_end=booked_day,
     )
 
     booked_line = _check(db, product.id)

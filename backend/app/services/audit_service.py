@@ -4,6 +4,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ValidationAppError
+from app.core.timezone import now_kuwait_naive, today_kuwait
 
 IGNORED_FIELDS = {"updated_at", "created_at"}
 
@@ -11,10 +12,10 @@ IGNORED_FIELDS = {"updated_at", "created_at"}
 def log_create(db: Session, table_name: str, record_id: int, user_id: int | None) -> None:
     db.execute(
         text(
-            """INSERT INTO audit_log (table_name, record_id, action, changed_by)
-               VALUES (:t, :r, 'CREATE', :u)"""
+            """INSERT INTO audit_log (table_name, record_id, action, changed_by, changed_at)
+               VALUES (:t, :r, 'CREATE', :u, :ts)"""
         ),
-        {"t": table_name, "r": record_id, "u": user_id},
+        {"t": table_name, "r": record_id, "u": user_id, "ts": now_kuwait_naive()},
     )
 
 
@@ -26,6 +27,7 @@ def log_update(
     user_id: int | None,
 ) -> None:
     """changes: {field_name: (old_value, new_value)} — only fields that actually changed."""
+    ts = now_kuwait_naive()
     rows = [
         {
             "t": table_name,
@@ -34,6 +36,7 @@ def log_update(
             "old": str(old) if old is not None else None,
             "new": str(new) if new is not None else None,
             "u": user_id,
+            "ts": ts,
         }
         for field, (old, new) in changes.items()
         if field not in IGNORED_FIELDS and old != new
@@ -42,8 +45,8 @@ def log_update(
         return
     db.execute(
         text(
-            """INSERT INTO audit_log (table_name, record_id, action, field_name, old_value, new_value, changed_by)
-               VALUES (:t, :r, 'UPDATE', :f, :old, :new, :u)"""
+            """INSERT INTO audit_log (table_name, record_id, action, field_name, old_value, new_value, changed_by, changed_at)
+               VALUES (:t, :r, 'UPDATE', :f, :old, :new, :u, :ts)"""
         ),
         rows,
     )
@@ -52,20 +55,20 @@ def log_update(
 def log_delete(db: Session, table_name: str, record_id: int, user_id: int | None) -> None:
     db.execute(
         text(
-            """INSERT INTO audit_log (table_name, record_id, action, changed_by)
-               VALUES (:t, :r, 'DELETE', :u)"""
+            """INSERT INTO audit_log (table_name, record_id, action, changed_by, changed_at)
+               VALUES (:t, :r, 'DELETE', :u, :ts)"""
         ),
-        {"t": table_name, "r": record_id, "u": user_id},
+        {"t": table_name, "r": record_id, "u": user_id, "ts": now_kuwait_naive()},
     )
 
 
 def log_restore(db: Session, table_name: str, record_id: int, user_id: int | None) -> None:
     db.execute(
         text(
-            """INSERT INTO audit_log (table_name, record_id, action, changed_by)
-               VALUES (:t, :r, 'RESTORE', :u)"""
+            """INSERT INTO audit_log (table_name, record_id, action, changed_by, changed_at)
+               VALUES (:t, :r, 'RESTORE', :u, :ts)"""
         ),
-        {"t": table_name, "r": record_id, "u": user_id},
+        {"t": table_name, "r": record_id, "u": user_id, "ts": now_kuwait_naive()},
     )
 
 
@@ -122,7 +125,7 @@ def get_my_history(db: Session, user_id: int, month: str | None = None) -> list[
         except ValueError:
             raise ValidationAppError("month must be in YYYY-MM format.")
     else:
-        today = date.today()
+        today = today_kuwait()
         year, mon = today.year, today.month
 
     start = date(year, mon, 1)

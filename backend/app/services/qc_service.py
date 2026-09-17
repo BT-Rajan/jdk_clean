@@ -16,12 +16,12 @@ decided_date) come from core.timezone.today_kuwait(), never a client-
 supplied value, per the P7 spec's global Kuwait-time rule.
 """
 
-from datetime import date, datetime, timezone
+from datetime import date
 
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
-from app.core.timezone import today_kuwait
+from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_transition_allowed
 from app.core.pagination import sort_and_paginate
 from app.models.production_execution import ProductionExecution
@@ -360,7 +360,7 @@ def admin_review(db: Session, request_id: int, notes: str, user_id: int | None =
         raise ConflictError("This QC request has no pending admin review.")
 
     request.admin_review_required = False
-    request.admin_reviewed_at = datetime.now(timezone.utc)
+    request.admin_reviewed_at = now_kuwait_naive()
     request.admin_reviewed_by = user_id
     request.admin_review_notes = notes
     request.updated_by = user_id

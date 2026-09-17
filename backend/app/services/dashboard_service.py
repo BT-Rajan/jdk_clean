@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.timezone import today_kuwait
 from app.models.customer import Customer
 from app.models.deal import Deal
 from app.models.delivery_note import DeliveryNote
@@ -55,7 +56,7 @@ def get_stats(db: Session) -> dict:
     aren't computed here and aren't offered as a widget option either
     (see useDashboardPreferences.ts) rather than being faked.
     """
-    today = date.today()
+    today = today_kuwait()
     month_start = _month_start(today)
 
     stats = {

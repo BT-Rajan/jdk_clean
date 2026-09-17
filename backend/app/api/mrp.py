@@ -1,10 +1,9 @@
-from datetime import datetime, timezone
-
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.permissions import require_page_access
+from app.core.timezone import now_kuwait_naive
 from app.models.user import User
 from app.schemas.mrp import MrpReport
 from app.services import mrp_service
@@ -20,4 +19,4 @@ def get_mrp_report(
     _: User = Depends(read_guard),
 ):
     items = mrp_service.compute_requirements(db)
-    return MrpReport(generated_at=datetime.now(timezone.utc), items=items)
+    return MrpReport(generated_at=now_kuwait_naive(), items=items)

@@ -1,9 +1,8 @@
-from datetime import datetime, timezone
-
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.timezone import now_kuwait_naive
 from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.delivery_note import ALLOWED_TRANSITIONS, DeliveryNote, DeliveryNoteLine
 from app.models.order import Order
@@ -251,7 +250,7 @@ def delete_delivery_note(db: Session, note_id: int, user_id: int | None = None) 
     note = get_delivery_note(db, note_id)
     if note.status != "draft":
         raise ConflictError("Only draft delivery notes can be deleted; cancel issued ones instead.")
-    note.deleted_at = datetime.now(timezone.utc)
+    note.deleted_at = now_kuwait_naive()
     audit_service.log_delete(db, TABLE_NAME, note_id, user_id)
     db.commit()
 

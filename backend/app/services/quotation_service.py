@@ -1,5 +1,5 @@
 import json
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
 from app.core.pricing import compute_document_totals, price_line
+from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.customer import Customer
 from app.models.product import Product
@@ -498,7 +499,7 @@ def approve_quotation(db: Session, quotation_id: int, user_id: int | None = None
     quotation = get_quotation(db, quotation_id)
     if quotation.status != "draft":
         raise ConflictError("Only a draft quotation can be approved.")
-    quotation.approved_at = datetime.now(timezone.utc)
+    quotation.approved_at = now_kuwait_naive()
     quotation.approved_by = user_id
     quotation.updated_by = user_id
     audit_service.log_update(
@@ -514,7 +515,7 @@ def delete_quotation(db: Session, quotation_id: int, user_id: int | None = None)
         raise ConflictError(
             "This quotation has been converted to an order and cannot be deleted."
         )
-    quotation.deleted_at = datetime.now(timezone.utc)
+    quotation.deleted_at = now_kuwait_naive()
     audit_service.log_delete(db, TABLE_NAME, quotation_id, user_id)
     db.commit()
 
@@ -538,7 +539,7 @@ def escalate_expired_quotations(db: Session, as_of: date | None = None) -> list[
     'sent' quotations past their valid_until are ever touched, and once
     expired they're excluded by the status filter on the next run.
     """
-    today = as_of or datetime.now(timezone.utc).date()
+    today = as_of or today_kuwait()
 
     candidates = (
         db.query(Quotation)

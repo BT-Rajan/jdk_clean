@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
 from app.core.pricing import compute_document_totals, price_line
+from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.purchase_order import ALLOWED_TRANSITIONS, PurchaseOrder, PurchaseOrderLine
 from app.models.raw_material import RawMaterial
@@ -190,7 +191,7 @@ def auto_draft_from_mrp_shortages(db: Session, user_id: int | None = None) -> li
     materials = {m.id: m for m in db.query(RawMaterial).filter(RawMaterial.id.in_(material_ids)).all()}
 
     created: list[PurchaseOrder] = []
-    today = datetime.now(timezone.utc).date()
+    today = today_kuwait()
     for supplier_id, lines in by_supplier.items():
         max_lead_time = max((line["lead_time_days"] or 7) for line in lines)
         po_lines = []
@@ -329,7 +330,7 @@ def approve_purchase_order(db: Session, po_id: int, user_id: int | None = None) 
     po = get_purchase_order(db, po_id)
     if po.status != "draft":
         raise ConflictError("Only a draft purchase order can be approved.")
-    po.approved_at = datetime.now(timezone.utc)
+    po.approved_at = now_kuwait_naive()
     po.approved_by = user_id
     po.updated_by = user_id
     audit_service.log_update(
@@ -376,7 +377,7 @@ def receive_lines(
         )
     if not invoice_number or not received_by:
         raise ValidationAppError("invoice_number and received_by are required to receive goods.")
-    received_date = received_date or date.today()
+    received_date = received_date or today_kuwait()
 
     lines_by_id = {line.id: line for line in po.lines}
 
@@ -490,7 +491,7 @@ def delete_purchase_order(db: Session, po_id: int, user_id: int | None = None) -
     po = get_purchase_order(db, po_id)
     if po.status != "draft":
         raise ConflictError("Only draft purchase orders can be deleted; cancel confirmed ones instead.")
-    po.deleted_at = datetime.now(timezone.utc)
+    po.deleted_at = now_kuwait_naive()
     audit_service.log_delete(db, TABLE_NAME, po_id, user_id)
     db.commit()
 
@@ -512,7 +513,7 @@ def escalate_overdue_purchase_orders(db: Session, as_of: date | None = None) -> 
     POs that still qualify, it never clears admin_review_required itself
     (only change_status on cancel, or admin_review, does that).
     """
-    today = as_of or datetime.now(timezone.utc).date()
+    today = as_of or today_kuwait()
 
     candidates = (
         db.query(PurchaseOrder)
@@ -546,7 +547,7 @@ def admin_review(db: Session, po_id: int, notes: str, user_id: int | None = None
         raise ConflictError("This purchase order has no pending admin review.")
 
     po.admin_review_required = False
-    po.admin_reviewed_at = datetime.now(timezone.utc)
+    po.admin_reviewed_at = now_kuwait_naive()
     po.admin_reviewed_by = user_id
     po.admin_review_notes = notes
     po.updated_by = user_id
