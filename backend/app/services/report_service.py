@@ -1,8 +1,9 @@
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.timezone import now_kuwait_naive
 from app.models.customer import Customer
 from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory, StockMovement
 from app.models.order import ORDER_STATUSES, Order, OrderDetail
@@ -88,7 +89,7 @@ def _resolve_range(
     returning an empty/invalid range. With neither date given, falls back
     to the original "last N calendar months ending today" behavior.
     """
-    today = date.today()
+    today = today_kuwait()
     if date_from is not None or date_to is not None:
         range_end = min(date_to or today, today)
         range_start = date_from or range_end
@@ -245,7 +246,7 @@ def get_sales_report(
     conversion_rate = round((converted_quotations / total_quotations) * 100, 1) if total_quotations else 0.0
 
     return {
-        "generated_at": datetime.now(timezone.utc),
+        "generated_at": now_kuwait_naive(),
         "range_start": range_start,
         "range_end": range_end,
         "monthly": monthly,
@@ -392,7 +393,7 @@ def get_production_report(
     )
 
     return {
-        "generated_at": datetime.now(timezone.utc),
+        "generated_at": now_kuwait_naive(),
         "range_start": range_start,
         "range_end": range_end,
         "monthly": monthly,
@@ -540,7 +541,7 @@ def get_purchasing_report(
     ]
 
     return {
-        "generated_at": datetime.now(timezone.utc),
+        "generated_at": now_kuwait_naive(),
         "range_start": range_start,
         "range_end": range_end,
         "monthly": monthly,
@@ -730,7 +731,7 @@ def get_inventory_report(
     )
 
     return {
-        "generated_at": datetime.now(timezone.utc),
+        "generated_at": now_kuwait_naive(),
         "range_start": range_start,
         "range_end": range_end,
         "raw_material_value": round(float(raw_value), 3),

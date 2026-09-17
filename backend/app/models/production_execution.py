@@ -41,14 +41,15 @@ class ProductionExecution(Base, TimestampMixin):
     production_execution_service.get_progress) -- never a duplicated
     running total stored on the Production Order itself.
 
-    started_at/ended_at are always populated from
-    core.timezone.now_kuwait_naive() -- server-authoritative Kuwait
-    time, never a client-supplied timestamp. (The legacy
-    ProductionSchedule.actual_start/actual_end use
-    datetime.now(timezone.utc) instead, which is effectively UTC wall-
-    clock time since this app's DB server timezone is itself UTC -- a
-    pre-existing inconsistency out of scope for this pass; see the P6
-    report.)
+    started_at/ended_at, like the legacy ProductionSchedule.actual_start/
+    actual_end, are always populated from core.timezone.
+    now_kuwait_naive() -- server-authoritative Kuwait time, never a
+    client-supplied timestamp. (An earlier pass had the legacy fields
+    stamped via datetime.now(timezone.utc), effectively UTC wall-clock
+    time since this app's DB server timezone is itself UTC; that
+    inconsistency, and the equivalent one in every table's created_at/
+    updated_at via TimestampMixin, was fixed application-wide -- see
+    production_service.py and models/mixins.py.)
     """
 
     __tablename__ = "production_executions"

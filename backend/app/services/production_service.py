@@ -1,10 +1,11 @@
 import json
-from datetime import date, datetime, timezone
+from datetime import date
 
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed, assert_within_backdate_window
 from app.models.order import Order
 from app.models.product import Product
@@ -335,7 +336,7 @@ def delete_batch(db: Session, batch_id: int, user_id: int | None = None) -> None
     if batch.status != "planned":
         raise ConflictError("Only planned batches can be deleted; cancel started batches instead.")
     _release_batch_materials(db, batch)
-    batch.deleted_at = datetime.now(timezone.utc)
+    batch.deleted_at = now_kuwait_naive()
     audit_service.log_delete(db, TABLE_NAME, batch_id, user_id)
     db.commit()
 
@@ -351,7 +352,7 @@ def restore_batch(db: Session, batch_id: int, user_id: int | None = None) -> Pro
 
 
 def _start_batch(db: Session, batch: ProductionSchedule, user_id: int | None) -> None:
-    batch.actual_start = datetime.now(timezone.utc)
+    batch.actual_start = now_kuwait_naive()
     # If this batch is fulfilling a confirmed order, starting production is
     # exactly what should move the order from 'confirmed' to
     # 'in_production' -- previously that transition existed on Order but
@@ -647,7 +648,7 @@ def change_status(
         # before it) is forfeit -- closing out at less than planned_quantity
         # is a deliberate choice to stop here, not an error.
         _release_batch_materials(db, batch, commit=False)
-        batch.actual_end = datetime.now(timezone.utc)
+        batch.actual_end = now_kuwait_naive()
     elif new_status == "cancelled":
         assert_reason_given(reason, "A reason is required to cancel a production batch.")
         batch.cancel_reason = reason
@@ -739,7 +740,7 @@ def log_production(
     dangling half-done batch behind; the caller just sees the original
     error and nothing else changed.
     """
-    today = datetime.now(timezone.utc).date()
+    today = today_kuwait()
     target_date = entry_date or today
     assert_within_backdate_window(target_date, today, "production")
 
@@ -817,7 +818,7 @@ def escalate_overdue_batches(db: Session, as_of: date | None = None) -> list[Pro
     batches that still qualify, it never clears admin_review_required
     itself (only admin_review does that).
     """
-    today = as_of or datetime.now(timezone.utc).date()
+    today = as_of or today_kuwait()
 
     candidates = (
         db.query(ProductionSchedule)
@@ -850,7 +851,7 @@ def admin_review(db: Session, batch_id: int, notes: str, user_id: int | None = N
         raise ConflictError("This production batch has no pending admin review.")
 
     batch.admin_review_required = False
-    batch.admin_reviewed_at = datetime.now(timezone.utc)
+    batch.admin_reviewed_at = now_kuwait_naive()
     batch.admin_reviewed_by = user_id
     batch.admin_review_notes = notes
     batch.updated_by = user_id

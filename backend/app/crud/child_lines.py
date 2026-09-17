@@ -19,12 +19,12 @@ app/services/audit_service.get_history -- same convention every
 hand-rolled version already followed, preserved here.
 """
 
-from datetime import datetime, timezone
 from typing import Any, Generic, TypeVar
 
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError
+from app.core.timezone import now_kuwait_naive
 from app.services import audit_service
 
 ModelType = TypeVar("ModelType")
@@ -103,7 +103,7 @@ class ChildLineCRUD(Generic[ModelType]):
             self._validate_line(db, parent_id, line)
 
         existing = self._active_lines_query(db, parent_id).all()
-        now = datetime.now(timezone.utc)
+        now = now_kuwait_naive()
         for row in existing:
             row.deleted_at = now
 
@@ -173,6 +173,6 @@ class ChildLineCRUD(Generic[ModelType]):
         )
         if row is None:
             raise NotFoundError("Line")
-        row.deleted_at = datetime.now(timezone.utc)
+        row.deleted_at = now_kuwait_naive()
         audit_service.log_delete(db, self.table_name, parent_id, user_id)
         db.commit()

@@ -1,4 +1,3 @@
-from datetime import datetime, timezone
 from typing import Literal
 
 from fastapi import APIRouter, Depends, Query
@@ -9,6 +8,7 @@ from app.api.common import PagedResponse
 from app.api.deps import require_role
 from app.core.database import get_db
 from app.core.permissions import require_page_access
+from app.core.timezone import now_kuwait_naive
 from app.models.quotation import Quotation
 from app.models.user import User
 from app.schemas.email import EmailPreviewOut, SendDocumentEmailRequest
@@ -308,7 +308,7 @@ def email_quotation_pdf(
         attachment_bytes=pdf_bytes if payload.attach_pdf else None,
         attachment_filename=filename if payload.attach_pdf else None,
     )
-    quotation.last_emailed_at = datetime.now(timezone.utc)
+    quotation.last_emailed_at = now_kuwait_naive()
     audit_service.log_update(
         db, "quotations", quotation_id, {"emailed_to": (None, payload.to_email)}, user.id
     )

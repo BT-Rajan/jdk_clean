@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.exceptions import NotFoundError, ValidationAppError
+from app.core.timezone import today_kuwait
 from app.models.doc_template import DocTemplate
 from app.services import audit_service, pdf_generator
 
@@ -503,7 +504,7 @@ def build_feasibility_context(db: Session, feasibility) -> dict:
         "status_label": data["status"].replace("_", " ").title(),
         "notes": data["notes"] or "",
         "lines": lines,
-        "generated_date": _fmt_date(date.today()),
+        "generated_date": _fmt_date(today_kuwait()),
         "signer_name": signer_name or "Authorized Signatory",
         "_signature_path": signature_path,
     }
@@ -541,7 +542,7 @@ def build_quotation_context(db: Session, quotation) -> dict:
         "discount_amount": _fmt_money(data["discount_amount"]),
         "total_amount": _fmt_money(data["total_amount"]),
         "notes": data["notes"] or "",
-        "generated_date": _fmt_date(date.today()),
+        "generated_date": _fmt_date(today_kuwait()),
         "signer_name": signer_name or "Authorized Signatory",
         "_signature_path": signature_path,
     }
@@ -579,7 +580,7 @@ def build_order_context(db: Session, order) -> dict:
         "discount_amount": _fmt_money(data["discount_amount"]),
         "total_amount": _fmt_money(data["total_amount"]),
         "notes": data["notes"] or "",
-        "generated_date": _fmt_date(date.today()),
+        "generated_date": _fmt_date(today_kuwait()),
         "signer_name": signer_name or "Authorized Signatory",
         "_signature_path": signature_path,
     }
@@ -612,7 +613,7 @@ def build_delivery_note_context(db: Session, note) -> dict:
         "status_label": data["status"].replace("_", " ").title(),
         "lines": lines,
         "notes": data["notes"] or "",
-        "generated_date": _fmt_date(date.today()),
+        "generated_date": _fmt_date(today_kuwait()),
         "signer_name": signer_name or "Authorized Signatory",
         "_signature_path": signature_path,
     }

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.permissions import require_page_access
+from app.core.timezone import today_kuwait
 from app.models.user import User
 from app.schemas.report import (
     InventoryDrilldownOut,
@@ -37,7 +38,7 @@ def _validate_date_range(date_from: date | None, date_to: date | None) -> None:
     user their filter was rejected beats quietly showing them a
     different range than the one they asked for.
     """
-    if date_to is not None and date_to > date.today():
+    if date_to is not None and date_to > today_kuwait():
         raise HTTPException(status_code=400, detail="To date cannot be in the future")
 
 

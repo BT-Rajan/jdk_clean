@@ -13,11 +13,21 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from app.core.exceptions import ConflictError, ValidationAppError
-from app.services import inventory_service, production_service
+from app.services import inventory_service, production_service, settings_service
 
 from .factories import make_bom, make_bom_line, make_machine, make_product, make_raw_material, set_stock
 
 TODAY = datetime.now(timezone.utc).date()
+
+
+def _next_working_day(db):
+    """The readiness/capacity gate zeroes out a non-working day's
+    capacity regardless of how high capacity_hours_per_day is set (see
+    capacity_service.capacity_available_in_window) -- a batch meant to
+    actually be startable in a test must land on a real working day, not
+    just "tomorrow" by the calendar, or it fails on whichever real-world
+    weekday the suite happens to run on."""
+    return settings_service.next_working_day(TODAY, settings_service.get_working_days(db))
 
 
 def _ready_batch(db, planned_quantity=10, bom_quantity_per_unit=2, stock=1000):
@@ -32,7 +42,7 @@ def _ready_batch(db, planned_quantity=10, bom_quantity_per_unit=2, stock=1000):
     make_bom_line(db, product.id, "raw_material", material.id, quantity=bom_quantity_per_unit, scrap_percent=0)
     set_stock(db, material.id, stock)
 
-    start = TODAY + timedelta(days=1)
+    start = _next_working_day(db)
     batch = production_service.create_batch(
         db,
         {
@@ -183,7 +193,7 @@ def test_discrepancy_findings_accumulate_across_rounds(db):
     make_bom_line(db, product.id, "raw_material", material.id, quantity=2, scrap_percent=0)
     set_stock(db, material.id, 1000)
 
-    start = TODAY + timedelta(days=1)
+    start = _next_working_day(db)
     batch = production_service.create_batch(
         db,
         {

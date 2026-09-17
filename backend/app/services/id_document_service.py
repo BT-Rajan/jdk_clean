@@ -13,7 +13,6 @@ name, rather than this module importing either model directly.
 
 import io
 import uuid
-from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +21,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.core.exceptions import ValidationAppError
+from app.core.timezone import now_kuwait_naive
 from app.services import audit_service
 
 ALLOWED_IMAGE_FORMATS = {"JPEG": "jpg", "PNG": "png", "WEBP": "webp"}
@@ -161,7 +161,7 @@ def verify(db: Session, entity: Any, *, table_name: str, user_id: int | None) ->
         raise ValidationAppError("Upload an id document before marking it verified.")
     old = entity.id_verified
     entity.id_verified = True
-    entity.id_verified_at = datetime.now(timezone.utc)
+    entity.id_verified_at = now_kuwait_naive()
     entity.id_verified_by = user_id
     audit_service.log_update(db, table_name, entity.id, {"id_verified": (old, True)}, user_id)
     db.commit()

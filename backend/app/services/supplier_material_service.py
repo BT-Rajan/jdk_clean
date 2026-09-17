@@ -1,8 +1,7 @@
-from datetime import date
-
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import NotFoundError, ValidationAppError
+from app.core.timezone import today_kuwait
 from app.crud.child_lines import ChildLineCRUD
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
@@ -17,7 +16,7 @@ def _with_onboarded_at(line: dict) -> dict:
     this is always a brand new line), so onboarded_at is simply today
     whenever it isn't already supplied. See SupplierMaterialCRUD.
     replace_lines below for why this column is never client-supplied."""
-    return {**line, "onboarded_at": line.get("onboarded_at", date.today())}
+    return {**line, "onboarded_at": line.get("onboarded_at", today_kuwait())}
 
 
 def _enforce_single_preferred(db: Session, raw_material_id: int, keep_id: int | None) -> None:
@@ -87,7 +86,7 @@ class SupplierMaterialCRUD(ChildLineCRUD[SupplierMaterial]):
         existing_by_material = {
             row.raw_material_id: row for row in self._active_lines_query(db, parent_id).all()
         }
-        today = date.today()
+        today = today_kuwait()
         dated_lines = []
         for line in lines:
             existing = existing_by_material.get(line["raw_material_id"])

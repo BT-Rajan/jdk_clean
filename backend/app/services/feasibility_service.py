@@ -1,11 +1,11 @@
 import json
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
-from app.core.timezone import KUWAIT_TZ
+from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.customer import Customer
 from app.models.feasibility import (
@@ -43,16 +43,15 @@ def _base_query(db: Session, include_deleted: bool = False):
 
 
 def _expiry_deadline_kuwait(feasibility: FeasibilityCheck) -> datetime | None:
-    """11:59pm Kuwait time on the Kuwait calendar day `feasibility` was
-    generated -- None if created_at somehow isn't set yet (shouldn't
-    happen post-creation, but this is read on every fetch so it's worth
-    being defensive)."""
+    """11:59:59pm on the Kuwait calendar day `feasibility` was generated
+    -- None if created_at somehow isn't set yet (shouldn't happen post-
+    creation, but this is read on every fetch so it's worth being
+    defensive). created_at is already a naive Kuwait-local timestamp
+    (see models/mixins.py's TimestampMixin), so this just reads its own
+    calendar date -- no UTC conversion needed or performed."""
     if feasibility.created_at is None:
         return None
-    created_at = feasibility.created_at
-    created_utc = created_at if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc)
-    generated_date_kuwait = created_utc.astimezone(KUWAIT_TZ).date()
-    return datetime.combine(generated_date_kuwait, time(23, 59, 59), tzinfo=KUWAIT_TZ)
+    return datetime.combine(feasibility.created_at.date(), time(23, 59, 59))
 
 
 def _expire_if_due(db: Session, feasibility: FeasibilityCheck) -> bool:
@@ -66,7 +65,7 @@ def _expire_if_due(db: Session, feasibility: FeasibilityCheck) -> bool:
     deadline = _expiry_deadline_kuwait(feasibility)
     if deadline is None:
         return False
-    if datetime.now(timezone.utc).astimezone(KUWAIT_TZ) <= deadline:
+    if now_kuwait_naive() <= deadline:
         return False
 
     old_status = feasibility.status
@@ -319,7 +318,7 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
             f"Only a draft feasibility check can be run (current status: '{feasibility.status}')."
         )
 
-    today = datetime.now(timezone.utc).date()
+    today = today_kuwait()
     working_days = settings_service.get_working_days(db)
     all_feasible = True
     for line in feasibility.lines:
@@ -552,7 +551,7 @@ def run_check(db: Session, feasibility_id: int, user_id: int | None = None) -> F
     old_status = feasibility.status
     new_status = "feasible" if all_feasible else "exception_pending"
     feasibility.status = new_status
-    feasibility.checked_at = datetime.now(timezone.utc)
+    feasibility.checked_at = now_kuwait_naive()
     feasibility.updated_by = user_id
     audit_service.log_update(
         db, TABLE_NAME, feasibility_id, {"status": (old_status, new_status)}, user_id
@@ -642,7 +641,7 @@ def admin_decide_override(
     old_status = feasibility.status
     feasibility.status = new_status
     feasibility.admin_review_required = False
-    feasibility.admin_reviewed_at = datetime.now(timezone.utc)
+    feasibility.admin_reviewed_at = now_kuwait_naive()
     feasibility.admin_reviewed_by = user_id
     feasibility.admin_review_notes = notes
     feasibility.updated_by = user_id
@@ -703,7 +702,7 @@ def _maybe_auto_create_quotation(db: Session, feasibility_id: int, user_id: int 
                 "customer_id": feasibility.customer_id,
                 "deal_id": feasibility.deal_id,
                 "feasibility_id": feasibility.id,
-                "quotation_date": datetime.now(timezone.utc).date(),
+                "quotation_date": today_kuwait(),
                 "valid_until": None,
                 "notes": f"Auto-created from feasibility check {feasibility.feasibility_number}.",
                 "auto_created": True,
@@ -746,7 +745,7 @@ def revive_feasibility(db: Session, feasibility_id: int, user_id: int | None = N
 
     old_status = feasibility.status
     feasibility.status = "draft"
-    feasibility.created_at = datetime.now(timezone.utc)
+    feasibility.created_at = now_kuwait_naive()
     feasibility.checked_at = None
     feasibility.exception_reason = None
     feasibility.exception_by = None
@@ -803,7 +802,7 @@ def escalate_stale_feasibility_checks(db: Session, as_of: date | None = None) ->
     endpoint daily); idempotent -- re-running only (re)flags checks that
     still qualify. Mirrors order_service.escalate_overdue_orders exactly.
     """
-    today = as_of or datetime.now(timezone.utc).date()
+    today = as_of or today_kuwait()
     cutoff = today - timedelta(days=STALE_AFTER_DAYS)
 
     candidates = (
@@ -835,10 +834,10 @@ def escalate_stale_feasibility_checks(db: Session, as_of: date | None = None) ->
 def escalate_expired_feasibility_checks(db: Session, as_of: datetime | None = None) -> list[FeasibilityCheck]:
     """Expires every feasibility check not yet converted to a quotation
     by 11:59pm Kuwait time on the calendar day it was generated
-    (created_at, read in Kuwait local time -- 'the day it was generated'
-    means Kuwait's day, not UTC's, so a check created just before
-    midnight UTC doesn't get an extra few hours or lose them). Reachable
-    from any open status (draft, feasible, exception_pending,
+    (created_at is already a naive Kuwait-local timestamp -- see
+    models/mixins.py's TimestampMixin -- so 'the day it was generated'
+    is simply its own calendar date, no UTC conversion involved).
+    Reachable from any open status (draft, feasible, exception_pending,
     exception_approved, exception_rejected) -- wherever it was sitting
     in the workflow when its day ended. Closed/converted checks are
     already terminal and untouched here; an already-expired check is
@@ -850,10 +849,7 @@ def escalate_expired_feasibility_checks(db: Session, as_of: datetime | None = No
     this (and the other scan/escalate checks) every 6 hours, frequent
     enough that nothing sits unexpired for long past its actual cutoff.
     """
-    now_utc = as_of or datetime.now(timezone.utc)
-    if now_utc.tzinfo is None:
-        now_utc = now_utc.replace(tzinfo=timezone.utc)
-    now_kuwait = now_utc.astimezone(KUWAIT_TZ)
+    now = as_of or now_kuwait_naive()
 
     candidates = (
         db.query(FeasibilityCheck)
@@ -870,7 +866,7 @@ def escalate_expired_feasibility_checks(db: Session, as_of: datetime | None = No
         if deadline_kuwait is None:
             continue
 
-        if now_kuwait > deadline_kuwait:
+        if now > deadline_kuwait:
             old_status = feasibility.status
             feasibility.status = "expired"
             audit_service.log_update(
@@ -904,7 +900,7 @@ def admin_review(db: Session, feasibility_id: int, notes: str, user_id: int | No
         )
 
     feasibility.admin_review_required = False
-    feasibility.admin_reviewed_at = datetime.now(timezone.utc)
+    feasibility.admin_reviewed_at = now_kuwait_naive()
     feasibility.admin_reviewed_by = user_id
     feasibility.admin_review_notes = notes
     feasibility.updated_by = user_id
@@ -951,7 +947,7 @@ def delete_feasibility(db: Session, feasibility_id: int, user_id: int | None = N
     feasibility = get_feasibility(db, feasibility_id)
     if feasibility.status == "converted":
         raise ConflictError("This feasibility check has been converted to a quotation and cannot be deleted.")
-    feasibility.deleted_at = datetime.now(timezone.utc)
+    feasibility.deleted_at = now_kuwait_naive()
     audit_service.log_delete(db, TABLE_NAME, feasibility_id, user_id)
     db.commit()
 

@@ -17,11 +17,11 @@ import json
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import datetime, timezone
 
 from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt_secret, encrypt_secret
+from app.core.timezone import now_kuwait_naive
 from app.models.whatsapp_account import WhatsAppAccount
 
 GRAPH_HOST = "https://graph.facebook.com"
@@ -161,7 +161,7 @@ def test_connection(db: Session) -> dict:
 
 
 def _record_test(db: Session, row: WhatsAppAccount, ok: bool, message: str) -> dict:
-    row.last_tested_at = datetime.now(timezone.utc)
+    row.last_tested_at = now_kuwait_naive()
     row.last_test_ok = ok
     row.last_test_error = None if ok else message
     db.commit()

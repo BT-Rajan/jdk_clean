@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timezone
+from datetime import date
 
 from sqlalchemy import or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import NotFoundError, PermissionError_
+from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import is_within_backdate_window
 from app.models.calendar_event import CalendarEvent, CalendarEventMention
 from app.models.order import Order
@@ -124,7 +125,7 @@ def update_event(db: Session, user: User, event_id: int, payload: CalendarEventU
 
 def delete_event(db: Session, user: User, event_id: int) -> None:
     event = _get_own_event(db, user, event_id)
-    event.deleted_at = datetime.now(timezone.utc).replace(tzinfo=None)
+    event.deleted_at = now_kuwait_naive()
     event.updated_by = user.id
     db.commit()
 
@@ -137,7 +138,7 @@ def get_day_snapshot(db: Session, target_date: date) -> dict:
     day-actions popup: a snapshot of what happened, alongside the option
     to log something that hasn't been entered yet.
     """
-    today = datetime.now(timezone.utc).date()
+    today = today_kuwait()
 
     batches = (
         db.query(ProductionSchedule)

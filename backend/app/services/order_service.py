@@ -1,4 +1,4 @@
-from datetime import date, datetime, timezone
+from datetime import date
 from typing import Any
 
 from sqlalchemy.orm import Session, joinedload
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.exceptions import AppError, ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
 from app.core.pricing import compute_document_totals, price_line
+from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed, assert_within_backdate_window
 from app.models.customer import Customer
 from app.models.delivery_note import DeliveryNote
@@ -273,7 +274,7 @@ def log_sale(
     doesn't leave a dangling order behind; the caller just sees the
     original error.
     """
-    today = datetime.now(timezone.utc).date()
+    today = today_kuwait()
     target_date = entry_date or today
     assert_within_backdate_window(target_date, today, "a sale")
 
@@ -507,7 +508,7 @@ def change_status(
         # confirm" check -- 'confirmed' is only ever reached once (see
         # ALLOWED_TRANSITIONS), so this never needs to guard against
         # overwriting an earlier value.
-        order.confirmed_at = datetime.now(timezone.utc)
+        order.confirmed_at = now_kuwait_naive()
     if new_status in STATUSES_REQUIRING_CLOSE_REASON:
         order.close_reason = reason
         # A deliberate close resolves any pending escalation (overdue-
@@ -576,7 +577,7 @@ def _maybe_send_confirmation_email(db: Session, order_id: int, user_id: int | No
     except AppError:
         return
 
-    order.confirmation_emailed_at = datetime.now(timezone.utc)
+    order.confirmation_emailed_at = now_kuwait_naive()
     db.commit()
 
 
@@ -685,7 +686,7 @@ def split_order(db: Session, order_id: int, lines: list[dict], user_id: int | No
         order_number=number_series_service.next_number(db, "ORDER"),
         customer_id=order.customer_id,
         deal_id=order.deal_id,
-        order_date=datetime.now(timezone.utc).date(),
+        order_date=today_kuwait(),
         requested_delivery_date=order.requested_delivery_date,
         confirmed_delivery_date=order.confirmed_delivery_date,
         status="ready_to_ship",
@@ -819,7 +820,7 @@ def _maybe_auto_schedule_production(db: Session, order_id: int, user_id: int | N
     from app.services import capacity_service, inventory_service, production_service
 
     order = get_order(db, order_id)
-    today = datetime.now(timezone.utc).date()
+    today = today_kuwait()
 
     any_batch_created = False
     any_line_unresolved = False
@@ -962,7 +963,7 @@ def _maybe_auto_create_delivery_note(db: Session, order_id: int, user_id: int | 
             db,
             {
                 "order_id": order_id,
-                "delivery_date": datetime.now(timezone.utc).date(),
+                "delivery_date": today_kuwait(),
                 "auto_created": True,
                 "notes": "Auto-created when the order became ready to ship.",
             },
@@ -983,7 +984,7 @@ def approve_order(db: Session, order_id: int, user_id: int | None = None) -> Ord
     order = get_order(db, order_id)
     if order.status != "draft":
         raise ConflictError("Only a draft order can be approved.")
-    order.approved_at = datetime.now(timezone.utc)
+    order.approved_at = now_kuwait_naive()
     order.approved_by = user_id
     order.updated_by = user_id
     audit_service.log_update(
@@ -1000,7 +1001,7 @@ def mark_payment_requested(db: Session, order_id: int, user_id: int | None = Non
     payment_service.py). Doesn't touch order status or block anything;
     can be called any number of times as a reminder."""
     order = get_order(db, order_id)
-    order.payment_requested_at = datetime.now(timezone.utc)
+    order.payment_requested_at = now_kuwait_naive()
     order.updated_by = user_id
     audit_service.log_update(
         db, TABLE_NAME, order_id, {"payment_requested_at": (None, order.payment_requested_at.isoformat())}, user_id
@@ -1013,7 +1014,7 @@ def delete_order(db: Session, order_id: int, user_id: int | None = None) -> None
     order = get_order(db, order_id)
     if order.status != "draft":
         raise ConflictError("Only draft orders can be deleted; cancel confirmed orders instead.")
-    order.deleted_at = datetime.now(timezone.utc)
+    order.deleted_at = now_kuwait_naive()
     audit_service.log_delete(db, TABLE_NAME, order_id, user_id)
     db.commit()
 
@@ -1034,7 +1035,7 @@ def escalate_overdue_orders(db: Session, as_of: date | None = None) -> list[Orde
     still qualify, it never clears admin_review_required itself (only
     change_status on cancel, or admin_review, does that).
     """
-    today = as_of or datetime.now(timezone.utc).date()
+    today = as_of or today_kuwait()
 
     overdue_order_ids = {
         row.order_id
@@ -1087,7 +1088,7 @@ def escalate_unpaid_orders(db: Session, as_of: date | None = None) -> list[Order
     """
     from app.services import payment_service
 
-    today = as_of or datetime.now(timezone.utc).date()
+    today = as_of or today_kuwait()
 
     candidates = (
         db.query(Order)
@@ -1130,7 +1131,7 @@ def admin_review(db: Session, order_id: int, notes: str, user_id: int | None = N
 
     order.admin_review_required = False
     order.admin_review_reason = None
-    order.admin_reviewed_at = datetime.now(timezone.utc)
+    order.admin_reviewed_at = now_kuwait_naive()
     order.admin_reviewed_by = user_id
     order.admin_review_notes = notes
     order.updated_by = user_id
@@ -1184,7 +1185,7 @@ def create_order_from_quotation(db: Session, quotation_id: int, user_id: int | N
         order_number=order_number,
         customer_id=quotation.customer_id,
         deal_id=deal.id,
-        order_date=datetime.now(timezone.utc).date(),
+        order_date=today_kuwait(),
         subtotal_amount=quotation.subtotal_amount,
         total_amount=quotation.total_amount,
         notes=f"Converted from quotation {quotation.quotation_number}.",
