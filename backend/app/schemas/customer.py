@@ -103,6 +103,7 @@ class CustomerOut(BaseModel):
     city: str | None
     country: str | None
     category: str | None
+    assigned_to: int | None
     credit_limit: float
     payment_terms_days: int
     payment_terms_type: str
@@ -131,3 +132,12 @@ class CustomerOut(BaseModel):
 class CustomerOnboardingStatusUpdate(BaseModel):
     status: str = Field(pattern="^(pending|under_review|active|on_hold|rejected)$")
     reason: str | None = None
+
+
+class CustomerAssignUpdate(BaseModel):
+    """Payload for POST /{customer_id}/assign -- see api/customers.py.
+    assigned_to may be null to unassign (leaves the customer visible
+    only to a Department Head/admin and whoever created it, until
+    reassigned)."""
+
+    assigned_to: int | None = None

@@ -1,8 +1,10 @@
 import re
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, ValidationAppError
+from app.core.permissions import is_team_member
 from app.crud.base import BaseCRUD
 from app.models.customer import Customer
 from app.models.department import Department
@@ -48,13 +50,48 @@ class UserCRUD(BaseCRUD):
         if exists is None:
             raise ValidationAppError(f"Department {department_id} is not a recognized, active department.")
 
+    def _validate_role_department(
+        self, db: Session, role: str, department_id: int | None, exclude_user_id: int | None = None
+    ) -> None:
+        """department_head/team_member both require a department (spec
+        section 10: "Department Head + no department must not be
+        allowed", same for Team Member) -- admin/viewer/legacy manager
+        are unrestricted here, same as before this pass. Also enforces
+        one active department_head per department (section 11): the
+        business hasn't shown a need for more than one, and nothing in
+        the existing schema suggests otherwise, so this stays a hard
+        rule rather than configurable -- revisit only if that changes.
+        """
+        if role in ("department_head", "team_member") and department_id is None:
+            raise ValidationAppError(
+                f"A {role.replace('_', ' ')} must have a department."
+            )
+        if role != "department_head" or department_id is None:
+            return
+        existing_head = db.query(User).filter(
+            User.department_id == department_id,
+            User.role == "department_head",
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+        )
+        if exclude_user_id is not None:
+            existing_head = existing_head.filter(User.id != exclude_user_id)
+        if existing_head.first() is not None:
+            raise ConflictError("This department already has an active department head. Reassign or deactivate them first.")
+
     def create(self, db: Session, data: dict, user_id: int | None = None) -> User:
         self._validate_department(db, data.get("department_id"))
+        self._validate_role_department(db, data.get("role", "staff"), data.get("department_id"))
         return super().create(db, data, user_id=user_id)
 
     def update(self, db: Session, id: int, data: dict, user_id: int | None = None) -> User:
         if "department_id" in data:
             self._validate_department(db, data["department_id"])
+        if "role" in data or "department_id" in data:
+            existing = self.read_one(db, id)
+            role = data.get("role", existing.role)
+            department_id = data.get("department_id", existing.department_id)
+            self._validate_role_department(db, role, department_id, exclude_user_id=id)
         return super().update(db, id, data, user_id=user_id)
 
 
@@ -64,6 +101,20 @@ class CustomerCRUD(BaseCRUD):
     searchable_fields = ["name", "code", "customer_number", "email", "contact_person", "phone"]
     sortable_fields = ["name", "code", "customer_number", "created_at"]
     filterable_fields = ["status", "city", "country", "category"]
+
+    def _scope_query(self, query, user: User | None = None):
+        """Ownership scoping for team_member (the flagship rule from
+        spec section 6): created_by=them OR assigned_to=them. Every
+        other role (admin, department_head, viewer, and any
+        not-yet-migrated legacy 'manager') sees whatever the page-level
+        check already allowed -- unfiltered here, see
+        app/core/permissions.py's module docstring for why department_
+        head deliberately does NOT get this restriction. `user=None`
+        (the BaseCRUD default) means "no scoping", used by internal
+        callers that already know they're allowed the record."""
+        if user is None or not is_team_member(user):
+            return query
+        return query.filter(or_(Customer.created_by == user.id, Customer.assigned_to == user.id))
 
     def _check_duplicate_phone(self, db: Session, phone: str | None, exclude_id: int | None = None) -> None:
         if not phone:

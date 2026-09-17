@@ -13,10 +13,13 @@ from app.schemas.user import AdminResetPasswordRequest, UserCreate, UserOut, Use
 from app.services import audit_service, auth_service, signature_service
 
 router = APIRouter(prefix="/api/users", tags=["users"])
-admin_only = require_role("admin", "manager")
-# Password resets are more sensitive than the general user-edit actions above
-# (email, role, department, etc.) -- restricted to admin, not manager.
-admin_strict = require_role("admin")
+# Admin-only: user management (including who becomes a department_head)
+# is exactly the privilege escalation path spec section 11 says only
+# admin should control. Was ("admin", "manager") -- manager's blanket
+# global reach is what this whole hardening pass removes, see
+# app/core/permissions.py's module docstring.
+admin_only = require_role("admin")
+admin_strict = admin_only
 
 
 @router.get("", response_model=PagedResponse)
@@ -63,11 +66,19 @@ def _validate_manager_id(db: Session, user_id: int, manager_id: int | None) -> N
     """Enforced only when manager_id is being set to something other than
     None -- clearing it (drag to "Unassigned" in the org chart) always
     passes. A Member's reporting line must point at an active, non-deleted
-    manager, and never at themselves; cross-department reporting is
+    manager-tier user, and never at themselves; cross-department reporting is
     intentionally allowed (see migrations/2026-08-31_add_user_manager_id.sql).
     There's only one level of reporting here (Member -> Manager, Manager
     is always directly under the Owner tier), so no cycle check is needed
     beyond the self-reference guard.
+
+    Accepts role in ('manager', 'department_head'): 'department_head' is
+    the new manager-tier role going forward (see
+    migrations/2026-10-02_add_department_head_team_member_roles.sql) --
+    without this, a freshly created department_head couldn't be picked
+    as anyone's org-chart manager, a regression this hardening pass
+    would otherwise introduce. This check is org-chart display only and
+    has no bearing on RBAC/department scoping.
     """
     if manager_id is None:
         return
@@ -80,9 +91,9 @@ def _validate_manager_id(db: Session, user_id: int, manager_id: int | None) -> N
     )
     if manager is None:
         raise ValidationAppError(f"Manager {manager_id} not found.")
-    if manager.role != "manager" or not manager.is_active:
+    if manager.role not in ("manager", "department_head") or not manager.is_active:
         raise ValidationAppError(
-            f"{manager.full_name} is not an active manager and can't have reports assigned in the org chart."
+            f"{manager.full_name} is not an active manager/department head and can't have reports assigned in the org chart."
         )
 
 

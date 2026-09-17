@@ -1,7 +1,9 @@
 """Manages the department_permissions matrix that app.core.permissions
-enforces. Only ever touched by admin/manager (see api/permissions.py's
-guard) -- staff and viewer users are governed by this data, never
-allowed to change it.
+enforces. Only ever touched by admin (see api/permissions.py's guard)
+-- every other role is governed by this data, never allowed to change
+it (department_head included: heads run their department's day-to-day
+work, but only admin assigns heads or edits what a department can
+reach, see spec section 11).
 
 Departments come from the Department master (app/models/department.py),
 not a hardcoded tuple -- the matrix always has one row per *active*
@@ -11,7 +13,7 @@ changes the grid without a code change here.
 
 from sqlalchemy.orm import Session
 
-from app.core.permissions import PAGE_KEYS
+from app.core.permissions import PAGE_KEYS, is_admin
 from app.models.department import Department
 from app.models.department_permission import DepartmentPermission
 from app.services import audit_service
@@ -50,11 +52,13 @@ def compute_effective_permissions(db: Session, user) -> dict[str, str]:
     """The calling user's own access_level per page -- what
     require_page_access actually enforces, exposed as data instead of a
     gate, so the frontend can decide what to show in nav/routing without
-    needing admin rights to see the whole matrix. admin/manager get
-    'write' on every page; viewer gets 'read' on every page; staff get
-    whatever their department has been granted (or 'none', including
-    when they have no department at all)."""
-    if user.role in ("admin", "manager"):
+    needing admin rights to see the whole matrix. admin gets 'write' on
+    every page; viewer gets 'read' on every page; every other role
+    (department_head, team_member, and the legacy staff/manager values)
+    gets whatever their department has been granted, or 'none' including
+    when they have no department at all -- mirrors
+    app/core/permissions.py's has_page_access."""
+    if is_admin(user):
         return dict.fromkeys(PAGE_KEYS, "write")
     if user.role == "viewer":
         return dict.fromkeys(PAGE_KEYS, "read")

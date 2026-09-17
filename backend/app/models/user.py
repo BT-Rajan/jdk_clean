@@ -25,12 +25,13 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     full_name: Mapped[str] = mapped_column(String(120), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
     avatar_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # Which document-creating department this user belongs to (staff only
-    # get write access to Quotations/Orders/Purchase Orders through this --
-    # admin/manager keep full access regardless). NULL means no department,
-    # i.e. a staff member with read-only access everywhere, same as before
-    # this column existed. References the Department master (People &
-    # Organization) instead of a hardcoded ENUM -- see app/models/department.py.
+    # Which department this user belongs to -- required for
+    # department_head/team_member (and legacy staff), enforced in
+    # app/api/users.py; admin keeps full access regardless of this field.
+    # NULL means no department, i.e. no page access anywhere (see
+    # app/core/permissions.py has_page_access) until one is assigned.
+    # References the Department master (People & Organization) instead
+    # of a hardcoded ENUM -- see app/models/department.py.
     department_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("departments.id"), nullable=True)
     # foreign_keys is explicit because departments.created_by/updated_by
     # (TimestampMixin) also point back at users.id, giving SQLAlchemy two
@@ -38,22 +39,35 @@ class User(Base, TimestampMixin, SoftDeleteMixin):
     department: Mapped["Department | None"] = relationship(
         "Department", lazy="joined", foreign_keys=[department_id]
     )
-    # Which Manager this user (a Member -- staff/viewer) reports to in the
-    # org chart (Admin -> Access control -> Org chart). Admin ("Owner") and
-    # manager rows leave this NULL: there's exactly one owner tier and one
-    # manager tier, both fixed by role, so only Members need a reporting
-    # line. No ORM relationship (just the raw id) since the org-chart
-    # endpoint builds the tree itself from a flat user list -- see
-    # app/api/users.py update_user for the "target must be an active
-    # manager" validation enforced on write.
+    # Which Manager this user (a Member -- staff/team_member/viewer)
+    # reports to in the org chart (Admin -> Access control -> Org
+    # chart). Admin/manager/department_head rows leave this NULL: only
+    # Members need a reporting line. No ORM relationship (just the raw
+    # id) since the org-chart endpoint builds the tree itself from a
+    # flat user list -- see app/api/users.py update_user for the
+    # "target must be an active manager or department_head" validation
+    # enforced on write. Unrelated to RBAC/department scoping (see
+    # app/core/permissions.py) -- this is org-chart display only.
     manager_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
     # Admin-assigned signature image (mirrors avatar_filename exactly --
     # same upload/storage pattern, see profile_service.py and
     # signature_service.py). No self-upload, no approval state: admin
     # uploads and assigns directly.
     signature_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # 'manager' and 'staff' are legacy values, kept for backward
+    # compatibility rather than dropped (a live enum rename would need a
+    # data migration that can't always resolve deterministically -- see
+    # migrations/2026-10-02_add_department_head_team_member_roles.sql).
+    # New users get 'department_head'/'team_member' instead. A legacy
+    # 'staff' row is treated identically to 'team_member' everywhere in
+    # app.core.permissions -- department-scoped, no special casing. A
+    # legacy 'manager' row is NOT treated as 'department_head': it kept
+    # its department-blind global access only until this migration ran;
+    # since then it has whatever role + department an admin has since
+    # assigned it (see the migration file for why some manager rows
+    # can't be auto-migrated).
     role: Mapped[str] = mapped_column(
-        Enum("admin", "manager", "staff", "viewer", name="user_role"),
+        Enum("admin", "manager", "staff", "viewer", "department_head", "team_member", name="user_role"),
         nullable=False,
         default="staff",
     )

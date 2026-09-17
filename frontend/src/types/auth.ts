@@ -3,7 +3,10 @@
  * Keep these in sync with the backend when either side changes shape.
  */
 
-export type UserRole = 'admin' | 'manager' | 'staff' | 'viewer'
+/** 'manager'/'staff' are legacy values, kept for backward compatibility
+ * with existing rows -- new users get 'department_head'/'team_member'
+ * instead (see backend/app/models/user.py's role enum comment). */
+export type UserRole = 'admin' | 'manager' | 'staff' | 'viewer' | 'department_head' | 'team_member'
 
 export interface User {
   id: number
@@ -22,8 +25,9 @@ export interface User {
   department_code: string | null
   department_name: string | null
   /** Org chart reporting line (Admin -> Access control -> Org chart) --
-   * the id of the manager-role user this user reports to. Only ever set
-   * for staff/viewer ("Member") rows; admin/manager rows leave it null. */
+   * the id of the manager/department_head-role user this user reports
+   * to. Only ever set for staff/team_member/viewer ("Member") rows;
+   * admin/manager/department_head rows leave it null. */
   manager_id: number | null
   has_signature: boolean
   is_active: boolean

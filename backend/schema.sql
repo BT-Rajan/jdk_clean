@@ -82,7 +82,11 @@ CREATE TABLE IF NOT EXISTS users (
     -- migrations/2026-08-31_add_user_manager_id.sql for the full rationale.
     manager_id      BIGINT UNSIGNED NULL,
     signature_filename VARCHAR(255) NULL,
-    role            ENUM('admin','manager','staff','viewer') NOT NULL DEFAULT 'staff',
+    -- 'manager'/'staff' kept for backward compatibility with existing
+    -- rows and the org-chart reporting line (see manager_id above) --
+    -- new users get 'department_head'/'team_member' instead. See
+    -- migrations/2026-10-02_add_department_head_team_member_roles.sql.
+    role            ENUM('admin','manager','staff','viewer','department_head','team_member') NOT NULL DEFAULT 'staff',
     is_active       TINYINT(1)   NOT NULL DEFAULT 1,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -134,6 +138,11 @@ CREATE TABLE IF NOT EXISTS customers (
     -- Free-text operational classification for filtering/reporting
     -- only -- same shape as raw_materials.category / products.category.
     category        VARCHAR(100) NULL,
+    -- Who currently owns the operational relationship with this customer
+    -- (Sales Head/admin assign; see app/api/customers.py POST
+    -- /{id}/assign). Distinct from created_by (TimestampMixin) below,
+    -- which never changes once set -- see app/models/customer.py.
+    assigned_to     BIGINT UNSIGNED NULL,
     credit_limit    DECIMAL(14,2) NOT NULL DEFAULT 0,
     payment_terms_days SMALLINT UNSIGNED NOT NULL DEFAULT 30,
     -- Classification alongside payment_terms_days above -- 'credit'
@@ -170,8 +179,10 @@ CREATE TABLE IF NOT EXISTS customers (
     updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_customers_id_verified_by FOREIGN KEY (id_verified_by) REFERENCES users(id),
+    CONSTRAINT fk_customers_assigned_to FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_customers_deleted_at (deleted_at),
-    INDEX idx_customers_name (name)
+    INDEX idx_customers_name (name),
+    INDEX idx_customers_assigned_to (assigned_to)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================

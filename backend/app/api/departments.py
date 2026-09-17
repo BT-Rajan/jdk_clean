@@ -29,11 +29,14 @@ def _guard_department_in_use(db: Session, department_id: int) -> None:
         )
 
 
-# Admin/manager-only, not department-permission-gated: departments define
-# the very axis department_permissions is keyed on, so letting a
-# department's own staff manage the department list would be a privilege
-# escalation path (see app/core/permissions.py -- Access Control is
-# excluded from PAGE_KEYS for the same reason).
+# Admin-only, not department-permission-gated: departments define the
+# very axis department_permissions is keyed on, so letting a
+# department's own head/team manage the department list would be a
+# privilege escalation path (see app/core/permissions.py -- Access
+# Control is excluded from PAGE_KEYS for the same reason). Also where
+# section 11's "only admin designates/changes a Department Head" is
+# enforced -- see app/api/users.py's role/department validation, which
+# is where a user actually becomes a given department's head.
 router = build_crud_router(
     crud=department_crud,
     create_schema=DepartmentCreate,
@@ -41,6 +44,6 @@ router = build_crud_router(
     out_schema=DepartmentOut,
     prefix="/api/departments",
     tags=["departments"],
-    write_roles=("admin", "manager"),
+    write_roles=("admin",),
     delete_guard=_guard_department_in_use,
 )

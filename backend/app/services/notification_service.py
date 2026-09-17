@@ -10,22 +10,36 @@ from app.models.production_schedule import ProductionSchedule
 from app.models.raw_material import RawMaterial
 from app.models.user import User
 
-# Which roles/departments each notification *type* is relevant to. Mirrors
-# lib/roles.ts on the frontend: admin/manager always see everything;
-# sales/procurement/warehouse staff see only what's relevant to their
-# department, same as canWriteDepartment gates their write access.
-ADMIN_ROLES = ("admin", "manager")
+# Which roles/departments each notification *type* is relevant to.
+# Mirrors lib/roles.ts on the frontend: admin always sees everything;
+# department_head/team_member (and the legacy staff/manager values) see
+# only what's relevant to their own department, same as
+# canWriteDepartment gates their write access. 'manager' deliberately
+# dropped from the admin-wide bypass here -- see
+# app/core/permissions.py's module docstring for why manager no longer
+# gets department-blind global reach after this hardening pass.
+ADMIN_ROLES = ("admin",)
+
+# Roles that are department-scoped for notification visibility -- every
+# non-admin role except viewer (which has no write-triggered
+# notifications of its own to see). Legacy 'manager' is included since
+# an unresolved one (no department assigned, see
+# migrations/2026-10-02_add_department_head_team_member_roles.sql) has
+# department_code None and simply won't match any department, same as
+# it won't match any page access -- not a special case, falls out of
+# the same department-scoped check as everyone else.
+DEPARTMENT_SCOPED_ROLES = ("staff", "team_member", "department_head", "manager")
 
 
 def _visible(user: User, departments: tuple[str, ...] | None) -> bool:
-    """departments=None means admin/manager-only (e.g. admin-review
-    escalations). Otherwise: admin/manager see it regardless, staff see it
-    only if their department matches."""
+    """departments=None means admin-only (e.g. admin-review
+    escalations). Otherwise: admin sees it regardless, everyone else
+    sees it only if their department matches."""
     if user.role in ADMIN_ROLES:
         return True
     if departments is None:
         return False
-    return user.role == "staff" and user.department_code in departments
+    return user.role in DEPARTMENT_SCOPED_ROLES and user.department_code in departments
 
 
 def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
