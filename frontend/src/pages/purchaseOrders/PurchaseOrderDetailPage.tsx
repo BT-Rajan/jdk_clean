@@ -251,7 +251,7 @@ export function PurchaseOrderDetailPage() {
       // Re-derive from the just-returned PO, not the stale pre-receive
       // quantities still sitting in the inputs -- otherwise a line that
       // was just fully received would still show its old (now invalid)
-      // amount, and a second click on "Receive goods" would resubmit it,
+      // amount, and a second click on "Receive materials" would resubmit it,
       // double-counting stock for the same delivery.
       setReceiveQuantities(defaultReceiveQuantities(updated))
       setReceiveLineDetails({})
@@ -640,7 +640,7 @@ export function PurchaseOrderDetailPage() {
               />
             </div>
             <div className="mt-4 flex justify-end">
-              <Button isLoading={busy} disabled={!hasPendingReceipt} onClick={handleReceive}>Receive goods</Button>
+              <Button isLoading={busy} disabled={!hasPendingReceipt} onClick={handleReceive}>Receive materials</Button>
             </div>
           </div>
         )}

@@ -1,6 +1,7 @@
 from datetime import date, timedelta
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
@@ -65,6 +66,39 @@ def get_purchase_order(
     if obj is None:
         raise NotFoundError("Purchase order")
     return obj
+
+
+# A line only counts as "incoming" once the supplier has actually been
+# committed to (sent onward) -- a draft PO is still just an internal
+# intent, not something a warehouse user should read as "on the way".
+OPEN_PO_STATUSES = ("sent", "confirmed", "partially_received")
+
+
+def get_open_quantities_by_material(db: Session, raw_material_ids: list[int] | None = None) -> dict[int, float]:
+    """How much of each raw material is still outstanding on an open PO
+    (quantity - received_quantity, summed across every not-yet-fully-
+    received, not-cancelled line) -- the same remaining-quantity figure
+    receive_lines() already checks per line, just aggregated per material
+    for the Warehouse stock screen's "incoming" column. No new purchasing
+    logic, just a grouped read of what's already there.
+    """
+    query = (
+        db.query(
+            PurchaseOrderLine.raw_material_id,
+            func.sum(PurchaseOrderLine.quantity - PurchaseOrderLine.received_quantity),
+        )
+        .join(PurchaseOrder, PurchaseOrderLine.purchase_order_id == PurchaseOrder.id)
+        .filter(
+            PurchaseOrder.status.in_(OPEN_PO_STATUSES),
+            PurchaseOrder.deleted_at.is_(None),
+            PurchaseOrderLine.is_cancelled.is_(False),
+            PurchaseOrderLine.quantity > PurchaseOrderLine.received_quantity,
+        )
+    )
+    if raw_material_ids is not None:
+        query = query.filter(PurchaseOrderLine.raw_material_id.in_(raw_material_ids))
+
+    return {raw_material_id: float(qty) for raw_material_id, qty in query.group_by(PurchaseOrderLine.raw_material_id)}
 
 
 _PO_SORTABLE_FIELDS = {

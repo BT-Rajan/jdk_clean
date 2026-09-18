@@ -3,6 +3,7 @@ import type {
   FinishedGoodStockItem,
   InventoryItemType,
   LowStockItem,
+  RawMaterialStockItem,
   StockAdjustPayload,
   StockLevel,
   StockMovement,
@@ -36,6 +37,15 @@ export async function getFinishedGoodsStock(
   params: FinishedGoodsQueryParams,
 ): Promise<PagedResponse<FinishedGoodStockItem>> {
   const { data } = await apiClient.get<PagedResponse<FinishedGoodStockItem>>('/api/inventory/finished-goods', {
+    params,
+  })
+  return data
+}
+
+export async function getRawMaterialStock(
+  params: FinishedGoodsQueryParams,
+): Promise<PagedResponse<RawMaterialStockItem>> {
+  const { data } = await apiClient.get<PagedResponse<RawMaterialStockItem>>('/api/inventory/raw-materials', {
     params,
   })
   return data

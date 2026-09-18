@@ -59,8 +59,8 @@ def test_issued_stock_movement_references_the_specific_delivery_note(db):
         db, item_type="product", item_id=product.id, reference_type="delivery_note", reference_id=note.id
     )
     assert movements["total"] == 1
-    assert movements["items"][0].quantity == -10
-    assert movements["items"][0].movement_type == "issue"
+    assert movements["items"][0]["quantity"] == -10
+    assert movements["items"][0]["movement_type"] == "issue"
 
 
 def test_double_issue_is_rejected_and_does_not_double_deduct(db):

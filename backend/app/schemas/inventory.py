@@ -55,14 +55,44 @@ class FinishedGoodStockItem(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class RawMaterialStockItem(BaseModel):
+    raw_material_id: int
+    code: str
+    name: str
+    unit: str
+    material_status: str
+    quantity_on_hand: float
+    quantity_reserved: float
+    quantity_available: float
+    reorder_point: float
+    is_low: bool
+    # Quantity still outstanding on an open (sent/confirmed/partially
+    # received) purchase order line -- always a real computed number, so
+    # defaults to 0 rather than null.
+    incoming_quantity: float = 0
+    # From mrp_service.compute_requirements(): only set when this
+    # material currently has live production demand *and* a shortfall
+    # against on-hand stock -- MRP doesn't compute a "total required"
+    # figure for a material with no shortfall, so left null rather than
+    # invented as 0 (0 would misleadingly read as "confirmed no demand").
+    required_quantity: float | None = None
+    shortfall: float | None = None
+
+    model_config = {"from_attributes": True}
+
+
 class StockMovementOut(BaseModel):
     id: int
     item_type: str
     item_id: int
+    item_name: str | None = None
+    item_route: str | None = None
     movement_type: str
     quantity: float
     reference_type: str | None
     reference_id: int | None
+    reference_label: str | None = None
+    reference_route: str | None = None
     supplier_id: int | None
     unit_cost: float | None
     batch_number: str | None

@@ -282,6 +282,14 @@ export function RawMaterialDetailPage() {
             <Field label="Maximum stock" value={material.maximum_stock > 0 ? `${material.maximum_stock} ${material.unit}` : 'No ceiling set'} />
             <Field label="Storage location" value={material.storage_location} />
           </dl>
+          <div className="mt-6 border-t border-white/10 pt-6">
+            <Link
+              to={`/inventory?item_type=raw_material&item_id=${materialId}`}
+              className="text-sm font-medium text-gold-300 hover:text-gold-200"
+            >
+              View stock movements for this material →
+            </Link>
+          </div>
         </GlassCard>
       </TabPanel>
 

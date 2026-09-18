@@ -301,6 +301,14 @@ export function ProductDetailPage() {
               />
               <Field label="Reorder point" value={`${product.reorder_point} ${product.unit}`} />
             </dl>
+            <div className="mt-6 border-t border-white/10 pt-6">
+              <Link
+                to={`/inventory?item_type=product&item_id=${productId}`}
+                className="text-sm font-medium text-gold-300 hover:text-gold-200"
+              >
+                View stock movements for this product →
+              </Link>
+            </div>
           </GlassCard>
 
           <GlassCard className="p-8">

@@ -735,12 +735,18 @@ def get_inventory_report(
         .filter(Product.deleted_at.is_(None))
         .scalar()
     )
+    # Outer join, same as inventory_service.get_low_stock() -- a material
+    # that's never had a single stock movement has no RawMaterialInventory
+    # row yet (lazily created), so an inner join here would silently drop
+    # it from the count even though it's at zero stock, likely below its
+    # reorder point. Coalesce to 0 so a missing row reads as "no stock".
     low_stock_count = (
-        db.query(RawMaterialInventory)
-        .join(RawMaterial, RawMaterialInventory.raw_material_id == RawMaterial.id)
+        db.query(RawMaterial)
+        .outerjoin(RawMaterialInventory, RawMaterialInventory.raw_material_id == RawMaterial.id)
         .filter(
             RawMaterial.deleted_at.is_(None),
-            RawMaterialInventory.quantity_on_hand <= RawMaterial.reorder_point,
+            RawMaterial.status == "active",
+            func.coalesce(RawMaterialInventory.quantity_on_hand, 0) <= RawMaterial.reorder_point,
         )
         .count()
     )

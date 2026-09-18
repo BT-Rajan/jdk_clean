@@ -8,11 +8,12 @@ from app.models.user import User
 from app.schemas.inventory import (
     FinishedGoodStockItem,
     LowStockItem,
+    RawMaterialStockItem,
     StockAdjustRequest,
     StockLevelOut,
     StockMovementOut,
 )
-from app.services import inventory_service
+from app.services import inventory_service, mrp_service, purchase_order_service
 
 router = APIRouter(prefix="/api/inventory", tags=["inventory"])
 read_guard = require_page_access("inventory", "read")
@@ -37,6 +38,38 @@ def finished_goods_stock(
         db, page=page, page_size=page_size, search=search, sort=sort, low_only=low_only
     )
     result["items"] = [FinishedGoodStockItem.model_validate(i) for i in result["items"]]
+    return result
+
+
+@router.get("/raw-materials", response_model=PagedResponse)
+def raw_material_stock(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(10, ge=1, le=200),
+    search: str | None = Query(None),
+    sort: str | None = Query(None),
+    low_only: bool = Query(False),
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    """Stock overview across every active raw material -- the counterpart
+    to /finished-goods below. Complements /low-stock, which only ever
+    returns the at/below-reorder-point subset, never the full list."""
+    result = inventory_service.get_raw_material_stock(
+        db, page=page, page_size=page_size, search=search, sort=sort, low_only=low_only
+    )
+    page_ids = [i["raw_material_id"] for i in result["items"]]
+    incoming = purchase_order_service.get_open_quantities_by_material(db, page_ids) if page_ids else {}
+    # MRP only reports materials with live demand *and* a shortfall --
+    # reused as-is (no re-derivation of demand/shortfall here), just
+    # looked up per material on this page.
+    requirements = {r["raw_material_id"]: r for r in mrp_service.compute_requirements(db)} if page_ids else {}
+    for item in result["items"]:
+        item["incoming_quantity"] = incoming.get(item["raw_material_id"], 0.0)
+        req = requirements.get(item["raw_material_id"])
+        if req:
+            item["required_quantity"] = req["total_required"]
+            item["shortfall"] = req["shortfall"]
+    result["items"] = [RawMaterialStockItem.model_validate(i) for i in result["items"]]
     return result
 
 
