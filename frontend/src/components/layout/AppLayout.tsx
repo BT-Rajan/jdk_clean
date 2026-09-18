@@ -112,20 +112,26 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const navEntries: NavEntry[] = [
     { to: '/dashboard', label: 'Dashboard' },
-    // Admin-only, and deliberately a top-level entry rather than buried
-    // under Settings -- Master Data (products, raw materials, BOM,
-    // suppliers' shared reference data, etc.) is reached far more often
-    // by an admin than anything else in that menu.
-    ...(isAdmin(user?.role) ? [{ to: '/master-data', label: 'Master Data' } satisfies NavLeaf] : []),
     {
       label: 'Sales',
       items: [
         { to: '/feasibilities', label: 'Feasibility checks' },
         { to: '/quotations', label: 'Quotations' },
         { to: '/orders', label: 'Orders' },
+        // The single home for Delivery notes -- previously also listed
+        // under Warehouse/Inventory as "Delivery notes (view)", same
+        // route, two menu entries pointing at it.
         { to: '/delivery-notes', label: 'Delivery notes' },
         { to: '/customers', label: 'Customers' },
-        { to: '/reports/sales-report', label: 'Sales Report' },
+      ],
+    },
+    {
+      label: 'Purchasing',
+      items: [
+        { to: '/purchase-orders', label: 'Purchase orders' },
+        { to: '/suppliers', label: 'Suppliers' },
+        { to: '/raw-materials', label: 'Raw Materials' },
+        { to: '/supplier-returns', label: 'Supplier returns' },
       ],
     },
     {
@@ -140,41 +146,47 @@ export function AppLayout({ children }: AppLayoutProps) {
         { to: '/production-orders', label: 'Production orders' },
         { to: '/production', label: 'Production schedule' },
         { to: '/machines', label: 'Production Line' },
-        { to: '/reports/production-report', label: 'Production Report' },
         { to: '/reconciliation', label: 'Reconciliation' },
       ],
     },
+    // A single link rather than a one-item dropdown -- Stock levels was
+    // the only entry here once Delivery notes' duplicate was removed.
+    { to: '/inventory', label: 'Warehouse' },
     {
-      label: 'Purchasing',
+      // Previously scattered one-per-domain inside Sales/Purchasing/
+      // Production/Warehouse -- each report is still gated the same way
+      // it always was (per-domain, server-side), this just gives them
+      // one shared home instead of four.
+      label: 'Reports',
       items: [
-        { to: '/purchase-orders', label: 'Purchase orders' },
-        { to: '/suppliers', label: 'Suppliers' },
-        { to: '/raw-materials', label: 'Raw Materials' },
-        { to: '/supplier-returns', label: 'Supplier returns' },
+        { to: '/reports/sales-report', label: 'Sales Report' },
         { to: '/reports/purchasing-report', label: 'Purchasing Report' },
-      ],
-    },
-    {
-      label: 'Warehouse/Inventory',
-      items: [
-        { to: '/inventory', label: 'Stock levels' },
-        { to: '/delivery-notes', label: 'Delivery notes (view)' },
+        { to: '/reports/production-report', label: 'Production Report' },
         { to: '/reports/inventory-report', label: 'Inventory Report' },
       ],
     },
     ...(isAdmin(user?.role)
       ? [
           {
-            label: 'Settings',
+            label: 'Admin',
             items: [
               { to: '/users', label: 'Users' },
               { to: '/departments', label: 'Departments' },
               { to: '/roles-permissions', label: 'Roles & Permissions' },
-              { to: '/admin?section=company', label: 'Company Settings' },
-              { to: '/admin?section=communication', label: 'Communication' },
-              { to: '/admin?section=email-templates', label: 'Templates' },
-              { to: '/admin?section=org-chart', label: 'Org Chart' },
-              { to: '/admin?section=ai-assistant', label: 'AI Assistant' },
+              // Master Data's own hub page (browse every master by
+              // category) is still here, just no longer a top-level nav
+              // item of its own -- most of what it lists (Users,
+              // Departments, Roles & Permissions, Customers, Suppliers,
+              // Raw Materials, Production Line) is already one click away
+              // above; this is for the rest (Products) and for browsing
+              // everything in one place.
+              { to: '/master-data', label: 'Master Data' },
+              // Company/Approvals/AI Assistant/Communication/Templates/Org
+              // Chart used to each get their own top-level dropdown entry
+              // (?section=...) even though AdminShell already groups and
+              // switches between them internally -- one link in here, and
+              // AdminShell's own nav takes it from there.
+              { to: '/admin', label: 'Admin Settings' },
             ],
           } satisfies NavGroup,
         ]
@@ -207,8 +219,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   // a page that 403s. A Master Data entry whose route is also reachable
   // from the nav bar itself (Customers, Suppliers, Raw Materials,
   // Production Line, Users, Departments, and Roles & Permissions all
-  // moved into the operational dropdowns) is skipped below -- kept here
-  // only for the masters that still aren't in the nav bar at all
+  // live in the operational/Admin dropdowns) is skipped below -- kept
+  // here only for the masters that still aren't in the nav bar at all
   // (Products), so the palette never lists the same destination twice.
   function isMasterEntryVisible(entry: (typeof MASTER_DATA_REGISTRY)[number]): boolean {
     if (entry.adminOnly) return isAdmin(user?.role)
@@ -251,13 +263,13 @@ export function AppLayout({ children }: AppLayoutProps) {
     { id: 'action:logout', label: 'Sign out', keywords: 'logout', onSelect: handleLogout },
     ...(isAdmin(user?.role)
       ? [
-          { id: 'admin:approvals', label: 'Approvals', hint: 'Settings', onSelect: () => navigate('/admin?section=approvals') },
-          // Master Data has its own top-level nav entry (see navEntries
-          // above) -- not duplicated here.
-          // Users, Departments, Roles & Permissions, Company Settings,
-          // Communication, Templates, Org Chart, and AI Assistant are
-          // covered by the Settings nav dropdown's own entries (see
-          // navEntries above) -- not duplicated here.
+          // Approvals is a quick-access shortcut straight into one
+          // AdminShell section -- it isn't its own Admin dropdown entry
+          // (see navEntries above), so it stays listed here.
+          { id: 'admin:approvals', label: 'Approvals', hint: 'Admin', onSelect: () => navigate('/admin?section=approvals') },
+          // Users, Departments, Roles & Permissions, Master Data, and
+          // Admin Settings are covered by the Admin nav dropdown's own
+          // entries (see navEntries above) -- not duplicated here.
         ]
       : []),
   ]
