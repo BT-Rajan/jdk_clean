@@ -25,7 +25,7 @@ export function DashboardCustomizePage() {
         </Link>
       </div>
 
-      <h1 className="mt-4 font-display text-3xl font-medium text-white">Customize Dashboard</h1>
+      <h1 className="mt-4 font-display text-3xl font-medium text-white">Customize dashboard</h1>
       <p className="mt-2 text-sm text-white/50">
         Choose which widgets you want to see on your dashboard. You can enable or disable them anytime.
       </p>

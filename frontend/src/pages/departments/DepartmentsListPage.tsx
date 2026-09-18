@@ -78,7 +78,7 @@ export function DepartmentsListPage() {
     { key: 'status', label: 'Status', render: (d) => <StatusBadge status={d.status} /> },
     {
       key: 'head',
-      label: 'Department Head',
+      label: 'Department head',
       render: (d) => {
         const head = peopleByDepartment[d.id]?.head
         return head ? (
@@ -92,7 +92,7 @@ export function DepartmentsListPage() {
     },
     {
       key: 'members',
-      label: 'Team Members',
+      label: 'Team members',
       render: (d) => <span className="text-white/60">{formatMembers(peopleByDepartment[d.id]?.members ?? [])}</span>,
     },
   ]

@@ -43,8 +43,8 @@ export function FeasibilitiesListPage() {
     <AppLayout>
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-medium text-white">Feasibility Checks</h1>
-          <p className="mt-2 text-sm text-white/50">{total} on file</p>
+          <h1 className="font-display text-3xl font-medium text-white">Feasibility checks</h1>
+          <p className="mt-2 text-sm text-white/50">{total} feasibility checks on file</p>
         </div>
         <div className="flex items-end gap-3">
           <div className="w-44">

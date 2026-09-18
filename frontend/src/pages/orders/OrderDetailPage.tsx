@@ -523,7 +523,7 @@ export function OrderDetailPage() {
         </div>
 
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-          <Field label="Client">
+          <Field label="Customer">
             <Link to={`/customers/${order.customer_id}`} className="text-gold-300 hover:text-gold-200">
               {order.customer_name ?? '—'}
             </Link>

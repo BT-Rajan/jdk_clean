@@ -47,24 +47,27 @@ export function RawMaterialsListPage() {
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="font-display text-3xl font-medium text-white">Raw materials</h1>
-          <p className="mt-2 text-sm text-white/50">{total} on file</p>
+          <p className="mt-2 text-sm text-white/50">{total} raw materials on file</p>
         </div>
-        {canWrite(user?.role) && <Button onClick={() => navigate('/raw-materials/new')}>New material</Button>}
-      </div>
-
-      <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-[1fr_200px]">
-        <TextField
-          label="Search"
-          placeholder="Code, name…"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-        />
-        <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="">All statuses</option>
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="blocked">Blocked</option>
-        </SelectField>
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-56">
+            <TextField
+              label="Search"
+              placeholder="Code, name…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+          </div>
+          <div className="w-44">
+            <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+              <option value="blocked">Blocked</option>
+            </SelectField>
+          </div>
+          {canWrite(user?.role) && <Button onClick={() => navigate('/raw-materials/new')}>New material</Button>}
+        </div>
       </div>
 
       <Alert variant="error">{error}</Alert>

@@ -31,6 +31,7 @@ const SEGMENT_LABELS: Record<string, SegmentInfo> = {
   quotations: { label: 'Quotations' },
   orders: { label: 'Orders' },
   production: { label: 'Production' },
+  'production-orders': { label: 'Production orders' },
   admin: { label: 'Admin' },
   'roles-permissions': { label: 'Roles & Permissions' },
   settings: { label: 'Settings' },
