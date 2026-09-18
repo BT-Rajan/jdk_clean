@@ -22,6 +22,9 @@ const NotFoundPage = lazy(() =>
   import('@/pages/NotFoundPage').then((m) => ({ default: m.NotFoundPage })),
 )
 
+const SalesHomePage = lazy(() =>
+  import('@/pages/sales/SalesHomePage').then((m) => ({ default: m.SalesHomePage })),
+)
 const CustomersListPage = lazy(() =>
   import('@/pages/customers/CustomersListPage').then((m) => ({ default: m.CustomersListPage })),
 )
@@ -68,6 +71,9 @@ const ProductDetailPage = lazy(() =>
   import('@/pages/products/ProductDetailPage').then((m) => ({ default: m.ProductDetailPage })),
 )
 
+const WarehouseHomePage = lazy(() =>
+  import('@/pages/warehouse/WarehouseHomePage').then((m) => ({ default: m.WarehouseHomePage })),
+)
 const InventoryPage = lazy(() =>
   import('@/pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryPage })),
 )
@@ -152,6 +158,9 @@ const ProductionOrdersListPage = lazy(() =>
 const ProductionOrderDetailPage = lazy(() =>
   import('@/pages/productionOrders/ProductionOrderDetailPage').then((m) => ({ default: m.ProductionOrderDetailPage })),
 )
+const ProductionHomePage = lazy(() =>
+  import('@/pages/production/ProductionHomePage').then((m) => ({ default: m.ProductionHomePage })),
+)
 const ProductionListPage = lazy(() =>
   import('@/pages/production/ProductionListPage').then((m) => ({ default: m.ProductionListPage })),
 )
@@ -191,6 +200,9 @@ const DepartmentFormPage = lazy(() =>
   import('@/pages/departments/DepartmentFormPage').then((m) => ({ default: m.DepartmentFormPage })),
 )
 
+const ReportsHomePage = lazy(() =>
+  import('@/pages/reports/ReportsHomePage').then((m) => ({ default: m.ReportsHomePage })),
+)
 const SalesReportPage = lazy(() =>
   import('@/pages/reports/SalesReportPage').then((m) => ({ default: m.SalesReportPage })),
 )
@@ -234,6 +246,7 @@ export function App() {
             {/* The password form moved into /profile; keep old links working. */}
             <Route path="/change-password" element={<Navigate to="/profile" replace />} />
 
+            <Route path="/sales" element={<SalesHomePage />} />
             <Route path="/customers" element={<CustomersListPage />} />
             <Route path="/customers/new" element={<CustomerOnboardingWizardPage />} />
             <Route path="/customers/:id" element={<CustomerDetailPage />} />
@@ -254,6 +267,7 @@ export function App() {
             <Route path="/products/:id" element={<ProductDetailPage />} />
             <Route path="/products/:id/edit" element={<ProductFormPage />} />
 
+            <Route path="/warehouse" element={<WarehouseHomePage />} />
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/inventory/adjust" element={<InventoryAdjustPage />} />
             <Route path="/mrp" element={<MrpPage />} />
@@ -287,6 +301,7 @@ export function App() {
             <Route path="/orders" element={<OrdersListPage />} />
             <Route path="/orders/:id" element={<OrderDetailPage />} />
             <Route path="/orders/:id/edit" element={<OrderFormPage />} />
+            <Route path="/production-overview" element={<ProductionHomePage />} />
             <Route path="/production-orders" element={<ProductionOrdersListPage />} />
             <Route path="/production-orders/:id" element={<ProductionOrderDetailPage />} />
             <Route path="/production" element={<ProductionListPage />} />
@@ -295,6 +310,7 @@ export function App() {
             <Route path="/production/:id/edit" element={<ProductionFormPage />} />
             <Route path="/reconciliation" element={<ReconciliationPage />} />
 
+            <Route path="/reports" element={<ReportsHomePage />} />
             <Route path="/reports/sales-report" element={<SalesReportPage />} />
             <Route path="/reports/production-report" element={<ProductionReportPage />} />
             <Route path="/reports/purchasing-report" element={<PurchasingReportPage />} />

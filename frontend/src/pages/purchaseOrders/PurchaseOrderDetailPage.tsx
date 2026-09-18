@@ -519,7 +519,9 @@ export function PurchaseOrderDetailPage() {
                 return (
                   <tr key={line.id} className={`border-b border-white/5 last:border-0 ${line.is_cancelled ? 'opacity-50' : ''}`}>
                     <td className="px-6 py-4 text-white">
-                      {line.material_code} — {line.material_name}
+                      <Link to={`/raw-materials/${line.raw_material_id}`} className="text-gold-300 hover:text-gold-200">
+                        {line.material_code} — {line.material_name}
+                      </Link>
                       {line.is_cancelled && (
                         <div className="mt-1 text-xs text-white/40">Cancelled: {line.cancel_reason}</div>
                       )}
