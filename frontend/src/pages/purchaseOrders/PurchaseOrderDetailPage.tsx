@@ -451,6 +451,12 @@ export function PurchaseOrderDetailPage() {
         </div>
 
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+          <Field label="Supplier">
+            <Link to={`/suppliers/${po.supplier_id}`} className="text-gold-300 hover:text-gold-200">
+              {po.supplier_name ?? `#${po.supplier_id}`}
+            </Link>
+            {po.supplier_code && <span className="ml-2 text-xs text-white/40">{po.supplier_code}</span>}
+          </Field>
           <Field label="Order date" value={formatDate(po.order_date)} />
           <Field label="Expected delivery" value={formatDate(po.expected_delivery_date)} />
           <Field label="Total" value={formatCurrency(po.total_amount)} />
@@ -484,6 +490,7 @@ export function PurchaseOrderDetailPage() {
                 <th className="px-6 py-4 font-medium">Unit price</th>
                 <th className="px-6 py-4 font-medium">Line total</th>
                 <th className="px-6 py-4 font-medium">Received</th>
+                <th className="px-6 py-4 font-medium">Outstanding</th>
                 {canReceive && <th className="px-6 py-4 font-medium">Receive now</th>}
                 {canReceive && <th className="px-6 py-4 font-medium">Actual unit cost</th>}
                 {canReceive && <th className="px-6 py-4 font-medium">Batch/Lot</th>}
@@ -507,6 +514,15 @@ export function PurchaseOrderDetailPage() {
                     <td className="px-6 py-4 text-white/60">{formatCurrency(line.unit_price)}</td>
                     <td className="px-6 py-4 text-white/60">{formatCurrency(line.line_total)}</td>
                     <td className="px-6 py-4 text-white/60">{line.received_quantity} {line.unit}</td>
+                    <td className="px-6 py-4">
+                      {line.is_cancelled ? (
+                        <span className="text-xs text-white/40">Cancelled</span>
+                      ) : remaining > 0 ? (
+                        <span className="text-amber-300">{remaining} {line.unit}</span>
+                      ) : (
+                        <span className="text-white/40">—</span>
+                      )}
+                    </td>
                     {canReceive && (
                       <td className="px-6 py-4">
                         {line.is_cancelled ? (

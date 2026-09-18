@@ -5,6 +5,7 @@ import { apiClient } from './client'
 
 export interface QuotationListParams extends ListQueryParams {
   customer_id?: number
+  feasibility_id?: number
 }
 
 export async function listQuotations(params: QuotationListParams): Promise<PagedResponse<Quotation>> {

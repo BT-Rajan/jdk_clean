@@ -77,6 +77,11 @@ export function SupplierReturnDetailPage() {
 
       <GlassCard className="p-8">
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+          <Field label="Supplier">
+            <Link to={`/suppliers/${supplierReturn.supplier_id}`} className="text-gold-300 hover:text-gold-200">
+              {supplierReturn.supplier_name ?? `#${supplierReturn.supplier_id}`}
+            </Link>
+          </Field>
           <Field label="Return date" value={formatDate(supplierReturn.return_date)} />
           <Field
             label="Purchase order"

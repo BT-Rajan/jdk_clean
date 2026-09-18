@@ -216,7 +216,11 @@ export function DeliveryNoteDetailPage() {
         </div>
 
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-          <Field label="Order" value={note.order_number} />
+          <Field label="Order">
+            <Link to={`/orders/${note.order_id}`} className="text-gold-300 hover:text-gold-200">
+              {note.order_number ?? `#${note.order_id}`}
+            </Link>
+          </Field>
           <Field label="Delivery date" value={formatDate(note.delivery_date)} />
           <Field label="Notes" value={note.notes} />
         </dl>

@@ -32,7 +32,9 @@ import {
   reviveFeasibility,
   runFeasibilityCheck,
 } from '@/api/feasibilities'
+import { listQuotations } from '@/api/quotations'
 import type { Feasibility } from '@/types/feasibility'
+import type { Quotation } from '@/types/quotation'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
@@ -136,6 +138,11 @@ export function FeasibilityDetailPage() {
   const allowAdmin = isAdmin(user?.role)
 
   const [feasibility, setFeasibility] = useState<Feasibility | null>(null)
+  // The quotation(s) raised from this check, if any -- there's no field
+  // on Feasibility itself for this (the FK points the other way, see
+  // Quotation.feasibility_id), so it's looked up the same way the
+  // customer detail page's Activity tab does.
+  const [resultingQuotations, setResultingQuotations] = useState<Quotation[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -159,6 +166,12 @@ export function FeasibilityDetailPage() {
   }
 
   useEffect(load, [feasibilityId])
+
+  useEffect(() => {
+    listQuotations({ feasibility_id: feasibilityId, page: 1, page_size: 5 })
+      .then((res) => setResultingQuotations(res.items))
+      .catch(() => setResultingQuotations([]))
+  }, [feasibilityId])
 
   // Wraps every action below in the same "one at a time" guard (see
   // useAsyncGuard) so a fast double-click, or two buttons that both
@@ -342,9 +355,19 @@ export function FeasibilityDetailPage() {
               {f.deal_number}
             </Link>
           )}
+          {resultingQuotations.map((q) => (
+            <Link key={q.id} to={`/quotations/${q.id}`} className="text-sm text-gold-300 hover:text-gold-200">
+              View quotation {q.quotation_number} →
+            </Link>
+          ))}
         </div>
 
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+          <Field label="Customer">
+            <Link to={`/customers/${f.customer_id}`} className="text-gold-300 hover:text-gold-200">
+              {f.customer_name ?? `#${f.customer_id}`}
+            </Link>
+          </Field>
           <Field label="Required by">{formatDate(f.required_by_date)}</Field>
           <Field label="Checked at">{f.checked_at ? formatDateTime(f.checked_at) : 'Not yet run'}</Field>
           <Field label="Created">{formatDateTime(f.created_at)}</Field>

@@ -22,10 +22,12 @@ import { WhereUsedPanel } from '@/components/master/WhereUsedPanel'
 import { deleteRawMaterial, getRawMaterial, restoreRawMaterial } from '@/api/rawMaterials'
 import { getStock } from '@/api/inventory'
 import { getSupplier } from '@/api/suppliers'
+import { getMrpReport } from '@/api/mrp'
 import { RAW_MATERIAL_TYPE_LABELS } from '@/types/rawMaterial'
 import type { RawMaterial } from '@/types/rawMaterial'
 import type { StockLevel } from '@/types/inventory'
 import type { SupplierMaterial } from '@/types/supplierMaterial'
+import type { MrpRequirementLine } from '@/types/mrp'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
@@ -59,6 +61,10 @@ export function RawMaterialDetailPage() {
   const [defaultSupplierName, setDefaultSupplierName] = useState<string | null>(null)
   const [stock, setStock] = useState<StockLevel | null>(null)
   const [suppliers, setSuppliers] = useState<SupplierMaterial[] | null>(null)
+  // Whether this material currently shows up as a shortfall in MRP --
+  // material requirements are an input to the purchasing decision, not
+  // shown here as a separate calculation (reuses GET /api/mrp as-is).
+  const [mrpRequirement, setMrpRequirement] = useState<MrpRequirementLine | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -79,6 +85,9 @@ export function RawMaterialDetailPage() {
       .finally(() => setLoading(false))
     getStock('raw_material', materialId)
       .then(setStock)
+      .catch(() => {})
+    getMrpReport()
+      .then((report) => setMrpRequirement(report.items.find((item) => item.raw_material_id === materialId) ?? null))
       .catch(() => {})
   }, [materialId])
 
@@ -218,6 +227,16 @@ export function RawMaterialDetailPage() {
           />
           <Field label="Lead time" value={leadTimeDays != null ? `${leadTimeDays} days` : '—'} />
         </dl>
+        {mrpRequirement && (
+          <div className="mt-5 flex flex-wrap items-center gap-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+            <span>
+              Short {mrpRequirement.shortfall.toLocaleString()} {material.unit} against current requirements.
+            </span>
+            <Link to="/mrp" className="font-medium underline hover:text-amber-100">
+              View in Material Requirements Planning →
+            </Link>
+          </div>
+        )}
       </GlassCard>
 
       <Tabs items={TABS} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
@@ -314,7 +333,15 @@ export function RawMaterialDetailPage() {
         <GlassCard className="p-8">
           <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <Field label="Baseline unit cost" value={formatCurrency(material.unit_cost)} />
-            <Field label="Default supplier" value={defaultSupplierName} />
+            <Field label="Default supplier">
+              {material.default_supplier_id ? (
+                <Link to={`/suppliers/${material.default_supplier_id}`} className="text-gold-300 hover:text-gold-200">
+                  {defaultSupplierName ?? `#${material.default_supplier_id}`}
+                </Link>
+              ) : (
+                '—'
+              )}
+            </Field>
           </dl>
           <p className="mt-4 text-xs text-white/40">
             Supplier-specific pricing lives on the Procurement tab -- baseline unit cost here is used for inventory
