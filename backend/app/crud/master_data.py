@@ -287,11 +287,25 @@ class ProductCRUD(BaseCRUD):
             data = {**data, "production_hours_per_unit": round(float(batch_hours) / float(batch_size), 4)}
         return data
 
+    def _check_stock_thresholds(self, data: dict, existing: Product | None) -> None:
+        # Same "fill the gaps from the existing row" reasoning as
+        # RawMaterialCRUD's identical method -- a payload that only
+        # lowers reorder_point still needs the *existing* maximum_stock
+        # to validate against.
+        maximum_stock = data.get("maximum_stock", getattr(existing, "maximum_stock", 0) if existing else 0)
+        if not maximum_stock or float(maximum_stock) <= 0:
+            return
+        reorder_point = data.get("reorder_point", getattr(existing, "reorder_point", 0) if existing else 0)
+        if reorder_point is not None and float(reorder_point) > float(maximum_stock):
+            raise ValidationAppError("Reorder point cannot exceed maximum stock.")
+
     def create(self, db: Session, data: dict, user_id: int | None = None) -> Product:
+        self._check_stock_thresholds(data, None)
         return super().create(db, self._sync_hours_per_unit(data), user_id=user_id)
 
     def update(self, db: Session, id: int, data: dict, user_id: int | None = None) -> Product:
         existing = self.read_one(db, id)
+        self._check_stock_thresholds(data, existing)
         return super().update(db, id, self._sync_hours_per_unit(data, existing), user_id=user_id)
 
 

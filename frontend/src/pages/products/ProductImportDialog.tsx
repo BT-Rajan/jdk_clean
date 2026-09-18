@@ -29,6 +29,7 @@ const IMPORT_FIELDS: ImportField[] = [
   { key: 'workers_required', label: 'Workers required', required: false, numeric: true },
   { key: 'status', label: 'Status', required: false, numeric: false },
   { key: 'reorder_point', label: 'Reorder point', required: false, numeric: true },
+  { key: 'maximum_stock', label: 'Maximum stock', required: false, numeric: true },
 ]
 
 function normalize(s: string): string {

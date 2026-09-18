@@ -228,7 +228,11 @@ export function ProductDetailPage() {
               )
             }
           />
-          <Field label="Reorder point" value={`${product.reorder_point} ${product.unit}`} />
+          <Field label="Minimum inventory" value={`${product.reorder_point} ${product.unit}`} />
+          <Field
+            label="Maximum inventory"
+            value={product.maximum_stock > 0 ? `${product.maximum_stock} ${product.unit}` : 'No ceiling set'}
+          />
           <Field label="BOM status" value={bomHeader ? <StatusBadge status={bomHeader.status} /> : '—'} />
           <Field label="Components" value={componentCount != null ? componentCount : '—'} />
           <Field label="Selling price" value={formatCurrency(product.selling_price)} />
@@ -299,7 +303,11 @@ export function ProductDetailPage() {
                   )
                 }
               />
-              <Field label="Reorder point" value={`${product.reorder_point} ${product.unit}`} />
+              <Field label="Minimum inventory" value={`${product.reorder_point} ${product.unit}`} />
+              <Field
+                label="Maximum inventory"
+                value={product.maximum_stock > 0 ? `${product.maximum_stock} ${product.unit}` : 'No ceiling set'}
+              />
             </dl>
           </GlassCard>
 

@@ -421,6 +421,8 @@ CREATE TABLE IF NOT EXISTS products (
     -- Finished-goods equivalent of raw_materials.reorder_point -- see
     -- app/models/product.py and inventory_service.get_finished_goods_stock.
     reorder_point   DECIMAL(14,4) NOT NULL DEFAULT 0,
+    -- Ceiling side of the same pair -- see raw_materials.maximum_stock.
+    maximum_stock   DECIMAL(14,4) NOT NULL DEFAULT 0,
     -- Lightweight QC, mirroring raw_materials.inspection_required/qc_notes.
     inspection_required TINYINT(1) NOT NULL DEFAULT 0,
     qc_notes        TEXT NULL,
