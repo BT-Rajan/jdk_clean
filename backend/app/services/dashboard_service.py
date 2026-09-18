@@ -12,13 +12,14 @@ from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory, S
 from app.models.machine import Machine
 from app.models.order import Order
 from app.models.product import Product
+from app.models.production_execution import ProductionExecution
 from app.models.production_schedule import ProductionSchedule
 from app.models.purchase_order import PurchaseOrder
 from app.models.quotation import Quotation
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
 from app.models.user import User
-from app.services import mrp_service, settings_service
+from app.services import mrp_service, production_execution_service, settings_service
 
 # The "order position" graph's bars: every order status still in flight
 # (mirrors order_service.py's OPEN_STATUSES), in the order Sales sees
@@ -160,24 +161,23 @@ def get_stats(db: Session) -> dict:
         .count()
     )
 
-    # Production
-    active_batches = (
-        db.query(ProductionSchedule)
-        .filter(
-            ProductionSchedule.deleted_at.is_(None),
-            ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
-        )
-        .all()
-    )
+    # Production. Every batch's status is resolved through
+    # production_execution_service.get_effective_schedule_state, not read
+    # directly off ProductionSchedule.status -- a Production-Order-linked
+    # batch's own status column never advances past 'planned' on its own
+    # (see that function's docstring), so trusting it here would count a
+    # long-since-completed batch as still active forever, and never count
+    # it toward completion. A legacy batch's own status is already
+    # correct and passes through unchanged.
+    all_batches = db.query(ProductionSchedule).filter(ProductionSchedule.deleted_at.is_(None)).all()
+    effective = production_execution_service.get_effective_schedule_state(db, all_batches)
+
+    active_batches = [b for b in all_batches if effective[b.id]["status"] in ("planned", "in_progress", "paused")]
     stats["production_active"] = _stat(len(active_batches))
     stats["production_delayed"] = _stat(sum(1 for b in active_batches if b.scheduled_end < today))
 
-    completed = db.query(ProductionSchedule).filter(
-        ProductionSchedule.deleted_at.is_(None), ProductionSchedule.status == "completed"
-    ).count()
-    total_finished = completed + db.query(ProductionSchedule).filter(
-        ProductionSchedule.deleted_at.is_(None), ProductionSchedule.status == "cancelled"
-    ).count()
+    completed = sum(1 for b in all_batches if effective[b.id]["status"] == "completed")
+    total_finished = completed + sum(1 for b in all_batches if effective[b.id]["status"] == "cancelled")
     completion_pct = round((completed / total_finished) * 100) if total_finished > 0 else None
     stats["production_completion"] = _stat(f"{completion_pct}%" if completion_pct is not None else "—")
 
@@ -300,15 +300,13 @@ def _inventory_breakdown(db: Session) -> list[dict]:
 
 
 def _production_timeline(db: Session, today: date) -> list[dict]:
+    """See the 'Production' stats block in get_dashboard_stats for why
+    status is resolved via get_effective_schedule_state rather than read
+    directly off ProductionSchedule.status."""
     at_risk_by = today + timedelta(days=AT_RISK_WINDOW_DAYS)
-    batches = (
-        db.query(ProductionSchedule)
-        .filter(
-            ProductionSchedule.deleted_at.is_(None),
-            ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
-        )
-        .all()
-    )
+    all_batches = db.query(ProductionSchedule).filter(ProductionSchedule.deleted_at.is_(None)).all()
+    effective = production_execution_service.get_effective_schedule_state(db, all_batches)
+    batches = [b for b in all_batches if effective[b.id]["status"] in ("planned", "in_progress", "paused")]
     on_schedule = sum(1 for b in batches if b.scheduled_end > at_risk_by)
     at_risk = sum(1 for b in batches if today <= b.scheduled_end <= at_risk_by)
     delayed = sum(1 for b in batches if b.scheduled_end < today)
@@ -339,17 +337,38 @@ def _month_bounds(any_day: date) -> tuple[date, date]:
 
 
 def _produced_quantity_between(db: Session, start: date, end: date) -> float:
-    total = (
+    """Total units actually produced in [start, end), across both
+    production flows. A legacy batch (no production_order_id) records
+    its own completion directly on this row -- produced_quantity/
+    actual_end are both set by production_service on completion, so
+    those columns are read as-is. A Production-Order-linked batch never
+    sets either of those columns on its ProductionSchedule row (see
+    get_effective_schedule_state's docstring) -- its real output and
+    completion time live on its own ProductionExecution rows instead
+    (produced_quantity/ended_at, set by production_execution_service.
+    complete_execution), so that flow's contribution is summed from
+    there rather than missed entirely."""
+    legacy_total = (
         db.query(func.coalesce(func.sum(ProductionSchedule.produced_quantity), 0))
         .filter(
             ProductionSchedule.deleted_at.is_(None),
+            ProductionSchedule.production_order_id.is_(None),
             ProductionSchedule.status == "completed",
             ProductionSchedule.actual_end >= start,
             ProductionSchedule.actual_end < end,
         )
         .scalar()
     )
-    return float(total)
+    po_total = (
+        db.query(func.coalesce(func.sum(ProductionExecution.produced_quantity), 0))
+        .filter(
+            ProductionExecution.status == "completed",
+            ProductionExecution.ended_at >= start,
+            ProductionExecution.ended_at < end,
+        )
+        .scalar()
+    )
+    return float(legacy_total) + float(po_total)
 
 
 def _production_this_month(db: Session, today: date) -> dict:
@@ -409,8 +428,12 @@ def _production_capacity_utilization(db: Session, today: date) -> dict:
         )
         .all()
     )
+    # See the 'Production' stats block in get_dashboard_stats for why
+    # produced_quantity/status are resolved via get_effective_schedule_state
+    # rather than read directly off these rows.
+    effective = production_execution_service.get_effective_schedule_state(db, batches)
     booked_hours = sum(
-        float(b.produced_quantity if b.status == "completed" else b.planned_quantity)
+        float(effective[b.id]["produced_quantity"] if effective[b.id]["status"] == "completed" else b.planned_quantity)
         * float(b.product.production_hours_per_unit or 0)
         for b in batches
     )

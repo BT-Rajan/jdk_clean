@@ -5,7 +5,7 @@ from app.models.production_schedule import ProductionSchedule
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
 from app.models.supplier_material import SupplierMaterial
-from app.services import bom_service, inventory_service
+from app.services import bom_service, inventory_service, production_execution_service
 
 # Orders in these statuses still need their goods produced/shipped, so
 # they're live demand. draft isn't included (not yet committed),
@@ -41,23 +41,34 @@ def _quantity_to_produce(db: Session) -> dict[int, float]:
     """
     product_qty: dict[int, float] = {}
 
-    batches = (
+    # Fetched unfiltered by status (beyond excluding cancelled/deleted),
+    # not just the "still outstanding" statuses -- a Production-Order-
+    # linked row's own `status` column never advances off 'planned' on
+    # its own (see get_effective_schedule_state's docstring), so filtering
+    # in SQL on the raw column would silently keep counting a batch
+    # that's actually long since completed. The real status/quantity for
+    # each row is resolved below instead, and only rows whose *effective*
+    # status is still outstanding are kept.
+    candidate_batches = (
         db.query(ProductionSchedule)
         .filter(
-            ProductionSchedule.status.in_(SCHEDULED_BATCH_STATUSES),
+            ProductionSchedule.status != "cancelled",
             ProductionSchedule.deleted_at.is_(None),
         )
         .all()
     )
+    effective = production_execution_service.get_effective_schedule_state(db, candidate_batches)
+    batches = [b for b in candidate_batches if effective[b.id]["status"] in SCHEDULED_BATCH_STATUSES]
     batched_order_ids = {b.order_id for b in batches if b.order_id}
     for batch in batches:
         # What's actually still outstanding on this batch -- not its full
         # planned_quantity -- now that a batch can carry partial output
         # from one or more log_partial_production calls (e.g. paused
-        # partway through). A freshly planned/in_progress batch with
-        # nothing recorded yet still contributes its full amount, same as
-        # before.
-        remaining = max(float(batch.planned_quantity) - float(batch.produced_quantity), 0.0)
+        # partway through), or, for a Production-Order-linked batch, one
+        # or more completed ProductionExecution runs. A freshly planned/
+        # in_progress batch with nothing recorded yet still contributes
+        # its full amount, same as before.
+        remaining = max(float(batch.planned_quantity) - effective[batch.id]["produced_quantity"], 0.0)
         product_qty[batch.product_id] = product_qty.get(batch.product_id, 0.0) + remaining
 
     orders_query = db.query(Order).options(joinedload(Order.lines)).filter(

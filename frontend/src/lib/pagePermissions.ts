@@ -40,6 +40,14 @@ const PATH_PREFIX_TO_PAGE_KEY: [string, string][] = [
   // permission to configure. See backend/app/api/production_orders.py.
   ['/production-orders', 'production'],
   ['/production', 'production'],
+  // The Production entry page is a summary of the same Production data,
+  // same reasoning as /purchasing above.
+  ['/production-overview', 'production'],
+  // QC requests are surfaced from within Production Orders already;
+  // this list is the same data under the same permission, not a
+  // separate QC module -- qc_agents.py's own backend router already
+  // reuses page_key="production" for QC the same way.
+  ['/qc-requests', 'production'],
   // Reconciliation spans production, materials, QC and delivery, but
   // reuses the same 'production' page key rather than a new one -- see
   // backend/app/api/reconciliation.py's own comment on the same reuse.

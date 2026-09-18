@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.timezone import now_kuwait_naive
+from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.models.customer import Customer
 from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory, StockMovement
 from app.models.order import ORDER_STATUSES, Order, OrderDetail
@@ -13,6 +13,7 @@ from app.models.purchase_order import PURCHASE_ORDER_STATUSES, PurchaseOrder, Pu
 from app.models.quotation import Quotation
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
+from app.services import production_execution_service
 
 # Orders in these statuses aren't real committed revenue -- a draft is
 # nothing until confirmed, a cancelled order never happened. Every
@@ -308,89 +309,96 @@ def get_production_report(
     instead of orders -- batches bucketed by scheduled_start (when a
     batch was scheduled, not when it finished, so a batch scheduled
     this month but still in_progress still shows up in this month's
-    trend rather than not appearing until it completes)."""
+    trend rather than not appearing until it completes).
+
+    Every batch's produced_quantity/status is read through
+    production_execution_service.get_effective_schedule_state rather
+    than trusting this table's own columns directly: a Production-
+    Order-linked batch's own status/produced_quantity never advance
+    past 'planned'/0 (see that function's own docstring on why), so
+    reading the raw columns here would silently under-report real
+    output from that flow forever. A legacy batch's own columns are
+    already correct and pass straight through unchanged. Aggregated in
+    Python (one query for the whole range) rather than per-bucket SQL
+    sums, since the correction itself needs each row resolved first.
+    """
     range_start, range_end, buckets = _resolve_range(months, date_from, date_to)
     range_end_exclusive = range_end + timedelta(days=1)
+
+    schedules = (
+        db.query(ProductionSchedule)
+        .filter(
+            ProductionSchedule.deleted_at.is_(None),
+            ProductionSchedule.scheduled_start >= range_start,
+            ProductionSchedule.scheduled_start < range_end_exclusive,
+        )
+        .all()
+    )
+    effective = production_execution_service.get_effective_schedule_state(db, schedules)
 
     monthly = []
     for year, month in buckets:
         start, end = _month_bounds(year, month)
-        base = db.query(ProductionSchedule).filter(
-            ProductionSchedule.deleted_at.is_(None),
-            ProductionSchedule.scheduled_start >= start,
-            ProductionSchedule.scheduled_start < end,
-        )
-        batch_count = base.count()
-        planned = base.with_entities(func.coalesce(func.sum(ProductionSchedule.planned_quantity), 0)).scalar()
-        produced = (
-            base.filter(ProductionSchedule.status == "completed")
-            .with_entities(func.coalesce(func.sum(ProductionSchedule.produced_quantity), 0))
-            .scalar()
+        in_month = [s for s in schedules if start <= s.scheduled_start < end]
+        planned = sum(float(s.planned_quantity) for s in in_month)
+        produced = sum(
+            effective[s.id]["produced_quantity"] for s in in_month if effective[s.id]["status"] == "completed"
         )
         monthly.append(
             {
                 "year": year,
                 "month": month,
                 "label": start.strftime("%b %Y"),
-                "batch_count": batch_count,
-                "planned_quantity": round(float(planned or 0), 4),
-                "produced_quantity": round(float(produced or 0), 4),
+                "batch_count": len(in_month),
+                "planned_quantity": round(planned, 4),
+                "produced_quantity": round(produced, 4),
             }
         )
 
     by_status = []
     for status in PRODUCTION_STATUSES:
-        q = db.query(ProductionSchedule).filter(
-            ProductionSchedule.deleted_at.is_(None),
-            ProductionSchedule.scheduled_start >= range_start,
-            ProductionSchedule.scheduled_start < range_end_exclusive,
-            ProductionSchedule.status == status,
-        )
-        count = q.count()
-        planned = q.with_entities(func.coalesce(func.sum(ProductionSchedule.planned_quantity), 0)).scalar()
-        by_status.append({"status": status, "count": count, "planned_quantity": round(float(planned or 0), 4)})
+        in_status = [s for s in schedules if effective[s.id]["status"] == status]
+        planned = sum(float(s.planned_quantity) for s in in_status)
+        by_status.append({"status": status, "count": len(in_status), "planned_quantity": round(planned, 4)})
 
-    top_product_rows = (
-        db.query(
-            Product.id,
-            Product.code,
-            Product.name,
-            func.count(ProductionSchedule.id).label("batch_count"),
-            func.sum(ProductionSchedule.produced_quantity).label("produced_quantity"),
+    product_totals: dict[int, dict] = {}
+    for s in schedules:
+        if effective[s.id]["status"] != "completed":
+            continue
+        entry = product_totals.setdefault(
+            s.product_id,
+            {
+                "code": s.product.code if s.product else None,
+                "name": s.product.name if s.product else None,
+                "batch_count": 0,
+                "produced_quantity": 0.0,
+            },
         )
-        .join(ProductionSchedule, ProductionSchedule.product_id == Product.id)
-        .filter(
-            ProductionSchedule.deleted_at.is_(None),
-            ProductionSchedule.status == "completed",
-            ProductionSchedule.scheduled_start >= range_start,
-            ProductionSchedule.scheduled_start < range_end_exclusive,
-        )
-        .group_by(Product.id, Product.code, Product.name)
-        .order_by(func.sum(ProductionSchedule.produced_quantity).desc())
-        .limit(10)
-        .all()
-    )
-    top_products = [
-        {
-            "product_id": row.id,
-            "code": row.code,
-            "name": row.name,
-            "batch_count": row.batch_count,
-            "produced_quantity": round(float(row.produced_quantity or 0), 4),
-        }
-        for row in top_product_rows
-    ]
+        entry["batch_count"] += 1
+        entry["produced_quantity"] += effective[s.id]["produced_quantity"]
+    top_products = sorted(
+        (
+            {
+                "product_id": pid,
+                "code": totals["code"],
+                "name": totals["name"],
+                "batch_count": totals["batch_count"],
+                "produced_quantity": round(totals["produced_quantity"], 4),
+            }
+            for pid, totals in product_totals.items()
+        ),
+        key=lambda r: r["produced_quantity"],
+        reverse=True,
+    )[:10]
 
-    material_discrepancy_count = (
-        db.query(ProductionSchedule)
-        .filter(
-            ProductionSchedule.deleted_at.is_(None),
-            ProductionSchedule.material_discrepancy_flag.is_(True),
-            ProductionSchedule.scheduled_start >= range_start,
-            ProductionSchedule.scheduled_start < range_end_exclusive,
-        )
-        .count()
-    )
+    # Legacy-flow-only concept -- material_discrepancy_flag is set by
+    # production_service._record_output, which only ever runs against a
+    # batch with no production_order_id (see that function's own
+    # docstring); a Production-Order-linked batch's completion
+    # (production_execution_service.complete_execution) has no
+    # equivalent flag today, so this figure is deliberately scoped to
+    # the legacy flow, not a gap introduced by this fix.
+    material_discrepancy_count = sum(1 for s in schedules if s.material_discrepancy_flag)
 
     return {
         "generated_at": now_kuwait_naive(),
@@ -410,25 +418,32 @@ def get_production_drilldown(
     status: str | None = None,
     product_id: int | None = None,
 ) -> list[dict]:
+    """See get_production_report's own note on why status/produced_quantity
+    are resolved via get_effective_schedule_state rather than read
+    directly off this table -- same correction, applied here too so a
+    drilldown row never contradicts the summary it was opened from."""
     query = db.query(ProductionSchedule).filter(ProductionSchedule.deleted_at.is_(None))
     if year is not None and month is not None:
         start, end = _month_bounds(year, month)
         query = query.filter(ProductionSchedule.scheduled_start >= start, ProductionSchedule.scheduled_start < end)
-    if status:
-        query = query.filter(ProductionSchedule.status == status)
     if product_id is not None:
         query = query.filter(ProductionSchedule.product_id == product_id)
 
-    batches = query.order_by(ProductionSchedule.scheduled_start.desc()).limit(200).all()
+    batches = query.order_by(ProductionSchedule.scheduled_start.desc()).all()
+    effective = production_execution_service.get_effective_schedule_state(db, batches)
+    if status:
+        batches = [b for b in batches if effective[b.id]["status"] == status]
+    batches = batches[:200]
+
     return [
         {
             "id": b.id,
             "batch_number": b.batch_number,
             "product_name": b.product.name if b.product else None,
             "scheduled_start": b.scheduled_start,
-            "status": b.status,
+            "status": effective[b.id]["status"],
             "planned_quantity": float(b.planned_quantity),
-            "produced_quantity": float(b.produced_quantity),
+            "produced_quantity": effective[b.id]["produced_quantity"],
         }
         for b in batches
     ]

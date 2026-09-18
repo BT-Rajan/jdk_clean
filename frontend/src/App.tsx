@@ -164,6 +164,12 @@ const ProductionDetailPage = lazy(() =>
 const ReconciliationPage = lazy(() =>
   import('@/pages/reconciliation/ReconciliationPage').then((m) => ({ default: m.ReconciliationPage })),
 )
+const QcRequestsListPage = lazy(() =>
+  import('@/pages/qc/QcRequestsListPage').then((m) => ({ default: m.QcRequestsListPage })),
+)
+const ProductionOverviewPage = lazy(() =>
+  import('@/pages/production/ProductionOverviewPage').then((m) => ({ default: m.ProductionOverviewPage })),
+)
 
 const AdminShell = lazy(() =>
   import('@/pages/admin/AdminShell').then((m) => ({ default: m.AdminShell })),
@@ -287,12 +293,14 @@ export function App() {
             <Route path="/orders" element={<OrdersListPage />} />
             <Route path="/orders/:id" element={<OrderDetailPage />} />
             <Route path="/orders/:id/edit" element={<OrderFormPage />} />
+            <Route path="/production-overview" element={<ProductionOverviewPage />} />
             <Route path="/production-orders" element={<ProductionOrdersListPage />} />
             <Route path="/production-orders/:id" element={<ProductionOrderDetailPage />} />
             <Route path="/production" element={<ProductionListPage />} />
             <Route path="/production/new" element={<ProductionFormPage />} />
             <Route path="/production/:id" element={<ProductionDetailPage />} />
             <Route path="/production/:id/edit" element={<ProductionFormPage />} />
+            <Route path="/qc-requests" element={<QcRequestsListPage />} />
             <Route path="/reconciliation" element={<ReconciliationPage />} />
 
             <Route path="/reports/sales-report" element={<SalesReportPage />} />

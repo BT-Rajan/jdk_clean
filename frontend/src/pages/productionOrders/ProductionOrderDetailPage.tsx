@@ -549,7 +549,18 @@ export function ProductionOrderDetailPage() {
                 </Link>
               }
             />
-            <Field label="Customer" value={po.customer_name ?? '—'} />
+            <Field
+              label="Customer"
+              value={
+                po.customer_id ? (
+                  <Link to={`/customers/${po.customer_id}`} className="text-gold-300 hover:text-gold-200">
+                    {po.customer_name ?? `#${po.customer_id}`}
+                  </Link>
+                ) : (
+                  po.customer_name ?? '—'
+                )
+              }
+            />
             <Field label="Order date" value={order ? formatDate(order.order_date) : '—'} />
             <Field label="Due date" value={formatDate(po.due_date)} />
           </dl>
@@ -563,7 +574,11 @@ export function ProductionOrderDetailPage() {
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
           <Field
             label="Product"
-            value={po.product_code ? `${po.product_code} — ${po.product_name}` : `#${po.product_id}`}
+            value={
+              <Link to={`/products/${po.product_id}`} className="text-gold-300 hover:text-gold-200">
+                {po.product_code ? `${po.product_code} — ${po.product_name}` : `#${po.product_id}`}
+              </Link>
+            }
           />
           {po.order_id !== null && (
             <Field label="Ordered quantity" value={`${po.ordered_quantity ?? '—'} ${po.unit ?? ''}`} />
@@ -686,7 +701,9 @@ export function ProductionOrderDetailPage() {
                   return (
                     <tr key={item.id} className="border-b border-white/5 last:border-0 align-top">
                       <td className="px-6 py-4 text-white">
-                        {item.code} — {item.name}
+                        <Link to={`/raw-materials/${item.raw_material_id}`} className="text-gold-300 hover:text-gold-200">
+                          {item.code} — {item.name}
+                        </Link>
                         <div className="mt-1 text-xs text-white/40">{item.material_type_label}</div>
                       </td>
                       <td className="px-6 py-4 text-right text-white/60">{item.required_quantity}</td>
@@ -1505,6 +1522,16 @@ export function ProductionOrderDetailPage() {
           <span className="flex items-center gap-3">
             <span className="text-white/20">→</span>
             <Badge tone={qcPipelineTone}>Quality control</Badge>
+          </span>
+          <span className="flex items-center gap-3">
+            <span className="text-white/20">→</span>
+            {executions && executions.qc_released > 0 ? (
+              <Link to={`/products/${po.product_id}`}>
+                <Badge tone="success">Finished goods</Badge>
+              </Link>
+            ) : (
+              <Badge tone="neutral">Finished goods</Badge>
+            )}
           </span>
           {FUTURE_STAGES.map((stage) => (
             <span key={stage} className="flex items-center gap-3">

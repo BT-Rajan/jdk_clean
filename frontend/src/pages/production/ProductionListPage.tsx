@@ -52,7 +52,7 @@ export function ProductionListPage() {
     <AppLayout>
       <div className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-3xl font-medium text-white">Production</h1>
+          <h1 className="font-display text-3xl font-medium text-white">Production Schedule</h1>
           <p className="mt-2 text-sm text-white/50">{total} batches on file</p>
         </div>
         <div className="flex items-end gap-3">

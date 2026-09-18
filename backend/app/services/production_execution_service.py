@@ -54,6 +54,66 @@ def list_executions_for_production_order(db: Session, production_order_id: int) 
     )
 
 
+def get_effective_schedule_state(db: Session, schedules: list[ProductionSchedule]) -> dict[int, dict]:
+    """The real produced_quantity/status for each given ProductionSchedule
+    row, correcting a gap between this flow and the legacy one: a
+    Production-Order-linked schedule's own `status`/`produced_quantity`
+    columns are never written by execution start/complete (see
+    complete_execution -- it only ever updates the ProductionExecution
+    row) or by anything else in this flow, so they stay stuck at
+    'planned'/0 forever once a schedule is created, however much real
+    production actually happens under it afterward. The real numbers
+    live on this table's own rows instead (get_progress already computes
+    them the same way, scoped to a whole Production Order; this scopes
+    the identical sum/in-progress check to one schedule at a time, since
+    that's the row MRP/reports/the dashboard actually read).
+
+    A legacy batch (production_order_id is None) already carries its own
+    accurate status/produced_quantity at all times -- production_service
+    updates both directly on every completion -- so it passes through
+    unchanged here; only Production-Order-linked rows are ever recomputed.
+    A cancelled schedule also passes through unchanged (cancellation is
+    always a direct, correctly-recorded status write, on both flows).
+
+    Returns {schedule.id: {"produced_quantity": float, "status": str}}
+    for every schedule passed in, status always one of PRODUCTION_STATUSES.
+    """
+    po_linked_ids = [s.id for s in schedules if s.production_order_id is not None and s.status != "cancelled"]
+    actuals: dict[int, dict] = {}
+    if po_linked_ids:
+        rows = (
+            db.query(
+                ProductionExecution.schedule_id,
+                ProductionExecution.status,
+                ProductionExecution.produced_quantity,
+            )
+            .filter(ProductionExecution.schedule_id.in_(po_linked_ids))
+            .all()
+        )
+        for schedule_id, status, produced_quantity in rows:
+            entry = actuals.setdefault(schedule_id, {"produced": 0.0, "in_progress": False})
+            if status == "completed":
+                entry["produced"] += float(produced_quantity)
+            elif status == "in_progress":
+                entry["in_progress"] = True
+
+    result: dict[int, dict] = {}
+    for s in schedules:
+        if s.production_order_id is None or s.status == "cancelled":
+            result[s.id] = {"produced_quantity": float(s.produced_quantity), "status": s.status}
+            continue
+        actual = actuals.get(s.id, {"produced": 0.0, "in_progress": False})
+        produced = round(actual["produced"], 4)
+        if actual["in_progress"]:
+            status = "in_progress"
+        elif produced > 0 and produced >= float(s.planned_quantity):
+            status = "completed"
+        else:
+            status = s.status
+        result[s.id] = {"produced_quantity": produced, "status": status}
+    return result
+
+
 def _completed_quantity(db: Session, production_order_id: int, for_update: bool = False, exclude_execution_id: int | None = None) -> float:
     """Sum of produced_quantity across every 'completed' execution for
     this Production Order -- the one place total-produced is computed,
