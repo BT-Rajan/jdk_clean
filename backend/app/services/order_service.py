@@ -336,6 +336,65 @@ def update_order(db: Session, order_id: int, data: dict, user_id: int | None = N
     return get_order(db, order_id)
 
 
+# An order in any of these statuses still has a delivery ahead of it, so
+# its confirmed_delivery_date is still a live commitment worth revising.
+# 'draft' is deliberately excluded -- update_order already covers a
+# draft order's confirmed_delivery_date like any other field, with no
+# reason required, since nothing's been promised to the customer yet.
+# 'shipped'/'delivered'/'cancelled' are excluded the other way: the
+# delivery already happened (or the order's closed), so there's nothing
+# left to re-commit to.
+DELIVERY_DATE_CHANGEABLE_STATUSES = {"confirmed", "in_production", "ready_to_ship"}
+
+
+def change_delivery_date(
+    db: Session, order_id: int, new_date: date, reason: str, user_id: int | None = None
+) -> Order:
+    """Revises the delivery date Sales already committed to (see
+    change_status's 'confirmed' branch, which is the only other place
+    confirmed_delivery_date gets set once an order leaves 'draft').
+    Deliberately a separate action from update_order rather than one
+    more field that function happens to allow past 'draft': once a date
+    has been promised, moving it is a decision production/delivery
+    planning needs to see coming and Sales needs to be able to explain
+    later, not a silent edit -- so a reason is mandatory and, like every
+    other order field change, it lands in the audit trail (see
+    audit_service.get_history / GET /{order_id}/history) rather than a
+    bespoke history table of its own.
+    """
+    order = get_order(db, order_id)
+    if order.status not in DELIVERY_DATE_CHANGEABLE_STATUSES:
+        if order.status == "draft":
+            raise ConflictError("A draft order's delivery date can be changed via the ordinary edit form.")
+        raise ConflictError(
+            f"Cannot change the delivery date of an order that is '{order.status}' -- "
+            "the delivery has already happened or the order is closed."
+        )
+    assert_reason_given(reason, "A reason is required to change a confirmed delivery date.")
+
+    old_date = order.confirmed_delivery_date
+    if old_date == new_date:
+        return order
+
+    order.confirmed_delivery_date = new_date
+    order.updated_by = user_id
+    audit_service.log_update(
+        db,
+        TABLE_NAME,
+        order_id,
+        {
+            "confirmed_delivery_date": (
+                old_date.isoformat() if old_date else None,
+                new_date.isoformat(),
+            ),
+            "delivery_date_change_reason": (None, reason),
+        },
+        user_id,
+    )
+    db.commit()
+    return get_order(db, order_id)
+
+
 def log_sale(
     db: Session,
     customer_id: int,
@@ -423,6 +482,84 @@ def log_sale(
     return get_order(db, order.id)
 
 
+def get_confirm_block_reasons(db: Session, order: Order) -> list[str]:
+    """Every reason this order (still 'draft') cannot move to 'confirmed'
+    right now without an admin's sign-off -- large discount, or a
+    customer over/near their credit limit. Shared by change_status
+    (which raises on these) and GET /{order_id}/confirm-check (which
+    just reports them, so Sales can see 'Awaiting admin approval:
+    <specific reason>' on a blocked order without having to attempt --
+    and fail -- the confirm action first to find out why.
+
+    Returns an empty list once order.approved_at is set (an admin has
+    already cleared whatever applied at approval time) or if nothing
+    currently blocks it -- callers that only care about the blocked
+    case should check order.approved_at themselves first, same as
+    change_status does, since a still-empty list here doesn't by
+    itself mean "no approval was ever needed."
+    """
+    block_reasons: list[str] = []
+
+    threshold = settings_service.get_effective_discount_approval_threshold(db, customer=order.customer)
+    if threshold is not None:
+        largest = max(
+            [float(order.discount_percent)] + [float(line.discount_percent) for line in order.lines],
+            default=0.0,
+        )
+        if largest >= threshold:
+            block_reasons.append(
+                f"a discount of {largest}%, at or above the large-discount approval threshold ({threshold}%)"
+            )
+
+    # Credit limit: 0 (the field's default) means nobody's set one for
+    # this customer yet, so it's treated as "not enforced" -- see
+    # payment_service.get_customer_credit_status.
+    if float(order.customer.credit_limit) > 0:
+        from app.services import payment_service
+
+        if not order.customer.id_verified:
+            block_reasons.append(
+                f"{order.customer.name} has a credit limit set but their id isn't verified yet -- "
+                "upload/verify their id document, or get admin approval"
+            )
+
+        outstanding = payment_service.get_customer_outstanding_balance(
+            db, order.customer_id, exclude_order_id=order.id
+        )
+        projected = outstanding + float(order.total_amount)
+        limit = float(order.customer.credit_limit)
+        if projected > limit:
+            block_reasons.append(
+                f"would put {order.customer.name} at {projected:.2f} outstanding, over their "
+                f"credit limit of {limit:.2f} (already owe {outstanding:.2f} on other orders) -- "
+                f"record a payment to bring them under the limit, or get admin approval"
+            )
+
+    return block_reasons
+
+
+def get_order_block_status(db: Session, order_id: int) -> dict:
+    """Read-only answer to 'why is this order blocked right now' for the
+    order detail page -- so Sales can see the specific reason (or that
+    there isn't one) without guessing from a greyed-out button or
+    triggering the real transition just to read its error. Only
+    meaningful for a 'draft' order (the only status the large-discount/
+    credit-limit gate applies to); every other status reports simply
+    not blocked, since nothing else in the workflow silently gates a
+    transition the way confirm does.
+    """
+    order = get_order(db, order_id)
+    if order.status != "draft" or order.approved_at is not None:
+        return {"blocked": False, "reasons": [], "requires_admin_approval": False}
+
+    reasons = get_confirm_block_reasons(db, order)
+    return {
+        "blocked": bool(reasons),
+        "reasons": reasons,
+        "requires_admin_approval": bool(reasons),
+    }
+
+
 def change_status(
     db: Session,
     order_id: int,
@@ -456,43 +593,7 @@ def change_status(
     assert_transition_allowed(ALLOWED_TRANSITIONS, order.status, new_status, "order")
 
     if new_status == "confirmed" and order.approved_at is None:
-        block_reasons: list[str] = []
-
-        threshold = settings_service.get_effective_discount_approval_threshold(db, customer=order.customer)
-        if threshold is not None:
-            largest = max(
-                [float(order.discount_percent)] + [float(line.discount_percent) for line in order.lines],
-                default=0.0,
-            )
-            if largest >= threshold:
-                block_reasons.append(
-                    f"a discount of {largest}%, at or above the large-discount approval threshold ({threshold}%)"
-                )
-
-        # Credit limit: 0 (the field's default) means nobody's set one
-        # for this customer yet, so it's treated as "not enforced" --
-        # see payment_service.get_customer_credit_status.
-        if float(order.customer.credit_limit) > 0:
-            from app.services import payment_service
-
-            if not order.customer.id_verified:
-                block_reasons.append(
-                    f"{order.customer.name} has a credit limit set but their id isn't verified yet -- "
-                    "upload/verify their id document, or get admin approval"
-                )
-
-            outstanding = payment_service.get_customer_outstanding_balance(
-                db, order.customer_id, exclude_order_id=order.id
-            )
-            projected = outstanding + float(order.total_amount)
-            limit = float(order.customer.credit_limit)
-            if projected > limit:
-                block_reasons.append(
-                    f"would put {order.customer.name} at {projected:.2f} outstanding, over their "
-                    f"credit limit of {limit:.2f} (already owe {outstanding:.2f} on other orders) -- "
-                    f"record a payment to bring them under the limit, or get admin approval"
-                )
-
+        block_reasons = get_confirm_block_reasons(db, order)
         if block_reasons:
             raise ConflictError(
                 "This order needs admin approval before it can be confirmed: " + "; ".join(block_reasons) + "."
@@ -676,6 +777,17 @@ def change_status(
         # ALLOWED_TRANSITIONS), so this never needs to guard against
         # overwriting an earlier value.
         order.confirmed_at = now_kuwait_naive()
+        # The moment Sales confirms is the moment they're committing to
+        # a delivery date -- if nobody typed a different one in while it
+        # was still a draft, that commitment defaults to the customer's
+        # own requested date rather than leaving confirmed_delivery_date
+        # NULL (which would silently fall back to "no commitment at
+        # all" for escalate_overdue_orders and production/delivery
+        # planning). Once set here, only change_delivery_date can move
+        # it -- see that function's docstring for why a confirmed date
+        # can't just be edited like any other field.
+        if order.confirmed_delivery_date is None:
+            order.confirmed_delivery_date = order.requested_delivery_date
     if new_status in STATUSES_REQUIRING_CLOSE_REASON:
         order.close_reason = reason
         # A deliberate close resolves any pending escalation (overdue-

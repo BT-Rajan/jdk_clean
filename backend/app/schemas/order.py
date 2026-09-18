@@ -104,6 +104,26 @@ class OrderStatusUpdate(BaseModel):
     reason: str | None = Field(default=None, max_length=5000)
 
 
+class OrderDeliveryDateChange(BaseModel):
+    """Revises confirmed_delivery_date on an order that's already past
+    'draft' -- see order_service.change_delivery_date. A reason is
+    mandatory once a date's been committed to."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    confirmed_delivery_date: date
+    reason: str = Field(min_length=1, max_length=5000)
+
+
+class OrderBlockStatus(BaseModel):
+    """Read-only answer to 'why is this order blocked' -- see
+    order_service.get_order_block_status."""
+
+    blocked: bool
+    reasons: list[str]
+    requires_admin_approval: bool
+
+
 class OrderAdminReview(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 

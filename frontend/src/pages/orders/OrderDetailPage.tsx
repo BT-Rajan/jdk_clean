@@ -8,16 +8,19 @@ import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewOrder,
   approveOrder,
+  changeOrderDeliveryDate,
   deleteOrder,
   downloadOrderDocx,
   downloadOrderPdf,
   emailOrder,
   getOrder,
+  getOrderConfirmCheck,
   getOrderFulfillment,
   requestPayment,
   restoreOrder,
   splitOrder,
   updateOrderStatus,
+  type OrderBlockStatus,
 } from '@/api/orders'
 import { createDeliveryNote, listDeliveryNotes } from '@/api/deliveryNotes'
 import { listProductionOrders } from '@/api/productionOrders'
@@ -160,6 +163,80 @@ function SplitOrderModal({
   )
 }
 
+function DeliveryDateChangeModal({
+  open,
+  order,
+  onClose,
+  onChanged,
+}: {
+  open: boolean
+  order: Order
+  onClose: () => void
+  onChanged: (updated: Order) => void
+}) {
+  const [newDate, setNewDate] = useState('')
+  const [reason, setReason] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (open) {
+      setNewDate(order.confirmed_delivery_date ?? '')
+      setReason('')
+      setFormError(null)
+    }
+  }, [open, order.confirmed_delivery_date])
+
+  async function handleSubmit() {
+    setFormError(null)
+    if (!newDate) {
+      setFormError('Choose a new delivery date.')
+      return
+    }
+    if (!reason.trim()) {
+      setFormError('A reason is required to change a confirmed delivery date.')
+      return
+    }
+    setSubmitting(true)
+    try {
+      const updated = await changeOrderDeliveryDate(order.id, newDate, reason.trim())
+      onChanged(updated)
+    } catch (err) {
+      setFormError(getApiErrorMessage(err))
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal open={open} title="Change confirmed delivery date" onClose={onClose}>
+      <div className="flex flex-col gap-4">
+        <p className="text-xs text-white/40">
+          This date is what production/delivery planning are working to. Changing it is recorded in this
+          order's history, so say why the commitment is moving.
+        </p>
+        <Alert variant="error">{formError}</Alert>
+        <TextField
+          label="New confirmed delivery date"
+          type="date"
+          min={todayDateInputMin}
+          value={newDate}
+          onChange={(e) => setNewDate(e.target.value)}
+        />
+        <TextareaField
+          label="Reason for change"
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+        />
+        <div className="mt-2 flex justify-end gap-3">
+          <Button variant="ghost" type="button" onClick={onClose}>Cancel</Button>
+          <Button type="button" isLoading={submitting} onClick={handleSubmit}>Save new date</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
 export function OrderDetailPage() {
   const { id } = useParams()
   const orderId = Number(id)
@@ -192,6 +269,8 @@ export function OrderDetailPage() {
   // detail page), so this surfaces just enough to answer "is this order's
   // production waiting on QC" without building one.
   const [qcByProductionOrder, setQcByProductionOrder] = useState<Record<number, QcRequest[]>>({})
+  const [blockStatus, setBlockStatus] = useState<OrderBlockStatus | null>(null)
+  const [deliveryDateOpen, setDeliveryDateOpen] = useState(false)
 
   function load() {
     setLoading(true)
@@ -200,6 +279,14 @@ export function OrderDetailPage() {
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
   }
+
+  function loadBlockStatus() {
+    getOrderConfirmCheck(orderId)
+      .then(setBlockStatus)
+      .catch(() => setBlockStatus(null))
+  }
+
+  useEffect(loadBlockStatus, [orderId])
 
   function loadDeliveryNotes() {
     listDeliveryNotes({ order_id: orderId, page: 1, page_size: 50 })
@@ -242,6 +329,7 @@ export function OrderDetailPage() {
       setOrder(updated)
       setNotice(`Status changed to ${status}.`)
       loadFulfillment()
+      loadBlockStatus()
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -256,6 +344,7 @@ export function OrderDetailPage() {
       const updated = await approveOrder(orderId)
       setOrder(updated)
       setNotice('Approved.')
+      loadBlockStatus()
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -450,6 +539,17 @@ export function OrderDetailPage() {
         </div>
       )}
 
+      {order.status === 'draft' && blockStatus?.blocked && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <span>
+            Awaiting admin approval before this order can be confirmed: {blockStatus.reasons.join('; ')}.
+          </span>
+          {allowAdmin && !order.approved_at && (
+            <Button variant="ghost" size="sm" onClick={handleApprove} isLoading={busy}>Approve</Button>
+          )}
+        </div>
+      )}
+
       {order.admin_review_required && allowAdmin && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           <span>
@@ -535,6 +635,18 @@ export function OrderDetailPage() {
           </Field>
           <Field label="Order date" value={formatDate(order.order_date)} />
           <Field label="Requested delivery" value={formatDate(order.requested_delivery_date)} />
+          <Field label="Confirmed delivery">
+            {formatDate(order.confirmed_delivery_date)}
+            {allowWrite && order.status !== 'draft' && order.status !== 'shipped' && order.status !== 'delivered' && order.status !== 'cancelled' && (
+              <button
+                type="button"
+                onClick={() => setDeliveryDateOpen(true)}
+                className="ml-2 text-xs text-gold-300 underline hover:text-gold-200"
+              >
+                Change
+              </button>
+            )}
+          </Field>
           <Field label="Total" value={formatCurrency(order.total_amount)} />
         </dl>
         {order.discount_percent > 0 && (
@@ -841,6 +953,17 @@ export function OrderDetailPage() {
           setProductionOrderModalOpen(false)
           setNotice(`Production order ${po.production_order_number} created.`)
           loadProductionOrders()
+        }}
+      />
+
+      <DeliveryDateChangeModal
+        open={deliveryDateOpen}
+        order={order}
+        onClose={() => setDeliveryDateOpen(false)}
+        onChanged={(updated) => {
+          setOrder(updated)
+          setDeliveryDateOpen(false)
+          setNotice('Confirmed delivery date changed.')
         }}
       />
 
