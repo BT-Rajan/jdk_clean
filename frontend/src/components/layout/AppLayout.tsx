@@ -115,6 +115,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     {
       label: 'Sales',
       items: [
+        { to: '/sales', label: 'Overview' },
         { to: '/feasibilities', label: 'Feasibility checks' },
         { to: '/quotations', label: 'Quotations' },
         { to: '/orders', label: 'Orders' },
@@ -143,6 +144,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         // and Purchasing respectively, so a second link to the exact same
         // route only added nav clutter (and a duplicate command-palette
         // entry) without reaching anywhere new.
+        { to: '/production-overview', label: 'Overview' },
         { to: '/mrp', label: 'MRP' },
         { to: '/production-orders', label: 'Production orders' },
         { to: '/production', label: 'Production schedule' },
@@ -150,9 +152,13 @@ export function AppLayout({ children }: AppLayoutProps) {
         { to: '/reconciliation', label: 'Reconciliation' },
       ],
     },
-    // A single link rather than a one-item dropdown -- Stock levels was
-    // the only entry here once Delivery notes' duplicate was removed.
-    { to: '/inventory', label: 'Warehouse' },
+    {
+      label: 'Warehouse',
+      items: [
+        { to: '/warehouse', label: 'Overview' },
+        { to: '/inventory', label: 'Stock levels' },
+      ],
+    },
     {
       // Previously scattered one-per-domain inside Sales/Purchasing/
       // Production/Warehouse -- each report is still gated the same way
@@ -160,6 +166,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       // one shared home instead of four.
       label: 'Reports',
       items: [
+        { to: '/reports', label: 'Overview' },
         { to: '/reports/sales-report', label: 'Sales Report' },
         { to: '/reports/purchasing-report', label: 'Purchasing Report' },
         { to: '/reports/production-report', label: 'Production Report' },
