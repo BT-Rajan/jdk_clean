@@ -21,6 +21,7 @@ import {
 } from '@/api/orders'
 import { createDeliveryNote, listDeliveryNotes } from '@/api/deliveryNotes'
 import { listProductionOrders } from '@/api/productionOrders'
+import { listQcRequests } from '@/api/qcRequests'
 import { todayDateInputMin } from '@/lib/validation'
 import { PaymentsPanel } from './PaymentsPanel'
 import { PaymentPlansPanel } from './PaymentPlansPanel'
@@ -28,6 +29,7 @@ import { CreateProductionOrderModal } from './CreateProductionOrderModal'
 import type { Order, OrderFulfillmentLine } from '@/types/order'
 import type { DeliveryNote } from '@/types/deliveryNote'
 import type { ProductionOrder } from '@/types/productionOrder'
+import type { QcRequest } from '@/types/qcRequest'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
@@ -185,6 +187,11 @@ export function OrderDetailPage() {
   const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([])
   const [productionOrders, setProductionOrders] = useState<ProductionOrder[]>([])
   const [fulfillment, setFulfillment] = useState<OrderFulfillmentLine[]>([])
+  // QC state per production order, keyed by production_order_id -- QC has
+  // no list page of its own (only reachable from a Production Order's own
+  // detail page), so this surfaces just enough to answer "is this order's
+  // production waiting on QC" without building one.
+  const [qcByProductionOrder, setQcByProductionOrder] = useState<Record<number, QcRequest[]>>({})
 
   function load() {
     setLoading(true)
@@ -202,7 +209,17 @@ export function OrderDetailPage() {
 
   function loadProductionOrders() {
     listProductionOrders({ order_id: orderId, page: 1, page_size: 50 })
-      .then((result) => setProductionOrders(result.items))
+      .then((result) => {
+        setProductionOrders(result.items)
+        return Promise.all(
+          result.items.map((po) =>
+            listQcRequests({ production_order_id: po.id, page: 1, page_size: 10 })
+              .then((r) => [po.id, r.items] as const)
+              .catch(() => [po.id, []] as const),
+          ),
+        )
+      })
+      .then((entries) => entries && setQcByProductionOrder(Object.fromEntries(entries)))
       .catch(() => setProductionOrders([]))
   }
 
@@ -650,25 +667,42 @@ export function OrderDetailPage() {
                   <th className="px-6 py-4 font-medium">Due date</th>
                   <th className="px-6 py-4 font-medium">Priority</th>
                   <th className="px-6 py-4 font-medium">Status</th>
+                  <th className="px-6 py-4 font-medium">QC</th>
                 </tr>
               </thead>
               <tbody>
-                {productionOrders.map((po) => (
-                  <tr key={po.id} className="border-b border-white/5 last:border-0">
-                    <td className="px-6 py-4">
-                      <Link to={`/production-orders/${po.id}`} className="font-medium text-gold-300 hover:text-gold-200">
-                        {po.production_order_number}
-                      </Link>
-                    </td>
-                    <td className="px-6 py-4 text-white">
-                      {po.product_code ? `${po.product_code} — ${po.product_name}` : `#${po.product_id}`}
-                    </td>
-                    <td className="px-6 py-4 text-white/60">{po.planned_quantity} {po.unit ?? ''}</td>
-                    <td className="px-6 py-4 text-white/60">{formatDate(po.due_date)}</td>
-                    <td className="px-6 py-4"><Badge tone="neutral">{po.priority}</Badge></td>
-                    <td className="px-6 py-4"><StatusBadge status={po.status} /></td>
-                  </tr>
-                ))}
+                {productionOrders.map((po) => {
+                  const qcRequests = qcByProductionOrder[po.id] ?? []
+                  const latestQc = qcRequests[0]
+                  return (
+                    <tr key={po.id} className="border-b border-white/5 last:border-0">
+                      <td className="px-6 py-4">
+                        <Link to={`/production-orders/${po.id}`} className="font-medium text-gold-300 hover:text-gold-200">
+                          {po.production_order_number}
+                        </Link>
+                      </td>
+                      <td className="px-6 py-4 text-white">
+                        {po.product_code ? `${po.product_code} — ${po.product_name}` : `#${po.product_id}`}
+                      </td>
+                      <td className="px-6 py-4 text-white/60">{po.planned_quantity} {po.unit ?? ''}</td>
+                      <td className="px-6 py-4 text-white/60">{formatDate(po.due_date)}</td>
+                      <td className="px-6 py-4"><Badge tone="neutral">{po.priority}</Badge></td>
+                      <td className="px-6 py-4"><StatusBadge status={po.status} /></td>
+                      <td className="px-6 py-4">
+                        {latestQc ? (
+                          <Link to={`/production-orders/${po.id}`} className="inline-flex items-center gap-2 hover:opacity-80">
+                            <StatusBadge status={latestQc.status} />
+                            {qcRequests.length > 1 && (
+                              <span className="text-xs text-white/40">+{qcRequests.length - 1} more</span>
+                            )}
+                          </Link>
+                        ) : (
+                          <span className="text-white/40">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

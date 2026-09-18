@@ -259,6 +259,11 @@ export function QuotationDetailPage() {
               {quotation.deal_number}
             </Link>
           )}
+          {quotation.feasibility_id && (
+            <Link to={`/feasibilities/${quotation.feasibility_id}`} className="text-sm text-gold-300 hover:text-gold-200">
+              View feasibility check →
+            </Link>
+          )}
           {quotation.approved_at && (
             <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200">
               Approved {formatDate(quotation.approved_at)}
@@ -295,6 +300,11 @@ export function QuotationDetailPage() {
         </div>
 
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+          <Field label="Customer">
+            <Link to={`/customers/${quotation.customer_id}`} className="text-gold-300 hover:text-gold-200">
+              {quotation.customer_name ?? `#${quotation.customer_id}`}
+            </Link>
+          </Field>
           <Field label="Date" value={formatDate(quotation.quotation_date)} />
           <Field label="Valid until" value={formatDate(quotation.valid_until)} />
           <Field label="Total" value={formatCurrency(quotation.total_amount)} />

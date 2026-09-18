@@ -36,10 +36,12 @@ import {
 import { listFeasibilities } from '@/api/feasibilities'
 import { listQuotations } from '@/api/quotations'
 import { listOrders } from '@/api/orders'
+import { listDeliveryNotes } from '@/api/deliveryNotes'
 import type { Customer } from '@/types/customer'
 import type { Feasibility } from '@/types/feasibility'
 import type { Quotation } from '@/types/quotation'
 import type { Order } from '@/types/order'
+import type { DeliveryNote } from '@/types/deliveryNote'
 import type { CustomerCreditStatus } from '@/types/payment'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatCurrency } from '@/lib/currency'
@@ -48,14 +50,18 @@ import { useAuth } from '@/hooks/useAuth'
 import { canWrite, isAdmin } from '@/lib/roles'
 import { CUSTOMER_ONBOARDING_STATUSES_REQUIRING_REASON, CUSTOMER_ONBOARDING_TRANSITIONS } from '@/lib/statusTransitions'
 
-const TABS: TabItem[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'commercial', label: 'Commercial' },
-  { id: 'onboarding', label: 'Onboarding' },
-  { id: 'documents', label: 'Documents' },
-  { id: 'activity', label: 'Activity' },
-  { id: 'history', label: 'History' },
-]
+function buildTabs(activityCount: number): TabItem[] {
+  return [
+    { id: 'overview', label: 'Overview' },
+    { id: 'commercial', label: 'Commercial' },
+    { id: 'onboarding', label: 'Onboarding' },
+    { id: 'documents', label: 'Documents' },
+    // Badged with the count so a user can see there's Sales activity to
+    // look at without having to open the tab first.
+    { id: 'activity', label: 'Activity', badge: activityCount > 0 ? activityCount : undefined },
+    { id: 'history', label: 'History' },
+  ]
+}
 
 function ActivitySection<T>({
   title,
@@ -103,6 +109,7 @@ export function CustomerDetailPage() {
   const [feasibilityChecks, setFeasibilityChecks] = useState<Feasibility[]>([])
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [orders, setOrders] = useState<Order[]>([])
+  const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([])
   const [creditStatus, setCreditStatus] = useState<CustomerCreditStatus | null>(null)
 
   useEffect(() => {
@@ -123,7 +130,19 @@ export function CustomerDetailPage() {
       .then((res) => setQuotations(res.items))
       .catch(() => setQuotations([]))
     listOrders({ page: 1, page_size: 10, customer_id: customerId })
-      .then((res) => setOrders(res.items))
+      .then((res) => {
+        setOrders(res.items)
+        // Delivery Note has no customer_id of its own to filter list by
+        // (see types/deliveryNote.ts) -- it's reached the same way the
+        // order detail page reaches it, via order_id, for each of this
+        // customer's own orders.
+        return Promise.all(
+          res.items.map((o) =>
+            listDeliveryNotes({ order_id: o.id, page: 1, page_size: 10 }).then((r) => r.items).catch(() => []),
+          ),
+        )
+      })
+      .then((groups) => groups && setDeliveryNotes(groups.flat()))
       .catch(() => setOrders([]))
   }, [customerId])
 
@@ -190,7 +209,7 @@ export function CustomerDetailPage() {
   const canEdit = canWrite(user?.role) && !justDeleted
   const nextOnboardingStatuses = CUSTOMER_ONBOARDING_TRANSITIONS[customer.onboarding_status]
   const canChangeOnboarding = canEdit && nextOnboardingStatuses.length > 0
-  const activityCount = feasibilityChecks.length + quotations.length + orders.length
+  const activityCount = feasibilityChecks.length + quotations.length + orders.length + deliveryNotes.length
 
   return (
     <AppLayout>
@@ -268,7 +287,7 @@ export function CustomerDetailPage() {
         </dl>
       </GlassCard>
 
-      <Tabs items={TABS} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
+      <Tabs items={buildTabs(activityCount)} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
 
       <TabPanel id="overview" activeId={activeTab}>
         <GlassCard className="p-8">
@@ -424,7 +443,9 @@ export function CustomerDetailPage() {
 
       <TabPanel id="activity" activeId={activeTab}>
         {activityCount === 0 ? (
-          <GlassCard className="p-8 text-center text-sm text-white/40">No feasibility checks, quotations, or orders on file yet.</GlassCard>
+          <GlassCard className="p-8 text-center text-sm text-white/40">
+            No feasibility checks, quotations, orders, or deliveries on file yet.
+          </GlassCard>
         ) : (
           <div className="flex flex-col gap-6">
             <ActivitySection
@@ -484,6 +505,27 @@ export function CustomerDetailPage() {
                     <span className="flex items-center gap-3">
                       <span className="text-sm text-white/40">{formatCurrency(o.total_amount)}</span>
                       <StatusBadge status={o.status} />
+                    </span>
+                  </Link>
+                ),
+              })}
+            />
+
+            <ActivitySection
+              title="Deliveries"
+              items={deliveryNotes}
+              count={deliveryNotes.length}
+              renderRow={(n) => ({
+                key: n.id,
+                content: (
+                  <Link
+                    to={`/delivery-notes/${n.id}`}
+                    className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
+                  >
+                    <span className="font-medium text-white">{n.delivery_note_number}</span>
+                    <span className="flex items-center gap-3">
+                      <span className="text-sm text-white/40">{formatDate(n.delivery_date)}</span>
+                      <StatusBadge status={n.status} />
                     </span>
                   </Link>
                 ),
