@@ -13,7 +13,9 @@ from app.models.user import User
 from app.schemas.email import SendDocumentEmailRequest
 from app.schemas.order import (
     OrderAdminReview,
+    OrderBlockStatus,
     OrderCreate,
+    OrderDeliveryDateChange,
     OrderFulfillmentLineOut,
     OrderOut,
     OrderQuickLog,
@@ -124,6 +126,19 @@ def get_order_fulfillment(
     return order_service.get_fulfillment(db, order_id)
 
 
+@router.get("/{order_id}/confirm-check", response_model=OrderBlockStatus)
+def get_order_confirm_check(
+    order_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    """Read-only preview of whether/why this order is blocked from
+    reaching 'confirmed' -- lets the order detail page show a specific
+    'Awaiting admin approval: ...' message up front instead of a person
+    having to click Confirm and read the resulting error to find out."""
+    return order_service.get_order_block_status(db, order_id)
+
+
 @router.get("/{order_id}/history")
 def get_order_history(
     order_id: int,
@@ -197,6 +212,22 @@ def update_status(
 ):
     order = order_service.change_status(
         db, order_id, payload.status, reason=payload.reason, user_id=user.id
+    )
+    return OrderOut.from_model(order)
+
+
+@router.post("/{order_id}/delivery-date", response_model=OrderOut)
+def change_delivery_date(
+    order_id: int,
+    payload: OrderDeliveryDateChange,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """Revises the confirmed delivery date on an order that's already
+    past 'draft' -- a mandatory reason is recorded to order history.
+    Use PUT /{order_id} instead while the order is still 'draft'."""
+    order = order_service.change_delivery_date(
+        db, order_id, payload.confirmed_delivery_date, payload.reason, user_id=user.id
     )
     return OrderOut.from_model(order)
 

@@ -84,6 +84,31 @@ export async function adminReviewOrder(id: number, notes: string): Promise<Order
   return data
 }
 
+export interface OrderBlockStatus {
+  blocked: boolean
+  reasons: string[]
+  requires_admin_approval: boolean
+}
+
+/** Read-only preview of whether/why this order is blocked from reaching
+ * 'confirmed' -- see backend/app/services/order_service.py's
+ * get_order_block_status. Only meaningful while the order is 'draft'. */
+export async function getOrderConfirmCheck(id: number): Promise<OrderBlockStatus> {
+  const { data } = await apiClient.get<OrderBlockStatus>(`/api/orders/${id}/confirm-check`)
+  return data
+}
+
+/** Revises the confirmed delivery date on an order that's already past
+ * 'draft' -- a reason is mandatory and lands in order history. Use
+ * updateOrder instead while the order is still 'draft'. */
+export async function changeOrderDeliveryDate(id: number, confirmedDeliveryDate: string, reason: string): Promise<Order> {
+  const { data } = await apiClient.post<Order>(`/api/orders/${id}/delivery-date`, {
+    confirmed_delivery_date: confirmedDeliveryDate,
+    reason,
+  })
+  return data
+}
+
 export async function deleteOrder(id: number): Promise<MessageResponse> {
   const { data } = await apiClient.delete<MessageResponse>(`/api/orders/${id}`)
   return data
