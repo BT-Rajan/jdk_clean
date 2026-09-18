@@ -22,7 +22,7 @@ import { deleteUser, fetchUserSignatureBlob, getUser, resetUserPassword, restore
 import type { User } from '@/types/auth'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
-import { isAdmin } from '@/lib/roles'
+import { isAdmin, roleLabel } from '@/lib/roles'
 import {
   adminResetPasswordSchema,
   type AdminResetPasswordFormValues,
@@ -281,7 +281,7 @@ export function UserDetailPage() {
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
           <Field label="Email" value={record.email} />
           <Field label="Phone" value={record.phone ?? undefined} />
-          <Field label="Role" value={<Badge tone="gold">{record.role}</Badge>} />
+          <Field label="Role" value={<Badge tone="gold">{roleLabel(record.role)}</Badge>} />
           <Field label="Department" value={record.department_name ?? undefined} />
           <Field
             label="Reports to"

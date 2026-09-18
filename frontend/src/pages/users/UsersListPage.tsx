@@ -6,7 +6,7 @@ import { listUsers } from '@/api/users'
 import { listDepartments } from '@/api/departments'
 import { useAuth } from '@/hooks/useAuth'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
-import { isAdmin } from '@/lib/roles'
+import { isAdmin, roleLabel } from '@/lib/roles'
 import type { User, UserRole } from '@/types/auth'
 
 const ROLE_OPTIONS: { value: UserRole; label: string }[] = [
@@ -75,7 +75,7 @@ export function UsersListPage() {
     },
     { key: 'full_name', label: 'Full name', sortable: true, render: (u) => <span className="text-white">{u.full_name}</span> },
     { key: 'email', label: 'Email', render: (u) => <span className="text-white/60">{u.email}</span> },
-    { key: 'role', label: 'Role', render: (u) => <Badge tone="gold">{u.role}</Badge> },
+    { key: 'role', label: 'Role', render: (u) => <Badge tone="gold">{roleLabel(u.role)}</Badge> },
     {
       key: 'department_name',
       label: 'Department',

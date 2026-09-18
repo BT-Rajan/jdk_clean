@@ -31,33 +31,43 @@ interface SectionGroup {
 
 const GROUPS: SectionGroup[] = [
   {
-    label: 'General',
+    label: 'People & Access',
+    // Users/Departments/Roles & Permissions are each their own routed
+    // page (not a local panel), so these are links out of /admin rather
+    // than a section switch -- same pattern the Master Data link below
+    // already used. Grouped here so the Admin area has one place to
+    // reach who has access to what, instead of being scattered across
+    // the top nav's own Admin dropdown.
     items: [
-      // Factory Setup (weekdays & working hours) now renders as part of
-      // this section instead of its own "Factory" group -- see the
-      // `activeSection === 'company'` render below.
-      { key: 'company', label: 'Company' },
-      { key: 'approvals', label: 'Approvals' },
+      { href: '/users', label: 'Users' },
+      { href: '/departments', label: 'Departments' },
+      { href: '/roles-permissions', label: 'Roles & Permissions' },
+    ],
+  },
+  {
+    label: 'Company',
+    items: [
+      // Factory Setup (weekdays & working hours) renders as part of this
+      // section too -- see the `activeSection === 'company'` render below.
+      { key: 'company', label: 'Company Settings' },
+      { key: 'org-chart', label: 'Org Chart' },
       { key: 'ai-assistant', label: 'AI Assistant' },
     ],
+  },
+  {
+    label: 'Approvals & Controls',
+    items: [{ key: 'approvals', label: 'Approvals' }],
   },
   {
     label: 'Communication',
     // Email/WhatsApp/SMS used to be three separate section keys (three
     // separate sidebar entries); they're now one page with its own
     // inner tab strip -- see the `communication` TabPanel below.
-    items: [{ key: 'communication', label: 'Communication' }],
-  },
-  {
-    label: 'Documents',
     items: [
+      { key: 'communication', label: 'Communication' },
       { key: 'email-templates', label: 'Email Templates' },
       { key: 'doc-templates', label: 'Document Templates' },
     ],
-  },
-  {
-    label: 'Access',
-    items: [{ key: 'org-chart', label: 'Org Chart' }],
   },
   {
     label: 'Master Data',
@@ -118,10 +128,10 @@ export function AdminShell() {
   return (
     <AppLayout>
       <PageContainer>
-        <h1 className="font-display text-2xl font-medium text-white">Settings</h1>
+        <h1 className="font-display text-2xl font-medium text-white">Admin</h1>
         <p className="mt-2 text-sm text-white/50">
-          Company configuration (including factory setup), communication channels, and the org chart -- all in one
-          place. Master data and Roles &amp; Permissions live one click away, under Master Data.
+          People &amp; access, company configuration (including factory setup and the org chart), approvals, and
+          communication -- organized in one place. Master data is one click away.
         </p>
 
         <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
