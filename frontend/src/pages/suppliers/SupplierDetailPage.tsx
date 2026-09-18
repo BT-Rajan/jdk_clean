@@ -8,6 +8,7 @@ import {
   ConfirmDialog,
   DeleteIcon,
   EditIcon,
+  EmptyState,
   Field,
   GlassCard,
   PageHeader,
@@ -32,8 +33,13 @@ import {
   uploadSupplierIdDocument,
   verifySupplierId,
 } from '@/api/suppliers'
+import { listPurchaseOrders } from '@/api/purchaseOrders'
+import { listSupplierReturns } from '@/api/supplierReturns'
 import type { Supplier } from '@/types/supplier'
+import type { PurchaseOrder } from '@/types/purchaseOrder'
+import type { SupplierReturn } from '@/types/supplierReturn'
 import { formatCurrency } from '@/lib/currency'
+import { formatDate } from '@/lib/dateFormat'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite } from '@/lib/roles'
@@ -47,13 +53,16 @@ const MODE_OF_SUPPLY_LABELS: Record<string, string> = {
   import: 'Import',
 }
 
-const TABS: TabItem[] = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'onboarding', label: 'Onboarding' },
-  { id: 'documents', label: 'Documents' },
-  { id: 'materials', label: 'Materials supplied' },
-  { id: 'history', label: 'History' },
-]
+function buildTabs(purchasingCount: number): TabItem[] {
+  return [
+    { id: 'overview', label: 'Overview' },
+    { id: 'purchasing', label: 'Purchasing', badge: purchasingCount > 0 ? purchasingCount : undefined },
+    { id: 'onboarding', label: 'Onboarding' },
+    { id: 'documents', label: 'Documents' },
+    { id: 'materials', label: 'Materials supplied' },
+    { id: 'history', label: 'History' },
+  ]
+}
 
 export function SupplierDetailPage() {
   const { id } = useParams()
@@ -70,13 +79,41 @@ export function SupplierDetailPage() {
   const [justDeleted, setJustDeleted] = useState(false)
   const [notice, setNotice] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
+  // This supplier's own purchasing context -- Purchase Orders and
+  // Supplier Returns already carry supplier_id, so this is a plain
+  // filtered read of the same list APIs the Purchasing pages use, not a
+  // duplicate record.
+  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([])
+  const [purchaseOrdersTotal, setPurchaseOrdersTotal] = useState(0)
+  const [supplierReturns, setSupplierReturns] = useState<SupplierReturn[]>([])
+  const [supplierReturnsTotal, setSupplierReturnsTotal] = useState(0)
 
   useEffect(() => {
     getSupplier(supplierId)
       .then(setSupplier)
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
+    listPurchaseOrders({ supplier_id: supplierId, page: 1, page_size: 20 })
+      .then((result) => {
+        setPurchaseOrders(result.items)
+        setPurchaseOrdersTotal(result.total)
+      })
+      .catch(() => {
+        setPurchaseOrders([])
+        setPurchaseOrdersTotal(0)
+      })
+    listSupplierReturns({ supplier_id: supplierId, page: 1, page_size: 20 })
+      .then((result) => {
+        setSupplierReturns(result.items)
+        setSupplierReturnsTotal(result.total)
+      })
+      .catch(() => {
+        setSupplierReturns([])
+        setSupplierReturnsTotal(0)
+      })
   }, [supplierId])
+
+  const purchasingCount = purchaseOrdersTotal + supplierReturnsTotal
 
   async function handleDelete() {
     setBusy(true)
@@ -219,7 +256,7 @@ export function SupplierDetailPage() {
         </dl>
       </GlassCard>
 
-      <Tabs items={TABS} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
+      <Tabs items={buildTabs(purchasingCount)} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
 
       <TabPanel id="overview" activeId={activeTab}>
         <GlassCard className="p-8">
@@ -255,6 +292,106 @@ export function SupplierDetailPage() {
             />
           </dl>
         </GlassCard>
+      </TabPanel>
+
+      <TabPanel id="purchasing" activeId={activeTab}>
+        <div className="flex flex-col gap-6">
+          <GlassCard className="overflow-hidden">
+            <div className="border-b border-white/10 px-6 py-4">
+              <h2 className="font-display text-base font-medium text-white">
+                Purchase orders {purchaseOrdersTotal > 0 && <span className="text-sm text-white/40">({purchaseOrdersTotal})</span>}
+              </h2>
+            </div>
+            {purchaseOrders.length === 0 ? (
+              <EmptyState title="No purchase orders yet" message="Nothing has been ordered from this supplier." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                      <th className="px-6 py-4 font-medium">Purchase order</th>
+                      <th className="px-6 py-4 font-medium">Date</th>
+                      <th className="px-6 py-4 font-medium">Total</th>
+                      <th className="px-6 py-4 font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {purchaseOrders.map((po) => (
+                      <tr key={po.id} className="border-b border-white/5 last:border-0">
+                        <td className="px-6 py-4">
+                          <Link to={`/purchase-orders/${po.id}`} className="font-medium text-gold-300 hover:text-gold-200">
+                            {po.po_number}
+                          </Link>
+                        </td>
+                        <td className="px-6 py-4 text-white/60">{formatDate(po.order_date)}</td>
+                        <td className="px-6 py-4 text-white/60">{formatCurrency(po.total_amount)}</td>
+                        <td className="px-6 py-4">
+                          <StatusBadge status={po.status} />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {purchaseOrdersTotal > purchaseOrders.length && (
+              <p className="px-6 pb-4 text-xs text-white/40">
+                +{purchaseOrdersTotal - purchaseOrders.length} more purchase order{purchaseOrdersTotal - purchaseOrders.length === 1 ? '' : 's'} for this supplier not shown here.
+              </p>
+            )}
+          </GlassCard>
+
+          <GlassCard className="overflow-hidden">
+            <div className="border-b border-white/10 px-6 py-4">
+              <h2 className="font-display text-base font-medium text-white">
+                Supplier returns {supplierReturnsTotal > 0 && <span className="text-sm text-white/40">({supplierReturnsTotal})</span>}
+              </h2>
+            </div>
+            {supplierReturns.length === 0 ? (
+              <EmptyState title="No supplier returns" message="Nothing has been returned to this supplier." />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                      <th className="px-6 py-4 font-medium">Return</th>
+                      <th className="px-6 py-4 font-medium">Date</th>
+                      <th className="px-6 py-4 font-medium">Against</th>
+                      <th className="px-6 py-4 font-medium">Reason</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {supplierReturns.map((r) => (
+                      <tr key={r.id} className="border-b border-white/5 last:border-0">
+                        <td className="px-6 py-4">
+                          <Link to={`/supplier-returns/${r.id}`} className="font-medium text-gold-300 hover:text-gold-200">
+                            {r.return_number}
+                          </Link>
+                        </td>
+                        <td className="px-6 py-4 text-white/60">{formatDate(r.return_date)}</td>
+                        <td className="px-6 py-4 text-white/60">
+                          {r.purchase_order_id ? (
+                            <Link to={`/purchase-orders/${r.purchase_order_id}`} className="text-gold-300 hover:text-gold-200">
+                              {r.po_number}
+                            </Link>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td className="px-6 py-4 max-w-xs truncate text-white/60">{r.reason}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {supplierReturnsTotal > supplierReturns.length && (
+              <p className="px-6 pb-4 text-xs text-white/40">
+                +{supplierReturnsTotal - supplierReturns.length} more return{supplierReturnsTotal - supplierReturns.length === 1 ? '' : 's'} for this supplier not shown here.
+              </p>
+            )}
+          </GlassCard>
+        </div>
       </TabPanel>
 
       <TabPanel id="onboarding" activeId={activeTab}>

@@ -9,6 +9,7 @@ import {
   Pagination,
   SortableHeader,
   Spinner,
+  TextField,
 } from '@/components/ui'
 import { listSupplierReturns } from '@/api/supplierReturns'
 import { usePagedResource } from '@/hooks/usePagedResource'
@@ -23,7 +24,8 @@ export function SupplierReturnsListPage() {
     (params: { page: number; page_size?: number; search?: string; sort?: string }) => listSupplierReturns(params),
     [],
   )
-  const { items, total, totalPages, page, setPage, sort, toggleSort, loading, error } = usePagedResource(fetcher)
+  const { items, total, totalPages, page, setPage, searchInput, setSearchInput, sort, toggleSort, loading, error } =
+    usePagedResource(fetcher)
 
   return (
     <AppLayout>
@@ -32,9 +34,19 @@ export function SupplierReturnsListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Supplier returns</h1>
           <p className="mt-2 text-sm text-white/50">{total} supplier returns on file</p>
         </div>
-        {canWriteDepartment(user, 'procurement') && (
-          <Button onClick={() => navigate('/supplier-returns/new')}>New supplier return</Button>
-        )}
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-56">
+            <TextField
+              label="Search"
+              placeholder="Return number…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+          </div>
+          {canWriteDepartment(user, 'procurement') && (
+            <Button onClick={() => navigate('/supplier-returns/new')}>New supplier return</Button>
+          )}
+        </div>
       </div>
 
       <Alert variant="error">{error}</Alert>

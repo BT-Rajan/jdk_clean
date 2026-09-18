@@ -306,8 +306,13 @@ export function InventoryPage() {
                   <tbody>
                     {pagedLowStock.map((item) => (
                       <tr key={item.raw_material_id} className="border-b border-white/5 last:border-0">
-                        <td className="px-6 py-4 text-white">
-                          {item.code} — {item.name}
+                        <td className="px-6 py-4">
+                          <Link
+                            to={`/raw-materials/${item.raw_material_id}`}
+                            className="font-medium text-gold-300 hover:text-gold-200"
+                          >
+                            {item.code} — {item.name}
+                          </Link>
                         </td>
                         <td className="px-6 py-4">
                           <Badge tone="danger">{`${item.quantity_on_hand}`}</Badge>

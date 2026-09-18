@@ -11,6 +11,7 @@ import {
   SortableHeader,
   Spinner,
   StatusBadge,
+  TextField,
 } from '@/components/ui'
 import { listPurchaseOrders } from '@/api/purchaseOrders'
 import { usePagedResource } from '@/hooks/usePagedResource'
@@ -33,6 +34,8 @@ export function PurchaseOrdersListPage() {
     totalPages,
     page,
     setPage,
+    searchInput,
+    setSearchInput,
     status,
     setStatus,
     sort,
@@ -48,7 +51,15 @@ export function PurchaseOrdersListPage() {
           <h1 className="font-display text-3xl font-medium text-white">Purchase orders</h1>
           <p className="mt-2 text-sm text-white/50">{total} purchase orders on file</p>
         </div>
-        <div className="flex items-end gap-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <div className="w-56">
+            <TextField
+              label="Search"
+              placeholder="PO number, supplier…"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+            />
+          </div>
           <div className="w-44">
             <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">All statuses</option>

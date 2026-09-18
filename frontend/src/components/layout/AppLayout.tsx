@@ -128,6 +128,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     {
       label: 'Purchasing',
       items: [
+        { to: '/purchasing', label: 'Overview' },
         { to: '/purchase-orders', label: 'Purchase orders' },
         { to: '/suppliers', label: 'Suppliers' },
         { to: '/raw-materials', label: 'Raw Materials' },

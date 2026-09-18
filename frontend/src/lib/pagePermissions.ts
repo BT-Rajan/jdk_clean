@@ -21,6 +21,11 @@ const PATH_PREFIX_TO_PAGE_KEY: [string, string][] = [
   ['/products', 'products'],
   ['/inventory', 'inventory'],
   ['/mrp', 'mrp'],
+  // The Purchasing entry page is a summary of purchase orders, suppliers,
+  // and raw-material stock -- reuses the purchase_orders page key rather
+  // than a new permission, same as /reconciliation reuses 'production'
+  // below.
+  ['/purchasing', 'purchase_orders'],
   ['/purchase-orders', 'purchase_orders'],
   ['/supplier-returns', 'supplier_returns'],
   ['/delivery-notes', 'delivery_notes'],

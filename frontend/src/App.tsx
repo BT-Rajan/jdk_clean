@@ -72,6 +72,9 @@ const InventoryPage = lazy(() =>
   import('@/pages/inventory/InventoryPage').then((m) => ({ default: m.InventoryPage })),
 )
 const MrpPage = lazy(() => import('@/pages/mrp/MrpPage').then((m) => ({ default: m.MrpPage })))
+const PurchasingHomePage = lazy(() =>
+  import('@/pages/purchasing/PurchasingHomePage').then((m) => ({ default: m.PurchasingHomePage })),
+)
 const PurchaseOrdersListPage = lazy(() =>
   import('@/pages/purchaseOrders/PurchaseOrdersListPage').then((m) => ({ default: m.PurchaseOrdersListPage })),
 )
@@ -254,6 +257,7 @@ export function App() {
             <Route path="/inventory" element={<InventoryPage />} />
             <Route path="/inventory/adjust" element={<InventoryAdjustPage />} />
             <Route path="/mrp" element={<MrpPage />} />
+            <Route path="/purchasing" element={<PurchasingHomePage />} />
             <Route path="/purchase-orders" element={<PurchaseOrdersListPage />} />
             <Route path="/purchase-orders/new" element={<PurchaseOrderFormPage />} />
             <Route path="/purchase-orders/:id" element={<PurchaseOrderDetailPage />} />
