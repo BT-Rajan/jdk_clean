@@ -30,7 +30,12 @@ function useSupplierOptions() {
 }
 
 function useRawMaterialOptions() {
-  const fetcher = useCallback(() => listRawMaterials({ page: 1, page_size: 200, status: 'active' }), [])
+  // No status filter here (unlike suppliers): a PO line already pointing at
+  // a material that's since gone inactive/blocked still needs to resolve to
+  // that material in the dropdown -- filtering to 'active' would make an
+  // existing line's raw material look unselected on this page even though
+  // it's saved correctly.
+  const fetcher = useCallback(() => listRawMaterials({ page: 1, page_size: 200 }), [])
   return useSelectOptions(fetcher)
 }
 
@@ -58,14 +63,21 @@ function LineItemsEditor({
   watch: ReturnType<typeof useForm<PurchaseOrderFormValues, unknown, PurchaseOrderSubmitValues>>['watch']
   setValue: ReturnType<typeof useForm<PurchaseOrderFormValues, unknown, PurchaseOrderSubmitValues>>['setValue']
   errors: ReturnType<typeof useForm<PurchaseOrderFormValues, unknown, PurchaseOrderSubmitValues>>['formState']['errors']
-  materials: { id: number; code: string; name: string; unit_cost: number; reorder_point: number }[]
+  materials: { id: number; code: string; name: string; unit: string; unit_cost: number; reorder_point: number; status: string }[]
 }) {
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' })
   const lines = watch('lines')
 
   function handleMaterialChange(index: number, rawMaterialId: string) {
     const material = materials.find((m) => m.id === Number(rawMaterialId))
-    if (!material) return
+    if (!material) {
+      // Cleared back to "Choose…" -- the old quantity/unit price were only
+      // ever meaningful for the material that was just deselected, so blank
+      // them rather than leaving numbers on screen next to no material.
+      setValue(`lines.${index}.quantity` as const, '' as never, { shouldValidate: true })
+      setValue(`lines.${index}.unit_price` as const, '' as never, { shouldValidate: true })
+      return
+    }
     // Auto-populate quantity and unit price from the chosen raw material so
     // the common case (order the usual reorder amount, at the material's
     // current standard cost) needs no extra typing -- both stay editable.
@@ -110,6 +122,7 @@ function LineItemsEditor({
             (m) => m.id === selectedRawMaterialId || !chosenElsewhere.has(m.id),
           )
           const lineError = errors.lines?.[index]?.raw_material_id?.message
+          const selectedMaterial = materials.find((m) => m.id === selectedRawMaterialId)
           return (
             <div key={field.id} className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-end">
               <div className="sm:col-span-5">
@@ -122,12 +135,20 @@ function LineItemsEditor({
                 >
                   <option value="">Choose…</option>
                   {availableMaterials.map((m) => (
-                    <option key={m.id} value={m.id}>{m.code} — {m.name}</option>
+                    <option key={m.id} value={m.id}>
+                      {m.code} — {m.name}{m.status !== 'active' ? ` (${m.status})` : ''}
+                    </option>
                   ))}
                 </SelectField>
               </div>
               <div className="sm:col-span-2">
-                <TextField label="Quantity" type="number" step="0.0001" {...register(`lines.${index}.quantity` as const)} />
+                <TextField
+                  label="Quantity"
+                  type="number"
+                  step="0.0001"
+                  trailingSlot={selectedMaterial ? <span className="text-xs text-white/40 uppercase">{selectedMaterial.unit}</span> : undefined}
+                  {...register(`lines.${index}.quantity` as const)}
+                />
               </div>
               <div className="sm:col-span-2">
                 <TextField label="Unit price" type="number" step="0.01" {...register(`lines.${index}.unit_price` as const)} />
