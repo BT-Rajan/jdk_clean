@@ -49,17 +49,31 @@ function LineItemsEditor({
   control,
   register,
   watch,
+  setValue,
   errors,
   materials,
 }: {
   control: ReturnType<typeof useForm<PurchaseOrderFormValues, unknown, PurchaseOrderSubmitValues>>['control']
   register: ReturnType<typeof useForm<PurchaseOrderFormValues, unknown, PurchaseOrderSubmitValues>>['register']
   watch: ReturnType<typeof useForm<PurchaseOrderFormValues, unknown, PurchaseOrderSubmitValues>>['watch']
+  setValue: ReturnType<typeof useForm<PurchaseOrderFormValues, unknown, PurchaseOrderSubmitValues>>['setValue']
   errors: ReturnType<typeof useForm<PurchaseOrderFormValues, unknown, PurchaseOrderSubmitValues>>['formState']['errors']
-  materials: { id: number; code: string; name: string }[]
+  materials: { id: number; code: string; name: string; unit_cost: number; reorder_point: number }[]
 }) {
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' })
   const lines = watch('lines')
+
+  function handleMaterialChange(index: number, rawMaterialId: string) {
+    const material = materials.find((m) => m.id === Number(rawMaterialId))
+    if (!material) return
+    // Auto-populate quantity and unit price from the chosen raw material so
+    // the common case (order the usual reorder amount, at the material's
+    // current standard cost) needs no extra typing -- both stay editable.
+    setValue(`lines.${index}.quantity` as const, (material.reorder_point > 0 ? material.reorder_point : 1) as never, {
+      shouldValidate: true,
+    })
+    setValue(`lines.${index}.unit_price` as const, material.unit_cost as never, { shouldValidate: true })
+  }
 
   return (
     <div>
@@ -69,7 +83,7 @@ function LineItemsEditor({
           variant="ghost"
           size="sm"
           type="button"
-          onClick={() => append({ raw_material_id: 0, quantity: 1, unit_price: 0, discount_percent: 0 })}
+          onClick={() => append({ raw_material_id: 0, quantity: 1, unit_price: 0 })}
         >
           Add line
         </Button>
@@ -81,14 +95,33 @@ function LineItemsEditor({
         {fields.map((field, index) => {
           const quantity = Number(lines?.[index]?.quantity ?? 0)
           const unitPrice = Number(lines?.[index]?.unit_price ?? 0)
-          const discountPercent = Number(lines?.[index]?.discount_percent ?? 0)
-          const lineTotal = quantity * unitPrice * (1 - discountPercent / 100)
+          const lineTotal = quantity * unitPrice
+          const selectedRawMaterialId = Number(lines?.[index]?.raw_material_id ?? 0)
+          // Dedup: a material already chosen on another line isn't offered
+          // here -- quantities for a repeat pick belong on the existing
+          // line, so this option list only shows materials still free to
+          // pick (plus whatever this line already has selected).
+          const chosenElsewhere = new Set(
+            (lines ?? [])
+              .map((l, i) => (i === index ? null : Number(l?.raw_material_id ?? 0)))
+              .filter((v): v is number => !!v),
+          )
+          const availableMaterials = materials.filter(
+            (m) => m.id === selectedRawMaterialId || !chosenElsewhere.has(m.id),
+          )
+          const lineError = errors.lines?.[index]?.raw_material_id?.message
           return (
             <div key={field.id} className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-end">
-              <div className="sm:col-span-4">
-                <SelectField label="Raw material" {...register(`lines.${index}.raw_material_id` as const)}>
+              <div className="sm:col-span-5">
+                <SelectField
+                  label="Raw material"
+                  error={lineError}
+                  {...register(`lines.${index}.raw_material_id` as const, {
+                    onChange: (e) => handleMaterialChange(index, e.target.value),
+                  })}
+                >
                   <option value="">Choose…</option>
-                  {materials.map((m) => (
+                  {availableMaterials.map((m) => (
                     <option key={m.id} value={m.id}>{m.code} — {m.name}</option>
                   ))}
                 </SelectField>
@@ -98,9 +131,6 @@ function LineItemsEditor({
               </div>
               <div className="sm:col-span-2">
                 <TextField label="Unit price" type="number" step="0.01" {...register(`lines.${index}.unit_price` as const)} />
-              </div>
-              <div className="sm:col-span-1">
-                <TextField label="Disc. %" type="number" step="0.01" min="0" max="100" {...register(`lines.${index}.discount_percent` as const)} />
               </div>
               <div className="sm:col-span-2 text-sm text-white/60">
                 Line total: {formatCurrency(lineTotal)}
@@ -134,6 +164,7 @@ function PurchaseOrderCreateForm() {
     register,
     control,
     watch,
+    setValue,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<PurchaseOrderFormValues, unknown, PurchaseOrderSubmitValues>({
@@ -178,20 +209,7 @@ function PurchaseOrderCreateForm() {
           <TextField label="Expected delivery" type="date" min={todayDateInputMin} error={errors.expected_delivery_date?.message} {...register('expected_delivery_date')} />
         </div>
 
-        <div className="max-w-xs">
-          <TextField
-            label="Discount (%)"
-            type="number"
-            step="0.01"
-            min="0"
-            max="100"
-            placeholder="Whole-document discount, on top of any per-line discounts"
-            error={errors.discount_percent?.message}
-            {...register('discount_percent')}
-          />
-        </div>
-
-        <LineItemsEditor control={control} register={register} watch={watch} errors={errors} materials={materials} />
+        <LineItemsEditor control={control} register={register} watch={watch} setValue={setValue} errors={errors} materials={materials} />
 
         <TextareaField label="Notes" {...register('notes')} />
 
@@ -215,6 +233,7 @@ function PurchaseOrderEditForm({ id }: { id: number }) {
     register,
     control,
     watch,
+    setValue,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
@@ -271,7 +290,7 @@ function PurchaseOrderEditForm({ id }: { id: number }) {
             <TextField label="Expected delivery" type="date" min={todayDateInputMin} error={errors.expected_delivery_date?.message} {...register('expected_delivery_date')} />
           </div>
 
-          <LineItemsEditor control={control} register={register} watch={watch} errors={errors} materials={materials} />
+          <LineItemsEditor control={control} register={register} watch={watch} setValue={setValue} errors={errors} materials={materials} />
 
           <TextareaField label="Notes" {...register('notes')} />
 

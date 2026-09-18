@@ -3,7 +3,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadIcon, EditIcon, EmailIcon, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TextField, TextareaField, ThumbsUpIcon } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadIcon, EditIcon, EmailIcon, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TabPanel, Tabs, TextField, TextareaField, ThumbsUpIcon } from '@/components/ui'
+import type { TabItem } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewPurchaseOrder,
@@ -62,6 +63,15 @@ function AdminReviewModal({
       </form>
     </Modal>
   )
+}
+
+function buildTabs(lineCount: number, returnCount: number): TabItem[] {
+  return [
+    { id: 'overview', label: 'Overview' },
+    { id: 'lines', label: 'Line items', badge: lineCount > 0 ? lineCount : undefined },
+    { id: 'returns', label: 'Supplier returns', badge: returnCount > 0 ? returnCount : undefined },
+    { id: 'history', label: 'History' },
+  ]
 }
 
 function CancelLineModal({
@@ -144,6 +154,7 @@ export function PurchaseOrderDetailPage() {
   const [receiptMeta, setReceiptMeta] = useState({ invoice_number: '', received_by: '', received_date: '' })
   const [supplierReturns, setSupplierReturns] = useState<SupplierReturn[]>([])
   const [cancelLineTarget, setCancelLineTarget] = useState<PurchaseOrderLine | null>(null)
+  const [activeTab, setActiveTab] = useState('overview')
 
   function defaultReceiveQuantities(data: PurchaseOrder): Record<number, string> {
     const defaults: Record<number, string> = {}
@@ -477,6 +488,9 @@ export function PurchaseOrderDetailPage() {
         )}
       </GlassCard>
 
+      <Tabs items={buildTabs(po.lines.length, supplierReturns.length)} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
+
+      <TabPanel id="lines" activeId={activeTab}>
       <GlassCard className="mb-6 overflow-hidden">
         <div className="border-b border-white/10 px-6 py-4">
           <h2 className="font-display text-lg font-medium text-white">Line items</h2>
@@ -631,7 +645,9 @@ export function PurchaseOrderDetailPage() {
           </div>
         )}
       </GlassCard>
+      </TabPanel>
 
+      <TabPanel id="returns" activeId={activeTab}>
       <GlassCard className="mb-6 overflow-hidden">
         <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
           <h2 className="font-display text-lg font-medium text-white">Supplier returns</h2>
@@ -674,10 +690,11 @@ export function PurchaseOrderDetailPage() {
           <p className="px-6 py-4 text-sm text-white/50">Nothing returned to the supplier against this PO.</p>
         )}
       </GlassCard>
+      </TabPanel>
 
-      <div className="mt-6">
+      <TabPanel id="history" activeId={activeTab}>
         <HistoryTimeline resourcePath="/api/purchase-orders" id={poId} />
-      </div>
+      </TabPanel>
 
       <div className="mt-6">
         <Link to="/purchase-orders" className="text-sm text-white/50 hover:text-white">← Back to purchase orders</Link>

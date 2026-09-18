@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner } from '@/components/ui'
+import { Alert, Button, ConfirmDialog, Field, GlassCard, PageHeader, Spinner, TabPanel, Tabs } from '@/components/ui'
+import type { TabItem } from '@/components/ui'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { deleteSupplierReturn, getSupplierReturn } from '@/api/supplierReturns'
 import type { SupplierReturn } from '@/types/supplierReturn'
@@ -9,6 +10,14 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
 import { isAdmin } from '@/lib/roles'
+
+function buildTabs(lineCount: number): TabItem[] {
+  return [
+    { id: 'overview', label: 'Overview' },
+    { id: 'lines', label: 'Line items', badge: lineCount > 0 ? lineCount : undefined },
+    { id: 'history', label: 'History' },
+  ]
+}
 
 export function SupplierReturnDetailPage() {
   const { id } = useParams()
@@ -22,6 +31,7 @@ export function SupplierReturnDetailPage() {
   const [error, setError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [activeTab, setActiveTab] = useState('overview')
 
   useEffect(() => {
     getSupplierReturn(returnId)
@@ -75,6 +85,9 @@ export function SupplierReturnDetailPage() {
 
       <Alert variant="error">{error}</Alert>
 
+      <Tabs items={buildTabs(supplierReturn.lines.length)} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
+
+      <TabPanel id="overview" activeId={activeTab}>
       <GlassCard className="p-8">
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
           <Field label="Supplier">
@@ -109,8 +122,10 @@ export function SupplierReturnDetailPage() {
           </div>
         )}
       </GlassCard>
+      </TabPanel>
 
-      <GlassCard className="mt-6 p-6">
+      <TabPanel id="lines" activeId={activeTab}>
+      <GlassCard className="p-6">
         <h2 className="mb-4 font-display text-base font-medium text-white">Line items</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -135,10 +150,11 @@ export function SupplierReturnDetailPage() {
           </table>
         </div>
       </GlassCard>
+      </TabPanel>
 
-      <div className="mt-6">
+      <TabPanel id="history" activeId={activeTab}>
         <HistoryTimeline resourcePath="/api/supplier-returns" id={returnId} />
-      </div>
+      </TabPanel>
 
       <div className="mt-6">
         <Link to="/supplier-returns" className="text-sm text-white/50 hover:text-white">
