@@ -3,7 +3,7 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.core.timezone import now_kuwait_naive
+from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.models.customer import Customer
 from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory, StockMovement
 from app.models.order import ORDER_STATUSES, Order, OrderDetail

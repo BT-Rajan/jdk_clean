@@ -477,7 +477,9 @@ export function ProductionDetailPage() {
                   {readiness.materials.map((m) => (
                     <tr key={m.raw_material_id} className="border-b border-white/5 last:border-0">
                       <td className="px-3 py-3 text-white">
-                        {m.code} — {m.name}
+                        <Link to={`/raw-materials/${m.raw_material_id}`} className="text-gold-300 hover:text-gold-200">
+                          {m.code} — {m.name}
+                        </Link>
                         {m.safety_stock_warning && (
                           <span className="ml-2 text-xs text-amber-300">below safety stock</span>
                         )}

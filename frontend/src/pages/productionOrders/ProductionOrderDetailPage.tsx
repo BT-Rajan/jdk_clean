@@ -561,10 +561,11 @@ export function ProductionOrderDetailPage() {
 
         <h2 className="mt-8 mb-4 font-display text-base font-medium text-white">Production information</h2>
         <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-          <Field
-            label="Product"
-            value={po.product_code ? `${po.product_code} — ${po.product_name}` : `#${po.product_id}`}
-          />
+          <Field label="Product">
+            <Link to={`/products/${po.product_id}`} className="text-gold-300 hover:text-gold-200">
+              {po.product_code ? `${po.product_code} — ${po.product_name}` : `#${po.product_id}`}
+            </Link>
+          </Field>
           {po.order_id !== null && (
             <Field label="Ordered quantity" value={`${po.ordered_quantity ?? '—'} ${po.unit ?? ''}`} />
           )}
@@ -593,13 +594,15 @@ export function ProductionOrderDetailPage() {
       {executions && (
         <GlassCard className="mb-6 p-8">
           <h2 className="mb-4 font-display text-base font-medium text-white">Finished-goods quantities</h2>
-          <dl className="grid grid-cols-2 gap-6 sm:grid-cols-6">
+          <dl className="grid grid-cols-2 gap-6 sm:grid-cols-5">
             <Field label="Planned" value={`${executions.planned_quantity} ${po.unit ?? ''}`} />
             <Field label="Produced" value={`${executions.total_produced} ${po.unit ?? ''}`} />
             <Field label="QC pending" value={`${executions.qc_pending} ${po.unit ?? ''}`} />
-            <Field label="QC released" value={`${executions.qc_released} ${po.unit ?? ''}`} />
+            {/* Release always immediately creates the matching FG inventory
+               receipt (see ProductionExecutionSummary.qc_released's own
+               doc comment) -- one figure, not a separate "FG received". */}
+            <Field label="QC released (FG received)" value={`${executions.qc_released} ${po.unit ?? ''}`} />
             <Field label="QC rejected" value={`${executions.qc_rejected} ${po.unit ?? ''}`} />
-            <Field label="FG received" value={`${executions.qc_released} ${po.unit ?? ''}`} />
           </dl>
         </GlassCard>
       )}
@@ -686,7 +689,9 @@ export function ProductionOrderDetailPage() {
                   return (
                     <tr key={item.id} className="border-b border-white/5 last:border-0 align-top">
                       <td className="px-6 py-4 text-white">
-                        {item.code} — {item.name}
+                        <Link to={`/raw-materials/${item.raw_material_id}`} className="text-gold-300 hover:text-gold-200">
+                          {item.code} — {item.name}
+                        </Link>
                         <div className="mt-1 text-xs text-white/40">{item.material_type_label}</div>
                       </td>
                       <td className="px-6 py-4 text-right text-white/60">{item.required_quantity}</td>

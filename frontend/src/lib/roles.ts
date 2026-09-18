@@ -46,3 +46,21 @@ export function canWriteDepartment(user: User | null | undefined, department: st
 export function isAdmin(role: UserRole | undefined): boolean {
   return role === 'admin'
 }
+
+/** Administrator-friendly display label for a role value -- display only,
+ * never used for authorization (see canWrite/canWriteDepartment/isAdmin
+ * above for the actual RBAC checks, which still key off the raw enum
+ * value). */
+const ROLE_LABELS: Record<UserRole, string> = {
+  admin: 'Admin',
+  department_head: 'Department Head',
+  team_member: 'Team Member',
+  viewer: 'Viewer',
+  manager: 'Manager (legacy)',
+  staff: 'Staff (legacy)',
+}
+
+export function roleLabel(role: UserRole | undefined): string {
+  if (!role) return '—'
+  return ROLE_LABELS[role] ?? role
+}
