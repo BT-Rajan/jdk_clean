@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.customer import Customer
 from app.models.deal import Deal
+from app.models.feasibility import FeasibilityCheck
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.product import Product
 from app.models.user import BigPK
@@ -114,6 +115,14 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     deal: Mapped[Deal | None] = relationship(lazy="joined")
+    # The feasibility check this quotation was raised from, if any -- see
+    # quotation_service.get_feasibility_blocker, which surfaces a still-
+    # relevant concern from it (an approved-despite-shortfall override,
+    # or a status change since this quotation was created) directly on
+    # the quotation instead of making a person click through to find out.
+    feasibility: Mapped[FeasibilityCheck | None] = relationship(
+        foreign_keys="Quotation.feasibility_id", lazy="joined", viewonly=True
+    )
     lines: Mapped[list["QuotationDetail"]] = relationship(
         back_populates="quotation",
         cascade="all, delete-orphan",

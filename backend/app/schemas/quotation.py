@@ -181,6 +181,12 @@ class QuotationOut(BaseModel):
     notes: str | None
     converted_order_id: int | None
     feasibility_id: int | None
+    # A still-relevant concern from the feasibility check this was raised
+    # from (approved despite a shortfall, or the check has since been
+    # revived and no longer reflects the approval this relied on) -- see
+    # quotation_service.get_feasibility_blocker. None for a standalone
+    # quotation or one whose check is a clean pass.
+    feasibility_blocker: str | None = None
     auto_created: bool
     close_reason: str | None
     payment_link: str | None = None
@@ -214,6 +220,7 @@ class QuotationOut(BaseModel):
         data.customer_name = obj.customer.name if obj.customer else None
         data.customer_email = obj.customer.email if obj.customer else None
         data.deal_number = obj.deal.deal_number if obj.deal else None
+        data.feasibility_blocker = quotation_service.get_feasibility_blocker(obj)
         data.material_conflict_details = (
             json.loads(obj.material_conflict_notes) if obj.material_conflict_notes else None
         )

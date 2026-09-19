@@ -43,6 +43,11 @@ export interface Quotation {
   total_amount: number
   notes: string | null
   converted_order_id: number | null
+  /** A still-relevant concern from the feasibility check this was raised
+   * from (approved despite a shortfall, or the check has since been
+   * revived and no longer reflects the approval this relied on). Null
+   * for a standalone quotation or one whose check is a clean pass. */
+  feasibility_blocker: string | null
   /** Manually entered (from an external payment system) once this
    * quotation is 'accepted' -- required before it can be converted to
    * an order (see convertQuotationToOrder). Printed as a QR code on the

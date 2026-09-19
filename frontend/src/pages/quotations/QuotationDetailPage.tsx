@@ -258,6 +258,12 @@ export function QuotationDetailPage() {
         </div>
       )}
 
+      {quotation.feasibility_blocker && (
+        <div className="mb-6 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          {quotation.feasibility_blocker}
+        </div>
+      )}
+
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-4">
           <StatusBadge status={quotation.status} />

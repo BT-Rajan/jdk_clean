@@ -135,11 +135,16 @@ export interface Feasibility {
   required_by_date: string | null
   checked_at: string | null
   exception_reason: string | null
+  /** Who made the reject/override-request decision, and when. */
+  exception_by_name: string | null
+  exception_at: string | null
   close_reason: string | null
   notes: string | null
   admin_review_required: boolean
   admin_review_reason: AdminReviewReason | null
   admin_reviewed_at: string | null
+  /** Who made the admin override decision. */
+  admin_reviewed_by_name: string | null
   admin_review_notes: string | null
   lines: FeasibilityLine[]
   created_at: string

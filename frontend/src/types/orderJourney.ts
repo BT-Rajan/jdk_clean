@@ -7,6 +7,9 @@ export interface JourneyFeasibility {
   required_by_date: string | null
   created_at: string
   checked_at: string | null
+  /** A still-relevant feasibility concern, if any -- see
+   * feasibility_service.get_blocker_summary. */
+  blocker: string | null
 }
 
 export interface JourneyQuotation {

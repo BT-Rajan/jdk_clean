@@ -39,6 +39,7 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { FeasibilityStageResultsModal } from './FeasibilityStageResultsModal'
+import { computeFeasibilityStages } from '@/lib/feasibilityStages'
 import { useAuth } from '@/hooks/useAuth'
 import { useAsyncGuard } from '@/hooks/useAsyncGuard'
 import { canWriteDepartment, isAdmin } from '@/lib/roles'
@@ -233,6 +234,11 @@ export function FeasibilityDetailPage() {
   }
 
   const f = feasibility
+  // The exact stage this check came up short on, if any -- shown as a
+  // prominent banner right at the top instead of only reachable by
+  // scanning the "What's needed" table further down, or opening the
+  // "View check results" modal.
+  const failedStage = computeFeasibilityStages(f).find((stage) => stage.status === 'fail') ?? null
 
   return (
     <AppLayout>
@@ -344,6 +350,20 @@ export function FeasibilityDetailPage() {
         </div>
       )}
 
+      {failedStage && (
+        <div className="mb-6 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          <p className="font-medium">Failed: {failedStage.label}</p>
+          <p className="mt-1 text-red-100/80">{failedStage.summary}</p>
+          {failedStage.details.length > 0 && (
+            <ul className="mt-2 list-inside list-disc space-y-0.5 text-xs text-red-100/70">
+              {failedStage.details.map((detail) => (
+                <li key={detail}>{detail}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <StatusBadge status={f.status} />
@@ -388,6 +408,12 @@ export function FeasibilityDetailPage() {
                 : 'Exception decision comment'}
             </dt>
             <dd className="mt-1 text-[15px] text-white/80">{f.exception_reason}</dd>
+            {(f.exception_by_name || f.exception_at) && (
+              <dd className="mt-1 text-xs text-white/40">
+                {f.exception_by_name ?? 'Someone'}
+                {f.exception_at && ` · ${formatDateTime(f.exception_at)}`}
+              </dd>
+            )}
           </div>
         )}
         {f.admin_review_notes && f.admin_review_reason === 'override' && (
@@ -396,6 +422,12 @@ export function FeasibilityDetailPage() {
               {f.status === 'exception_approved' ? "Admin's approval notes" : "Admin's rejection notes"}
             </dt>
             <dd className="mt-1 text-[15px] text-white/80">{f.admin_review_notes}</dd>
+            {(f.admin_reviewed_by_name || f.admin_reviewed_at) && (
+              <dd className="mt-1 text-xs text-white/40">
+                {f.admin_reviewed_by_name ?? 'Someone'}
+                {f.admin_reviewed_at && ` · ${formatDateTime(f.admin_reviewed_at)}`}
+              </dd>
+            )}
           </div>
         )}
         {f.close_reason && (

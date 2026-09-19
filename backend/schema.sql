@@ -608,6 +608,7 @@ CREATE TABLE IF NOT EXISTS feasibility_checks (
     checked_at          DATETIME NULL,
     exception_reason    TEXT NULL,        -- Sales' reason for approving/rejecting a shortfall exception (the "override" comment)
     exception_by        BIGINT UNSIGNED NULL,
+    exception_at        DATETIME NULL,    -- when that decision was made
     close_reason        TEXT NULL,        -- Sales' reason for closing without generating a quotation
     notes               TEXT NULL,
     -- Admin notification: flagged when Sales overrides an infeasible result

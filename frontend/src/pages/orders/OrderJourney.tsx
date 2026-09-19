@@ -96,6 +96,11 @@ export function OrderJourney({ orderId }: OrderJourneyProps) {
                   : `Requested ${formatDateTime(feasibility.created_at)}`}
                 {feasibility.required_by_date && ` · required by ${formatDate(feasibility.required_by_date)}`}
               </p>
+              {feasibility.blocker && (
+                <p className="mt-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                  {feasibility.blocker}
+                </p>
+              )}
             </>
           ) : (
             <p className="text-sm text-white/40">No feasibility check on record for this order.</p>

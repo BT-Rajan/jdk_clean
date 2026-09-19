@@ -118,6 +118,17 @@ def assert_sendable(quotation: Quotation) -> None:
         )
 
 
+def get_feasibility_blocker(quotation: Quotation) -> str | None:
+    """A one-line summary of a still-relevant concern from the
+    feasibility check this quotation was raised from, if any -- see
+    feasibility_service.get_blocker_summary for the two cases this
+    covers. None for a standalone quotation (no feasibility_id) or one
+    whose check is a clean 'feasible'/'converted'."""
+    if quotation.feasibility is None:
+        return None
+    return feasibility_service.get_blocker_summary(quotation.feasibility)
+
+
 def _explode_lines_requirement(db: Session, lines: list) -> dict[int, float]:
     """Sums bom_service.explode_requirements across every line of a
     quotation (or a prospective one) into one {raw_material_id: quantity}
