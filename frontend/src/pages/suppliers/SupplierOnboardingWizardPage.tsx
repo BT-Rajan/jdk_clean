@@ -243,7 +243,7 @@ export function SupplierOnboardingWizardPage() {
                       return (
                       <div
                         key={line.key}
-                        className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-end"
+                        className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-start"
                       >
                         <div className="sm:col-span-7">
                           <SelectField
@@ -272,8 +272,14 @@ export function SupplierOnboardingWizardPage() {
                             }
                           />
                         </div>
-                        <div className="sm:col-span-1">
-                          <Button variant="ghost" size="sm" type="button" onClick={() => removeMaterialLine(line.key)}>
+                        <div className="sm:col-span-1 sm:pt-[1.375rem]">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            type="button"
+                            className="h-12 w-full px-2"
+                            onClick={() => removeMaterialLine(line.key)}
+                          >
                             Remove
                           </Button>
                         </div>
