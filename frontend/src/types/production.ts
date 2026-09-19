@@ -42,6 +42,12 @@ export interface ProductionBatch {
    * production_readiness_service.quick_status). Populated by the list/get
    * endpoints, not the full breakdown -- see ReadinessResult for that. */
   readiness_status: ReadinessStatus | null
+  /** Only set on the response to the status-change call that just
+   * cancelled this batch, and only when it was tied to a still-active
+   * order -- how much of that order's demand for this product now has
+   * no batch scheduled against it at all. Null otherwise (including for
+   * every status other than 'cancelled'). */
+  resulting_unscheduled_quantity: number | null
   created_at: string
   updated_at: string
 }

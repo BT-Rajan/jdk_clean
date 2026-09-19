@@ -217,7 +217,13 @@ export function ProductionDetailPage() {
     try {
       const updated = await updateProductionBatchStatus(batchId, status, undefined, reason)
       setBatch(updated)
-      setNotice(`Status changed to ${status.replace(/_/g, ' ')}.`)
+      const unscheduled = updated.resulting_unscheduled_quantity
+      setNotice(
+        `Status changed to ${status.replace(/_/g, ' ')}.` +
+          (unscheduled != null
+            ? ` This order now has ${unscheduled} ${updated.unit ?? ''} of ${updated.product_name ?? 'this product'} unscheduled.`
+            : ''),
+      )
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {

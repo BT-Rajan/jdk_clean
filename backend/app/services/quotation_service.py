@@ -208,6 +208,7 @@ def get_quotation(db: Session, quotation_id: int, include_deleted: bool = False)
 _QUOTATION_SORTABLE_FIELDS = {
     "quotation_number": Quotation.quotation_number,
     "quotation_date": Quotation.quotation_date,
+    "valid_until": Quotation.valid_until,
     "total_amount": Quotation.total_amount,
     "status": Quotation.status,
     "created_at": Quotation.created_at,

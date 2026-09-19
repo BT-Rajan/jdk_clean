@@ -187,7 +187,9 @@ def update_status(
         reason=payload.reason,
         user_id=user.id,
     )
-    return ProductionScheduleOut.from_model(batch)
+    out = ProductionScheduleOut.from_model(batch)
+    out.resulting_unscheduled_quantity = production_service.get_resulting_unscheduled_quantity(db, batch)
+    return out
 
 
 @router.delete("/{batch_id}")

@@ -28,6 +28,9 @@ export interface JourneyOrder {
   total_amount: number
   customer_name: string | null
   admin_review_required: boolean
+  /** A single "what to do next" sentence derived from this order's
+   * current status and its real production/delivery/payment state. */
+  next_action: string
   created_at: string
 }
 

@@ -82,8 +82,39 @@ export interface Order {
    * of this one. */
   child_orders: OrderChildSummary[]
   lines: OrderLine[]
+  /** A single "what to do next" sentence derived from this order's
+   * current status and its real production/delivery/payment state --
+   * only populated on the detail and status-change responses (null on
+   * list rows). See order_service.get_next_action. */
+  next_action: string | null
+  /** Only set on the response to the status-change call that just
+   * cancelled this order -- what got taken down with it. */
+  cancellation_effects: OrderCancellationEffects | null
   created_at: string
   updated_at: string
+}
+
+export interface CancelledProductionBatchSummary {
+  id: number
+  batch_number: string
+  status: string
+}
+
+export interface ReleasedReservationSummary {
+  product_id: number
+  product_name: string | null
+  quantity: number
+}
+
+export interface CancelledDeliveryNoteSummary {
+  id: number
+  delivery_note_number: string
+}
+
+export interface OrderCancellationEffects {
+  cancelled_production_batches: CancelledProductionBatchSummary[]
+  released_reservations: ReleasedReservationSummary[]
+  cancelled_delivery_notes: CancelledDeliveryNoteSummary[]
 }
 
 export interface OrderChildSummary {

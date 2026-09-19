@@ -31,6 +31,10 @@ class JourneyOrder(BaseModel):
     total_amount: float
     customer_name: str | None
     admin_review_required: bool
+    # See order_service.get_next_action -- a single sentence for "what
+    # should happen to this order next", derived from its status plus its
+    # real production/delivery/payment state.
+    next_action: str
     created_at: datetime
 
 

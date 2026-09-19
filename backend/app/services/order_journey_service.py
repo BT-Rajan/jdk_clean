@@ -6,6 +6,7 @@ from app.models.feasibility import FeasibilityCheck
 from app.models.order import Order
 from app.models.production_schedule import ProductionSchedule
 from app.models.quotation import Quotation
+from app.services import order_service
 
 # Answers "where is this order, right now" by walking the real chain that
 # already links these five tables -- nothing new is stored here, this is
@@ -72,6 +73,7 @@ def get_order_journey(db: Session, order_id: int) -> dict:
             "total_amount": float(order.total_amount),
             "customer_name": order.customer.name if order.customer else None,
             "admin_review_required": order.admin_review_required,
+            "next_action": order_service.get_next_action(db, order),
             "created_at": order.created_at,
         },
         "feasibility": (

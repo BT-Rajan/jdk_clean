@@ -130,6 +130,7 @@ export function OrderJourney({ orderId }: OrderJourneyProps) {
             {order.confirmed_delivery_date && ` · due ${formatDate(order.confirmed_delivery_date)}`}
           </p>
           <p className="mt-1 text-sm text-white/40">Placed {formatDateTime(order.created_at)}</p>
+          <p className="mt-2 text-sm font-medium text-gold-300">Next action: {order.next_action}</p>
         </Stage>
 
         <Stage label="Production" reached={production_batches.length > 0}>

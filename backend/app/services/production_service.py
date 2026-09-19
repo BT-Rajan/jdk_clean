@@ -1,6 +1,7 @@
 import json
 from datetime import date
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError, ValidationAppError
@@ -8,7 +9,7 @@ from app.core.pagination import sort_and_paginate
 from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed, assert_within_backdate_window
 from app.models.machine import Machine
-from app.models.order import Order
+from app.models.order import OPEN_STATUSES, Order, OrderDetail
 from app.models.product import Product
 from app.models.production_schedule import ALLOWED_TRANSITIONS, ProductionSchedule
 from app.models.raw_material import RawMaterial
@@ -690,6 +691,67 @@ def change_status(
         _maybe_advance_order_to_ready_to_ship(db, batch.order_id, user_id)
 
     return get_batch(db, batch_id)
+
+
+def get_resulting_unscheduled_quantity(db: Session, batch: ProductionSchedule) -> float | None:
+    """After cancelling a batch tied to a still-active order, how much of
+    that order's demand for the batch's product now has no production
+    scheduled against it at all -- the exact number that would otherwise
+    only surface later, indirectly, via the MRP screen's "outstanding
+    order with no batch scheduled" pass (see mrp_service._quantity_to_produce).
+    Returned straight off the cancellation instead, so nobody has to go
+    looking for it.
+
+    None when the batch isn't cancelled, isn't tied to an order, or that
+    order is no longer active (cancelled, or already fully
+    shipped/delivered) -- the question is moot then.
+    """
+    if batch.status != "cancelled" or batch.order_id is None:
+        return None
+
+    from app.models.delivery_note import DeliveryNote, DeliveryNoteLine
+
+    order = db.query(Order).filter(Order.id == batch.order_id).first()
+    if order is None or order.status not in OPEN_STATUSES:
+        return None
+
+    ordered_quantity = float(
+        db.query(func.coalesce(func.sum(OrderDetail.quantity), 0))
+        .filter(OrderDetail.order_id == order.id, OrderDetail.product_id == batch.product_id)
+        .scalar()
+    )
+    if ordered_quantity <= 0:
+        return None
+
+    delivered_quantity = float(
+        db.query(func.coalesce(func.sum(DeliveryNoteLine.quantity_delivered), 0))
+        .join(DeliveryNote)
+        .filter(
+            DeliveryNote.order_id == order.id,
+            DeliveryNote.status == "issued",
+            DeliveryNote.deleted_at.is_(None),
+            DeliveryNoteLine.product_id == batch.product_id,
+        )
+        .scalar()
+    )
+
+    still_scheduled = (
+        db.query(ProductionSchedule)
+        .filter(
+            ProductionSchedule.order_id == order.id,
+            ProductionSchedule.product_id == batch.product_id,
+            ProductionSchedule.id != batch.id,
+            ProductionSchedule.deleted_at.is_(None),
+            ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
+        )
+        .all()
+    )
+    still_scheduled_quantity = sum(
+        max(float(b.planned_quantity) - float(b.produced_quantity), 0.0) for b in still_scheduled
+    )
+
+    unscheduled = ordered_quantity - delivered_quantity - still_scheduled_quantity
+    return round(max(unscheduled, 0.0), 4)
 
 
 def log_partial_production(

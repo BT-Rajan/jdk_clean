@@ -160,6 +160,14 @@ class ProductionScheduleOut(BaseModel):
     # by the list/get endpoints via production_readiness_service.quick_status,
     # not stored -- see production_readiness_service for why.
     readiness_status: str | None = None
+    # Only set on the response to the status-change call that just
+    # cancelled this batch, and only when it was tied to a still-active
+    # order -- how much of that order's demand for this product now has
+    # no batch scheduled against it at all. See
+    # production_service.get_resulting_unscheduled_quantity. None in
+    # every other case (not cancelled, no order, or the order's no
+    # longer active) -- not stored, populated by the status endpoint.
+    resulting_unscheduled_quantity: float | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -148,6 +148,34 @@ class OrderChildSummary(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CancelledProductionBatchOut(BaseModel):
+    id: int
+    batch_number: str
+    status: str
+
+
+class ReleasedReservationOut(BaseModel):
+    product_id: int
+    product_name: str | None
+    quantity: float
+
+
+class CancelledDeliveryNoteOut(BaseModel):
+    id: int
+    delivery_note_number: str
+
+
+class OrderCancellationEffects(BaseModel):
+    """What a cancellation took down with it -- see
+    order_service._cancel_active_production_batches and change_status's
+    'cancelled' branches. Only ever populated on the response to the
+    status-change call that actually cancelled the order; None otherwise."""
+
+    cancelled_production_batches: list[CancelledProductionBatchOut] = []
+    released_reservations: list[ReleasedReservationOut] = []
+    cancelled_delivery_notes: list[CancelledDeliveryNoteOut] = []
+
+
 class OrderFulfillmentLineOut(BaseModel):
     """P8: per order line, how much is ordered/delivered/outstanding set
     against what's actually released FG stock right now, plus existing
@@ -223,13 +251,24 @@ class OrderOut(BaseModel):
     # actually went.
     child_orders: list[OrderChildSummary] = []
     lines: list[OrderLineOut] = []
+    # A single human-readable "what to do next" sentence derived from the
+    # order's current status plus its real production/delivery/payment
+    # state -- see order_service.get_next_action. Only populated by
+    # callers that pass next_action in (the detail/status-change
+    # endpoints); None on plain list rows, where computing this for every
+    # row would mean several extra queries per order.
+    next_action: str | None = None
+    # Only set on the response to the status-change call that actually
+    # cancelled this order -- see order_service.change_status and
+    # OrderCancellationEffects.
+    cancellation_effects: OrderCancellationEffects | None = None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
 
     @staticmethod
-    def from_model(obj, quotation_number: str | None = None) -> "OrderOut":
+    def from_model(obj, quotation_number: str | None = None, next_action: str | None = None) -> "OrderOut":
         data = OrderOut.model_validate(obj)
         data.customer_name = obj.customer.name if obj.customer else None
         data.customer_email = obj.customer.email if obj.customer else None
@@ -246,4 +285,10 @@ class OrderOut(BaseModel):
             line.product_code = src.product.code if src.product else None
             line.product_name = src.product.name if src.product else None
             line.unit = src.product.unit if src.product else None
+        data.next_action = next_action
+        # Transient attribute set by order_service.change_status right
+        # after a cancellation -- see that function's own comment. Not a
+        # mapped column, so plain getattr with a default is needed.
+        effects = getattr(obj, "cancellation_effects", None)
+        data.cancellation_effects = OrderCancellationEffects(**effects) if effects else None
         return data
