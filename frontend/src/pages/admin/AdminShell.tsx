@@ -31,20 +31,6 @@ interface SectionGroup {
 
 const GROUPS: SectionGroup[] = [
   {
-    label: 'People & Access',
-    // Users/Departments/Roles & Permissions are each their own routed
-    // page (not a local panel), so these are links out of /admin rather
-    // than a section switch -- same pattern the Master Data link below
-    // already used. Grouped here so the Admin area has one place to
-    // reach who has access to what, instead of being scattered across
-    // the top nav's own Admin dropdown.
-    items: [
-      { href: '/users', label: 'Users' },
-      { href: '/departments', label: 'Departments' },
-      { href: '/roles-permissions', label: 'Roles & Permissions' },
-    ],
-  },
-  {
     label: 'Company',
     items: [
       // Factory Setup (weekdays & working hours) renders as part of this
@@ -130,8 +116,8 @@ export function AdminShell() {
       <PageContainer>
         <h1 className="font-display text-2xl font-medium text-white">Admin</h1>
         <p className="mt-2 text-sm text-white/50">
-          People &amp; access, company configuration (including factory setup and the org chart), approvals, and
-          communication -- organized in one place. Master data is one click away.
+          Company configuration (including factory setup and the org chart), approvals, and communication --
+          organized in one place. Master data is one click away.
         </p>
 
         <div className="mt-8 flex flex-col gap-8 lg:flex-row lg:items-start">
