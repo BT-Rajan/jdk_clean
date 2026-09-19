@@ -106,6 +106,12 @@ class ProductionSchedule(Base, TimestampMixin, SoftDeleteMixin):
     # implicitly by whatever transition leaves 'paused' next; only ever
     # reflects the most recent pause.
     pause_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Mandatory when this batch is completed with produced_quantity
+    # different from planned_quantity (either direction) -- why the
+    # actual output didn't match the plan. Distinct from
+    # material_discrepancy_notes below, which is about raw-material
+    # *consumption* vs. the BOM, not finished-goods output vs. plan.
+    quantity_discrepancy_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     # Set on completion (see production_service._record_output) when any
     # raw material's actual usage either exceeds its BOM line(s)'

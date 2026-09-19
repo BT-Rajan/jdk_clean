@@ -4,6 +4,7 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.core.validators import not_in_past
+from app.services import production_service
 
 
 class ProductionMaterialActual(BaseModel):
@@ -97,8 +98,11 @@ class ProductionScheduleStatusUpdate(BaseModel):
     # the scrap-allowance-breach and material-discrepancy checks (see
     # production_service._record_output).
     actual_materials: list[ProductionMaterialActual] | None = None
-    # Required when status == 'cancelled' or 'paused' (enforced in the
-    # service layer) -- why production is stopping/pausing.
+    # Required when status == 'cancelled' or 'paused' (why production is
+    # stopping/pausing), and conditionally when status == 'completed'
+    # with a produced_quantity that differs from planned_quantity (why
+    # actual output didn't match the plan) -- all enforced in the
+    # service layer, see change_status.
     reason: str | None = Field(default=None, max_length=5000)
 
 
@@ -124,6 +128,17 @@ class OrderProductQuantitySummary(BaseModel):
     scheduled: float
     produced: float
     remaining: float
+
+
+class MachineConflictOut(BaseModel):
+    """Another booked batch sharing this batch's machine with an
+    overlapping scheduled window -- see
+    production_service.get_machine_conflicts."""
+
+    id: int
+    batch_number: str
+    scheduled_start: date
+    scheduled_end: date
 
 
 class ProductionScheduleOut(BaseModel):
@@ -153,6 +168,7 @@ class ProductionScheduleOut(BaseModel):
     auto_scheduled: bool
     cancel_reason: str | None
     pause_reason: str | None
+    quantity_discrepancy_reason: str | None
     notes: str | None
     material_discrepancy_flag: bool
     # Deliberately not named material_discrepancy_notes (the ORM column
@@ -183,6 +199,16 @@ class ProductionScheduleOut(BaseModel):
     # Only set on the single-batch GET (the per-row cost isn't worth
     # paying on every list row); None for a batch with no order_id.
     order_quantity_summary: OrderProductQuantitySummary | None = None
+    # How many days past scheduled_end this batch is right now -- see
+    # production_service.get_days_overdue. Computed fresh on every
+    # response (pure date math, no extra query), None once closed out or
+    # not overdue.
+    days_overdue: int | None = None
+    # Other booked batches sharing this batch's machine with an
+    # overlapping window -- see production_service.get_machine_conflicts.
+    # Only set on the single-batch GET (needs its own query); None/empty
+    # on list rows.
+    machine_conflicts: list[MachineConflictOut] = []
     created_at: datetime
     updated_at: datetime
 
@@ -196,6 +222,7 @@ class ProductionScheduleOut(BaseModel):
         data.unit = obj.product.unit if obj.product else None
         data.machine_name = obj.machine.name if obj.machine else None
         data.order_number = obj.order.order_number if obj.order else None
+        data.days_overdue = production_service.get_days_overdue(obj)
         data.material_discrepancy_findings = (
             json.loads(obj.material_discrepancy_notes) if obj.material_discrepancy_notes else None
         )

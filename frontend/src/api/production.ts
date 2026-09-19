@@ -16,6 +16,9 @@ export interface ProductionListParams extends ListQueryParams {
   /** Only ever matches 'planned' batches -- see
    * production_service._list_planned_by_readiness. */
   readiness?: 'ready' | 'blocked'
+  /** Past scheduled_end and not completed/cancelled -- see
+   * production_service.get_days_overdue. */
+  overdue?: boolean
 }
 
 export async function listProductionBatches(

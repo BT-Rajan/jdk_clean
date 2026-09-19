@@ -47,6 +47,7 @@ def list_batches(
     # filter set: NOT_CHECKED just means "not planned", already reachable
     # via the existing `status` filter.
     readiness: str | None = Query(None, pattern="^(?i:ready|blocked)$"),
+    overdue: bool | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(read_guard),
 ):
@@ -60,6 +61,7 @@ def list_batches(
         order_id=order_id,
         sort=sort,
         readiness=readiness,
+        overdue=overdue,
     )
     result["items"] = [_with_readiness(db, b, ProductionScheduleOut.from_model(b)) for b in result["items"]]
     return result
@@ -77,6 +79,7 @@ def get_batch(
         out.order_quantity_summary = production_service.get_order_product_quantity_summary(
             db, batch.order_id, batch.product_id
         )
+    out.machine_conflicts = production_service.get_machine_conflicts(db, batch)
     return out
 
 

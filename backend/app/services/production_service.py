@@ -25,6 +25,12 @@ from app.services import (
 
 TABLE_NAME = "production_schedules"
 
+# How far produced_quantity can drift from planned_quantity on
+# completion before it counts as a genuine discrepancy requiring a
+# reason -- just enough to absorb floating-point/rounding noise on a
+# DECIMAL(14,4) column, not a real under/over-run.
+QUANTITY_DISCREPANCY_TOLERANCE = 1e-4
+
 
 def _base_query(db: Session, include_deleted: bool = False):
     query = db.query(ProductionSchedule).options(
@@ -74,6 +80,7 @@ def list_batches(
     order_id: int | None = None,
     sort: str | None = None,
     readiness: str | None = None,
+    overdue: bool | None = None,
 ) -> dict:
     query = _base_query(db)
 
@@ -85,6 +92,14 @@ def list_batches(
         query = query.filter(ProductionSchedule.order_id == order_id)
     if search:
         query = query.filter(ProductionSchedule.batch_number.ilike(f"%{search}%"))
+    if overdue:
+        # Same condition escalate_overdue_batches flags for admin review
+        # -- past its expected completion date and not yet closed out
+        # one way or another, whatever its current status.
+        query = query.filter(
+            ProductionSchedule.status.notin_(("completed", "cancelled")),
+            ProductionSchedule.scheduled_end < today_kuwait(),
+        )
 
     if readiness:
         # Readiness isn't a stored column (see production_readiness_service)
@@ -706,7 +721,16 @@ def change_status(
         # Whatever's left of the reservation beyond what's actually been
         # produced (across this call and any log_partial_production calls
         # before it) is forfeit -- closing out at less than planned_quantity
-        # is a deliberate choice to stop here, not an error.
+        # (or, less commonly, over it) is a deliberate choice, but one
+        # that now has to be explained: QUANTITY_DISCREPANCY_TOLERANCE
+        # allows for harmless rounding, not a genuine under/over-run.
+        if abs(float(batch.produced_quantity) - float(batch.planned_quantity)) > QUANTITY_DISCREPANCY_TOLERANCE:
+            assert_reason_given(
+                reason,
+                f"Produced quantity ({batch.produced_quantity}) differs from planned "
+                f"({batch.planned_quantity}) -- a reason is required to complete this batch.",
+            )
+            batch.quantity_discrepancy_reason = reason
         _release_batch_materials(db, batch, commit=False)
         batch.actual_end = now_kuwait_naive()
     elif new_status == "cancelled":
@@ -810,6 +834,56 @@ def get_resulting_unscheduled_quantity(db: Session, batch: ProductionSchedule) -
     if summary["ordered"] <= 0:
         return None
     return summary["remaining"]
+
+
+def get_days_overdue(batch: ProductionSchedule, today: date | None = None) -> int | None:
+    """How many days past scheduled_end this batch is -- the same
+    condition escalate_overdue_batches flags for admin review, but as a
+    number instead of a boolean, and computed live off the batch's
+    current fields rather than only whenever the periodic scan last ran.
+    None once it's closed out (completed/cancelled) or not yet overdue.
+    """
+    if batch.status in ("completed", "cancelled"):
+        return None
+    as_of = today or today_kuwait()
+    days = (as_of - batch.scheduled_end).days
+    return days if days > 0 else None
+
+
+def get_machine_conflicts(db: Session, batch: ProductionSchedule) -> list[dict]:
+    """Other booked batches sharing this batch's machine with an
+    overlapping scheduled window -- the literal, batch-level "what else
+    is fighting for this same machine slot" question, distinct from
+    production_readiness_service's hours-based capacity check (which
+    answers "is there enough free time in this window", not "which
+    specific other batch is double-booking it"). Empty when this batch
+    has no machine assigned, or isn't itself still occupying a slot
+    (completed/cancelled).
+    """
+    if batch.machine_id is None or batch.status not in ("planned", "in_progress", "paused"):
+        return []
+
+    others = (
+        db.query(ProductionSchedule)
+        .filter(
+            ProductionSchedule.machine_id == batch.machine_id,
+            ProductionSchedule.id != batch.id,
+            ProductionSchedule.deleted_at.is_(None),
+            ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
+            ProductionSchedule.scheduled_end >= batch.scheduled_start,
+            ProductionSchedule.scheduled_start <= batch.scheduled_end,
+        )
+        .all()
+    )
+    return [
+        {
+            "id": other.id,
+            "batch_number": other.batch_number,
+            "scheduled_start": other.scheduled_start,
+            "scheduled_end": other.scheduled_end,
+        }
+        for other in others
+    ]
 
 
 def log_partial_production(

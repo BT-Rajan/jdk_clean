@@ -148,9 +148,12 @@ def test_closing_out_early_forfeits_remaining_reservation(db):
 
     production_service.log_partial_production(db, batch.id, 6)
     production_service.change_status(db, batch.id, "paused", reason="Line reassigned to a rush order")
-    completed = production_service.change_status(db, batch.id, "completed")
+    completed = production_service.change_status(
+        db, batch.id, "completed", reason="Line reassigned -- stopping at 6 of 10."
+    )
 
     assert completed.status == "completed"
+    assert completed.quantity_discrepancy_reason == "Line reassigned -- stopping at 6 of 10."
     assert float(completed.produced_quantity) == 6  # never produced the rest
     # The partial log already released 6 units' worth (12); closing out
     # early releases the remaining 4 units' worth (8) too, on top of

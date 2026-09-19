@@ -28,10 +28,13 @@ export function ProductionListPage() {
   // production_service._list_planned_by_readiness. A small filter, not a
   // dashboard: just READY / BLOCKED, same two states the row indicator shows.
   const [readinessFilter, setReadinessFilter] = useState<'' | 'ready' | 'blocked'>('')
+  // Past scheduled_end and not completed/cancelled -- see
+  // production_service.get_days_overdue.
+  const [overdueOnly, setOverdueOnly] = useState(false)
   const fetcher = useCallback(
     (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) =>
-      listProductionBatches({ ...params, readiness: readinessFilter || undefined }),
-    [readinessFilter],
+      listProductionBatches({ ...params, readiness: readinessFilter || undefined, overdue: overdueOnly || undefined }),
+    [readinessFilter, overdueOnly],
   )
   const {
     items,
@@ -77,6 +80,15 @@ export function ProductionListPage() {
               <option value="blocked">Blocked</option>
             </SelectField>
           </div>
+          <label className="flex h-12 items-center gap-2 text-sm text-white/70">
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-white/20 bg-transparent"
+              checked={overdueOnly}
+              onChange={(e) => setOverdueOnly(e.target.checked)}
+            />
+            Overdue only
+          </label>
           {canWrite(user?.role) && (
             <div className="flex gap-3">
               <Button variant="ghost" onClick={() => navigate('/production/new')}>New batch</Button>
@@ -104,11 +116,13 @@ export function ProductionListPage() {
                 <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
                   <SortableHeader label="Batch" field="batch_number" sort={sort} onSort={toggleSort} />
                   <th className="px-6 py-4 font-medium">Product</th>
+                  <th className="px-6 py-4 font-medium">Machine</th>
                   <th className="px-6 py-4 font-medium">Order</th>
                   <SortableHeader label="Scheduled start" field="scheduled_start" sort={sort} onSort={toggleSort} />
                   <th className="px-6 py-4 font-medium">Quantity</th>
                   <SortableHeader label="Status" field="status" sort={sort} onSort={toggleSort} />
                   <th className="px-6 py-4 font-medium">Readiness</th>
+                  <th className="px-6 py-4 font-medium">Overdue</th>
                 </tr>
               </thead>
               <tbody>
@@ -122,6 +136,7 @@ export function ProductionListPage() {
                     <td className="px-6 py-4 text-white">
                       {b.product_code ? `${b.product_code} — ${b.product_name}` : `#${b.product_id}`}
                     </td>
+                    <td className="px-6 py-4 text-white/60">{b.machine_name ?? '—'}</td>
                     <td className="px-6 py-4 text-white/60">{b.order_number ?? '—'}</td>
                     <td className="px-6 py-4 text-white/60">{formatDate(b.scheduled_start)}</td>
                     <td className="px-6 py-4 text-white/60">
@@ -139,6 +154,13 @@ export function ProductionListPage() {
                         <Badge tone="success">Ready</Badge>
                       ) : b.readiness_status ? (
                         <Badge tone="danger">Blocked</Badge>
+                      ) : (
+                        <span className="text-white/30">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      {b.days_overdue ? (
+                        <Badge tone="danger">{`${b.days_overdue}d overdue`}</Badge>
                       ) : (
                         <span className="text-white/30">—</span>
                       )}
