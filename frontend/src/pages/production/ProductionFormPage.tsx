@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, Spinner, TextareaField, TextField } from '@/components/ui'
@@ -49,6 +49,16 @@ function ProductionCreateForm() {
   const [formError, setFormError] = useState<string | null>(null)
   const { options: products } = useProductOptions()
   const { options: orders } = useOrderOptions()
+  // Populated by ProductionDetailPage's "Reschedule" action
+  // (/production/new?product_id=&order_id=&planned_quantity=) so
+  // rescheduling cancelled or under-completed production doesn't mean
+  // re-entering everything from a blank form -- only fresh dates are
+  // ever asked for, since whatever this batch was scheduled for is
+  // already in the past by the time it's cancelled/incomplete.
+  const [searchParams] = useSearchParams()
+  const prefillProductId = Number(searchParams.get('product_id')) || 0
+  const prefillOrderId = searchParams.get('order_id') ?? ''
+  const prefillQuantity = Number(searchParams.get('planned_quantity')) || 1
 
   const {
     register,
@@ -57,9 +67,9 @@ function ProductionCreateForm() {
   } = useForm<ProductionBatchFormValues, unknown, ProductionBatchSubmitValues>({
     resolver: zodResolver(productionBatchSchema),
     defaultValues: {
-      product_id: 0,
-      order_id: '',
-      planned_quantity: 1,
+      product_id: prefillProductId,
+      order_id: prefillOrderId,
+      planned_quantity: prefillQuantity,
       scheduled_start: todayDateInputMin,
       scheduled_end: todayDateInputMin,
       notes: '',

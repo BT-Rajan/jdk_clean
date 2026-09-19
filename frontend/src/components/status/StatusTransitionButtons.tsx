@@ -14,6 +14,11 @@ interface StatusTransitionButtonsProps<S extends string> {
   onChange: (status: S, reason?: string) => Promise<void>
   busy?: boolean
   className?: string
+  /** Statuses that are currently blocked by something other than a
+   * reason (e.g. production's readiness gate on 'in_progress'). The
+   * button still renders -- so the reason is visible -- but is disabled
+   * and the given text renders right beside it. */
+  disabledStatuses?: Partial<Record<S, string>>
 }
 
 /** A handful of status labels get an icon-only button instead of text --
@@ -39,6 +44,7 @@ export function StatusTransitionButtons<S extends string>({
   onChange,
   busy = false,
   className = '',
+  disabledStatuses,
 }: StatusTransitionButtonsProps<S>) {
   const [pendingStatus, setPendingStatus] = useState<S | null>(null)
   const [reason, setReason] = useState('')
@@ -72,10 +78,11 @@ export function StatusTransitionButtons<S extends string>({
 
   return (
     <>
-      <div className={`flex flex-wrap gap-2 ${className}`}>
+      <div className={`flex flex-wrap items-center gap-2 ${className}`}>
         {nextStatuses.map((s) => {
           const iconConfig = STATUS_ICONS[s]
           const label = s.replace(/_/g, ' ')
+          const blockedReason = disabledStatuses?.[s]
           if (iconConfig) {
             const Icon = iconConfig.icon
             return (
@@ -85,6 +92,8 @@ export function StatusTransitionButtons<S extends string>({
                 size="sm"
                 className="!w-9 !px-0"
                 isLoading={busy}
+                disabled={!!blockedReason}
+                title={blockedReason}
                 onClick={() => handleClick(s)}
                 aria-label={label}
               >
@@ -93,9 +102,19 @@ export function StatusTransitionButtons<S extends string>({
             )
           }
           return (
-            <Button key={s} variant="ghost" size="sm" isLoading={busy} onClick={() => handleClick(s)}>
-              {label}
-            </Button>
+            <span key={s} className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                isLoading={busy}
+                disabled={!!blockedReason}
+                title={blockedReason}
+                onClick={() => handleClick(s)}
+              >
+                {label}
+              </Button>
+              {blockedReason && <span className="text-xs text-red-300">{blockedReason}</span>}
+            </span>
           )
         })}
       </div>

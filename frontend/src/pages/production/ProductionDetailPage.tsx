@@ -49,6 +49,24 @@ import { StatusTransitionButtons } from '@/components/status/StatusTransitionBut
 import { productionAdminReviewSchema, type ProductionAdminReviewFormValues } from '@/lib/validation'
 import { ProductionReadinessPanel } from './ProductionReadinessPanel'
 
+/** Calendar days scheduled_start through scheduled_end, inclusive -- a
+ * batch scheduled start==end is a 1-day job. */
+function plannedDurationDays(startISO: string, endISO: string): number {
+  const start = new Date(`${startISO}T00:00:00`)
+  const end = new Date(`${endISO}T00:00:00`)
+  return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+}
+
+function actualDurationHours(startISO: string, endISO: string): number {
+  return (new Date(endISO).getTime() - new Date(startISO).getTime()) / (1000 * 60 * 60)
+}
+
+function formatHoursAsDaysHours(hours: number): string {
+  const days = Math.floor(hours / 24)
+  const remainder = Math.round((hours - days * 24) * 10) / 10
+  return days === 0 ? `${remainder}h` : `${days}d ${remainder}h`
+}
+
 function AdminReviewModal({
   open,
   onClose,
@@ -231,6 +249,27 @@ export function ProductionDetailPage() {
     }
   }
 
+  /** Pre-fills the "New batch" form with this batch's product/order/
+   * machine and however much of the order line is still unsatisfied
+   * (order_quantity_summary.remaining -- accounts for every other batch
+   * on the same order+product, not just this one's own shortfall), so
+   * rescheduling cancelled or under-completed production is a couple of
+   * clicks instead of re-entering everything from scratch. Dates aren't
+   * pre-filled: whatever this batch was scheduled for is in the past by
+   * now, so a fresh pair is always needed. */
+  function handleReschedule() {
+    if (!batch) return
+    const remaining = batch.order_quantity_summary
+      ? batch.order_quantity_summary.remaining
+      : Math.max(batch.planned_quantity - batch.produced_quantity, 0)
+    const params = new URLSearchParams({
+      product_id: String(batch.product_id),
+      planned_quantity: String(remaining || batch.planned_quantity),
+    })
+    if (batch.order_id) params.set('order_id', String(batch.order_id))
+    navigate(`/production/new?${params.toString()}`)
+  }
+
   function buildActualMaterials(): ActualMaterialUsed[] | undefined {
     const actualMaterials: ActualMaterialUsed[] = materialRequirements
       .map((r): ActualMaterialUsed | null => {
@@ -356,6 +395,15 @@ export function ProductionDetailPage() {
   const nextStatuses = PRODUCTION_TRANSITIONS[batch.status]
   const canComplete = allowWrite && !justDeleted && nextStatuses.includes('completed')
   const otherTransitions = nextStatuses.filter((s) => s !== 'completed')
+  // Readiness only gates the 'planned' -> 'in_progress' transition --
+  // shown right beside the Start button instead of only discoverable by
+  // scrolling down to the readiness panel.
+  const startBlockedReason =
+    batch.status === 'planned' && readiness && readiness.status !== 'READY' ? readiness.summary : undefined
+  const canReschedule =
+    allowWrite &&
+    !justDeleted &&
+    (batch.status === 'cancelled' || (batch.status === 'completed' && batch.produced_quantity < batch.planned_quantity))
 
   // A material's approved alternatives, keyed by the BOM material's own id
   // -- read straight from the one readiness computation, never re-derived.
@@ -369,6 +417,9 @@ export function ProductionDetailPage() {
         actions={
           !justDeleted ? (
             <>
+              {canReschedule && (
+                <Button size="sm" onClick={handleReschedule}>Reschedule</Button>
+              )}
               {allowWrite && batch.status === 'planned' && (
                 <Button
                   variant="primary"
@@ -429,11 +480,38 @@ export function ProductionDetailPage() {
                 reasonLabel="Reason"
                 busy={busy}
                 onChange={handleStatusChange}
+                disabledStatuses={startBlockedReason ? { in_progress: startBlockedReason } : undefined}
               />
             </div>
           )}
         </div>
       </GlassCard>
+
+      {batch.order_quantity_summary && (
+        <GlassCard className="mb-6 p-6">
+          <p className="mb-3 text-xs font-medium tracking-wide text-white/50 uppercase">
+            This order's {batch.product_code ?? 'product'} line
+          </p>
+          <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+            <span className="text-white/60">
+              Ordered <span className="font-medium text-white">{batch.order_quantity_summary.ordered}</span>{' '}
+              {batch.unit}
+            </span>
+            <span className="text-white/60">
+              Scheduled <span className="font-medium text-white">{batch.order_quantity_summary.scheduled}</span>{' '}
+              {batch.unit}
+            </span>
+            <span className="text-white/60">
+              Produced <span className="font-medium text-white">{batch.order_quantity_summary.produced}</span>{' '}
+              {batch.unit}
+            </span>
+            <span className={batch.order_quantity_summary.remaining > 0 ? 'text-amber-300' : 'text-white/60'}>
+              Remaining{' '}
+              <span className="font-medium">{batch.order_quantity_summary.remaining}</span> {batch.unit}
+            </span>
+          </div>
+        </GlassCard>
+      )}
 
       {isActive && (
         <ProductionReadinessPanel readiness={readiness} loading={readinessLoading} error={readinessError} />
@@ -452,8 +530,18 @@ export function ProductionDetailPage() {
             />
             <Field label="Scheduled start" value={formatDate(batch.scheduled_start)} />
             <Field label="Scheduled end" value={formatDate(batch.scheduled_end)} />
+            <Field
+              label="Planned duration"
+              value={`${plannedDurationDays(batch.scheduled_start, batch.scheduled_end)} day(s)`}
+            />
             <Field label="Actual start" value={batch.actual_start ? formatDateTime(batch.actual_start) : null} />
             <Field label="Actual end" value={batch.actual_end ? formatDateTime(batch.actual_end) : null} />
+            {batch.actual_start && batch.actual_end && (
+              <Field
+                label="Actual duration"
+                value={formatHoursAsDaysHours(actualDurationHours(batch.actual_start, batch.actual_end))}
+              />
+            )}
             {batch.status === 'paused' && <Field label="Paused because" value={batch.pause_reason} />}
             {batch.status === 'cancelled' && <Field label="Cancelled because" value={batch.cancel_reason} />}
           </dl>

@@ -48,8 +48,19 @@ export interface ProductionBatch {
    * no batch scheduled against it at all. Null otherwise (including for
    * every status other than 'cancelled'). */
   resulting_unscheduled_quantity: number | null
+  /** ordered / scheduled / produced / remaining for this batch's own
+   * order+product -- only set on the single-batch GET, and only when
+   * this batch is tied to an order. */
+  order_quantity_summary: OrderProductQuantitySummary | null
   created_at: string
   updated_at: string
+}
+
+export interface OrderProductQuantitySummary {
+  ordered: number
+  scheduled: number
+  produced: number
+  remaining: number
 }
 
 /** Mirrors backend/app/schemas/production_readiness.py. */

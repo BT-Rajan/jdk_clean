@@ -291,11 +291,35 @@ def get_material_requirements(db: Session, batch_id: int) -> list[dict]:
     return results
 
 
+def _assert_no_duplicate_scheduling(
+    db: Session, order_id: int, product_id: int, planned_quantity: float, exclude_batch_id: int | None = None
+) -> None:
+    """Blocks scheduling more against an order line than it actually
+    still needs -- see get_order_product_quantity_summary's own
+    docstring for how 'remaining' is derived. Without this, nothing
+    stopped several batches from independently covering the same
+    already-satisfied quantity (each individually valid, but jointly
+    scheduling more than the order line could ever need)."""
+    summary = get_order_product_quantity_summary(db, order_id, product_id, exclude_batch_id=exclude_batch_id)
+    if summary["ordered"] <= 0:
+        # Not actually a line on this order -- _validate_order/
+        # _validate_product already gate the order/product existing at
+        # all; nothing further to guard here.
+        return
+    if planned_quantity > summary["remaining"] + 1e-6:
+        raise ConflictError(
+            f"This order's line for this product only has {summary['remaining']} unit(s) still "
+            f"unsatisfied ({summary['produced']} produced and {summary['scheduled']} already scheduled "
+            f"against {summary['ordered']} ordered) -- {planned_quantity} would over-schedule it."
+        )
+
+
 def create_batch(db: Session, data: dict, user_id: int | None = None) -> ProductionSchedule:
     product = _validate_product(db, data["product_id"])
     order = None
     if data.get("order_id"):
         order = _validate_order(db, data["order_id"])
+        _assert_no_duplicate_scheduling(db, data["order_id"], data["product_id"], float(data["planned_quantity"]))
     if not data.get("machine_id"):
         data["machine_id"] = product.machine_id
     if data.get("machine_id"):
@@ -335,6 +359,17 @@ def update_batch(db: Session, batch_id: int, data: dict, user_id: int | None = N
     material_inputs_changed = ("product_id" in data and data["product_id"] != batch.product_id) or (
         "planned_quantity" in data and float(data["planned_quantity"]) != float(batch.planned_quantity)
     )
+    scheduling_inputs_changed = material_inputs_changed or (
+        "order_id" in data and data["order_id"] != batch.order_id
+    )
+    new_order_id = data["order_id"] if "order_id" in data else batch.order_id
+    if scheduling_inputs_changed and new_order_id:
+        new_product_id = data.get("product_id", batch.product_id)
+        new_planned_quantity = float(data.get("planned_quantity", batch.planned_quantity))
+        _assert_no_duplicate_scheduling(
+            db, new_order_id, new_product_id, new_planned_quantity, exclude_batch_id=batch.id
+        )
+
     if material_inputs_changed:
         _release_batch_materials(db, batch)
 
@@ -693,6 +728,64 @@ def change_status(
     return get_batch(db, batch_id)
 
 
+def get_order_product_quantity_summary(
+    db: Session, order_id: int, product_id: int, exclude_batch_id: int | None = None
+) -> dict:
+    """The single "where does this order's production for this product
+    actually stand" figure -- ordered / scheduled / produced / remaining
+    -- combining every batch tied to that order+product instead of
+    making a person piece it together by hand from however many batches
+    exist. Used both to display that row directly on the production
+    batch detail page and, via `remaining`, to guard against scheduling
+    more than an order's line actually still needs (see
+    _assert_no_duplicate_scheduling) and to compute what's left to
+    reschedule after a cancellation (get_resulting_unscheduled_quantity).
+
+    - ordered: the order line's quantity for this product (0 if this
+      product isn't actually on the order).
+    - produced: cumulative produced_quantity across every batch tied to
+      this order+product, whatever its current status -- output already
+      made is real regardless of what happened to the batch afterward.
+    - scheduled: planned_quantity minus produced_quantity, summed across
+      only still-active (planned/in_progress/paused) batches -- capacity
+      genuinely committed but not yet delivered as output.
+    - remaining: max(ordered - produced - scheduled, 0) -- what's
+      neither been made nor has a batch covering it yet.
+
+    `exclude_batch_id` leaves one batch out of both produced and
+    scheduled entirely -- used when checking whether *that* batch's own
+    quantity would over-schedule the line (its own existing contribution
+    shouldn't count against itself), and when a cancelled batch (already
+    excluded from `scheduled` by its own status, but its produced_quantity
+    would otherwise still count) needs to be left out of `produced` too.
+    """
+    query = db.query(ProductionSchedule).filter(
+        ProductionSchedule.order_id == order_id,
+        ProductionSchedule.product_id == product_id,
+        ProductionSchedule.deleted_at.is_(None),
+    )
+    if exclude_batch_id is not None:
+        query = query.filter(ProductionSchedule.id != exclude_batch_id)
+    batches = query.all()
+
+    ordered = float(
+        db.query(func.coalesce(func.sum(OrderDetail.quantity), 0))
+        .filter(OrderDetail.order_id == order_id, OrderDetail.product_id == product_id)
+        .scalar()
+    )
+    produced = round(sum(float(b.produced_quantity) for b in batches), 4)
+    scheduled = round(
+        sum(
+            max(float(b.planned_quantity) - float(b.produced_quantity), 0.0)
+            for b in batches
+            if b.status in ("planned", "in_progress", "paused")
+        ),
+        4,
+    )
+    remaining = round(max(ordered - produced - scheduled, 0.0), 4)
+    return {"ordered": ordered, "scheduled": scheduled, "produced": produced, "remaining": remaining}
+
+
 def get_resulting_unscheduled_quantity(db: Session, batch: ProductionSchedule) -> float | None:
     """After cancelling a batch tied to a still-active order, how much of
     that order's demand for the batch's product now has no production
@@ -709,49 +802,14 @@ def get_resulting_unscheduled_quantity(db: Session, batch: ProductionSchedule) -
     if batch.status != "cancelled" or batch.order_id is None:
         return None
 
-    from app.models.delivery_note import DeliveryNote, DeliveryNoteLine
-
     order = db.query(Order).filter(Order.id == batch.order_id).first()
     if order is None or order.status not in OPEN_STATUSES:
         return None
 
-    ordered_quantity = float(
-        db.query(func.coalesce(func.sum(OrderDetail.quantity), 0))
-        .filter(OrderDetail.order_id == order.id, OrderDetail.product_id == batch.product_id)
-        .scalar()
-    )
-    if ordered_quantity <= 0:
+    summary = get_order_product_quantity_summary(db, order.id, batch.product_id, exclude_batch_id=batch.id)
+    if summary["ordered"] <= 0:
         return None
-
-    delivered_quantity = float(
-        db.query(func.coalesce(func.sum(DeliveryNoteLine.quantity_delivered), 0))
-        .join(DeliveryNote)
-        .filter(
-            DeliveryNote.order_id == order.id,
-            DeliveryNote.status == "issued",
-            DeliveryNote.deleted_at.is_(None),
-            DeliveryNoteLine.product_id == batch.product_id,
-        )
-        .scalar()
-    )
-
-    still_scheduled = (
-        db.query(ProductionSchedule)
-        .filter(
-            ProductionSchedule.order_id == order.id,
-            ProductionSchedule.product_id == batch.product_id,
-            ProductionSchedule.id != batch.id,
-            ProductionSchedule.deleted_at.is_(None),
-            ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
-        )
-        .all()
-    )
-    still_scheduled_quantity = sum(
-        max(float(b.planned_quantity) - float(b.produced_quantity), 0.0) for b in still_scheduled
-    )
-
-    unscheduled = ordered_quantity - delivered_quantity - still_scheduled_quantity
-    return round(max(unscheduled, 0.0), 4)
+    return summary["remaining"]
 
 
 def log_partial_production(

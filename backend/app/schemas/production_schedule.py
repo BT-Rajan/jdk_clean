@@ -116,6 +116,16 @@ class ProductionLogOutput(BaseModel):
     actual_materials: list[ProductionMaterialActual] | None = None
 
 
+class OrderProductQuantitySummary(BaseModel):
+    """ordered / scheduled / produced / remaining for one order+product
+    combination -- see production_service.get_order_product_quantity_summary."""
+
+    ordered: float
+    scheduled: float
+    produced: float
+    remaining: float
+
+
 class ProductionScheduleOut(BaseModel):
     id: int
     batch_number: str
@@ -168,6 +178,11 @@ class ProductionScheduleOut(BaseModel):
     # every other case (not cancelled, no order, or the order's no
     # longer active) -- not stored, populated by the status endpoint.
     resulting_unscheduled_quantity: float | None = None
+    # ordered / scheduled / produced / remaining for this batch's own
+    # order+product -- see production_service.get_order_product_quantity_summary.
+    # Only set on the single-batch GET (the per-row cost isn't worth
+    # paying on every list row); None for a batch with no order_id.
+    order_quantity_summary: OrderProductQuantitySummary | None = None
     created_at: datetime
     updated_at: datetime
 

@@ -72,7 +72,12 @@ def get_batch(
     _: User = Depends(read_guard),
 ):
     batch = production_service.get_batch(db, batch_id)
-    return _with_readiness(db, batch, ProductionScheduleOut.from_model(batch))
+    out = _with_readiness(db, batch, ProductionScheduleOut.from_model(batch))
+    if batch.order_id is not None:
+        out.order_quantity_summary = production_service.get_order_product_quantity_summary(
+            db, batch.order_id, batch.product_id
+        )
+    return out
 
 
 @router.get("/{batch_id}/readiness", response_model=ReadinessResult)
