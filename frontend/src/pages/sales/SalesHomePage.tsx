@@ -304,26 +304,11 @@ export function SalesHomePage() {
         <div>
           <h2 className="mb-4 font-display text-lg font-medium text-white">Go to</h2>
           <div className="flex flex-col gap-2">
-            <Link to="/feasibilities">
-              <Button variant="ghost" className="w-full justify-start">Feasibility checks</Button>
-            </Link>
             <Link to="/feasibilities/new">
               <Button variant="ghost" className="w-full justify-start">New feasibility check</Button>
             </Link>
-            <Link to="/quotations">
-              <Button variant="ghost" className="w-full justify-start">Quotations</Button>
-            </Link>
             <Link to="/quotations/new">
               <Button variant="ghost" className="w-full justify-start">New quotation</Button>
-            </Link>
-            <Link to="/orders">
-              <Button variant="ghost" className="w-full justify-start">Orders</Button>
-            </Link>
-            <Link to="/delivery-notes">
-              <Button variant="ghost" className="w-full justify-start">Delivery notes</Button>
-            </Link>
-            <Link to="/customers">
-              <Button variant="ghost" className="w-full justify-start">Customers</Button>
             </Link>
             <Link to="/customers/new">
               <Button variant="ghost" className="w-full justify-start">New customer</Button>

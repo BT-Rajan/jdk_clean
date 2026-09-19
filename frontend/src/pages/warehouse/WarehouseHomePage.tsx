@@ -271,28 +271,13 @@ export function WarehouseHomePage() {
         <div>
           <h2 className="mb-4 font-display text-lg font-medium text-white">Go to</h2>
           <div className="flex flex-col gap-2">
-            <Link to="/inventory">
-              <Button variant="ghost" className="w-full justify-start">Stock levels</Button>
-            </Link>
             {canAdjust && (
               <Link to="/inventory/adjust">
                 <Button variant="ghost" className="w-full justify-start">Adjust stock</Button>
               </Link>
             )}
-            <Link to="/raw-materials">
-              <Button variant="ghost" className="w-full justify-start">Raw materials</Button>
-            </Link>
             <Link to="/products">
               <Button variant="ghost" className="w-full justify-start">Products</Button>
-            </Link>
-            <Link to="/delivery-notes">
-              <Button variant="ghost" className="w-full justify-start">Delivery notes</Button>
-            </Link>
-            <Link to="/mrp">
-              <Button variant="ghost" className="w-full justify-start">Material requirements planning</Button>
-            </Link>
-            <Link to="/reports/inventory-report">
-              <Button variant="ghost" className="w-full justify-start">Inventory report</Button>
             </Link>
           </div>
         </div>
