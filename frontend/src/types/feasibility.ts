@@ -130,6 +130,8 @@ export interface Feasibility {
   deal_id: number | null
   deal_number: string | null
   status: FeasibilityStatus
+  /** Who raised this check -- resolved from created_by. */
+  owner_name: string | null
   required_by_date: string | null
   checked_at: string | null
   exception_reason: string | null
@@ -146,7 +148,7 @@ export interface Feasibility {
 
 export interface FeasibilityPayload {
   customer_id: number
-  required_by_date?: string | null
+  required_by_date: string
   notes?: string | null
   lines: FeasibilityLineInput[]
 }

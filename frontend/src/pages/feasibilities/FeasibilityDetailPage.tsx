@@ -368,6 +368,7 @@ export function FeasibilityDetailPage() {
               {f.customer_name ?? `#${f.customer_id}`}
             </Link>
           </Field>
+          <Field label="Owner" value={f.owner_name ?? '—'} />
           <Field label="Required by">{formatDate(f.required_by_date)}</Field>
           <Field label="Checked at">{f.checked_at ? formatDateTime(f.checked_at) : 'Not yet run'}</Field>
           <Field label="Created">{formatDateTime(f.created_at)}</Field>

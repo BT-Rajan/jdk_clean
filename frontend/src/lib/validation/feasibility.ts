@@ -9,10 +9,10 @@ export const feasibilityLineSchema = z.object({
 
 export const feasibilitySchema = z.object({
   customer_id: z.coerce.number().int().positive('Choose a customer'),
-  // The empty-string branch goes FIRST and transforms to undefined --
-  // see quotation.ts's valid_until for why the reverse order silently
-  // never applies the transform at all (z.string() already accepts '').
-  required_by_date: z.literal('').transform(() => undefined).or(z.string()).optional().refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
+  // Mandatory: run_check's production-line stage only ever evaluates
+  // capacity against a required_by_date -- see FeasibilityCreate's own
+  // docstring on the backend.
+  required_by_date: z.string().min(1, 'A required-by date is required.').refine(isNotPastDate, { message: NOT_PAST_DATE_MESSAGE }),
   notes: z.string().trim().optional().or(z.literal('')),
   lines: z.array(feasibilityLineSchema).min(1, 'At least one product line is required'),
 })

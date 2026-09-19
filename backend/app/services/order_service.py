@@ -1581,15 +1581,9 @@ def create_order_from_quotation(db: Session, quotation_id: int, user_id: int | N
     from app.services import quotation_service
 
     quotation = quotation_service.get_quotation(db, quotation_id)
-    if quotation.status != "accepted":
-        raise ConflictError(
-            f"Only accepted quotations can be converted to an order (current status: '{quotation.status}')."
-        )
-    if not quotation.payment_link:
-        raise ConflictError(
-            "A payment link must be entered on this quotation (see quotation_service.set_payment_link) "
-            "before it can be converted to an order."
-        )
+    conversion_status, block_reasons = quotation_service.get_conversion_status(quotation)
+    if conversion_status != "ready":
+        raise ConflictError(" ".join(block_reasons) or "This quotation cannot be converted to an order.")
 
     order_number = number_series_service.next_number(db, "ORDER")
     lines = [

@@ -58,9 +58,22 @@ export interface Quotation {
   material_conflict_acknowledged: boolean
   material_conflict_details: MaterialConflict[] | null
   lines: QuotationLine[]
+  /** Stamped every time Sales logs a customer follow-up (a call, an
+   * email outside this app) -- distinct from being emailed through
+   * this app. See next_followup_date/followup_status. */
+  last_followup_at: string | null
+  next_followup_date: string | null
+  followup_status: FollowupStatus
+  /** Where this quotation stands re: becoming an order, and (for
+   * 'blocked') exactly why -- see conversion_block_reasons. */
+  conversion_status: ConversionStatus
+  conversion_block_reasons: string[]
   created_at: string
   updated_at: string
 }
+
+export type FollowupStatus = 'not_due' | 'due' | 'overdue' | 'completed'
+export type ConversionStatus = 'converted' | 'ready' | 'blocked'
 
 export interface MaterialConflictCompetitor {
   quotation_id: number

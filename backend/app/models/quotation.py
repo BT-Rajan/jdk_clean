@@ -102,6 +102,15 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
     # quotation_email vs. quotation_followup_email template based on
     # whether this is still NULL, then stamps it on send.
     last_emailed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Stamped by quotation_service.record_followup every time Sales logs a
+    # customer follow-up (a call, an email outside this app, ...) --
+    # distinct from last_emailed_at, which only ever reflects this app's
+    # own "Send email" action.
+    last_followup_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # When the next follow-up is due -- set by record_followup (defaults
+    # to today + FOLLOWUP_INTERVAL_DAYS there) or picked explicitly by
+    # Sales. Drives get_followup_status's Not Due/Due/Overdue verdict.
+    next_followup_date: Mapped[date | None] = mapped_column(DATE, nullable=True)
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     deal: Mapped[Deal | None] = relationship(lazy="joined")

@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
@@ -12,12 +12,13 @@ import {
   Spinner,
   StatusBadge,
 } from '@/components/ui'
-import { listQuotations } from '@/api/quotations'
+import { listQuotations, recordQuotationFollowup } from '@/api/quotations'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
+import { getApiErrorMessage } from '@/lib/apiError'
 import type { Quotation } from '@/types/quotation'
 
 /** Highlights the expiry date once it's actually a live concern: red once
@@ -36,6 +37,8 @@ function expiryClassName(q: Quotation): string {
 export function QuotationsListPage() {
   const { user } = useAuth()
   const navigate = useNavigate()
+  const [followupBusyId, setFollowupBusyId] = useState<number | null>(null)
+  const [followupError, setFollowupError] = useState<string | null>(null)
   const fetcher = useCallback(
     (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) => listQuotations(params),
     [],
@@ -52,7 +55,21 @@ export function QuotationsListPage() {
     toggleSort,
     loading,
     error,
+    refetch,
   } = usePagedResource(fetcher)
+
+  async function handleFollowup(quotationId: number) {
+    setFollowupBusyId(quotationId)
+    setFollowupError(null)
+    try {
+      await recordQuotationFollowup(quotationId)
+      await refetch()
+    } catch (err) {
+      setFollowupError(getApiErrorMessage(err))
+    } finally {
+      setFollowupBusyId(null)
+    }
+  }
 
   return (
     <AppLayout>
@@ -78,6 +95,7 @@ export function QuotationsListPage() {
       </div>
 
       <Alert variant="error">{error}</Alert>
+      <Alert variant="error">{followupError}</Alert>
 
       <GlassCard className="overflow-hidden">
         {loading ? (
@@ -97,6 +115,9 @@ export function QuotationsListPage() {
                   <SortableHeader label="Expiry" field="valid_until" sort={sort} onSort={toggleSort} />
                   <SortableHeader label="Total" field="total_amount" sort={sort} onSort={toggleSort} />
                   <SortableHeader label="Status" field="status" sort={sort} onSort={toggleSort} />
+                  <th className="px-6 py-4 font-medium">Conversion</th>
+                  <SortableHeader label="Follow-up due" field="next_followup_date" sort={sort} onSort={toggleSort} />
+                  {canWriteDepartment(user, 'sales') && <th className="px-6 py-4 font-medium">&nbsp;</th>}
                 </tr>
               </thead>
               <tbody>
@@ -114,6 +135,29 @@ export function QuotationsListPage() {
                     <td className="px-6 py-4">
                       <StatusBadge status={q.status} />
                     </td>
+                    <td className="px-6 py-4" title={q.conversion_block_reasons.join(' ') || undefined}>
+                      <StatusBadge status={q.conversion_status} />
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <StatusBadge status={q.followup_status} />
+                        <span className="text-white/40">{formatDate(q.next_followup_date)}</span>
+                      </div>
+                    </td>
+                    {canWriteDepartment(user, 'sales') && (
+                      <td className="px-6 py-4">
+                        {q.followup_status !== 'completed' && (
+                          <Button
+                            variant="subtle"
+                            size="sm"
+                            isLoading={followupBusyId === q.id}
+                            onClick={() => handleFollowup(q.id)}
+                          >
+                            Follow up
+                          </Button>
+                        )}
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>

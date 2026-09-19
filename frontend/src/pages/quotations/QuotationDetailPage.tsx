@@ -12,13 +12,15 @@ import {
   emailQuotation,
   getQuotation,
   getQuotationEmailPreview,
+  recordQuotationFollowup,
+  renewQuotation,
   restoreQuotation,
   setQuotationPaymentLink,
   updateQuotationStatus,
 } from '@/api/quotations'
 import type { Quotation } from '@/types/quotation'
 import { getApiErrorMessage } from '@/lib/apiError'
-import { formatDate } from '@/lib/dateFormat'
+import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
@@ -103,6 +105,22 @@ export function QuotationDetailPage() {
     await withBusy(async () => {
       const order = await convertQuotationToOrder(quotationId)
       navigate(`/orders/${order.id}`)
+    })
+  }
+
+  async function handleRenew() {
+    await withBusy(async () => {
+      const updated = await renewQuotation(quotationId)
+      setQuotation(updated)
+      setNotice(`Renewed -- valid until ${formatDate(updated.valid_until)}.`)
+    })
+  }
+
+  async function handleFollowup() {
+    await withBusy(async () => {
+      const updated = await recordQuotationFollowup(quotationId)
+      setQuotation(updated)
+      setNotice(`Follow-up recorded. Next one due ${formatDate(updated.next_followup_date)}.`)
     })
   }
 
@@ -191,10 +209,15 @@ export function QuotationDetailPage() {
                 className="!w-9 !px-0"
                 onClick={handleOpenEmail}
                 isLoading={emailPreviewLoading}
+                disabled={quotation.status === 'expired'}
+                title={quotation.status === 'expired' ? 'This quotation has expired -- renew it before sending.' : undefined}
                 aria-label="Send email"
               >
                 <EmailIcon />
               </Button>
+              {allowWrite && quotation.status === 'expired' && (
+                <Button size="sm" onClick={handleRenew} isLoading={busy}>Renew</Button>
+              )}
               {allowWrite && quotation.status === 'draft' && (
                 <Button
                   variant="primary"
@@ -206,7 +229,7 @@ export function QuotationDetailPage() {
                   <EditIcon />
                 </Button>
               )}
-              {allowWrite && quotation.status === 'accepted' && quotation.payment_link && (
+              {allowWrite && quotation.conversion_status === 'ready' && (
                 <Button onClick={handleConvert} isLoading={busy}>Convert to order</Button>
               )}
               {allowWrite && canDelete && (
@@ -238,6 +261,12 @@ export function QuotationDetailPage() {
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-4">
           <StatusBadge status={quotation.status} />
+          {quotation.status !== 'converted' && (
+            <span title={quotation.conversion_block_reasons.join(' ') || undefined}>
+              <StatusBadge status={quotation.conversion_status} />
+            </span>
+          )}
+          {quotation.followup_status !== 'completed' && <StatusBadge status={quotation.followup_status} />}
           <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/50">
             {quotation.language === 'ar' ? 'Arabic' : 'English'}
           </span>
@@ -316,6 +345,30 @@ export function QuotationDetailPage() {
             {' '}= {formatCurrency(quotation.total_amount)}
           </p>
         )}
+
+        {quotation.conversion_status === 'blocked' && quotation.status === 'accepted' && (
+          <div className="mt-6 rounded-xl border border-amber-400/30 bg-amber-500/10 p-4 text-sm text-amber-200">
+            <p className="font-medium">Cannot convert to an order yet:</p>
+            <ul className="mt-1 list-inside list-disc">
+              {quotation.conversion_block_reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-white/10 bg-white/5 p-4">
+          <div>
+            <p className="text-sm font-medium text-white">Follow-up</p>
+            <p className="mt-1 text-xs text-white/40">
+              Last followed up {quotation.last_followup_at ? formatDateTime(quotation.last_followup_at) : 'never'}
+              {' · '}Next due {formatDate(quotation.next_followup_date)}
+            </p>
+          </div>
+          {allowWrite && quotation.followup_status !== 'completed' && (
+            <Button size="sm" onClick={handleFollowup} isLoading={busy}>Follow up now</Button>
+          )}
+        </div>
 
         {quotation.status === 'accepted' && (
           <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">

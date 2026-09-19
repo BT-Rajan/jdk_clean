@@ -107,7 +107,6 @@ export function FeasibilityFormPage() {
       await runGuarded(async () => {
         const created = await createFeasibility({
           ...values,
-          required_by_date: values.required_by_date || null,
           notes: values.notes || null,
         })
         navigate(`/feasibilities/${created.id}`)

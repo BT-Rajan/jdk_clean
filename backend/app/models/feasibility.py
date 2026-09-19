@@ -8,7 +8,7 @@ from app.models.customer import Customer
 from app.models.deal import Deal
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.product import Product
-from app.models.user import BigPK
+from app.models.user import BigPK, User
 
 FEASIBILITY_STATUSES = (
     "draft",
@@ -97,6 +97,12 @@ class FeasibilityCheck(Base, TimestampMixin, SoftDeleteMixin):
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     deal: Mapped[Deal | None] = relationship(lazy="joined")
+    # Who raised this check -- surfaced as this feasibility "stage"'s
+    # owner on the list/detail views (see schemas.feasibility.FeasibilityOut
+    # .owner_name). created_by itself already exists via TimestampMixin;
+    # this just gives it a queryable relationship the same way
+    # Payment.creator does.
+    creator: Mapped[User | None] = relationship(foreign_keys="FeasibilityCheck.created_by", lazy="joined")
     lines: Mapped[list["FeasibilityLine"]] = relationship(
         back_populates="feasibility",
         cascade="all, delete-orphan",

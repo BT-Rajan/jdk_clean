@@ -87,6 +87,7 @@ def get_feasibility(db: Session, feasibility_id: int, include_deleted: bool = Fa
 _SORTABLE_FIELDS = {
     "feasibility_number": FeasibilityCheck.feasibility_number,
     "status": FeasibilityCheck.status,
+    "required_by_date": FeasibilityCheck.required_by_date,
     "created_at": FeasibilityCheck.created_at,
 }
 

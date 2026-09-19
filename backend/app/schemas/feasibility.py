@@ -116,13 +116,19 @@ class FeasibilityLineOut(BaseModel):
 
 class FeasibilityCreate(BaseModel):
     customer_id: int
-    required_by_date: date | None = None
+    # Mandatory: run_check's production-line stage (_check_capacity) only
+    # ever evaluates capacity against a required_by_date -- leave it out
+    # and that stage silently never gets a real result (capacity_ok stays
+    # permanently unevaluated), letting the check reach a decision
+    # without one of its stages ever actually completing. See
+    # FeasibilityLine.capacity_ok's own docstring.
+    required_by_date: date
     notes: str | None = None
     lines: list[FeasibilityLineIn] = Field(min_length=1)
 
     @field_validator("required_by_date")
     @classmethod
-    def _required_by_date_not_past(cls, v: date | None) -> date | None:
+    def _required_by_date_not_past(cls, v: date) -> date:
         return not_in_past(v)
 
     @field_validator("lines")
@@ -159,6 +165,9 @@ class FeasibilityOut(BaseModel):
     deal_id: int | None
     deal_number: str | None = None
     status: str
+    # Who raised this check -- this feasibility "stage"'s owner, resolved
+    # via the existing created_by (TimestampMixin) column.
+    owner_name: str | None = None
     required_by_date: date | None
     checked_at: datetime | None
     exception_reason: str | None
@@ -181,6 +190,7 @@ class FeasibilityOut(BaseModel):
         data = FeasibilityOut.model_validate(obj)
         data.customer_name = obj.customer.name if obj.customer else None
         data.deal_number = obj.deal.deal_number if obj.deal else None
+        data.owner_name = obj.creator.full_name if getattr(obj, "creator", None) else None
         for line, src in zip(data.lines, obj.lines):
             line.product_code = src.product.code if src.product else None
             line.product_name = src.product.name if src.product else None

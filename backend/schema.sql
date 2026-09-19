@@ -1022,6 +1022,11 @@ CREATE TABLE IF NOT EXISTS quotations (
     -- quotation_email vs. quotation_followup_email template based on
     -- whether this is still NULL.
     last_emailed_at DATETIME NULL,
+    -- Stamped by quotation_service.record_followup every time Sales logs
+    -- a customer follow-up; next_followup_date drives the Not Due/Due/
+    -- Overdue/Completed verdict (see get_followup_status).
+    last_followup_at DATETIME NULL,
+    next_followup_date DATE NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
