@@ -280,26 +280,8 @@ export function PurchasingHomePage() {
         <div>
           <h2 className="mb-4 font-display text-lg font-medium text-white">Go to</h2>
           <div className="flex flex-col gap-2">
-            <Link to="/raw-materials">
-              <Button variant="ghost" className="w-full justify-start">Raw materials — what we have</Button>
-            </Link>
-            <Link to="/mrp">
-              <Button variant="ghost" className="w-full justify-start">Material requirements planning</Button>
-            </Link>
-            <Link to="/suppliers">
-              <Button variant="ghost" className="w-full justify-start">Suppliers</Button>
-            </Link>
-            <Link to="/purchase-orders">
-              <Button variant="ghost" className="w-full justify-start">Purchase orders</Button>
-            </Link>
             <Link to="/purchase-orders/new">
               <Button variant="ghost" className="w-full justify-start">New purchase order</Button>
-            </Link>
-            <Link to="/supplier-returns">
-              <Button variant="ghost" className="w-full justify-start">Supplier returns</Button>
-            </Link>
-            <Link to="/inventory">
-              <Button variant="ghost" className="w-full justify-start">Raw material stock (Warehouse)</Button>
             </Link>
           </div>
         </div>

@@ -32,10 +32,11 @@ const severityLabel: Record<NotificationSeverity, string> = {
 const severityRank: Record<NotificationSeverity, number> = { high: 0, medium: 1, low: 2 }
 const MAX_NEEDS_ATTENTION = 6
 
-// Every target already exists as a route today -- this is a fixed,
-// deliberately short list (not another menu), filtered below by the same
-// department_permissions-derived visibility AppLayout's nav uses, so a
-// user never sees a shortcut to a section they can't open. No "New
+// Only shortcuts the nav menu can't reach in one click (create pages) --
+// anything that is itself a menu item (e.g. Production Planning -> /mrp)
+// is left to the menu. A fixed, deliberately short list, filtered below
+// by the same department_permissions-derived visibility AppLayout's nav
+// uses, so a user never sees a shortcut to a section they can't open. No "New
 // Order" here: orders are only ever created via quote conversion or
 // logging a sale (see api/orders.ts), there is no bare create route.
 interface QuickAction {
@@ -46,7 +47,6 @@ const QUICK_ACTIONS: QuickAction[] = [
   { label: 'New Customer', to: '/customers/new' },
   { label: 'New Feasibility', to: '/feasibilities/new' },
   { label: 'New Quotation', to: '/quotations/new' },
-  { label: 'Production Planning', to: '/mrp' },
   { label: 'Purchase Order', to: '/purchase-orders/new' },
 ]
 

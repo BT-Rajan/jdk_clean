@@ -275,23 +275,8 @@ export function ProductionHomePage() {
         <div>
           <h2 className="mb-4 font-display text-lg font-medium text-white">Go to</h2>
           <div className="flex flex-col gap-2">
-            <Link to="/mrp">
-              <Button variant="ghost" className="w-full justify-start">Material requirements planning</Button>
-            </Link>
-            <Link to="/production-orders">
-              <Button variant="ghost" className="w-full justify-start">Production orders</Button>
-            </Link>
-            <Link to="/production">
-              <Button variant="ghost" className="w-full justify-start">Production schedule</Button>
-            </Link>
             <Link to="/production/new">
               <Button variant="ghost" className="w-full justify-start">Log production</Button>
-            </Link>
-            <Link to="/machines">
-              <Button variant="ghost" className="w-full justify-start">Production Line</Button>
-            </Link>
-            <Link to="/reconciliation">
-              <Button variant="ghost" className="w-full justify-start">Reconciliation</Button>
             </Link>
           </div>
         </div>
