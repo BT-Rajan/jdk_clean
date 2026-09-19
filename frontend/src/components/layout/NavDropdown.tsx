@@ -10,12 +10,15 @@ export interface NavDropdownItem {
 
 interface NavDropdownProps {
   label: string
+  /** When set, the title itself is a link to this page (e.g. a department's
+   *  Overview) and only the chevron toggles the dropdown. */
+  to?: string
   items: NavDropdownItem[]
 }
 
 /** A single top-level nav entry that expands into a panel of related links.
  *  Groups the flat, ever-growing top nav into a handful of labeled buckets. */
-export function NavDropdown({ label, items }: NavDropdownProps) {
+export function NavDropdown({ label, to, items }: NavDropdownProps) {
   const [isOpen, setIsOpen] = useState(false)
   const containerRef = useRef<HTMLDivElement>(null)
   const location = useLocation()
@@ -27,12 +30,12 @@ export function NavDropdown({ label, items }: NavDropdownProps) {
   // search string, which would light up every one of them at once. Query-
   // bearing links need an exact pathname+search match instead; plain
   // ones keep the usual "this page or a page under it" match.
-  function isItemActive(to: string): boolean {
-    if (to.includes('?')) return currentPath === to
-    return location.pathname === to || location.pathname.startsWith(`${to}/`)
+  function isItemActive(target: string): boolean {
+    if (target.includes('?')) return currentPath === target
+    return location.pathname === target || location.pathname.startsWith(`${target}/`)
   }
 
-  const isGroupActive = items.some((item) => isItemActive(item.to))
+  const isGroupActive = (to !== undefined && isItemActive(to)) || items.some((item) => isItemActive(item.to))
 
   // Close on outside click, on Escape, and whenever the route changes.
   useEffect(() => {
@@ -61,33 +64,52 @@ export function NavDropdown({ label, items }: NavDropdownProps) {
 
   return (
     <div ref={containerRef} className="relative">
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        aria-haspopup="true"
-        aria-expanded={isOpen}
+      <div
         className={cn(
-          'flex items-center gap-1 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition-colors',
+          'flex items-center whitespace-nowrap rounded-lg text-sm font-medium transition-colors',
           isGroupActive || isOpen ? 'bg-gold-500/15 text-gold-200' : 'text-white/50 hover:text-white',
         )}
       >
-        {label}
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 12 12"
-          fill="none"
-          className={cn('transition-transform duration-200', isOpen && 'rotate-180')}
+        {to ? (
+          <Link to={to} className="rounded-l-lg py-1.5 pl-3 pr-1">
+            {label}
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsOpen((prev) => !prev)}
+            aria-haspopup="true"
+            aria-expanded={isOpen}
+            className="rounded-l-lg py-1.5 pl-3 pr-1"
+          >
+            {label}
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => setIsOpen((prev) => !prev)}
+          aria-haspopup="true"
+          aria-expanded={isOpen}
+          aria-label={`${label} menu`}
+          className="rounded-r-lg py-1.5 pl-1 pr-3"
         >
-          <path
-            d="M2.5 4.5 6 8l3.5-3.5"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 12 12"
+            fill="none"
+            className={cn('transition-transform duration-200', isOpen && 'rotate-180')}
+          >
+            <path
+              d="M2.5 4.5 6 8l3.5-3.5"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </button>
+      </div>
 
       <AnimatePresence>
         {isOpen && (
