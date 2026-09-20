@@ -34,6 +34,11 @@ export interface SalesDrilldownParams {
   status?: string
   customer_id?: number
   product_id?: number
+  /** Inclusive window, e.g. the range a report was drawn from. */
+  date_from?: string
+  date_to?: string
+  /** Leave out draft and cancelled orders, as the report's revenue does. */
+  revenue_only?: boolean
 }
 
 export async function getSalesDrilldown(params: SalesDrilldownParams): Promise<SalesDrilldownResult> {

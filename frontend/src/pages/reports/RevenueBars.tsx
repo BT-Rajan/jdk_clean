@@ -1,4 +1,5 @@
-import { Bar, BarChart, CartesianGrid, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { useRef } from 'react'
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { formatCurrency } from '@/lib/currency'
 import {
@@ -23,23 +24,55 @@ import { BarEndLabel, NoWrapYTick } from './SalesReportPanels'
  *
  * Pass `height` for a fixed-size chart, or omit it to fill the parent --
  * the parent then needs a definite height. Bars are clickable only when
- * `onSelect` is given.
+ * `onSelect` is given -- anywhere along a bar's row, not just on the thin
+ * bar itself. `selected` marks the row whose drill-down is open (the rest
+ * are dimmed).
  */
 export function RevenueBars<T>({
   rows,
   height,
   onSelect,
+  selected,
 }: {
   rows: RevenueRow<T>[]
   height?: number
   onSelect?: (row: T) => void
+  selected?: (row: T) => boolean
 }) {
   const narrow = useMediaQuery('(max-width: 639px)')
+  const anySelected = selected ? rows.some((r) => selected(r.source)) : false
+
+  // A click on a bar reaches both the bar's and the chart's handler; only
+  // the first one should act.
+  const lastFire = useRef<{ row: T; at: number } | null>(null)
+  const fire = (row: T) => {
+    const now = Date.now()
+    if (lastFire.current && lastFire.current.row === row && now - lastFire.current.at < 400) return
+    lastFire.current = { row, at: now }
+    onSelect?.(row)
+  }
   const maxRevenue = Math.max(...rows.map((r) => r.revenue), 0)
   return (
     <div className="w-full" style={{ height: height ?? '100%' }}>
       <ResponsiveContainer width="100%" height="100%">
-        <BarChart layout="vertical" data={rows} margin={{ top: 0, right: 44, left: 0, bottom: 0 }}>
+        <BarChart
+          layout="vertical"
+          data={rows}
+          margin={{ top: 0, right: 44, left: 0, bottom: 0 }}
+          style={onSelect ? { cursor: 'pointer' } : undefined}
+          onClick={
+            onSelect
+              ? (state) => {
+                  // No active row (e.g. a touch tap) -- the bar's own
+                  // handler covers that; Number(null) would read as row 0.
+                  const active = state?.activeTooltipIndex
+                  if (active === null || active === undefined) return
+                  const i = Number(active)
+                  if (Number.isInteger(i) && rows[i]) fire(rows[i].source)
+                }
+              : undefined
+          }
+        >
           <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false} />
           <XAxis
             type="number"
@@ -71,8 +104,11 @@ export function RevenueBars<T>({
             minPointSize={3}
             radius={[0, 4, 4, 0]}
             cursor={onSelect ? 'pointer' : undefined}
-            onClick={onSelect ? onBarClick<RevenueRow<T>>((row) => onSelect(row.source)) : undefined}
+            onClick={onSelect ? onBarClick<RevenueRow<T>>((row) => fire(row.source)) : undefined}
           >
+            {rows.map((r, i) => (
+              <Cell key={i} fill={REVENUE_COLOR} fillOpacity={anySelected && !selected?.(r.source) ? 0.35 : 1} />
+            ))}
             <LabelList dataKey="revenue" content={<BarEndLabel format={compact} />} />
           </Bar>
         </BarChart>

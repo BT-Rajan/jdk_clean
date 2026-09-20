@@ -269,13 +269,28 @@ def get_sales_drilldown(
     status: str | None = None,
     customer_id: int | None = None,
     product_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    revenue_only: bool = False,
 ) -> list[dict]:
     """The individual orders behind one chart click -- a month bar, a
     status slice, a top-customer/top-product bar, or any combination.
     Capped at 200 rows (most-recent-first) since this is a drill-down
     preview, not a full paginated list -- see the Orders page for that.
+
+    `date_from`/`date_to` (both inclusive) scope it to the same window a
+    report was drawn from, and `revenue_only` leaves out the orders the
+    report's revenue figures exclude (drafts and cancelled) -- together
+    they make a Top customers / Top products drill-down list exactly the
+    orders that bar was ranked on.
     """
     query = db.query(Order).filter(Order.deleted_at.is_(None))
+    if date_from is not None:
+        query = query.filter(Order.order_date >= date_from)
+    if date_to is not None:
+        query = query.filter(Order.order_date < date_to + timedelta(days=1))
+    if revenue_only:
+        query = query.filter(Order.status.in_(REVENUE_STATUSES))
     if year is not None and month is not None:
         start, end = _month_bounds(year, month)
         query = query.filter(Order.order_date >= start, Order.order_date < end)

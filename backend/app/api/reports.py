@@ -61,11 +61,22 @@ def get_sales_drilldown(
     status: str | None = None,
     customer_id: int | None = None,
     product_id: int | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    revenue_only: bool = False,
     db: Session = Depends(get_db),
     _: User = Depends(sales_read_guard),
 ):
     items = report_service.get_sales_drilldown(
-        db, year=year, month=month, status=status, customer_id=customer_id, product_id=product_id
+        db,
+        year=year,
+        month=month,
+        status=status,
+        customer_id=customer_id,
+        product_id=product_id,
+        date_from=date_from,
+        date_to=date_to,
+        revenue_only=revenue_only,
     )
     return {"items": items, "total_count": len(items)}
 
