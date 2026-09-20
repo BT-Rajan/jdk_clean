@@ -778,6 +778,20 @@ CREATE TABLE IF NOT EXISTS orders (
     -- own child, a completely normal order from here on. NULL for every
     -- order created the ordinary way.
     parent_order_id BIGINT UNSIGNED NULL,
+    -- Who at Finance is chasing this order's outstanding balance, and
+    -- when they're next due to follow up (see payment_service.
+    -- set_payment_followup) -- drives the collection queue's
+    -- owner/next-follow-up columns. Independent of admin_review_*
+    -- above: that's an automatic escalation, this is a worklist entry.
+    payment_followup_owner_id BIGINT UNSIGNED NULL,
+    payment_followup_date     DATE NULL,
+    -- Set when Finance proceeds a non-credit order into production
+    -- despite acknowledged payments falling short of total_amount (see
+    -- payment_service.override_payment_gate) -- the "otherwise take an
+    -- override confirmation" branch of the finance-amount check.
+    payment_override_at     DATETIME NULL,
+    payment_override_by     BIGINT UNSIGNED NULL,
+    payment_override_reason TEXT NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -788,10 +802,13 @@ CREATE TABLE IF NOT EXISTS orders (
     CONSTRAINT fk_orders_approved_by FOREIGN KEY (approved_by) REFERENCES users(id),
     CONSTRAINT fk_orders_deal FOREIGN KEY (deal_id) REFERENCES deals(id),
     CONSTRAINT fk_orders_parent_order FOREIGN KEY (parent_order_id) REFERENCES orders(id),
+    CONSTRAINT fk_orders_payment_followup_owner FOREIGN KEY (payment_followup_owner_id) REFERENCES users(id),
+    CONSTRAINT fk_orders_payment_override_by FOREIGN KEY (payment_override_by) REFERENCES users(id),
     INDEX idx_orders_status (status),
     INDEX idx_orders_deal (deal_id),
     INDEX idx_orders_deleted_at (deleted_at),
-    INDEX idx_orders_parent (parent_order_id)
+    INDEX idx_orders_parent (parent_order_id),
+    INDEX idx_orders_payment_followup_date (payment_followup_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS order_details (
@@ -821,8 +838,16 @@ CREATE TABLE IF NOT EXISTS payments (
     amount          DECIMAL(14,2) NOT NULL,
     payment_date    DATE NOT NULL,
     method          VARCHAR(60) NULL,   -- free text, e.g. "Bank transfer", "Cheque", "Cash"
-    reference       VARCHAR(120) NULL,  -- bank ref / cheque number / transaction id
+    reference       VARCHAR(120) NULL,  -- bank ref / cheque number / transaction id -- mandatory for non-cash methods, see payment_service.create_payment
     notes           TEXT NULL,
+    -- Finance confirming the money actually landed -- distinct from
+    -- created_by, who merely logged the claim. Only acknowledged
+    -- payments count toward unblocking production for a non-credit
+    -- order or completing a payment plan (see payment_service.
+    -- get_order_amount_acknowledged). Auto-set at creation when the
+    -- creator already holds "payments" write access.
+    acknowledged_at DATETIME NULL,
+    acknowledged_by BIGINT UNSIGNED NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -830,6 +855,7 @@ CREATE TABLE IF NOT EXISTS payments (
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_payments_order FOREIGN KEY (order_id) REFERENCES orders(id),
     CONSTRAINT fk_payments_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_payments_acknowledged_by FOREIGN KEY (acknowledged_by) REFERENCES users(id),
     INDEX idx_payments_order (order_id),
     INDEX idx_payments_customer (customer_id),
     INDEX idx_payments_deleted_at (deleted_at)
@@ -846,6 +872,12 @@ CREATE TABLE IF NOT EXISTS payment_plans (
     amount          DECIMAL(14,2) NOT NULL,
     target_date     DATE NOT NULL,
     notes           TEXT NULL,
+    -- 'completed' only settable via payment_plan_service.
+    -- complete_payment_plan, which refuses while the order still has an
+    -- outstanding acknowledged balance.
+    status          ENUM('open','completed') NOT NULL DEFAULT 'open',
+    completed_at    DATETIME NULL,
+    completed_by    BIGINT UNSIGNED NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -853,6 +885,7 @@ CREATE TABLE IF NOT EXISTS payment_plans (
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_payment_plans_order FOREIGN KEY (order_id) REFERENCES orders(id),
     CONSTRAINT fk_payment_plans_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_payment_plans_completed_by FOREIGN KEY (completed_by) REFERENCES users(id),
     INDEX idx_payment_plans_order (order_id),
     INDEX idx_payment_plans_customer (customer_id),
     INDEX idx_payment_plans_deleted_at (deleted_at)

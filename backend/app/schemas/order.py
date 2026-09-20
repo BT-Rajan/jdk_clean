@@ -240,6 +240,12 @@ class OrderOut(BaseModel):
     admin_review_notes: str | None
     payment_requested_at: datetime | None
     confirmation_emailed_at: datetime | None
+    payment_followup_owner_id: int | None = None
+    payment_followup_owner_name: str | None = None
+    payment_followup_date: date | None = None
+    payment_override_at: datetime | None = None
+    payment_override_by: int | None = None
+    payment_override_reason: str | None = None
     # Set when this order is itself a child born out of split_order --
     # a lighter reference back to the order it was carved from, since a
     # deliverable-now remainder came from a supply shortfall on that
@@ -277,6 +283,7 @@ class OrderOut(BaseModel):
         data.customer_phone = obj.customer.phone if obj.customer else None
         data.quotation_number = quotation_number
         data.deal_number = obj.deal.deal_number if obj.deal else None
+        data.payment_followup_owner_name = obj.payment_followup_owner.full_name if obj.payment_followup_owner else None
         data.parent_order_number = obj.parent_order.order_number if obj.parent_order else None
         data.child_orders = [
             OrderChildSummary.model_validate(child) for child in obj.child_orders if child.deleted_at is None

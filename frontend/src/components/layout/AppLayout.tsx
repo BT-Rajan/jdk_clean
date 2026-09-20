@@ -127,6 +127,9 @@ export function AppLayout({ children }: AppLayoutProps) {
         // route, two menu entries pointing at it.
         { to: '/delivery-notes', label: 'Delivery notes' },
         { to: '/customers', label: 'Customers' },
+        // Finance's own worklist of overdue, unacknowledged order
+        // balances -- see payment_service.list_collection_queue.
+        { to: '/collection-queue', label: 'Collection queue' },
       ],
     },
     {

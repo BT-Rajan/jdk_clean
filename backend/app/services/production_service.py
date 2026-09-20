@@ -749,6 +749,12 @@ def change_status(
             readiness = production_readiness_service.check_batch_readiness(db, batch_id)
             if readiness["status"] != "READY":
                 raise ConflictError(f"Cannot start production: {readiness['summary']}")
+            if batch.order_id:
+                from app.services import payment_service
+
+                block_reason = payment_service.get_production_payment_block_reason(db, batch.order)
+                if block_reason:
+                    raise ConflictError(f"Cannot start production: {block_reason}")
             _start_batch(db, batch, user_id)
         # else old_status == "paused": resuming right where it left off --
         # actual_start/reservation/produced_quantity are all untouched, no

@@ -12,3 +12,11 @@ export const paymentSchema = z.object({
 
 export type PaymentFormValues = z.input<typeof paymentSchema>
 export type PaymentSubmitValues = z.output<typeof paymentSchema>
+
+// Mirrors backend/app/schemas/payment.py's PaymentOverrideIn.
+export const paymentOverrideSchema = z.object({
+  reason: z.string().trim().min(1, 'A reason is required'),
+})
+
+export type PaymentOverrideFormValues = z.input<typeof paymentOverrideSchema>
+export type PaymentOverrideSubmitValues = z.output<typeof paymentOverrideSchema>

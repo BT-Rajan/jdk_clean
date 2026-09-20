@@ -57,6 +57,7 @@ const PATH_PREFIX_TO_PAGE_KEY: [string, string][] = [
   // reuses the same 'production' page key rather than a new one -- see
   // backend/app/api/reconciliation.py's own comment on the same reuse.
   ['/reconciliation', 'production'],
+  ['/collection-queue', 'payments'],
 ]
 
 export function getPageKeyForPath(pathname: string): string | null {

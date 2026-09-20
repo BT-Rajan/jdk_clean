@@ -269,9 +269,15 @@ export function OrderDetailPage() {
   const { id } = useParams()
   const orderId = Number(id)
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, permissions } = useAuth()
   const allowWrite = canWriteDepartment(user, 'sales')
   const allowAdmin = isAdmin(user?.role)
+  // Finance's own actions (acknowledging a payment, overriding the
+  // production gate, setting a follow-up, completing a plan) are gated
+  // by the "payments" page_key rather than the fixed 'sales' department
+  // canWriteDepartment assumes -- Finance is an admin-created department
+  // like any other, not one of the handful this shortcut hardcodes.
+  const allowFinance = isAdmin(user?.role) || permissions?.['payments'] === 'write'
 
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
@@ -919,11 +925,11 @@ export function OrderDetailPage() {
       )}
 
       <div className="mt-6">
-        <PaymentsPanel orderId={orderId} orderTotal={order.total_amount} allowWrite={allowWrite} allowAdmin={allowAdmin} />
+        <PaymentsPanel orderId={orderId} orderTotal={order.total_amount} allowWrite={allowWrite} allowAdmin={allowAdmin} allowFinance={allowFinance} />
       </div>
 
       <div className="mt-6">
-        <PaymentPlansPanel orderId={orderId} allowWrite={allowWrite} allowAdmin={allowAdmin} />
+        <PaymentPlansPanel orderId={orderId} allowWrite={allowWrite} allowAdmin={allowAdmin} allowFinance={allowFinance} />
       </div>
 
       <div className="mt-6">

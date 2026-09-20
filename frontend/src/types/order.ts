@@ -73,6 +73,16 @@ export interface Order {
    * sent (fires once, the first time the order reaches 'confirmed').
    * Null if the customer has no email on file or the send failed. */
   confirmation_emailed_at: string | null
+  /** Finance's own worklist entry for chasing this order's balance --
+   * see POST /{id}/payments/followup. Both null until set. */
+  payment_followup_owner_id: number | null
+  payment_followup_owner_name: string | null
+  payment_followup_date: string | null
+  /** Set when Finance lets a non-credit order into production despite
+   * an acknowledged shortfall -- see POST /{id}/payments/override. */
+  payment_override_at: string | null
+  payment_override_by: number | null
+  payment_override_reason: string | null
   /** Set when this order is itself a child born out of splitting a
    * 'ready_to_ship' order that stock couldn't fully cover (see
    * POST /{id}/split). */

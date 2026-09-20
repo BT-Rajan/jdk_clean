@@ -7,6 +7,7 @@ from app.api.assistant import router as assistant_router
 from app.api.auth import router as auth_router
 from app.api.bom import router as bom_router
 from app.api.calendar import router as calendar_router
+from app.api.collection_queue import router as collection_queue_router
 from app.api.communication import router as communication_router
 from app.api.customers import router as customers_router
 from app.api.dashboard import router as dashboard_router
@@ -120,6 +121,7 @@ app.include_router(quotations_router)
 app.include_router(orders_router)
 app.include_router(payments_router)
 app.include_router(payment_plans_router)
+app.include_router(collection_queue_router)
 app.include_router(delivery_notes_router)
 app.include_router(production_schedules_router)
 app.include_router(production_orders_router)

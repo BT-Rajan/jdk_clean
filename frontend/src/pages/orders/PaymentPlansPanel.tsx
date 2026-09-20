@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Alert, Button, ConfirmDialog, GlassCard, Modal, Spinner, TextField, TextareaField } from '@/components/ui'
-import { createPaymentPlan, deletePaymentPlan, listPaymentPlans } from '@/api/paymentPlans'
+import { completePaymentPlan, createPaymentPlan, deletePaymentPlan, listPaymentPlans } from '@/api/paymentPlans'
 import type { PaymentPlan } from '@/types/paymentPlan'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
@@ -87,16 +87,20 @@ export function PaymentPlansPanel({
   orderId,
   allowWrite,
   allowAdmin,
+  allowFinance,
 }: {
   orderId: number
   allowWrite: boolean
   allowAdmin: boolean
+  allowFinance: boolean
 }) {
   const [plans, setPlans] = useState<PaymentPlan[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [recordOpen, setRecordOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<PaymentPlan | null>(null)
   const { busy: deleting, run: runGuarded } = useAsyncGuard()
+  const { busy: completing, run: runCompleteGuarded } = useAsyncGuard()
+  const [completeError, setCompleteError] = useState<string | null>(null)
 
   function load() {
     listPaymentPlans(orderId)
@@ -117,6 +121,7 @@ export function PaymentPlansPanel({
       </div>
 
       <Alert variant="error">{error}</Alert>
+      <Alert variant="error">{completeError}</Alert>
 
       {plans === null ? (
         <div className="flex justify-center py-8">
@@ -134,22 +139,51 @@ export function PaymentPlansPanel({
               <div>
                 <p className="text-white">
                   {formatCurrency(p.amount)} <span className="text-white/50">by {formatDate(p.target_date)}</span>
+                  {p.status === 'completed' && <span className="ml-2 text-xs text-emerald-300">Completed</span>}
                 </p>
                 <p className="mt-0.5 text-xs text-white/40">
                   recorded {formatDateTime(p.created_at)}
                   {p.recorded_by_name && ` by ${p.recorded_by_name}`}
                 </p>
+                {p.status === 'completed' && p.completed_at && (
+                  <p className="mt-0.5 text-xs text-emerald-300/80">
+                    Completed {formatDateTime(p.completed_at)}
+                    {p.completed_by_name && ` by ${p.completed_by_name}`}
+                  </p>
+                )}
                 {p.notes && <p className="mt-1 text-xs text-white/50">{p.notes}</p>}
               </div>
-              {allowAdmin && (
-                <button
-                  type="button"
-                  onClick={() => setDeleteTarget(p)}
-                  className="shrink-0 text-xs font-medium text-red-300 hover:text-red-200"
-                >
-                  Reverse
-                </button>
-              )}
+              <div className="flex shrink-0 items-center gap-3">
+                {p.status === 'open' && allowFinance && (
+                  <button
+                    type="button"
+                    disabled={completing}
+                    onClick={() =>
+                      runCompleteGuarded(async () => {
+                        setCompleteError(null)
+                        try {
+                          await completePaymentPlan(orderId, p.id)
+                          load()
+                        } catch (err) {
+                          setCompleteError(getApiErrorMessage(err))
+                        }
+                      })
+                    }
+                    className="text-xs font-medium text-emerald-300 hover:text-emerald-200 disabled:opacity-50"
+                  >
+                    Complete
+                  </button>
+                )}
+                {allowAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(p)}
+                    className="text-xs font-medium text-red-300 hover:text-red-200"
+                  >
+                    Reverse
+                  </button>
+                )}
+              </div>
             </div>
           ))}
         </div>

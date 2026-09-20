@@ -121,7 +121,12 @@ def _lock_production_order(db: Session, production_order_id: int):
     lazy="joined" at the model level, so a plain entity query under
     with_for_update() would implicitly outer-join them."""
     locked = (
-        db.query(ProductionOrder.status, ProductionOrder.product_id, ProductionOrder.planned_quantity)
+        db.query(
+            ProductionOrder.status,
+            ProductionOrder.product_id,
+            ProductionOrder.planned_quantity,
+            ProductionOrder.order_id,
+        )
         .filter(ProductionOrder.id == production_order_id)
         .with_for_update()
         .first()
@@ -200,6 +205,16 @@ def start_execution(
     po = _lock_production_order(db, production_order_id)
     if po.status != "planned":
         raise ConflictError(f"Cannot start production for a production order in '{po.status}' status.")
+
+    if po.order_id:
+        from app.models.order import Order
+        from app.services import payment_service
+
+        order = db.query(Order).filter(Order.id == po.order_id, Order.deleted_at.is_(None)).first()
+        if order is not None:
+            block_reason = payment_service.get_production_payment_block_reason(db, order)
+            if block_reason:
+                raise ConflictError(f"Cannot start production: {block_reason}")
 
     schedule = _lock_schedule_row(db, schedule_id)
     if schedule.production_order_id != production_order_id:

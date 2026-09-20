@@ -13,8 +13,13 @@ export interface PaymentPlan {
   amount: number
   target_date: string
   notes: string | null
+  /** 'completed' only reachable via POST .../complete, which refuses
+   * while the order still has an outstanding acknowledged balance. */
+  status: 'open' | 'completed'
   created_at: string
   recorded_by_name: string | null
+  completed_at: string | null
+  completed_by_name: string | null
 }
 
 export interface PaymentPlanPayload {
