@@ -17,7 +17,7 @@ import {
 import { IdDocumentPicker } from '@/components/documents/IdDocumentPicker'
 import { createCustomer, uploadCustomerIdDocument } from '@/api/customers'
 import { getApiErrorMessage } from '@/lib/apiError'
-import { customerSchema, type CustomerFormValues, type CustomerSubmitValues } from '@/lib/validation'
+import { customerSchema, parseTagsInput, type CustomerFormValues, type CustomerSubmitValues } from '@/lib/validation'
 import { formatCurrency } from '@/lib/currency'
 
 type StepId = 'type' | 'company' | 'contact' | 'financial' | 'review'
@@ -128,6 +128,33 @@ export function CustomerOnboardingWizardPage() {
         // decision set via CustomerFormPage once the customer's actually
         // been dealt with for a while.
         discount_approval_threshold_override: values.discount_approval_threshold_override || null,
+        // None of the Customer Master fields below are collected in the
+        // wizard either -- same reasoning, set later via CustomerFormPage
+        // once there's actually something to record. These normalize the
+        // unregistered fields' zod output (see CustomerFormPage.tsx's
+        // identical comment on the coerce-to-0-on-blank quirk) to the
+        // null/undefined shape CustomerPayload expects.
+        parent_company_id: values.parent_company_id || null,
+        buyer_id: values.buyer_id || null,
+        followup_responsible_id: values.followup_responsible_id || null,
+        purchase_payment_terms_days: values.purchase_payment_terms_days || null,
+        tags: parseTagsInput(values.tags) ?? null,
+        payment_method: values.payment_method || null,
+        purchase_payment_terms_type: values.purchase_payment_terms_type || null,
+        purchase_payment_method: values.purchase_payment_method || null,
+        auto_post_bills: values.auto_post_bills || null,
+        follow_up_stage: values.follow_up_stage || null,
+        follow_up_status: values.follow_up_status || null,
+        reminder_mode: values.reminder_mode || null,
+        next_reminder_date: values.next_reminder_date || null,
+        bank_accounts: (values.bank_accounts ?? [])
+          .filter((row) => row.bank_name.trim() && row.account_number.trim())
+          .map((row) => ({
+            bank_name: row.bank_name,
+            account_number: row.account_number,
+            iban: row.iban || null,
+            swift_code: row.swift_code || null,
+          })),
       })
       if (idDocumentFile) {
         // Best-effort: the customer record itself is already created at

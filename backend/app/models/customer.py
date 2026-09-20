@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from decimal import Decimal
 
-from sqlalchemy import DECIMAL, Boolean, DateTime, Enum, ForeignKey, SmallInteger, String, Text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DECIMAL, JSON, Boolean, Date, DateTime, Enum, ForeignKey, SmallInteger, String, Text
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
@@ -45,6 +45,22 @@ CUSTOMER_TYPES = ("individual", "business")
 # already keys off credit_limit, not this), this is classification for
 # filtering/reporting only -- same role as `category` below.
 PAYMENT_TERMS_TYPES = ("cash", "advance", "credit", "custom")
+
+# "Customer Master" field pass -- brings this screen in line with the
+# standard master-data reference list (Type/Name/Avatar/.../Journal
+# Items). Every field below is plain data with no automation behind it:
+# this app has no GL/accounting module, no e-invoicing or dunning
+# engine, and no purchase-RFQ workflow, so account_receivable/
+# account_payable/auto_post_bills/fiscal_position/follow_up_*/
+# reminder_*/group_rfq/buyer_id/etc. are all just stored values -- no
+# posting, no auto-generated reminders, no RFQ documents. See
+# migrations/2026-10-03_customer_master_fields.sql for the full
+# rationale per field.
+PAYMENT_METHODS = ("cash", "credit_card", "bank_transfer", "cheque", "other")
+AUTO_POST_BILLS_MODES = ("manual", "automatic")
+FOLLOW_UP_STAGES = ("none", "15_days", "30_days", "45_days", "legal")
+FOLLOW_UP_STATUSES = ("up_to_date", "in_progress", "overdue", "escalated")
+REMINDER_MODES = ("automatic", "manual")
 
 
 class Customer(Base, TimestampMixin, SoftDeleteMixin):
@@ -131,3 +147,108 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     id_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     id_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     id_verified_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+
+    # -- Core header / identity --
+    # Uploaded logo/photo, same storage convention as id_document_filename
+    # above (see app/services/avatar_service.py) -- just the generated
+    # filename, image only (no PDF, unlike the id document).
+    avatar_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+    # -- Primary contact & address --
+    # Links an individual contact to a parent company record (both rows
+    # live in this same table) -- e.g. a purchasing contact filed under
+    # the company they work for. Self-referential; see `parent_company`
+    # relationship below and CustomerCRUD._validate_parent_company for
+    # the "can't be its own parent" / "must exist" checks.
+    parent_company_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("customers.id"), nullable=True)
+    job_position: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    website: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Free-form labels, stored as a JSON array of strings -- deliberately
+    # not a separate lookup table (same reasoning as `category` above:
+    # no fixed picklist, low cardinality, no other consumer).
+    tags: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    # Structured address components, additive to the existing
+    # billing_address/shipping_address free-text blocks above (kept as
+    # -is, still used for quotations/orders) -- these back the
+    # Street 1/Street 2/State sub-fields the reference Customer Master
+    # layout expects; city/country already existed.
+    address_line1: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    address_line2: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    state: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+    # -- Sales configuration --
+    payment_method: Mapped[str | None] = mapped_column(
+        Enum(*PAYMENT_METHODS, name="customer_payment_method"), nullable=True
+    )
+    # Free-text label only -- this app has no pricing-rule/pricelist
+    # engine, so nothing downstream reads this to actually reprice a
+    # quotation; it's a stored reference value same as `category`.
+    pricelist: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # -- Purchase configuration --
+    # Mirrors sales configuration's shape but namespaced separately --
+    # this app keeps Customer and Supplier as distinct entities, so
+    # these describe purchasing *from* this contact when it also acts
+    # as one (e.g. a company that's both a customer and a source of
+    # consignment stock), not this customer's own supplier relationship.
+    group_rfq: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    buyer_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+    purchase_payment_terms_days: Mapped[int | None] = mapped_column(SmallInteger, nullable=True)
+    purchase_payment_terms_type: Mapped[str | None] = mapped_column(
+        Enum(*PAYMENT_TERMS_TYPES, name="customer_purchase_payment_terms_type"), nullable=True
+    )
+    purchase_payment_method: Mapped[str | None] = mapped_column(
+        Enum(*PAYMENT_METHODS, name="customer_purchase_payment_method"), nullable=True
+    )
+    receipt_reminder: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    supplier_currency: Mapped[str | None] = mapped_column(String(10), nullable=True)
+
+    # -- Fiscal & misc --
+    # Free-text label -- no tax-mapping engine exists here, so nothing
+    # reads this to actually change tax treatment; stored reference only.
+    fiscal_position: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    # Internal/external key or legacy code, distinct from `code` (the
+    # Civil ID / Registration number) and `customer_number` (the
+    # auto-generated internal reference) above.
+    reference: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # -- Accounting & general ledger --
+    # This app has no chart-of-accounts/GL module -- these four are
+    # stored reference values only (no posting, no bank integration).
+    # bank_accounts is a JSON array of {bank_name, account_number, iban,
+    # swift_code} objects -- see schemas/customer.py CustomerBankAccount.
+    bank_accounts: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    account_receivable: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    account_payable: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    auto_post_bills: Mapped[str | None] = mapped_column(
+        Enum(*AUTO_POST_BILLS_MODES, name="customer_auto_post_bills"), nullable=True
+    )
+
+    # -- Invoice follow-ups & e-invoicing --
+    # No dunning/e-invoicing engine exists here either -- these are
+    # manually-set status fields for staff to track collections by hand,
+    # not automation. Journal Items has no field of its own: the detail
+    # page links out to this customer's existing Orders/Payments
+    # activity instead (there's no separate ledger/journal concept).
+    follow_up_stage: Mapped[str | None] = mapped_column(
+        Enum(*FOLLOW_UP_STAGES, name="customer_follow_up_stage"), nullable=True
+    )
+    follow_up_status: Mapped[str | None] = mapped_column(
+        Enum(*FOLLOW_UP_STATUSES, name="customer_follow_up_status"), nullable=True
+    )
+    reminder_mode: Mapped[str | None] = mapped_column(
+        Enum(*REMINDER_MODES, name="customer_reminder_mode"), nullable=True
+    )
+    next_reminder_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    followup_responsible_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+
+    # Read via CustomerOut.parent_company_name (a plain @property below,
+    # picked up by pydantic's from_attributes the same as any other
+    # attribute) -- lazy-loaded, fine at this volume/access pattern.
+    parent_company: Mapped["Customer | None"] = relationship(
+        "Customer", remote_side="Customer.id", foreign_keys=[parent_company_id]
+    )
+
+    @property
+    def parent_company_name(self) -> str | None:
+        return self.parent_company.name if self.parent_company else None

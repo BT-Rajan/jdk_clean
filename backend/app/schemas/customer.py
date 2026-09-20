@@ -1,8 +1,39 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, model_validator
 
 
+class CustomerBankAccount(BaseModel):
+    """One row of Customer.bank_accounts (a JSON array of these) -- see
+    that column's comment in app/models/customer.py. Plain reference
+    data only, no bank integration reads or writes this."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    bank_name: str = Field(min_length=1, max_length=120)
+    account_number: str = Field(min_length=1, max_length=60)
+    iban: str | None = Field(default=None, max_length=42)
+    swift_code: str | None = Field(default=None, max_length=20)
+
+
+def _validate_tags(tags: list[str] | None) -> list[str] | None:
+    if tags is None:
+        return None
+    if len(tags) > 20:
+        raise ValueError("At most 20 tags.")
+    cleaned = [t.strip() for t in tags if t.strip()]
+    for t in cleaned:
+        if len(t) > 40:
+            raise ValueError("Each tag must be 40 characters or fewer.")
+    return cleaned or None
+
+
+# Shared field block for the "Customer Master" fields added on top of the
+# pre-existing Customer fields -- see app/models/customer.py's own
+# "Customer Master field pass" comment for why every one of these is
+# plain data with no automation behind it. Repeated identically (not a
+# shared base) across Create/Update/Out the same way the rest of this
+# module structures Create vs Update vs Out.
 class CustomerCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
@@ -34,10 +65,46 @@ class CustomerCreate(BaseModel):
     status: str = Field(default="active", pattern="^(active|inactive)$")
     notes: str | None = Field(default=None, max_length=5000)
 
+    # -- Customer Master fields (see app/models/customer.py) --
+    # avatar_filename is absent here, same reasoning as id_document_filename
+    # above -- it's set only via the dedicated avatar upload endpoint.
+    parent_company_id: int | None = None
+    job_position: str | None = Field(default=None, max_length=120)
+    website: str | None = Field(default=None, max_length=255)
+    tags: list[str] | None = None
+    address_line1: str | None = Field(default=None, max_length=255)
+    address_line2: str | None = Field(default=None, max_length=255)
+    state: str | None = Field(default=None, max_length=80)
+    payment_method: str | None = Field(default=None, pattern="^(cash|credit_card|bank_transfer|cheque|other)$")
+    pricelist: str | None = Field(default=None, max_length=100)
+    group_rfq: bool = False
+    buyer_id: int | None = None
+    purchase_payment_terms_days: int | None = Field(default=None, ge=0)
+    purchase_payment_terms_type: str | None = Field(default=None, pattern="^(cash|advance|credit|custom)$")
+    purchase_payment_method: str | None = Field(default=None, pattern="^(cash|credit_card|bank_transfer|cheque|other)$")
+    receipt_reminder: bool = False
+    supplier_currency: str | None = Field(default=None, max_length=10)
+    fiscal_position: str | None = Field(default=None, max_length=120)
+    reference: str | None = Field(default=None, max_length=100)
+    bank_accounts: list[CustomerBankAccount] | None = None
+    account_receivable: str | None = Field(default=None, max_length=50)
+    account_payable: str | None = Field(default=None, max_length=50)
+    auto_post_bills: str | None = Field(default=None, pattern="^(manual|automatic)$")
+    follow_up_stage: str | None = Field(default=None, pattern="^(none|15_days|30_days|45_days|legal)$")
+    follow_up_status: str | None = Field(default=None, pattern="^(up_to_date|in_progress|overdue|escalated)$")
+    reminder_mode: str | None = Field(default=None, pattern="^(automatic|manual)$")
+    next_reminder_date: date | None = None
+    followup_responsible_id: int | None = None
+
     @model_validator(mode="after")
     def _credit_terms_need_days(self) -> "CustomerCreate":
         if self.payment_terms_type == "credit" and self.payment_terms_days <= 0:
             raise ValueError("Credit days is required (must be greater than 0) when payment terms is Credit.")
+        return self
+
+    @model_validator(mode="after")
+    def _clean_tags(self) -> "CustomerCreate":
+        self.tags = _validate_tags(self.tags)
         return self
 
 
@@ -85,6 +152,40 @@ class CustomerUpdate(BaseModel):
     status: str | None = Field(default=None, pattern="^(active|inactive)$")
     notes: str | None = Field(default=None, max_length=5000)
 
+    # -- Customer Master fields (see app/models/customer.py) --
+    parent_company_id: int | None = None
+    job_position: str | None = Field(default=None, max_length=120)
+    website: str | None = Field(default=None, max_length=255)
+    tags: list[str] | None = None
+    address_line1: str | None = Field(default=None, max_length=255)
+    address_line2: str | None = Field(default=None, max_length=255)
+    state: str | None = Field(default=None, max_length=80)
+    payment_method: str | None = Field(default=None, pattern="^(cash|credit_card|bank_transfer|cheque|other)$")
+    pricelist: str | None = Field(default=None, max_length=100)
+    group_rfq: bool | None = None
+    buyer_id: int | None = None
+    purchase_payment_terms_days: int | None = Field(default=None, ge=0)
+    purchase_payment_terms_type: str | None = Field(default=None, pattern="^(cash|advance|credit|custom)$")
+    purchase_payment_method: str | None = Field(default=None, pattern="^(cash|credit_card|bank_transfer|cheque|other)$")
+    receipt_reminder: bool | None = None
+    supplier_currency: str | None = Field(default=None, max_length=10)
+    fiscal_position: str | None = Field(default=None, max_length=120)
+    reference: str | None = Field(default=None, max_length=100)
+    bank_accounts: list[CustomerBankAccount] | None = None
+    account_receivable: str | None = Field(default=None, max_length=50)
+    account_payable: str | None = Field(default=None, max_length=50)
+    auto_post_bills: str | None = Field(default=None, pattern="^(manual|automatic)$")
+    follow_up_stage: str | None = Field(default=None, pattern="^(none|15_days|30_days|45_days|legal)$")
+    follow_up_status: str | None = Field(default=None, pattern="^(up_to_date|in_progress|overdue|escalated)$")
+    reminder_mode: str | None = Field(default=None, pattern="^(automatic|manual)$")
+    next_reminder_date: date | None = None
+    followup_responsible_id: int | None = None
+
+    @model_validator(mode="after")
+    def _clean_tags(self) -> "CustomerUpdate":
+        self.tags = _validate_tags(self.tags)
+        return self
+
 
 class CustomerOut(BaseModel):
     id: int
@@ -125,6 +226,39 @@ class CustomerOut(BaseModel):
     # only exposing them, no migration involved.
     created_at: datetime
     updated_at: datetime
+
+    # -- Customer Master fields (see app/models/customer.py) --
+    avatar_filename: str | None
+    parent_company_id: int | None
+    # Read via the model's parent_company relationship/@property, not a
+    # stored column -- see app/models/customer.py.
+    parent_company_name: str | None = None
+    job_position: str | None
+    website: str | None
+    tags: list[str] | None
+    address_line1: str | None
+    address_line2: str | None
+    state: str | None
+    payment_method: str | None
+    pricelist: str | None
+    group_rfq: bool
+    buyer_id: int | None
+    purchase_payment_terms_days: int | None
+    purchase_payment_terms_type: str | None
+    purchase_payment_method: str | None
+    receipt_reminder: bool
+    supplier_currency: str | None
+    fiscal_position: str | None
+    reference: str | None
+    bank_accounts: list[CustomerBankAccount] | None
+    account_receivable: str | None
+    account_payable: str | None
+    auto_post_bills: str | None
+    follow_up_stage: str | None
+    follow_up_status: str | None
+    reminder_mode: str | None
+    next_reminder_date: date | None
+    followup_responsible_id: int | None
 
     model_config = {"from_attributes": True}
 
