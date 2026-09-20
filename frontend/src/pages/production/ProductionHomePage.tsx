@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, EmptyState, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, EmptyState, GlassCard, PageHeader, Pagination, Spinner, StatusBadge } from '@/components/ui'
 import { StatsWidget } from '@/components/dashboard/DashboardWidgets'
+import { ProductionDashboardCharts } from './ProductionDashboardCharts'
 import { getDashboardStats } from '@/api/dashboard'
 import { listNotifications } from '@/api/notifications'
 import { listProductionBatches } from '@/api/production'
@@ -11,6 +12,7 @@ import type { DashboardStatsResponse } from '@/types/dashboard'
 import type { Notification, NotificationSeverity } from '@/types/notification'
 import type { ProductionBatch, ProductionStatus } from '@/types/production'
 import type { ProductionOrder } from '@/types/productionOrder'
+import { useClientPagination } from '@/hooks/useClientPagination'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 
@@ -28,9 +30,6 @@ const severityLabel: Record<NotificationSeverity, string> = {
   low: 'FYI',
 }
 const severityRank: Record<NotificationSeverity, number> = { high: 0, medium: 1, low: 2 }
-const MAX_NEEDS_ATTENTION = 6
-const MAX_ORDERS = 5
-const MAX_BATCHES = 5
 
 // Production's own slice of the same live notification feed the header
 // bell and the main Dashboard already show (GET /api/notifications) --
@@ -84,17 +83,13 @@ export function ProductionHomePage() {
     () =>
       notifications
         .filter(isProductionNotification)
-        .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (a.created_at < b.created_at ? 1 : -1))
-        .slice(0, MAX_NEEDS_ATTENTION),
+        .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (a.created_at < b.created_at ? 1 : -1)),
     [notifications],
   )
 
   const plannedOrders = useMemo(() => productionOrders.filter((po) => po.status === 'planned'), [productionOrders])
-  const topOrders = useMemo(
-    () =>
-      [...plannedOrders]
-        .sort((a, b) => a.due_date.localeCompare(b.due_date))
-        .slice(0, MAX_ORDERS),
+  const sortedOrders = useMemo(
+    () => [...plannedOrders].sort((a, b) => a.due_date.localeCompare(b.due_date)),
     [plannedOrders],
   )
 
@@ -103,11 +98,8 @@ export function ProductionHomePage() {
     [batches],
   )
   const runningBatches = useMemo(() => activeBatches.filter((b) => b.status !== 'paused'), [activeBatches])
-  const topBatches = useMemo(
-    () =>
-      [...runningBatches]
-        .sort((a, b) => a.scheduled_end.localeCompare(b.scheduled_end))
-        .slice(0, MAX_BATCHES),
+  const sortedBatches = useMemo(
+    () => [...runningBatches].sort((a, b) => a.scheduled_end.localeCompare(b.scheduled_end)),
     [runningBatches],
   )
   // Shown as its own section, not folded into "what's running now" --
@@ -120,6 +112,10 @@ export function ProductionHomePage() {
         .sort((a, b) => a.scheduled_end.localeCompare(b.scheduled_end)),
     [activeBatches],
   )
+
+  const notificationsPager = useClientPagination(productionNotifications)
+  const ordersPager = useClientPagination(sortedOrders)
+  const batchesPager = useClientPagination(sortedBatches)
 
   return (
     <AppLayout>
@@ -148,8 +144,10 @@ export function ProductionHomePage() {
         </div>
       )}
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2 flex flex-col gap-8">
+      <ProductionDashboardCharts />
+
+      <div className="grid min-w-0 gap-6">
+        <div className="min-w-0 flex flex-col gap-8">
           <div>
             <h2 className="mb-4 font-display text-lg font-medium text-white">Needs attention</h2>
             {notifLoading ? (
@@ -158,7 +156,7 @@ export function ProductionHomePage() {
               <GlassCard className="p-6 text-sm text-white/50">Nothing in production needs action right now.</GlassCard>
             ) : (
               <div className="space-y-3">
-                {productionNotifications.map((n) => (
+                {notificationsPager.pageItems.map((n) => (
                   <Link
                     key={n.id}
                     to={n.link}
@@ -173,6 +171,7 @@ export function ProductionHomePage() {
                     <p className="mt-1 text-sm text-white/60">{n.message}</p>
                   </Link>
                 ))}
+                <Pagination className="" {...notificationsPager.pagerProps} />
               </div>
             )}
           </div>
@@ -189,7 +188,7 @@ export function ProductionHomePage() {
                 <div className="flex justify-center py-12">
                   <Spinner size={24} className="text-gold-300" />
                 </div>
-              ) : topOrders.length === 0 ? (
+              ) : sortedOrders.length === 0 ? (
                 <EmptyState title="Nothing planned" message="No production order is currently awaiting scheduling." />
               ) : (
                 <div className="overflow-x-auto">
@@ -203,7 +202,7 @@ export function ProductionHomePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {topOrders.map((po) => (
+                      {ordersPager.pageItems.map((po) => (
                         <tr key={po.id} className="border-b border-white/5 last:border-0">
                           <td className="px-6 py-4">
                             <Link to={`/production-orders/${po.id}`} className="font-medium text-gold-300 hover:text-gold-200">
@@ -221,11 +220,7 @@ export function ProductionHomePage() {
                   </table>
                 </div>
               )}
-              {plannedOrders.length > topOrders.length && (
-                <p className="px-6 pb-4 text-xs text-white/40">
-                  +{plannedOrders.length - topOrders.length} more awaiting scheduling not shown here.
-                </p>
-              )}
+              <Pagination className="px-6 pb-4" {...ordersPager.pagerProps} />
             </GlassCard>
           </div>
 
@@ -241,7 +236,7 @@ export function ProductionHomePage() {
                 <div className="flex justify-center py-12">
                   <Spinner size={24} className="text-gold-300" />
                 </div>
-              ) : topBatches.length === 0 ? (
+              ) : sortedBatches.length === 0 ? (
                 <EmptyState title="Nothing running" message="No batch is currently planned or in progress." />
               ) : (
                 <div className="overflow-x-auto">
@@ -255,7 +250,7 @@ export function ProductionHomePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {topBatches.map((b) => (
+                      {batchesPager.pageItems.map((b) => (
                         <tr key={b.id} className="border-b border-white/5 last:border-0">
                           <td className="px-6 py-4">
                             <Link to={`/production/${b.id}`} className="font-medium text-gold-300 hover:text-gold-200">
@@ -273,12 +268,7 @@ export function ProductionHomePage() {
                   </table>
                 </div>
               )}
-              {runningBatches.length > topBatches.length && (
-                <p className="px-6 pb-4 text-xs text-white/40">
-                  +{runningBatches.length - topBatches.length} more running batch
-                  {runningBatches.length - topBatches.length === 1 ? '' : 'es'} not shown here.
-                </p>
-              )}
+              <Pagination className="px-6 pb-4" {...batchesPager.pagerProps} />
             </GlassCard>
           </div>
 
@@ -320,30 +310,6 @@ export function ProductionHomePage() {
               </GlassCard>
             </div>
           )}
-        </div>
-
-        <div>
-          <h2 className="mb-4 font-display text-lg font-medium text-white">Go to</h2>
-          <div className="flex flex-col gap-2">
-            <Link to="/mrp">
-              <Button variant="ghost" className="w-full justify-start">Material requirements planning</Button>
-            </Link>
-            <Link to="/production-orders">
-              <Button variant="ghost" className="w-full justify-start">Production orders</Button>
-            </Link>
-            <Link to="/production">
-              <Button variant="ghost" className="w-full justify-start">Production schedule</Button>
-            </Link>
-            <Link to="/production/new">
-              <Button variant="ghost" className="w-full justify-start">Log production</Button>
-            </Link>
-            <Link to="/machines">
-              <Button variant="ghost" className="w-full justify-start">Production Line</Button>
-            </Link>
-            <Link to="/reconciliation">
-              <Button variant="ghost" className="w-full justify-start">Reconciliation</Button>
-            </Link>
-          </div>
         </div>
       </div>
     </AppLayout>

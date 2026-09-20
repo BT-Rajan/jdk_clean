@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { useClientPagination } from '@/hooks/useClientPagination'
 import {
   Alert,
   Badge,
@@ -12,6 +13,7 @@ import {
   Field,
   GlassCard,
   PageHeader,
+  Pagination,
   Spinner,
   StatusBadge,
   Tabs,
@@ -74,6 +76,7 @@ function ActivitySection<T>({
   count: number
   renderRow: (item: T) => { key: number | string; content: ReactNode }
 }) {
+  const pager = useClientPagination(items)
   if (count === 0) return null
   return (
     <GlassCard className="p-6">
@@ -81,11 +84,12 @@ function ActivitySection<T>({
         {title} <span className="text-sm text-white/40">({count})</span>
       </h2>
       <div className="space-y-2">
-        {items.map((item) => {
+        {pager.pageItems.map((item) => {
           const { key, content } = renderRow(item)
           return <div key={key}>{content}</div>
         })}
       </div>
+      <Pagination className="mt-4" {...pager.pagerProps} />
     </GlassCard>
   )
 }

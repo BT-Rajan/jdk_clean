@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { GlassCard, Button, Alert } from '@/components/ui'
+import { GlassCard, Button, Alert, Pagination } from '@/components/ui'
 import { useAuth } from '@/hooks/useAuth'
 import { useCompanyName } from '@/hooks/useCompanyName'
 import { useDashboardPreferences } from '@/hooks/useDashboardPreferences'
 import { getDashboardStats } from '@/api/dashboard'
 import { listNotifications } from '@/api/notifications'
 import { getPageKeyForPath } from '@/lib/pagePermissions'
+import { useClientPagination } from '@/hooks/useClientPagination'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatCurrency } from '@/lib/currency'
 import type { DashboardStatsResponse } from '@/types/dashboard'
@@ -30,12 +31,12 @@ const severityLabel: Record<NotificationSeverity, string> = {
   low: 'FYI',
 }
 const severityRank: Record<NotificationSeverity, number> = { high: 0, medium: 1, low: 2 }
-const MAX_NEEDS_ATTENTION = 6
 
-// Every target already exists as a route today -- this is a fixed,
-// deliberately short list (not another menu), filtered below by the same
-// department_permissions-derived visibility AppLayout's nav uses, so a
-// user never sees a shortcut to a section they can't open. No "New
+// Only shortcuts the nav menu can't reach in one click (create pages) --
+// anything that is itself a menu item (e.g. Production Planning -> /mrp)
+// is left to the menu. A fixed, deliberately short list, filtered below
+// by the same department_permissions-derived visibility AppLayout's nav
+// uses, so a user never sees a shortcut to a section they can't open. No "New
 // Order" here: orders are only ever created via quote conversion or
 // logging a sale (see api/orders.ts), there is no bare create route.
 interface QuickAction {
@@ -46,7 +47,6 @@ const QUICK_ACTIONS: QuickAction[] = [
   { label: 'New Customer', to: '/customers/new' },
   { label: 'New Feasibility', to: '/feasibilities/new' },
   { label: 'New Quotation', to: '/quotations/new' },
-  { label: 'Production Planning', to: '/mrp' },
   { label: 'Purchase Order', to: '/purchase-orders/new' },
 ]
 
@@ -103,13 +103,14 @@ export function DashboardPage() {
   const enabledWidgets = getEnabledWidgets()
   const isLoading = prefsLoading || statsLoading
 
-  const topNotifications = useMemo(
+  const sortedNotifications = useMemo(
     () =>
-      [...notifications]
-        .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (a.created_at < b.created_at ? 1 : -1))
-        .slice(0, MAX_NEEDS_ATTENTION),
+      [...notifications].sort(
+        (a, b) => severityRank[a.severity] - severityRank[b.severity] || (a.created_at < b.created_at ? 1 : -1),
+      ),
     [notifications],
   )
+  const notificationsPager = useClientPagination(sortedNotifications)
 
   // Same visibility rule AppLayout's nav applies to its links -- a page
   // with no page_key (ungoverned) or still-loading permissions shows;
@@ -142,11 +143,11 @@ export function DashboardPage() {
             <GlassCard className="p-6 text-sm text-white/40">Loading…</GlassCard>
           ) : notifError ? (
             <Alert variant="error">{notifError}</Alert>
-          ) : topNotifications.length === 0 ? (
+          ) : sortedNotifications.length === 0 ? (
             <GlassCard className="p-6 text-sm text-white/50">You're all caught up — nothing needs action right now.</GlassCard>
           ) : (
             <div className="space-y-3">
-              {topNotifications.map((n) => (
+              {notificationsPager.pageItems.map((n) => (
                 <Link
                   key={n.id}
                   to={n.link}
@@ -161,11 +162,7 @@ export function DashboardPage() {
                   <p className="mt-1 text-sm text-white/60">{n.message}</p>
                 </Link>
               ))}
-              {notifications.length > topNotifications.length && (
-                <p className="text-xs text-white/40">
-                  +{notifications.length - topNotifications.length} more — see the notifications bell above.
-                </p>
-              )}
+              <Pagination className="" {...notificationsPager.pagerProps} />
             </div>
           )}
         </div>

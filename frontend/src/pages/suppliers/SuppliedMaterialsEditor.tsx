@@ -131,7 +131,7 @@ export function SuppliedMaterialsEditor({ supplierId, canEdit }: SuppliedMateria
             return (
             <div
               key={line.key}
-              className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-end"
+              className="grid grid-cols-1 gap-3 rounded-xl border border-white/10 p-4 sm:grid-cols-12 sm:items-start"
             >
               <div className="sm:col-span-6">
                 <SelectField
@@ -177,8 +177,14 @@ export function SuppliedMaterialsEditor({ supplierId, canEdit }: SuppliedMateria
                 />
               </div>
               {canEdit && (
-                <div className="sm:col-span-1">
-                  <Button variant="ghost" size="sm" type="button" onClick={() => removeLine(line.key)}>
+                <div className="sm:col-span-1 sm:pt-[1.375rem]">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    type="button"
+                    className="h-12 w-full px-2"
+                    onClick={() => removeLine(line.key)}
+                  >
                     Remove
                   </Button>
                 </div>

@@ -254,8 +254,8 @@ export function MaterialSuppliersPanel({ rawMaterialId, canEdit, onChange }: Mat
                   </div>
                 )}
               </div>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-12">
-                <div className="sm:col-span-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-12 sm:items-end">
+                <div className="sm:col-span-2">
                   <TextField
                     label="Supplier material code"
                     value={line.supplier_material_code}
@@ -305,7 +305,7 @@ export function MaterialSuppliersPanel({ rawMaterialId, canEdit, onChange }: Mat
                     onChange={(e) => updateLine(line.id, { moq: clampNonNegativeString(e.target.value) })}
                   />
                 </div>
-                <div className="sm:col-span-1">
+                <div className="sm:col-span-2">
                   <TextField
                     label="Lead time (days)"
                     type="number"
@@ -327,7 +327,7 @@ export function MaterialSuppliersPanel({ rawMaterialId, canEdit, onChange }: Mat
                   </SelectField>
                 </div>
                 <div className="flex items-end sm:col-span-1">
-                  <label className="flex items-center gap-2 pb-2 text-sm text-white/70">
+                  <label className="flex h-12 items-center gap-2 text-sm text-white/70">
                     <input
                       type="checkbox"
                       checked={line.is_preferred}

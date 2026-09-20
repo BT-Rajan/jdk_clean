@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Badge, Button, EmptyState, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Badge, EmptyState, GlassCard, PageHeader, Pagination, Spinner, StatusBadge } from '@/components/ui'
 import { StatsWidget } from '@/components/dashboard/DashboardWidgets'
+import { PurchasingDashboardCharts } from './PurchasingDashboardCharts'
 import { getDashboardStats } from '@/api/dashboard'
 import { listNotifications } from '@/api/notifications'
 import { getMrpReport } from '@/api/mrp'
@@ -11,6 +12,7 @@ import type { DashboardStatsResponse } from '@/types/dashboard'
 import type { Notification, NotificationSeverity } from '@/types/notification'
 import type { MrpRequirementLine } from '@/types/mrp'
 import type { PurchaseOrder, PurchaseOrderStatus } from '@/types/purchaseOrder'
+import { useClientPagination } from '@/hooks/useClientPagination'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 
@@ -28,9 +30,6 @@ const severityLabel: Record<NotificationSeverity, string> = {
   low: 'FYI',
 }
 const severityRank: Record<NotificationSeverity, number> = { high: 0, medium: 1, low: 2 }
-const MAX_NEEDS_ATTENTION = 6
-const MAX_REQUIREMENTS = 5
-const MAX_EXPECTED = 5
 
 // Purchasing's own slice of the same live notification feed the header
 // bell and the main Dashboard already show (GET /api/notifications) --
@@ -86,20 +85,13 @@ export function PurchasingHomePage() {
     () =>
       notifications
         .filter(isPurchasingNotification)
-        .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (a.created_at < b.created_at ? 1 : -1))
-        .slice(0, MAX_NEEDS_ATTENTION),
+        .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (a.created_at < b.created_at ? 1 : -1)),
     [notifications],
   )
 
-  const topRequirements = useMemo(
-    () =>
-      [...requirements]
-        .sort((a, b) => b.shortfall - a.shortfall)
-        .slice(0, MAX_REQUIREMENTS),
-    [requirements],
-  )
+  const sortedRequirements = useMemo(() => [...requirements].sort((a, b) => b.shortfall - a.shortfall), [requirements])
 
-  const topOpenOrders = useMemo(
+  const sortedOpenOrders = useMemo(
     () =>
       openOrders
         .filter((po) => OPEN_PO_STATUSES.includes(po.status))
@@ -107,11 +99,13 @@ export function PurchasingHomePage() {
           if (!a.expected_delivery_date) return 1
           if (!b.expected_delivery_date) return -1
           return a.expected_delivery_date.localeCompare(b.expected_delivery_date)
-        })
-        .slice(0, MAX_EXPECTED),
+        }),
     [openOrders],
   )
-  const openOrdersCount = openOrders.filter((po) => OPEN_PO_STATUSES.includes(po.status)).length
+
+  const notificationsPager = useClientPagination(purchasingNotifications)
+  const requirementsPager = useClientPagination(sortedRequirements)
+  const openOrdersPager = useClientPagination(sortedOpenOrders)
 
   return (
     <AppLayout>
@@ -136,8 +130,10 @@ export function PurchasingHomePage() {
         </div>
       )}
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2 flex flex-col gap-8">
+      <PurchasingDashboardCharts />
+
+      <div className="grid min-w-0 gap-6">
+        <div className="min-w-0 flex flex-col gap-8">
           <div>
             <h2 className="mb-4 font-display text-lg font-medium text-white">Needs attention</h2>
             {notifLoading ? (
@@ -146,7 +142,7 @@ export function PurchasingHomePage() {
               <GlassCard className="p-6 text-sm text-white/50">Nothing in purchasing needs action right now.</GlassCard>
             ) : (
               <div className="space-y-3">
-                {purchasingNotifications.map((n) => (
+                {notificationsPager.pageItems.map((n) => (
                   <Link
                     key={n.id}
                     to={n.link}
@@ -161,6 +157,7 @@ export function PurchasingHomePage() {
                     <p className="mt-1 text-sm text-white/60">{n.message}</p>
                   </Link>
                 ))}
+                <Pagination className="" {...notificationsPager.pagerProps} />
               </div>
             )}
           </div>
@@ -177,7 +174,7 @@ export function PurchasingHomePage() {
                 <div className="flex justify-center py-12">
                   <Spinner size={24} className="text-gold-300" />
                 </div>
-              ) : topRequirements.length === 0 ? (
+              ) : sortedRequirements.length === 0 ? (
                 <EmptyState
                   title="No shortfalls"
                   message="Everything currently on order and scheduled for production can be covered by stock on hand."
@@ -194,7 +191,7 @@ export function PurchasingHomePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {topRequirements.map((item) => (
+                      {requirementsPager.pageItems.map((item) => (
                         <tr key={item.raw_material_id} className="border-b border-white/5 last:border-0">
                           <td className="px-6 py-4">
                             <Link to={`/raw-materials/${item.raw_material_id}`} className="font-medium text-gold-300 hover:text-gold-200">
@@ -216,11 +213,7 @@ export function PurchasingHomePage() {
                   </table>
                 </div>
               )}
-              {requirements.length > topRequirements.length && (
-                <p className="px-6 pb-4 text-xs text-white/40">
-                  +{requirements.length - topRequirements.length} more on the full requirements plan.
-                </p>
-              )}
+              <Pagination className="px-6 pb-4" {...requirementsPager.pagerProps} />
             </GlassCard>
           </div>
 
@@ -236,7 +229,7 @@ export function PurchasingHomePage() {
                 <div className="flex justify-center py-12">
                   <Spinner size={24} className="text-gold-300" />
                 </div>
-              ) : topOpenOrders.length === 0 ? (
+              ) : sortedOpenOrders.length === 0 ? (
                 <EmptyState title="Nothing open" message="No purchase order is currently sent, confirmed, or partially received." />
               ) : (
                 <div className="overflow-x-auto">
@@ -250,7 +243,7 @@ export function PurchasingHomePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {topOpenOrders.map((po) => (
+                      {openOrdersPager.pageItems.map((po) => (
                         <tr key={po.id} className="border-b border-white/5 last:border-0">
                           <td className="px-6 py-4">
                             <Link to={`/purchase-orders/${po.id}`} className="font-medium text-gold-300 hover:text-gold-200">
@@ -268,39 +261,8 @@ export function PurchasingHomePage() {
                   </table>
                 </div>
               )}
-              {openOrdersCount > topOpenOrders.length && (
-                <p className="px-6 pb-4 text-xs text-white/40">
-                  +{openOrdersCount - topOpenOrders.length} more open purchase order{openOrdersCount - topOpenOrders.length === 1 ? '' : 's'} not shown here.
-                </p>
-              )}
+              <Pagination className="px-6 pb-4" {...openOrdersPager.pagerProps} />
             </GlassCard>
-          </div>
-        </div>
-
-        <div>
-          <h2 className="mb-4 font-display text-lg font-medium text-white">Go to</h2>
-          <div className="flex flex-col gap-2">
-            <Link to="/raw-materials">
-              <Button variant="ghost" className="w-full justify-start">Raw materials — what we have</Button>
-            </Link>
-            <Link to="/mrp">
-              <Button variant="ghost" className="w-full justify-start">Material requirements planning</Button>
-            </Link>
-            <Link to="/suppliers">
-              <Button variant="ghost" className="w-full justify-start">Suppliers</Button>
-            </Link>
-            <Link to="/purchase-orders">
-              <Button variant="ghost" className="w-full justify-start">Purchase orders</Button>
-            </Link>
-            <Link to="/purchase-orders/new">
-              <Button variant="ghost" className="w-full justify-start">New purchase order</Button>
-            </Link>
-            <Link to="/supplier-returns">
-              <Button variant="ghost" className="w-full justify-start">Supplier returns</Button>
-            </Link>
-            <Link to="/inventory">
-              <Button variant="ghost" className="w-full justify-start">Raw material stock (Warehouse)</Button>
-            </Link>
           </div>
         </div>
       </div>

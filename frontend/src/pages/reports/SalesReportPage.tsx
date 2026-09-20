@@ -13,6 +13,7 @@ import {
   YAxis,
 } from 'recharts'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { useClientPagination } from '@/hooks/useClientPagination'
 import { StatsWidget } from '@/components/dashboard/DashboardWidgets'
 import {
   Alert,
@@ -20,6 +21,7 @@ import {
   EmptyState,
   GlassCard,
   PageHeader,
+  Pagination,
   SelectField,
   Spinner,
   StatusBadge,
@@ -125,6 +127,8 @@ export function SalesReportPage() {
       { revenue: 0, orders: 0, quotations: 0 },
     )
   }, [report])
+
+  const drilldownPager = useClientPagination(drilldown, { resetKey: filter })
 
   return (
     <AppLayout>
@@ -393,7 +397,7 @@ export function SalesReportPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {drilldown.map((o) => (
+                      {drilldownPager.pageItems.map((o) => (
                         <tr key={o.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
                           <td className="px-6 py-4">
                             <Link to={`/orders/${o.id}`} className="font-medium text-gold-300 hover:text-gold-200">
@@ -412,6 +416,7 @@ export function SalesReportPage() {
                   </table>
                 </div>
               )}
+              <Pagination className="px-6 pb-4" {...drilldownPager.pagerProps} />
             </GlassCard>
           )}
         </>

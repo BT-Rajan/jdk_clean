@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Cell, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { useClientPagination } from '@/hooks/useClientPagination'
 import { StatsWidget } from '@/components/dashboard/DashboardWidgets'
-import { Alert, Badge, Button, EmptyState, GlassCard, PageHeader, SelectField, Spinner, TextField } from '@/components/ui'
+import { Alert, Badge, Button, EmptyState, GlassCard, PageHeader, Pagination, SelectField, Spinner, TextField } from '@/components/ui'
 import { getInventoryDrilldown, getInventoryReport } from '@/api/reports'
 import { todayDateInputMin } from '@/lib/validation/dateRules'
 import type {
@@ -97,6 +98,8 @@ export function InventoryReportPage() {
     () => report?.by_movement_type.reduce((sum, t) => sum + t.count, 0) ?? 0,
     [report],
   )
+
+  const drilldownPager = useClientPagination(drilldown, { resetKey: filter })
 
   return (
     <AppLayout>
@@ -334,7 +337,7 @@ export function InventoryReportPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {drilldown.map((m) => (
+                      {drilldownPager.pageItems.map((m) => (
                         <tr key={m.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
                           <td className="px-6 py-4 text-white/60">{formatDateTime(m.created_at)}</td>
                           <td className="px-6 py-4">
@@ -359,6 +362,7 @@ export function InventoryReportPage() {
                   </table>
                 </div>
               )}
+              <Pagination className="px-6 pb-4" {...drilldownPager.pagerProps} />
             </GlassCard>
           )}
         </>

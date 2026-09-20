@@ -1,16 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Badge, Button, EmptyState, GlassCard, PageHeader, Spinner } from '@/components/ui'
+import { Alert, Badge, EmptyState, GlassCard, PageHeader, Pagination, Spinner } from '@/components/ui'
 import { StatsWidget } from '@/components/dashboard/DashboardWidgets'
+import { WarehouseDashboardCharts } from './WarehouseDashboardCharts'
 import { getDashboardStats } from '@/api/dashboard'
 import { listNotifications } from '@/api/notifications'
 import { getLowStock, getFinishedGoodsStock } from '@/api/inventory'
-import { useAuth } from '@/hooks/useAuth'
-import { canAdjustInventory } from '@/lib/roles'
+import { useClientPagination } from '@/hooks/useClientPagination'
 import type { DashboardStatsResponse } from '@/types/dashboard'
 import type { Notification, NotificationSeverity } from '@/types/notification'
 import type { FinishedGoodStockItem, LowStockItem } from '@/types/inventory'
+import { DEFAULT_PAGE_SIZE } from '@/lib/constants'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatCurrency } from '@/lib/currency'
 
@@ -28,9 +29,6 @@ const severityLabel: Record<NotificationSeverity, string> = {
   low: 'FYI',
 }
 const severityRank: Record<NotificationSeverity, number> = { high: 0, medium: 1, low: 2 }
-const MAX_NEEDS_ATTENTION = 6
-const MAX_RAW_MATERIALS = 5
-const MAX_FINISHED_GOODS = 5
 
 // Warehouse's own slice of the same live notification feed the header
 // bell and the main Dashboard already show (GET /api/notifications) --
@@ -44,9 +42,6 @@ function isWarehouseNotification(n: Notification): boolean {
 }
 
 export function WarehouseHomePage() {
-  const { user } = useAuth()
-  const canAdjust = canAdjustInventory(user?.role)
-
   const [stats, setStats] = useState<DashboardStatsResponse | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [statsError, setStatsError] = useState<string | null>(null)
@@ -59,6 +54,7 @@ export function WarehouseHomePage() {
 
   const [lowFinishedGoods, setLowFinishedGoods] = useState<FinishedGoodStockItem[]>([])
   const [lowFinishedGoodsTotal, setLowFinishedGoodsTotal] = useState(0)
+  const [finishedGoodsPage, setFinishedGoodsPage] = useState(1)
   const [lowFinishedGoodsLoading, setLowFinishedGoodsLoading] = useState(true)
 
   useEffect(() => {
@@ -74,34 +70,50 @@ export function WarehouseHomePage() {
       .then(setLowRawMaterials)
       .catch(() => setLowRawMaterials([]))
       .finally(() => setLowRawMaterialsLoading(false))
-    getFinishedGoodsStock({ page: 1, page_size: MAX_FINISHED_GOODS, low_only: true })
+  }, [])
+
+  // Finished goods are paged by the server (unlike the lists above, which are
+  // loaded whole and paged locally), so changing the page refetches. The
+  // previous page's rows stay on screen until the new ones arrive.
+  useEffect(() => {
+    let cancelled = false
+    getFinishedGoodsStock({ page: finishedGoodsPage, page_size: DEFAULT_PAGE_SIZE, low_only: true })
       .then((result) => {
+        if (cancelled) return
         setLowFinishedGoods(result.items)
         setLowFinishedGoodsTotal(result.total)
       })
       .catch(() => {
+        if (cancelled) return
         setLowFinishedGoods([])
         setLowFinishedGoodsTotal(0)
       })
-      .finally(() => setLowFinishedGoodsLoading(false))
-  }, [])
+      .finally(() => {
+        if (!cancelled) setLowFinishedGoodsLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [finishedGoodsPage])
 
   const warehouseNotifications = useMemo(
     () =>
       notifications
         .filter(isWarehouseNotification)
-        .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (a.created_at < b.created_at ? 1 : -1))
-        .slice(0, MAX_NEEDS_ATTENTION),
+        .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (a.created_at < b.created_at ? 1 : -1)),
     [notifications],
   )
 
-  const topRawMaterials = useMemo(
+  const sortedRawMaterials = useMemo(
     () =>
-      [...lowRawMaterials]
-        .sort((a, b) => b.reorder_point - b.quantity_on_hand - (a.reorder_point - a.quantity_on_hand))
-        .slice(0, MAX_RAW_MATERIALS),
+      [...lowRawMaterials].sort(
+        (a, b) => b.reorder_point - b.quantity_on_hand - (a.reorder_point - a.quantity_on_hand),
+      ),
     [lowRawMaterials],
   )
+
+  const notificationsPager = useClientPagination(warehouseNotifications)
+  const rawMaterialsPager = useClientPagination(sortedRawMaterials)
 
   return (
     <AppLayout>
@@ -130,8 +142,10 @@ export function WarehouseHomePage() {
         </div>
       )}
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2 flex flex-col gap-8">
+      <WarehouseDashboardCharts />
+
+      <div className="grid min-w-0 gap-6">
+        <div className="min-w-0 flex flex-col gap-8">
           <div>
             <h2 className="mb-4 font-display text-lg font-medium text-white">Needs attention</h2>
             {notifLoading ? (
@@ -140,7 +154,7 @@ export function WarehouseHomePage() {
               <GlassCard className="p-6 text-sm text-white/50">Nothing in the warehouse needs action right now.</GlassCard>
             ) : (
               <div className="space-y-3">
-                {warehouseNotifications.map((n) => (
+                {notificationsPager.pageItems.map((n) => (
                   <Link
                     key={n.id}
                     to={n.link}
@@ -155,6 +169,7 @@ export function WarehouseHomePage() {
                     <p className="mt-1 text-sm text-white/60">{n.message}</p>
                   </Link>
                 ))}
+                <Pagination className="" {...notificationsPager.pagerProps} />
               </div>
             )}
           </div>
@@ -171,7 +186,7 @@ export function WarehouseHomePage() {
                 <div className="flex justify-center py-12">
                   <Spinner size={24} className="text-gold-300" />
                 </div>
-              ) : topRawMaterials.length === 0 ? (
+              ) : sortedRawMaterials.length === 0 ? (
                 <EmptyState title="Nothing low" message="Every raw material is currently above its reorder point." />
               ) : (
                 <div className="overflow-x-auto">
@@ -185,7 +200,7 @@ export function WarehouseHomePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {topRawMaterials.map((item) => (
+                      {rawMaterialsPager.pageItems.map((item) => (
                         <tr key={item.raw_material_id} className="border-b border-white/5 last:border-0">
                           <td className="px-6 py-4">
                             <Link to={`/raw-materials/${item.raw_material_id}`} className="font-medium text-gold-300 hover:text-gold-200">
@@ -203,12 +218,7 @@ export function WarehouseHomePage() {
                   </table>
                 </div>
               )}
-              {lowRawMaterials.length > topRawMaterials.length && (
-                <p className="px-6 pb-4 text-xs text-white/40">
-                  +{lowRawMaterials.length - topRawMaterials.length} more low raw material
-                  {lowRawMaterials.length - topRawMaterials.length === 1 ? '' : 's'} not shown here.
-                </p>
-              )}
+              <Pagination className="px-6 pb-4" {...rawMaterialsPager.pagerProps} />
             </GlassCard>
           </div>
 
@@ -258,42 +268,14 @@ export function WarehouseHomePage() {
                   </table>
                 </div>
               )}
-              {lowFinishedGoodsTotal > lowFinishedGoods.length && (
-                <p className="px-6 pb-4 text-xs text-white/40">
-                  +{lowFinishedGoodsTotal - lowFinishedGoods.length} more low finished good
-                  {lowFinishedGoodsTotal - lowFinishedGoods.length === 1 ? '' : 's'} not shown here.
-                </p>
-              )}
+              <Pagination
+                className="px-6 pb-4"
+                page={finishedGoodsPage}
+                totalPages={Math.max(1, Math.ceil(lowFinishedGoodsTotal / DEFAULT_PAGE_SIZE))}
+                total={lowFinishedGoodsTotal}
+                onPageChange={setFinishedGoodsPage}
+              />
             </GlassCard>
-          </div>
-        </div>
-
-        <div>
-          <h2 className="mb-4 font-display text-lg font-medium text-white">Go to</h2>
-          <div className="flex flex-col gap-2">
-            <Link to="/inventory">
-              <Button variant="ghost" className="w-full justify-start">Stock levels</Button>
-            </Link>
-            {canAdjust && (
-              <Link to="/inventory/adjust">
-                <Button variant="ghost" className="w-full justify-start">Adjust stock</Button>
-              </Link>
-            )}
-            <Link to="/raw-materials">
-              <Button variant="ghost" className="w-full justify-start">Raw materials</Button>
-            </Link>
-            <Link to="/products">
-              <Button variant="ghost" className="w-full justify-start">Products</Button>
-            </Link>
-            <Link to="/delivery-notes">
-              <Button variant="ghost" className="w-full justify-start">Delivery notes</Button>
-            </Link>
-            <Link to="/mrp">
-              <Button variant="ghost" className="w-full justify-start">Material requirements planning</Button>
-            </Link>
-            <Link to="/reports/inventory-report">
-              <Button variant="ghost" className="w-full justify-start">Inventory report</Button>
-            </Link>
           </div>
         </div>
       </div>

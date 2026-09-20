@@ -30,6 +30,9 @@ interface NavLeaf {
 
 interface NavGroup {
   label: string
+  /** Where clicking the group's title goes (its Overview page). The chevron
+   *  next to the title still opens the dropdown. */
+  to?: string
   items: NavLeaf[]
 }
 
@@ -114,8 +117,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/dashboard', label: 'Dashboard' },
     {
       label: 'Sales',
+      to: '/sales',
       items: [
-        { to: '/sales', label: 'Overview' },
         { to: '/feasibilities', label: 'Feasibility checks' },
         { to: '/quotations', label: 'Quotations' },
         { to: '/orders', label: 'Orders' },
@@ -128,8 +131,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     },
     {
       label: 'Purchasing',
+      to: '/purchasing',
       items: [
-        { to: '/purchasing', label: 'Overview' },
         { to: '/purchase-orders', label: 'Purchase orders' },
         { to: '/suppliers', label: 'Suppliers' },
         { to: '/raw-materials', label: 'Raw Materials' },
@@ -138,13 +141,13 @@ export function AppLayout({ children }: AppLayoutProps) {
     },
     {
       label: 'Production',
+      to: '/production-overview',
       items: [
         // Orders and Purchase orders are deliberately not repeated here as
         // "(view)" shortcuts -- they're already one click away under Sales
         // and Purchasing respectively, so a second link to the exact same
         // route only added nav clutter (and a duplicate command-palette
         // entry) without reaching anywhere new.
-        { to: '/production-overview', label: 'Overview' },
         { to: '/mrp', label: 'MRP' },
         { to: '/production-orders', label: 'Production orders' },
         { to: '/production', label: 'Production schedule' },
@@ -154,8 +157,8 @@ export function AppLayout({ children }: AppLayoutProps) {
     },
     {
       label: 'Warehouse',
+      to: '/warehouse',
       items: [
-        { to: '/warehouse', label: 'Overview' },
         { to: '/inventory', label: 'Stock levels' },
       ],
     },
@@ -219,7 +222,12 @@ export function AppLayout({ children }: AppLayoutProps) {
       return isPathVisible(entry.to) ? [entry] : []
     }
     const visibleItems = entry.items.filter((item) => isPathVisible(item.to))
-    return visibleItems.length > 0 ? [{ ...entry, items: visibleItems }] : []
+    const overviewTo = entry.to !== undefined && isPathVisible(entry.to) ? entry.to : undefined
+    // Only the Overview is reachable: the title is just a plain link.
+    if (overviewTo && visibleItems.length === 0) return [{ to: overviewTo, label: entry.label }]
+    if (visibleItems.length === 0) return []
+    // No Overview access: the title falls back to a plain dropdown toggle.
+    return [{ ...entry, to: overviewTo, items: visibleItems }]
   })
 
   // Master Data entries the user can actually reach -- mirrors
@@ -242,20 +250,32 @@ export function AppLayout({ children }: AppLayoutProps) {
   // the exact same visibleNavEntries the nav bar renders, so a page
   // never shows up in one place but not the other.
   const navRoutes = new Set(
-    visibleNavEntries.flatMap((entry) => (isNavGroup(entry) ? entry.items.map((item) => item.to) : [entry.to])),
+    visibleNavEntries.flatMap((entry) =>
+      isNavGroup(entry) ? [...(entry.to ? [entry.to] : []), ...entry.items.map((item) => item.to)] : [entry.to],
+    ),
   )
 
   const paletteActions: PaletteAction[] = [
-    ...visibleNavEntries.flatMap((entry) =>
-      isNavGroup(entry)
-        ? entry.items.map((item) => ({
-            id: `nav:${item.to}`,
-            label: item.label,
-            hint: entry.label,
-            onSelect: () => navigate(item.to),
-          }))
-        : [{ id: `nav:${entry.to}`, label: entry.label, onSelect: () => navigate(entry.to) }],
-    ),
+    ...visibleNavEntries.flatMap((entry) => {
+      if (!isNavGroup(entry)) {
+        return [{ id: `nav:${entry.to}`, label: entry.label, onSelect: () => navigate(entry.to) }]
+      }
+      const overviewTo = entry.to
+      return [
+        // The group title links to its Overview page, so the palette
+        // lists that page under the same "<Department> · Overview" label
+        // it always had.
+        ...(overviewTo
+          ? [{ id: `nav:${overviewTo}`, label: 'Overview', hint: entry.label, onSelect: () => navigate(overviewTo) }]
+          : []),
+        ...entry.items.map((item) => ({
+          id: `nav:${item.to}`,
+          label: item.label,
+          hint: entry.label,
+          onSelect: () => navigate(item.to),
+        })),
+      ]
+    }),
     ...MASTER_DATA_REGISTRY.filter(isMasterEntryVisible)
       .filter((entry) => !navRoutes.has(entry.route))
       .map((entry) => ({
@@ -404,7 +424,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         <nav className="flex flex-wrap gap-1">
           {visibleNavEntries.map((entry) =>
             isNavGroup(entry) ? (
-              <NavDropdown key={entry.label} label={entry.label} items={entry.items} />
+              <NavDropdown key={entry.label} label={entry.label} to={entry.to} items={entry.items} />
             ) : (
               <NavLink
                 key={entry.to}

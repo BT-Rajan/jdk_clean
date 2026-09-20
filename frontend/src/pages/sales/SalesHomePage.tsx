@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, EmptyState, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, EmptyState, GlassCard, PageHeader, Pagination, Spinner, StatusBadge } from '@/components/ui'
 import { StatsWidget } from '@/components/dashboard/DashboardWidgets'
+import { SalesDashboardCharts } from './SalesDashboardCharts'
 import { listNotifications } from '@/api/notifications'
 import { listCustomers } from '@/api/customers'
 import { listFeasibilities } from '@/api/feasibilities'
@@ -12,6 +13,7 @@ import type { Notification, NotificationSeverity } from '@/types/notification'
 import type { Feasibility, FeasibilityStatus } from '@/types/feasibility'
 import type { Quotation, QuotationStatus } from '@/types/quotation'
 import type { Order, OrderStatus } from '@/types/order'
+import { useClientPagination } from '@/hooks/useClientPagination'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 
@@ -29,9 +31,6 @@ const severityLabel: Record<NotificationSeverity, string> = {
   low: 'FYI',
 }
 const severityRank: Record<NotificationSeverity, number> = { high: 0, medium: 1, low: 2 }
-const MAX_NEEDS_ATTENTION = 6
-const MAX_QUOTATIONS = 5
-const MAX_ORDERS = 5
 
 // Sales' own slice of the same live notification feed the header bell and
 // the main Dashboard already show (GET /api/notifications) -- not a
@@ -109,8 +108,7 @@ export function SalesHomePage() {
     () =>
       notifications
         .filter(isSalesNotification)
-        .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (a.created_at < b.created_at ? 1 : -1))
-        .slice(0, MAX_NEEDS_ATTENTION),
+        .sort((a, b) => severityRank[a.severity] - severityRank[b.severity] || (a.created_at < b.created_at ? 1 : -1)),
     [notifications],
   )
 
@@ -120,16 +118,15 @@ export function SalesHomePage() {
     () => quotations.filter((q) => OPEN_QUOTATION_STATUSES.includes(q.status)),
     [quotations],
   )
-  const topQuotations = useMemo(
+  const sortedQuotations = useMemo(
     () =>
       [...openQuotations]
-        .sort((a, b) => (a.quotation_date < b.quotation_date ? 1 : -1))
-        .slice(0, MAX_QUOTATIONS),
+        .sort((a, b) => (a.quotation_date < b.quotation_date ? 1 : -1)),
     [openQuotations],
   )
 
   const openOrders = useMemo(() => orders.filter((o) => OPEN_ORDER_STATUSES.includes(o.status)), [orders])
-  const topOrders = useMemo(
+  const sortedOrders = useMemo(
     () =>
       [...openOrders]
         .sort((a, b) => {
@@ -138,10 +135,13 @@ export function SalesHomePage() {
           if (!aDate) return 1
           if (!bDate) return -1
           return aDate.localeCompare(bDate)
-        })
-        .slice(0, MAX_ORDERS),
+        }),
     [openOrders],
   )
+
+  const notificationsPager = useClientPagination(salesNotifications)
+  const quotationsPager = useClientPagination(sortedQuotations)
+  const ordersPager = useClientPagination(sortedOrders)
 
   return (
     <AppLayout>
@@ -163,8 +163,10 @@ export function SalesHomePage() {
         <StatsWidget title="Open orders" value={ordersLoading ? '—' : openOrders.length} to="/orders" />
       </div>
 
-      <div className="grid min-w-0 gap-6 lg:grid-cols-3">
-        <div className="min-w-0 lg:col-span-2 flex flex-col gap-8">
+      <SalesDashboardCharts />
+
+      <div className="grid min-w-0 gap-6">
+        <div className="min-w-0 flex flex-col gap-8">
           <div>
             <h2 className="mb-4 font-display text-lg font-medium text-white">Needs attention</h2>
             {notifLoading ? (
@@ -173,7 +175,7 @@ export function SalesHomePage() {
               <GlassCard className="p-6 text-sm text-white/50">Nothing in Sales needs action right now.</GlassCard>
             ) : (
               <div className="space-y-3">
-                {salesNotifications.map((n) => (
+                {notificationsPager.pageItems.map((n) => (
                   <Link
                     key={n.id}
                     to={n.link}
@@ -188,6 +190,7 @@ export function SalesHomePage() {
                     <p className="mt-1 text-sm text-white/60">{n.message}</p>
                   </Link>
                 ))}
+                <Pagination className="" {...notificationsPager.pagerProps} />
               </div>
             )}
           </div>
@@ -204,7 +207,7 @@ export function SalesHomePage() {
                 <div className="flex justify-center py-12">
                   <Spinner size={24} className="text-gold-300" />
                 </div>
-              ) : topQuotations.length === 0 ? (
+              ) : sortedQuotations.length === 0 ? (
                 <EmptyState title="Nothing waiting" message="No quotation is currently in draft or sent." />
               ) : (
                 <div className="overflow-x-auto">
@@ -218,7 +221,7 @@ export function SalesHomePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {topQuotations.map((q) => (
+                      {quotationsPager.pageItems.map((q) => (
                         <tr key={q.id} className="border-b border-white/5 last:border-0">
                           <td className="px-6 py-4">
                             <Link to={`/quotations/${q.id}`} className="font-medium text-gold-300 hover:text-gold-200">
@@ -236,12 +239,7 @@ export function SalesHomePage() {
                   </table>
                 </div>
               )}
-              {openQuotations.length > topQuotations.length && (
-                <p className="px-6 pb-4 text-xs text-white/40">
-                  +{openQuotations.length - topQuotations.length} more open quotation
-                  {openQuotations.length - topQuotations.length === 1 ? '' : 's'} not shown here.
-                </p>
-              )}
+              <Pagination className="px-6 pb-4" {...quotationsPager.pagerProps} />
             </GlassCard>
           </div>
 
@@ -257,7 +255,7 @@ export function SalesHomePage() {
                 <div className="flex justify-center py-12">
                   <Spinner size={24} className="text-gold-300" />
                 </div>
-              ) : topOrders.length === 0 ? (
+              ) : sortedOrders.length === 0 ? (
                 <EmptyState title="Nothing open" message="No order is currently in progress." />
               ) : (
                 <div className="overflow-x-auto">
@@ -271,7 +269,7 @@ export function SalesHomePage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {topOrders.map((o) => (
+                      {ordersPager.pageItems.map((o) => (
                         <tr key={o.id} className="border-b border-white/5 last:border-0">
                           <td className="px-6 py-4">
                             <Link to={`/orders/${o.id}`} className="font-medium text-gold-300 hover:text-gold-200">
@@ -291,43 +289,8 @@ export function SalesHomePage() {
                   </table>
                 </div>
               )}
-              {openOrders.length > topOrders.length && (
-                <p className="px-6 pb-4 text-xs text-white/40">
-                  +{openOrders.length - topOrders.length} more open order{openOrders.length - topOrders.length === 1 ? '' : 's'} not
-                  shown here.
-                </p>
-              )}
+              <Pagination className="px-6 pb-4" {...ordersPager.pagerProps} />
             </GlassCard>
-          </div>
-        </div>
-
-        <div>
-          <h2 className="mb-4 font-display text-lg font-medium text-white">Go to</h2>
-          <div className="flex flex-col gap-2">
-            <Link to="/feasibilities">
-              <Button variant="ghost" className="w-full justify-start">Feasibility checks</Button>
-            </Link>
-            <Link to="/feasibilities/new">
-              <Button variant="ghost" className="w-full justify-start">New feasibility check</Button>
-            </Link>
-            <Link to="/quotations">
-              <Button variant="ghost" className="w-full justify-start">Quotations</Button>
-            </Link>
-            <Link to="/quotations/new">
-              <Button variant="ghost" className="w-full justify-start">New quotation</Button>
-            </Link>
-            <Link to="/orders">
-              <Button variant="ghost" className="w-full justify-start">Orders</Button>
-            </Link>
-            <Link to="/delivery-notes">
-              <Button variant="ghost" className="w-full justify-start">Delivery notes</Button>
-            </Link>
-            <Link to="/customers">
-              <Button variant="ghost" className="w-full justify-start">Customers</Button>
-            </Link>
-            <Link to="/customers/new">
-              <Button variant="ghost" className="w-full justify-start">New customer</Button>
-            </Link>
           </div>
         </div>
       </div>
