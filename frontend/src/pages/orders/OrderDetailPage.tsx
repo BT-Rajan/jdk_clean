@@ -717,7 +717,7 @@ export function OrderDetailPage() {
             </thead>
             <tbody>
               {order.lines.map((line) => (
-                <tr key={line.id} className="border-b border-white/5 last:border-0">
+                <tr id={`line-${line.id}`} key={line.id} className="border-b border-white/5 last:border-0 scroll-mt-24">
                   <td className="px-6 py-4 text-white">
                     {line.product_code ? `${line.product_code} — ${line.product_name}` : `#${line.product_id}`}
                   </td>

@@ -76,6 +76,13 @@ def _completed_quantity(db: Session, production_order_id: int, for_update: bool 
     return sum(float(row[0]) for row in query.all())
 
 
+def get_produced_quantity(db: Session, production_order_id: int) -> float:
+    """Public, read-only entry point for _completed_quantity -- for
+    callers (the Production Order resource itself) that just want the
+    current total, not the write-path's locking/exclusion options."""
+    return round(_completed_quantity(db, production_order_id), 4)
+
+
 def get_progress(db: Session, production_order_id: int) -> dict:
     """Planned/produced/remaining for a Production Order, plus every
     execution run -- always derived from this table's own rows, never a

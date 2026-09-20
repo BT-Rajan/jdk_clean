@@ -1150,6 +1150,11 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     -- planned_quantity (either direction) -- see
     -- app/models/production_schedule.py's comment on this column.
     quantity_discrepancy_reason TEXT NULL,
+    -- Mandatory when a Production-Order-driven schedule's quantity is
+    -- allowed to exceed the order's remaining unscheduled quantity --
+    -- see app/services/production_order_schedule_service.py's
+    -- allow_overproduction path.
+    overproduction_reason TEXT NULL,
     notes           TEXT NULL,
     -- Set on completion when actual raw-material usage (see
     -- app/api/production_schedules.py's actual_materials) either exceeds

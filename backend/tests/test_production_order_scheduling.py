@@ -54,7 +54,7 @@ def test_normal_scheduling(db):
     assert result["schedule_status"] == "scheduled"
     assert result["scheduled_quantity"] == 500
     assert result["remaining_to_schedule"] == 0
-    schedule = result["schedules"][0]
+    schedule = result["active_schedules"][0]
     assert schedule.machine_id == machine.id
     assert schedule.planned_start == start
     # 500 units * 0.004 h/unit = 2 hours.
@@ -108,7 +108,7 @@ def test_reschedule_moves_to_new_machine_and_time(db):
     assert updated.machine_id == other_machine.id
     assert updated.planned_start == datetime(2026, 9, 26, 9, 0)
     result = production_order_schedule_service.get_schedule_summary(db, po.id)
-    assert result["schedules"][0].machine_id == other_machine.id
+    assert result["active_schedules"][0].machine_id == other_machine.id
 
 
 def test_reschedule_reruns_conflict_validation(db):
@@ -163,8 +163,8 @@ def test_due_date_awareness_flags_a_late_schedule(db):
 
     # The schedule itself is created, not silently rejected -- the system
     # only has to make the lateness visible, never hide it.
-    assert result["schedules"][0].status == "planned"
-    assert result["schedules"][0].scheduled_end > result["due_date"]
+    assert result["active_schedules"][0].status == "planned"
+    assert result["active_schedules"][0].scheduled_end > result["due_date"]
 
 
 def test_schedule_within_due_date_is_not_flagged_late(db):
@@ -175,7 +175,7 @@ def test_schedule_within_due_date_is_not_flagged_late(db):
     )
     result = production_order_schedule_service.get_schedule_summary(db, po.id)
 
-    assert result["schedules"][0].scheduled_end <= result["due_date"]
+    assert result["active_schedules"][0].scheduled_end <= result["due_date"]
 
 
 def test_schedule_rejected_for_cancelled_production_order(db):

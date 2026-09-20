@@ -39,6 +39,7 @@ import type { Machine } from '@/types/machine'
 import type { QcAgent } from '@/types/qcAgent'
 import type { QcRequest, QcRequestStatus } from '@/types/qcRequest'
 import { getApiErrorMessage } from '@/lib/apiError'
+import { formatCurrency } from '@/lib/currency'
 import { formatDate, formatDateTime } from '@/lib/dateFormat'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
@@ -128,7 +129,14 @@ export function ProductionOrderDetailPage() {
   const [releaseQty, setReleaseQty] = useState<Record<number, string>>({})
   const [actionBusyId, setActionBusyId] = useState<number | null>(null)
 
-  const [scheduleForm, setScheduleForm] = useState({ machineId: '', quantity: '', start: '', end: '' })
+  const [scheduleForm, setScheduleForm] = useState({
+    machineId: '',
+    quantity: '',
+    start: '',
+    end: '',
+    allowOverproduction: false,
+    overproductionReason: '',
+  })
   const [schedulingBusy, setSchedulingBusy] = useState(false)
   const [cancelReasonById, setCancelReasonById] = useState<Record<number, string>>({})
   const [scheduleActionBusyId, setScheduleActionBusyId] = useState<number | null>(null)
@@ -142,7 +150,8 @@ export function ProductionOrderDetailPage() {
 
   const [qcAgents, setQcAgents] = useState<QcAgent[]>([])
   const [qcRequests, setQcRequests] = useState<QcRequest[]>([])
-  const schedulesPager = useClientPagination(schedules?.schedules)
+  const schedulesPager = useClientPagination(schedules?.active_schedules)
+  const cancelledSchedulesPager = useClientPagination(schedules?.cancelled_schedules)
   const runsPager = useClientPagination(executions?.runs)
   const qcRequestsPager = useClientPagination(qcRequests)
   const [qcForm, setQcForm] = useState({ executionId: '', agentId: '', quantity: '', sampleQuantity: '', expectedDate: '' })
@@ -272,6 +281,10 @@ export function ProductionOrderDetailPage() {
       setError('Enter a planned start to create a schedule.')
       return
     }
+    if (scheduleForm.allowOverproduction && !scheduleForm.overproductionReason.trim()) {
+      setError('Enter a reason to schedule more than the remaining unscheduled quantity.')
+      return
+    }
     setSchedulingBusy(true)
     setError(null)
     try {
@@ -280,9 +293,11 @@ export function ProductionOrderDetailPage() {
         planned_quantity: scheduleForm.quantity ? Number(scheduleForm.quantity) : undefined,
         planned_start: scheduleForm.start,
         planned_end: scheduleForm.end || undefined,
+        allow_overproduction: scheduleForm.allowOverproduction,
+        overproduction_reason: scheduleForm.overproductionReason || undefined,
       })
       setSchedules(result)
-      setScheduleForm({ machineId: '', quantity: '', start: '', end: '' })
+      setScheduleForm({ machineId: '', quantity: '', start: '', end: '', allowOverproduction: false, overproductionReason: '' })
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -543,6 +558,7 @@ export function ProductionOrderDetailPage() {
         <div className="mb-6 flex flex-wrap items-center gap-4">
           <StatusBadge status={po.status} />
           <Badge tone="neutral">{`${po.priority} priority`}</Badge>
+          <Badge tone="neutral">{po.production_type === 'make_to_order' ? 'Make to order' : 'Make to stock'}</Badge>
           {allowWrite && nextStatuses.length > 0 && (
             <div className="ml-auto">
               <StatusTransitionButtons
@@ -570,6 +586,19 @@ export function ProductionOrderDetailPage() {
             <Field label="Customer" value={po.customer_name ?? '—'} />
             <Field label="Order date" value={order ? formatDate(order.order_date) : '—'} />
             <Field label="Due date" value={formatDate(po.due_date)} />
+            {po.order_detail_id !== null && (
+              <Field
+                label="Source order line"
+                value={
+                  <Link
+                    to={`/orders/${po.order_id}#line-${po.order_detail_id}`}
+                    className="text-gold-300 hover:text-gold-200"
+                  >
+                    {po.ordered_quantity ?? '—'} {po.unit ?? ''} @ {formatCurrency(po.order_line_unit_price)}
+                  </Link>
+                }
+              />
+            )}
           </dl>
         ) : (
           <p className="text-sm text-white/50">
@@ -595,6 +624,15 @@ export function ProductionOrderDetailPage() {
             />
           )}
           {po.order_id === null && <Field label="Due date" value={formatDate(po.due_date)} />}
+        </dl>
+
+        <h2 className="mt-8 mb-4 font-display text-base font-medium text-white">Quantities</h2>
+        <dl className="grid grid-cols-2 gap-6 sm:grid-cols-5">
+          <Field label="Required" value={`${po.required_quantity ?? po.planned_quantity} ${po.unit ?? ''}`} />
+          <Field label="Scheduled" value={po.scheduled_quantity !== null ? `${po.scheduled_quantity} ${po.unit ?? ''}` : '—'} />
+          <Field label="Produced" value={po.produced_quantity !== null ? `${po.produced_quantity} ${po.unit ?? ''}` : '—'} />
+          <Field label="Remaining to produce" value={po.remaining_quantity !== null ? `${po.remaining_quantity} ${po.unit ?? ''}` : '—'} />
+          <Field label="Unscheduled balance" value={po.unscheduled_quantity !== null ? `${po.unscheduled_quantity} ${po.unit ?? ''}` : '—'} />
         </dl>
 
         {po.status === 'cancelled' && po.cancel_reason && (
@@ -834,10 +872,25 @@ export function ProductionOrderDetailPage() {
                   : SCHEDULE_STATUS_LABEL[schedules.schedule_status]}
               </Badge>
             )}
+            {schedules && schedules.machine_status !== 'not_applicable' && (
+              <Badge tone={schedules.machine_status === 'ready' ? 'success' : 'danger'}>
+                {schedules.machine_status === 'ready'
+                  ? 'Machine ready'
+                  : `Machine not ready -- ${schedules.machine_issues.join(', ')}`}
+              </Badge>
+            )}
           </div>
         </div>
 
-        {schedules && schedules.schedules.length > 0 && (
+        {schedules && (schedules.earliest_completion_date || schedules.latest_completion_date) && (
+          <div className="border-b border-white/10 px-6 py-3 text-xs text-white/50">
+            Estimated completion: {formatDateTime(schedules.earliest_completion_date)}
+            {schedules.latest_completion_date !== schedules.earliest_completion_date &&
+              ` -- ${formatDateTime(schedules.latest_completion_date)}`}
+          </div>
+        )}
+
+        {schedules && schedules.active_schedules.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
@@ -855,7 +908,17 @@ export function ProductionOrderDetailPage() {
                 {schedulesPager.pageItems.map((s) => (
                   <tr key={s.id} className="border-b border-white/5 last:border-0 align-top">
                     <td className="px-6 py-4 text-white">{s.machine_name ?? '—'}</td>
-                    <td className="px-6 py-4 text-right text-white/60">{s.planned_quantity}</td>
+                    <td className="px-6 py-4 text-right text-white/60">
+                      {s.planned_quantity}
+                      {s.overproduction_reason && (
+                        <span
+                          className="ml-1 text-xs text-amber-300"
+                          title={`Overproduction: ${s.overproduction_reason}`}
+                        >
+                          (over)
+                        </span>
+                      )}
+                    </td>
                     <td className="px-6 py-4 text-white/60">{formatDateTime(s.planned_start ?? s.scheduled_start)}</td>
                     <td className="px-6 py-4 text-white/60">{formatDateTime(s.planned_end ?? s.scheduled_end)}</td>
                     <td className="px-6 py-4">
@@ -903,16 +966,53 @@ export function ProductionOrderDetailPage() {
         )}
         <Pagination className="px-6 pb-4" {...schedulesPager.pagerProps} />
 
-        {(!schedules || schedules.schedules.length === 0) && (
+        {schedules && schedules.cancelled_schedules.length > 0 && (
+          <div className="border-t border-white/10">
+            <h3 className="px-6 pt-4 text-xs font-medium tracking-wide text-white/40 uppercase">
+              Cancelled schedules ({schedules.cancelled_schedules.length})
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                    <th className="px-6 py-4 font-medium">Machine</th>
+                    <th className="px-6 py-4 text-right font-medium">Qty</th>
+                    <th className="px-6 py-4 font-medium">Start</th>
+                    <th className="px-6 py-4 font-medium">End</th>
+                    <th className="px-6 py-4 font-medium">Cancel reason</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {cancelledSchedulesPager.pageItems.map((s) => (
+                    <tr key={s.id} className="border-b border-white/5 text-white/50 last:border-0">
+                      <td className="px-6 py-4">{s.machine_name ?? '—'}</td>
+                      <td className="px-6 py-4 text-right">{s.planned_quantity}</td>
+                      <td className="px-6 py-4">{formatDateTime(s.planned_start ?? s.scheduled_start)}</td>
+                      <td className="px-6 py-4">{formatDateTime(s.planned_end ?? s.scheduled_end)}</td>
+                      <td className="px-6 py-4">{s.cancel_reason ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pagination className="px-6 pb-4" {...cancelledSchedulesPager.pagerProps} />
+          </div>
+        )}
+
+        {schedules && schedules.active_schedules.length === 0 && schedules.cancelled_schedules.length === 0 && (
           <EmptyState
             title="Not scheduled"
             message="This production order hasn't been booked onto the machine calendar yet."
           />
         )}
 
-        {allowWrite && po.status === 'planned' && schedules && schedules.remaining_to_schedule > 0 && (
+        {allowWrite && po.status === 'planned' && schedules && (
           <div className="border-t border-white/10 px-6 py-5">
-            <h3 className="mb-4 text-sm font-medium text-white">Schedule remaining {schedules.remaining_to_schedule} {po.unit ?? ''}</h3>
+            <h3 className="mb-4 text-sm font-medium text-white">
+              {schedules.remaining_to_schedule > 0
+                ? `Schedule remaining ${schedules.remaining_to_schedule} ${po.unit ?? ''}`
+                : 'Fully scheduled -- add another schedule only as deliberate overproduction'}
+            </h3>
             <div className="flex flex-wrap items-end gap-3">
               <div className="w-48">
                 <SelectField
@@ -933,13 +1033,24 @@ export function ProductionOrderDetailPage() {
                   label="Quantity"
                   type="number"
                   min={0}
-                  max={schedules.remaining_to_schedule}
                   step="any"
                   placeholder={`${schedules.remaining_to_schedule}`}
                   value={scheduleForm.quantity}
                   onChange={(e) => setScheduleForm((prev) => ({ ...prev, quantity: e.target.value }))}
                 />
               </div>
+              {schedules.remaining_to_schedule > 0 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  type="button"
+                  onClick={() =>
+                    setScheduleForm((prev) => ({ ...prev, quantity: `${schedules.remaining_to_schedule}` }))
+                  }
+                >
+                  Schedule remaining
+                </Button>
+              )}
               <div className="w-52">
                 <TextField
                   label="Planned start"
@@ -961,6 +1072,23 @@ export function ProductionOrderDetailPage() {
                 Schedule
               </Button>
             </div>
+            <label className="mt-3 flex items-center gap-2 text-xs text-white/60">
+              <input
+                type="checkbox"
+                checked={scheduleForm.allowOverproduction}
+                onChange={(e) => setScheduleForm((prev) => ({ ...prev, allowOverproduction: e.target.checked }))}
+              />
+              Allow scheduling beyond the remaining unscheduled quantity (overproduction)
+            </label>
+            {scheduleForm.allowOverproduction && (
+              <div className="mt-2 w-96">
+                <TextField
+                  label="Overproduction reason (required)"
+                  value={scheduleForm.overproductionReason}
+                  onChange={(e) => setScheduleForm((prev) => ({ ...prev, overproductionReason: e.target.value }))}
+                />
+              </div>
+            )}
           </div>
         )}
       </GlassCard>
@@ -1100,7 +1228,7 @@ export function ProductionOrderDetailPage() {
 
         {allowWrite &&
           schedules &&
-          schedules.schedules.some(
+          schedules.active_schedules.some(
             (s) => s.status === 'planned' && !executions?.runs.some((r) => r.schedule_id === s.id && r.status === 'in_progress'),
           ) &&
           executions &&
@@ -1115,7 +1243,7 @@ export function ProductionOrderDetailPage() {
                     onChange={(e) => setStartScheduleId(e.target.value)}
                   >
                     <option value="">Choose a schedule</option>
-                    {schedules.schedules
+                    {schedules.active_schedules
                       .filter(
                         (s) =>
                           s.status === 'planned' &&

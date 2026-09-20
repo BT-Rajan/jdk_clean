@@ -96,6 +96,32 @@ def _scheduled_quantity(
     return sum(float(row[0]) for row in query.all())
 
 
+def get_scheduled_quantity(db: Session, production_order_id: int) -> float:
+    """Public, read-only entry point for _scheduled_quantity -- for
+    callers (the Production Order resource itself) that just want the
+    current total, not the write-path's locking/exclusion options."""
+    return round(_scheduled_quantity(db, production_order_id), 4)
+
+
+def _machine_readiness(active: list[ProductionSchedule]) -> tuple[str, list[str]]:
+    """Whether every active schedule's machine is still a real, active
+    machine -- 'ready' | 'not_ready' | 'not_applicable' (nothing active
+    to check yet). _lock_machine only validates a machine at schedule
+    *creation* time (see its own docstring); a machine deactivated or
+    soft-deleted afterward would otherwise leave an already-scheduled
+    run silently pointing at unusable capacity with no visible warning
+    anywhere on the Production Order. Returns the batch numbers of any
+    schedule whose machine has gone bad, for the caller to surface."""
+    if not active:
+        return "not_applicable", []
+    issues = [
+        s.batch_number
+        for s in active
+        if s.machine is None or s.machine.deleted_at is not None or s.machine.status != "active"
+    ]
+    return ("not_ready" if issues else "ready"), issues
+
+
 def get_schedule_summary(db: Session, production_order_id: int) -> dict:
     """Everything the Production Order detail page needs to show its
     schedule section: the due date, how much of the planned quantity is
@@ -103,11 +129,15 @@ def get_schedule_summary(db: Session, production_order_id: int) -> dict:
     unscheduled/scheduled/cancelled readiness verdict (see spec section
     9 -- deliberately not a richer status: partial scheduling is fully
     described by remaining_to_schedule without needing its own state),
-    and the schedule rows themselves.
+    the earliest/latest planned completion across whatever's still
+    active, an aggregate machine-readiness verdict, and the schedule
+    rows themselves -- active and cancelled kept as separate lists
+    rather than one combined list the caller has to filter itself.
     """
     po = production_order_service.get_production_order(db, production_order_id)
     schedules = list_schedules_for_production_order(db, production_order_id)
     active = [s for s in schedules if s.status != "cancelled"]
+    cancelled = [s for s in schedules if s.status == "cancelled"]
     scheduled_quantity = round(sum(float(s.planned_quantity) for s in active), 4)
     remaining_to_schedule = max(round(float(po.planned_quantity) - scheduled_quantity, 4), 0)
 
@@ -118,6 +148,9 @@ def get_schedule_summary(db: Session, production_order_id: int) -> dict:
     else:
         schedule_status = "unscheduled"
 
+    completion_dates = [s.planned_end for s in active if s.planned_end is not None]
+    machine_status, machine_issues = _machine_readiness(active)
+
     return {
         "production_order_id": production_order_id,
         "due_date": po.due_date,
@@ -125,7 +158,12 @@ def get_schedule_summary(db: Session, production_order_id: int) -> dict:
         "scheduled_quantity": scheduled_quantity,
         "remaining_to_schedule": remaining_to_schedule,
         "schedule_status": schedule_status,
-        "schedules": schedules,
+        "earliest_completion_date": min(completion_dates) if completion_dates else None,
+        "latest_completion_date": max(completion_dates) if completion_dates else None,
+        "machine_status": machine_status,
+        "machine_issues": machine_issues,
+        "active_schedules": active,
+        "cancelled_schedules": cancelled,
     }
 
 
@@ -275,6 +313,28 @@ def _compute_planned_end(
     return planned_start + timedelta(hours=hours)
 
 
+def _assert_within_requirement_or_overproduction_allowed(
+    quantity: float, remaining_to_schedule: float, allow_overproduction: bool, overproduction_reason: str | None
+) -> None:
+    """The schedule-quantity cap create_schedule/reschedule both enforce:
+    a schedule can't commit more of the Production Order's requirement
+    than is still unscheduled, unless the caller explicitly flags this
+    as intentional overproduction -- in which case a reason is mandatory,
+    the same reasoned-deviation convention production_service's own
+    quantity_discrepancy_reason already uses for planned-vs-actual gaps."""
+    if quantity <= remaining_to_schedule:
+        return
+    if not allow_overproduction:
+        raise ValidationAppError(
+            f"Scheduled quantity ({quantity}) exceeds this production order's remaining "
+            f"unscheduled quantity ({remaining_to_schedule}). Set allow_overproduction to "
+            f"schedule beyond it."
+        )
+    assert_reason_given(
+        overproduction_reason, "A reason is required to schedule more than the remaining unscheduled quantity."
+    )
+
+
 def create_schedule(db: Session, production_order_id: int, data: dict, user_id: int | None = None) -> ProductionSchedule:
     """Creates a schedule for (some or all of) a Production Order's
     planned quantity. Deliberately NOT gated on material allocation/
@@ -305,11 +365,10 @@ def create_schedule(db: Session, production_order_id: int, data: dict, user_id: 
     planned_quantity = float(requested_quantity) if requested_quantity is not None else remaining_to_schedule
     if planned_quantity <= 0:
         raise ValidationAppError("Planned quantity must be positive.")
-    if planned_quantity > remaining_to_schedule:
-        raise ValidationAppError(
-            f"Scheduled quantity ({planned_quantity}) exceeds this production order's remaining "
-            f"unscheduled quantity ({remaining_to_schedule})."
-        )
+    overproduction_reason = data.get("overproduction_reason")
+    _assert_within_requirement_or_overproduction_allowed(
+        planned_quantity, remaining_to_schedule, bool(data.get("allow_overproduction")), overproduction_reason
+    )
 
     machine_id = data.get("machine_id") or product.machine_id
     if not machine_id:
@@ -336,6 +395,7 @@ def create_schedule(db: Session, production_order_id: int, data: dict, user_id: 
         scheduled_end=planned_end.date(),
         planned_start=planned_start,
         planned_end=planned_end,
+        overproduction_reason=overproduction_reason if planned_quantity > remaining_to_schedule else None,
         notes=data.get("notes"),
         created_by=user_id,
     )
@@ -377,11 +437,10 @@ def reschedule(db: Session, schedule_id: int, data: dict, user_id: int | None = 
 
     already_scheduled = _scheduled_quantity(db, row.production_order_id, for_update=True, exclude_schedule_id=row.id)
     remaining_to_schedule = round(float(po.planned_quantity) - already_scheduled, 4)
-    if new_quantity > remaining_to_schedule:
-        raise ValidationAppError(
-            f"Scheduled quantity ({new_quantity}) exceeds this production order's remaining "
-            f"unscheduled quantity ({remaining_to_schedule})."
-        )
+    overproduction_reason = data.get("overproduction_reason")
+    _assert_within_requirement_or_overproduction_allowed(
+        new_quantity, remaining_to_schedule, bool(data.get("allow_overproduction")), overproduction_reason
+    )
 
     new_start = data.get("planned_start", row.planned_start)
     _reject_past_start(new_start)
@@ -404,6 +463,8 @@ def reschedule(db: Session, schedule_id: int, data: dict, user_id: int | None = 
     }
     if "notes" in data:
         update_values["notes"] = data["notes"]
+    if new_quantity > remaining_to_schedule:
+        update_values["overproduction_reason"] = overproduction_reason
     for field in ("machine_id", "planned_quantity", "planned_start", "planned_end"):
         old_value = getattr(row, field)
         if old_value != update_values[field]:

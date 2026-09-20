@@ -169,6 +169,7 @@ class ProductionScheduleOut(BaseModel):
     cancel_reason: str | None
     pause_reason: str | None
     quantity_discrepancy_reason: str | None
+    overproduction_reason: str | None = None
     notes: str | None
     material_discrepancy_flag: bool
     # Deliberately not named material_discrepancy_notes (the ORM column
