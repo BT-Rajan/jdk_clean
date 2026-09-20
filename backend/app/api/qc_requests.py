@@ -124,7 +124,7 @@ def record_result(
     db: Session = Depends(get_db),
     user: User = Depends(write_guard),
 ):
-    request = qc_service.record_result(db, qc_request_id, payload.result, user_id=user.id)
+    request = qc_service.record_result(db, qc_request_id, payload.result, payload.remarks, user_id=user.id)
     return QcRequestOut.from_model(request)
 
 

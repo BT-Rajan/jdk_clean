@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
@@ -6,7 +6,12 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, Spinner, TextareaField, TextField } from '@/components/ui'
-import { createProductionBatch, getProductionBatch, updateProductionBatch } from '@/api/production'
+import {
+  checkProductionReadinessPrecreate,
+  createProductionBatch,
+  getProductionBatch,
+  updateProductionBatch,
+} from '@/api/production'
 import { listProducts } from '@/api/products'
 import { listOrders } from '@/api/orders'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
@@ -17,6 +22,61 @@ import {
   type ProductionBatchFormValues,
   type ProductionBatchSubmitValues,
 } from '@/lib/validation'
+import { ProductionReadinessPanel } from './ProductionReadinessPanel'
+import type { ReadinessResult } from '@/types/production'
+
+/** Live materials/machine/worker preview for the "New batch" form --
+ * debounced so it doesn't fire a request on every keystroke, and
+ * cancellable so a stale response for an earlier product/quantity can
+ * never overwrite a newer one. */
+function useCandidateReadiness(
+  productId: number,
+  quantity: number,
+  scheduledStart: string,
+  scheduledEnd: string,
+) {
+  const [readiness, setReadiness] = useState<ReadinessResult | null>(null)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const requestId = useRef(0)
+
+  useEffect(() => {
+    if (!productId || !quantity || quantity <= 0) {
+      setReadiness(null)
+      setError(null)
+      setLoading(false)
+      return
+    }
+    const thisRequest = ++requestId.current
+    setLoading(true)
+    const timer = setTimeout(() => {
+      checkProductionReadinessPrecreate({
+        product_id: productId,
+        quantity,
+        scheduled_start: scheduledStart || undefined,
+        scheduled_end: scheduledEnd || undefined,
+      })
+        .then((result) => {
+          if (requestId.current === thisRequest) {
+            setReadiness(result)
+            setError(null)
+          }
+        })
+        .catch((err) => {
+          if (requestId.current === thisRequest) {
+            setError(getApiErrorMessage(err))
+            setReadiness(null)
+          }
+        })
+        .finally(() => {
+          if (requestId.current === thisRequest) setLoading(false)
+        })
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [productId, quantity, scheduledStart, scheduledEnd])
+
+  return { readiness, loading, error }
+}
 
 function FormShell({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -63,6 +123,7 @@ function ProductionCreateForm() {
   const {
     register,
     handleSubmit,
+    watch,
     formState: { errors, isSubmitting },
   } = useForm<ProductionBatchFormValues, unknown, ProductionBatchSubmitValues>({
     resolver: zodResolver(productionBatchSchema),
@@ -75,6 +136,12 @@ function ProductionCreateForm() {
       notes: '',
     },
   })
+
+  const watchedProductId = Number(watch('product_id')) || 0
+  const watchedQuantity = Number(watch('planned_quantity')) || 0
+  const watchedStart = watch('scheduled_start') || ''
+  const watchedEnd = watch('scheduled_end') || ''
+  const candidateReadiness = useCandidateReadiness(watchedProductId, watchedQuantity, watchedStart, watchedEnd)
 
   async function onSubmit(values: ProductionBatchSubmitValues) {
     setFormError(null)
@@ -131,6 +198,13 @@ function ProductionCreateForm() {
             {...register('scheduled_end')}
           />
         </div>
+        {watchedProductId > 0 && watchedQuantity > 0 && (
+          <ProductionReadinessPanel
+            readiness={candidateReadiness.readiness}
+            loading={candidateReadiness.loading}
+            error={candidateReadiness.error}
+          />
+        )}
         <TextareaField label="Notes" {...register('notes')} />
         <div className="mt-2 flex justify-end gap-3">
           <Button variant="ghost" type="button" onClick={() => navigate(-1)}>Cancel</Button>

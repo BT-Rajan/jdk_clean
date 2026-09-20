@@ -155,6 +155,10 @@ export function ProductionOrderDetailPage() {
     Record<number, { number: string; date: string; remarks: string; result: string }>
   >({})
   const [qcActionBusyId, setQcActionBusyId] = useState<number | null>(null)
+  // Rejection reason for the Accept/Reject decision made straight off an
+  // already-recorded report (status 'report_received') -- required when
+  // rejecting, see qc_service.record_result.
+  const [resultRemarksById, setResultRemarksById] = useState<Record<number, string>>({})
 
   const load = useCallback(() => {
     setLoading(true)
@@ -443,6 +447,10 @@ export function ProductionOrderDetailPage() {
       setError('Enter a report number and date to record the report.')
       return
     }
+    if (form.result === 'rejected' && !form.remarks.trim()) {
+      setError('Enter a rejection reason to record a rejected result.')
+      return
+    }
     setQcActionBusyId(requestId)
     setError(null)
     try {
@@ -462,11 +470,17 @@ export function ProductionOrderDetailPage() {
   }
 
   async function handleRecordResult(requestId: number, result: 'accepted' | 'rejected') {
+    const remarks = resultRemarksById[requestId] ?? ''
+    if (result === 'rejected' && !remarks.trim()) {
+      setError('Enter a rejection reason to reject this QC request.')
+      return
+    }
     setQcActionBusyId(requestId)
     setError(null)
     try {
-      await recordQcResult(requestId, { result })
+      await recordQcResult(requestId, { result, remarks: remarks || undefined })
       await refreshQc()
+      setResultRemarksById((prev) => ({ ...prev, [requestId]: '' }))
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
@@ -1286,6 +1300,25 @@ export function ProductionOrderDetailPage() {
                                   <option value="rejected">Rejected</option>
                                 </SelectField>
                               </div>
+                              <div className="w-64">
+                                <TextField
+                                  label={
+                                    reportForm[request.id]?.result === 'rejected'
+                                      ? 'Rejection reason (required)'
+                                      : 'Remarks (optional)'
+                                  }
+                                  value={reportForm[request.id]?.remarks ?? ''}
+                                  onChange={(e) =>
+                                    setReportForm((prev) => ({
+                                      ...prev,
+                                      [request.id]: {
+                                        ...(prev[request.id] ?? { number: '', date: '', remarks: '', result: '' }),
+                                        remarks: e.target.value,
+                                      },
+                                    }))
+                                  }
+                                />
+                              </div>
                               <Button
                                 size="sm"
                                 variant="ghost"
@@ -1297,23 +1330,34 @@ export function ProductionOrderDetailPage() {
                             </div>
                           )}
                           {request.status === 'report_received' && (
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                isLoading={qcActionBusyId === request.id}
-                                onClick={() => handleRecordResult(request.id, 'accepted')}
-                              >
-                                Accept
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                isLoading={qcActionBusyId === request.id}
-                                onClick={() => handleRecordResult(request.id, 'rejected')}
-                              >
-                                Reject
-                              </Button>
+                            <div className="flex flex-col gap-2">
+                              <div className="w-56">
+                                <TextField
+                                  label="Rejection reason (if rejecting)"
+                                  value={resultRemarksById[request.id] ?? ''}
+                                  onChange={(e) =>
+                                    setResultRemarksById((prev) => ({ ...prev, [request.id]: e.target.value }))
+                                  }
+                                />
+                              </div>
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  isLoading={qcActionBusyId === request.id}
+                                  onClick={() => handleRecordResult(request.id, 'accepted')}
+                                >
+                                  Accept
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  isLoading={qcActionBusyId === request.id}
+                                  onClick={() => handleRecordResult(request.id, 'rejected')}
+                                >
+                                  Reject
+                                </Button>
+                              </div>
                             </div>
                           )}
                           {(request.status === 'sample_sent' ||

@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom'
+
 import { Badge, CrossIcon, GlassCard, Spinner, TickIcon } from '@/components/ui'
 import { cn } from '@/lib/cn'
 import type { ReadinessResult } from '@/types/production'
@@ -88,7 +90,9 @@ export function ProductionReadinessPanel({
           {shortMaterials.map((m) => (
             <div key={m.raw_material_id} className="rounded-xl border border-red-400/20 bg-red-500/5 p-3">
               <p className="text-sm font-medium text-white">
-                {m.code} — {m.name}
+                <Link to={`/raw-materials/${m.raw_material_id}`} className="text-gold-300 hover:text-gold-200">
+                  {m.code} — {m.name}
+                </Link>
               </p>
               <p className="mt-1 text-xs text-white/60">
                 Required {m.required} {m.unit} · Available {m.available} {m.unit} · Short {m.shortage} {m.unit}

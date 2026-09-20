@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -65,6 +67,25 @@ def list_batches(
     )
     result["items"] = [_with_readiness(db, b, ProductionScheduleOut.from_model(b)) for b in result["items"]]
     return result
+
+
+@router.get("/check-readiness", response_model=ReadinessResult)
+def check_readiness_precreate(
+    product_id: int = Query(...),
+    quantity: float = Query(..., gt=0),
+    scheduled_start: date | None = Query(None),
+    scheduled_end: date | None = Query(None),
+    machine_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    """The "New batch" form's live materials/machine/worker preview --
+    see production_service.check_readiness_for_candidate_batch. Declared
+    before /{batch_id} so "check-readiness" is never swallowed by that
+    route's int path param."""
+    return production_service.check_readiness_for_candidate_batch(
+        db, product_id, quantity, scheduled_start, scheduled_end, machine_id
+    )
 
 
 @router.get("/{batch_id}", response_model=ProductionScheduleOut)

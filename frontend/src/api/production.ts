@@ -114,6 +114,23 @@ export async function getProductionReadiness(batchId: number): Promise<Readiness
   return data
 }
 
+/** The same materials/machine/worker readiness breakdown as
+ * getProductionReadiness, but for a batch that doesn't exist yet -- lets
+ * the "New batch" form preview machine availability and worker
+ * requirement vs. available before the user commits to a schedule. See
+ * backend/app/services/production_service.py's
+ * check_readiness_for_candidate_batch. */
+export async function checkProductionReadinessPrecreate(params: {
+  product_id: number
+  quantity: number
+  scheduled_start?: string
+  scheduled_end?: string
+  machine_id?: number
+}): Promise<ReadinessResult> {
+  const { data } = await apiClient.get<ReadinessResult>('/api/production-schedules/check-readiness', { params })
+  return data
+}
+
 export async function deleteProductionBatch(id: number): Promise<MessageResponse> {
   const { data } = await apiClient.delete<MessageResponse>(`/api/production-schedules/${id}`)
   return data

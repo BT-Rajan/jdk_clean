@@ -87,7 +87,7 @@ def test_partial_qc_release_splits_one_executions_output(db):
 
     rejected, _ = _qc_request(db, po, execution, agent=agent, quantity=300)
     qc_service.mark_sample_sent(db, rejected.id, None, None)
-    qc_service.record_report(db, rejected.id, "LAB-B", date(2026, 9, 27), None, result="rejected")
+    qc_service.record_report(db, rejected.id, "LAB-B", date(2026, 9, 27), "Fails spec.", result="rejected")
 
     stock = inventory_service.get_stock(db, "product", product.id)
     assert stock["quantity_on_hand"] == 700
@@ -414,7 +414,7 @@ def test_cannot_deliver_rejected_stock(db):
     po, execution, _ = _stock_execution(db, quantity=500, machine=machine, product=product)
     request, _ = _qc_request(db, po, execution)
     qc_service.mark_sample_sent(db, request.id, None, None)
-    qc_service.record_report(db, request.id, "LAB-REJ", date(2026, 9, 26), None, result="rejected")
+    qc_service.record_report(db, request.id, "LAB-REJ", date(2026, 9, 26), "Fails spec.", result="rejected")
 
     with pytest.raises(ConflictError):
         delivery_note_service.create_delivery_note(db, {"order_id": order.id, "delivery_date": date(2026, 1, 1)})

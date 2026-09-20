@@ -137,6 +137,35 @@ def _list_planned_by_readiness(
     }
 
 
+def check_readiness_for_candidate_batch(
+    db: Session,
+    product_id: int,
+    quantity: float,
+    scheduled_start: date | None = None,
+    scheduled_end: date | None = None,
+    machine_id: int | None = None,
+) -> dict:
+    """The same materials/machine/worker readiness check an existing
+    batch's own GET /{batch_id}/readiness runs, but for a batch that
+    doesn't exist yet -- lets the "New batch" form show machine
+    availability and worker requirement vs. available *before* the user
+    commits to a schedule, instead of only finding out via a
+    ConflictError after submitting. production_readiness_service.
+    check_readiness already takes a plain product/quantity/window/
+    machine rather than requiring a real batch row, so this is just the
+    product lookup in front of it.
+    """
+    product = _validate_product(db, product_id)
+    return production_readiness_service.check_readiness(
+        db,
+        product=product,
+        quantity=quantity,
+        scheduled_start=scheduled_start,
+        scheduled_end=scheduled_end,
+        machine_id=machine_id,
+    )
+
+
 def _reject_production_order_linked(batch: ProductionSchedule) -> None:
     """Guards every write path in this module that assumes it owns the
     batch's raw-material reservation (update_batch/delete_batch/
@@ -339,6 +368,7 @@ def create_batch(db: Session, data: dict, user_id: int | None = None) -> Product
         data["machine_id"] = product.machine_id
     if data.get("machine_id"):
         _validate_machine(db, data["machine_id"])
+        _assert_no_machine_conflict(db, data["machine_id"], data["scheduled_start"], data["scheduled_end"])
 
     batch_number = number_series_service.next_number(db, "PRODUCTION_BATCH")
     batch = ProductionSchedule(batch_number=batch_number, created_by=user_id, **data)
@@ -365,6 +395,18 @@ def update_batch(db: Session, batch_id: int, data: dict, user_id: int | None = N
         _validate_product(db, data["product_id"])
     if "machine_id" in data and data["machine_id"] and data["machine_id"] != batch.machine_id:
         _validate_machine(db, data["machine_id"])
+
+    new_machine_id = data["machine_id"] if "machine_id" in data else batch.machine_id
+    new_scheduled_start = data.get("scheduled_start", batch.scheduled_start)
+    new_scheduled_end = data.get("scheduled_end", batch.scheduled_end)
+    if (
+        new_machine_id != batch.machine_id
+        or new_scheduled_start != batch.scheduled_start
+        or new_scheduled_end != batch.scheduled_end
+    ):
+        _assert_no_machine_conflict(
+            db, new_machine_id, new_scheduled_start, new_scheduled_end, exclude_batch_id=batch.id
+        )
 
     # Whatever's currently reserved was reserved against the batch's
     # *current* product/quantity -- if either is about to change, release
@@ -850,6 +892,27 @@ def get_days_overdue(batch: ProductionSchedule, today: date | None = None) -> in
     return days if days > 0 else None
 
 
+def _find_machine_conflicts(
+    db: Session, machine_id: int, start: date, end: date, exclude_batch_id: int | None = None
+) -> list[ProductionSchedule]:
+    """Other booked batches (planned/in_progress/paused) on `machine_id`
+    whose own [scheduled_start, scheduled_end] overlaps [start, end] --
+    the shared window-overlap query behind both get_machine_conflicts
+    (an existing batch checking itself) and _assert_no_machine_conflict
+    (a not-yet-created/not-yet-changed batch checking a candidate
+    window before committing to it)."""
+    query = db.query(ProductionSchedule).filter(
+        ProductionSchedule.machine_id == machine_id,
+        ProductionSchedule.deleted_at.is_(None),
+        ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
+        ProductionSchedule.scheduled_end >= start,
+        ProductionSchedule.scheduled_start <= end,
+    )
+    if exclude_batch_id is not None:
+        query = query.filter(ProductionSchedule.id != exclude_batch_id)
+    return query.all()
+
+
 def get_machine_conflicts(db: Session, batch: ProductionSchedule) -> list[dict]:
     """Other booked batches sharing this batch's machine with an
     overlapping scheduled window -- the literal, batch-level "what else
@@ -863,18 +926,7 @@ def get_machine_conflicts(db: Session, batch: ProductionSchedule) -> list[dict]:
     if batch.machine_id is None or batch.status not in ("planned", "in_progress", "paused"):
         return []
 
-    others = (
-        db.query(ProductionSchedule)
-        .filter(
-            ProductionSchedule.machine_id == batch.machine_id,
-            ProductionSchedule.id != batch.id,
-            ProductionSchedule.deleted_at.is_(None),
-            ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
-            ProductionSchedule.scheduled_end >= batch.scheduled_start,
-            ProductionSchedule.scheduled_start <= batch.scheduled_end,
-        )
-        .all()
-    )
+    others = _find_machine_conflicts(db, batch.machine_id, batch.scheduled_start, batch.scheduled_end, batch.id)
     return [
         {
             "id": other.id,
@@ -884,6 +936,28 @@ def get_machine_conflicts(db: Session, batch: ProductionSchedule) -> list[dict]:
         }
         for other in others
     ]
+
+
+def _assert_no_machine_conflict(
+    db: Session, machine_id: int | None, scheduled_start: date, scheduled_end: date, exclude_batch_id: int | None = None
+) -> None:
+    """Blocks creating/editing a batch into a window that overlaps
+    another already-booked batch on the same machine -- the legacy
+    flow's own version of production_order_schedule_service._check_
+    conflict, which already prevents this for Production-Order-driven
+    schedules. Same table, same BOOKED_PRODUCTION_STATUSES-equivalent
+    filter (see _find_machine_conflicts), so a legacy batch and a
+    Production Order schedule on the same machine conflict with each
+    other exactly as two of either kind would."""
+    if machine_id is None:
+        return
+    conflicts = _find_machine_conflicts(db, machine_id, scheduled_start, scheduled_end, exclude_batch_id)
+    if conflicts:
+        other = conflicts[0]
+        raise ConflictError(
+            f"This machine is already booked by {other.batch_number} from "
+            f"{other.scheduled_start} to {other.scheduled_end}."
+        )
 
 
 def log_partial_production(

@@ -67,4 +67,6 @@ export interface QcReportPayload {
 
 export interface QcResultPayload {
   result: 'accepted' | 'rejected'
+  // Required when result is 'rejected' -- see qc_service.record_result.
+  remarks?: string | null
 }

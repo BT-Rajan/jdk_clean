@@ -55,6 +55,9 @@ class QcResultRecord(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     result: str = Field(pattern="^(accepted|rejected)$")
+    # Required when result == 'rejected' (enforced in qc_service.record_result,
+    # not here, since the requirement depends on another field's value).
+    remarks: str | None = Field(default=None, max_length=5000)
 
 
 class QcAdminReview(BaseModel):

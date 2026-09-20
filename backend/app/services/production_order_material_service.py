@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.models.product import Product
+from app.models.production_execution import ProductionExecution
 from app.models.production_order import ProductionOrder
 from app.models.production_order_material import ProductionOrderMaterialRequirement
 from app.models.raw_material import RawMaterial
@@ -90,6 +91,25 @@ def calculate(db: Session, production_order_id: int, user_id: int | None = None)
         raise ConflictError(
             f"Cannot calculate material requirements for a production order in '{status}' status; "
             f"it must be planned."
+        )
+    # status alone doesn't protect an already-committed requirement snapshot:
+    # 'planned' is the only status a Production Order holds throughout
+    # scheduling, allocation, and execution (only 'cancelled' exists as the
+    # alternative), so a recalculation after real consumption has already
+    # happened against the current rows would silently delete+replace the
+    # historical requirements those movements were recorded against.
+    execution_started = (
+        db.query(ProductionExecution.id)
+        .filter(
+            ProductionExecution.production_order_id == production_order_id,
+            ProductionExecution.status.in_(("in_progress", "completed")),
+        )
+        .first()
+    )
+    if execution_started is not None:
+        raise ConflictError(
+            "Cannot recalculate material requirements once production execution has started -- "
+            "this production order's requirement snapshot is now historical."
         )
 
     product = db.query(Product).filter(Product.id == product_id, Product.deleted_at.is_(None)).first()

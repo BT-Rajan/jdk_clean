@@ -41,6 +41,10 @@ function isProductionNotification(n: Notification): boolean {
 }
 
 const ACTIVE_BATCH_STATUSES: ProductionStatus[] = ['planned', 'in_progress', 'paused']
+// Paused batches aren't paginated (a small, always-visible "needs
+// attention" list, not the main running-batches table) -- capped here
+// instead so an unusually long paused list can't blow out the page.
+const MAX_BATCHES = 5
 
 export function ProductionHomePage() {
   const [stats, setStats] = useState<DashboardStatsResponse | null>(null)

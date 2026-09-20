@@ -290,3 +290,47 @@ def test_record_result_rejected_before_report_received(db):
 
     with pytest.raises(ConflictError):
         qc_service.record_result(db, request.id, "accepted")
+
+
+def test_record_report_rejecting_without_remarks_requires_a_reason(db):
+    po, execution, _ = _completed_execution(db)
+    request, _ = _create_request(db, po, execution)
+    qc_service.mark_sample_sent(db, request.id, None, None)
+
+    with pytest.raises(ValidationAppError, match="rejection reason"):
+        qc_service.record_report(db, request.id, "LAB-REPORT-6", date(2026, 9, 26), None, result="rejected")
+
+
+def test_record_report_rejecting_with_remarks_succeeds(db):
+    po, execution, _ = _completed_execution(db)
+    request, _ = _create_request(db, po, execution)
+    qc_service.mark_sample_sent(db, request.id, None, None)
+
+    updated = qc_service.record_report(
+        db, request.id, "LAB-REPORT-7", date(2026, 9, 26), "Fails moisture spec.", result="rejected"
+    )
+
+    assert updated.status == "rejected"
+    assert updated.notes == "Fails moisture spec."
+
+
+def test_record_result_rejecting_without_remarks_requires_a_reason(db):
+    po, execution, _ = _completed_execution(db)
+    request, _ = _create_request(db, po, execution)
+    qc_service.mark_sample_sent(db, request.id, None, None)
+    qc_service.record_report(db, request.id, "LAB-REPORT-8", date(2026, 9, 26), None, result=None)
+
+    with pytest.raises(ValidationAppError, match="rejection reason"):
+        qc_service.record_result(db, request.id, "rejected")
+
+
+def test_record_result_rejecting_with_remarks_succeeds(db):
+    po, execution, _ = _completed_execution(db)
+    request, _ = _create_request(db, po, execution)
+    qc_service.mark_sample_sent(db, request.id, None, None)
+    qc_service.record_report(db, request.id, "LAB-REPORT-9", date(2026, 9, 26), None, result=None)
+
+    updated = qc_service.record_result(db, request.id, "rejected", "Contaminated sample.")
+
+    assert updated.status == "rejected"
+    assert updated.notes == "Contaminated sample."
