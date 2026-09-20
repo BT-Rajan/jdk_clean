@@ -1,19 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { MouseEvent as ReactMouseEvent } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  Cell,
-  LabelList,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts'
+import { Bar, BarChart, CartesianGrid, Cell, LabelList, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { useClientPagination } from '@/hooks/useClientPagination'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
@@ -29,19 +16,8 @@ import {
   TextField,
 } from '@/components/ui'
 import { getSalesDrilldown, getSalesReport } from '@/api/reports'
-import { listFeasibilities } from '@/api/feasibilities'
-import { listOrders } from '@/api/orders'
-import { listQuotations } from '@/api/quotations'
 import { todayDateInputMin } from '@/lib/validation/dateRules'
-import type { PagedResponse } from '@/types/common'
-import type {
-  SalesDrilldownOrder,
-  SalesReport,
-  SalesReportMonthly,
-  SalesReportStatus,
-  SalesReportTopCustomer,
-  SalesReportTopProduct,
-} from '@/types/reports'
+import type { SalesDrilldownOrder, SalesReport, SalesReportMonthly, SalesReportStatus } from '@/types/reports'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { CURRENCY_CODE, formatCurrency } from '@/lib/currency'
 import { formatDate } from '@/lib/dateFormat'
@@ -55,9 +31,12 @@ import {
   TOOLTIP_STYLE,
 } from './chartHelpers'
 import type { NameType, ValueType } from './chartHelpers'
+import { customerRevenueRows, productRevenueRows } from './revenueRows'
+import { RevenueBars } from './RevenueBars'
+import { RevenueTrendChart } from './RevenueTrendChart'
 import { buildAttention, buildFunnel, ORDER_PIPELINE } from './salesReportModel'
-import type { PipelineData } from './salesReportModel'
 import { BarEndLabel, KpiTile, NoWrapYTick, Panel, SalesAttention, SalesFunnel } from './SalesReportPanels'
+import { useSalesPipeline } from './useSalesPipeline'
 
 // Mirrors components/ui/Badge.tsx's STATUS_TONES for the statuses an
 // order can actually have, so a status bar's color matches its
@@ -72,15 +51,6 @@ const STATUS_COLORS: Record<string, string> = {
   cancelled: '#f87171',
 }
 
-const REVENUE_COLOR = '#d4af6a'
-const TOP_N = 8
-const TREND_MARGIN = { top: 8, right: 12, left: 0, bottom: 0 }
-// One page of the existing list endpoints -- the same size Sales' own home
-// page reads. If a list is bigger than this it is treated as unknown rather
-// than shown short (see completeItems).
-const LIST_PAGE_SIZE = 100
-const EMPTY_PIPELINE: PipelineData = { quotations: null, feasibilities: null, readyToShipOrders: null }
-
 interface DrilldownFilter {
   year?: number
   month?: number
@@ -90,93 +60,8 @@ interface DrilldownFilter {
   label: string
 }
 
-/** Whole-number compact form for axis ticks and bar labels ("12.5k").
- * Exact KWD figures always stay in the tooltip. */
-function compact(value: number): string {
-  const abs = Math.abs(value)
-  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
-  if (abs >= 1_000) return `${(value / 1_000).toFixed(abs >= 10_000 ? 0 : 1).replace(/\.0$/, '')}k`
-  return String(Math.round(value))
-}
-
-function truncate(text: string, max: number): string {
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text
-}
-
 function kwdNumber(value: number): string {
   return formatCurrency(value).replace(`${CURRENCY_CODE} `, '')
-}
-
-/** Items of a settled list request, or null when it failed or holds more
- * rows than the page that was fetched (a count from it could be short). */
-function completeItems<T>(result: PromiseSettledResult<PagedResponse<T>>): T[] | null {
-  if (result.status !== 'fulfilled') return null
-  return result.value.total <= result.value.items.length ? result.value.items : null
-}
-
-interface RevenueRow<T> {
-  name: string
-  title: string
-  revenue: number
-  source: T
-}
-
-/** Horizontal revenue bars, shared by Top customers and Top products so
- * the two read identically. */
-function RevenueBars<T>({
-  rows,
-  narrow,
-  onSelect,
-}: {
-  rows: RevenueRow<T>[]
-  narrow: boolean
-  onSelect: (row: T) => void
-}) {
-  const height = Math.max(rows.length * 30 + 30, 120)
-  const maxRevenue = Math.max(...rows.map((r) => r.revenue), 0)
-  return (
-    <div className="w-full" style={{ height }}>
-      <ResponsiveContainer width="100%" height="100%">
-        <BarChart layout="vertical" data={rows} margin={{ top: 0, right: 44, left: 0, bottom: 0 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} horizontal={false} />
-          <XAxis
-            type="number"
-            tick={AXIS_TICK}
-            tickCount={4}
-            tickFormatter={(v: number) => compact(v)}
-            domain={[0, maxRevenue > 0 ? 'auto' : 1]}
-          />
-          <YAxis
-            type="category"
-            dataKey="name"
-            width={narrow ? 96 : 136}
-            interval={0}
-            tick={<NoWrapYTick format={(v) => truncate(v, narrow ? 12 : 18)} />}
-          />
-          <Tooltip
-            cursor={TOOLTIP_CURSOR}
-            contentStyle={TOOLTIP_STYLE}
-            labelStyle={TOOLTIP_LABEL_STYLE}
-            labelFormatter={(_label: unknown, payload: readonly { payload?: RevenueRow<T> }[]) =>
-              payload?.[0]?.payload?.title ?? ''
-            }
-            formatter={(value: ValueType | undefined) => [formatCurrency(toNumber(value)), 'Revenue']}
-          />
-          <Bar
-            dataKey="revenue"
-            fill={REVENUE_COLOR}
-            barSize={14}
-            minPointSize={3}
-            radius={[0, 4, 4, 0]}
-            cursor="pointer"
-            onClick={onBarClick<RevenueRow<T>>((row) => onSelect(row.source))}
-          >
-            <LabelList dataKey="revenue" content={<BarEndLabel format={compact} />} />
-          </Bar>
-        </BarChart>
-      </ResponsiveContainer>
-    </div>
-  )
 }
 
 export function SalesReportPage() {
@@ -190,8 +75,7 @@ export function SalesReportPage() {
   // Lists that feed the funnel's extra stages and the attention list. They
   // describe current state, so a date-range change doesn't refetch them --
   // only Refresh (and first load) does.
-  const [pipeline, setPipeline] = useState<PipelineData>(EMPTY_PIPELINE)
-  const [pipelineLoading, setPipelineLoading] = useState(true)
+  const { pipeline, loading: pipelineLoading, reload: reloadPipeline } = useSalesPipeline({ withReadyToShip: true })
 
   const [filter, setFilter] = useState<DrilldownFilter | null>(null)
   const [drilldown, setDrilldown] = useState<SalesDrilldownOrder[] | null>(null)
@@ -218,32 +102,12 @@ export function SalesReportPage() {
       })
   }, [months, dateFrom, dateTo])
 
-  const pipelineRequest = useRef(0)
-  const loadPipeline = useCallback(() => {
-    const id = ++pipelineRequest.current
-    setPipelineLoading(true)
-    Promise.allSettled([
-      listQuotations({ page: 1, page_size: LIST_PAGE_SIZE }),
-      listFeasibilities({ page: 1, page_size: LIST_PAGE_SIZE }),
-      listOrders({ page: 1, page_size: 1, status: 'ready_to_ship' }),
-    ]).then(([quotations, feasibilities, readyToShip]) => {
-      if (id !== pipelineRequest.current) return
-      setPipeline({
-        quotations: completeItems(quotations),
-        feasibilities: completeItems(feasibilities),
-        readyToShipOrders: readyToShip.status === 'fulfilled' ? readyToShip.value.total : null,
-      })
-      setPipelineLoading(false)
-    })
-  }, [])
-
   const refresh = useCallback(() => {
     load()
-    loadPipeline()
-  }, [load, loadPipeline])
+    reloadPipeline()
+  }, [load, reloadPipeline])
 
   useEffect(load, [load])
-  useEffect(loadPipeline, [loadPipeline])
 
   useEffect(() => {
     if (!filter) {
@@ -290,7 +154,6 @@ export function SalesReportPage() {
     )
   }, [report])
 
-  const maxMonthlyRevenue = useMemo(() => Math.max(0, ...(report?.monthly ?? []).map((m) => m.revenue)), [report])
   const funnel = useMemo(() => (report ? buildFunnel(report, pipeline) : null), [report, pipeline])
   const attention = useMemo(() => buildAttention(pipeline, todayDateInputMin), [pipeline])
 
@@ -305,52 +168,10 @@ export function SalesReportPage() {
     }))
   }, [report])
 
-  const customerRows = useMemo<RevenueRow<SalesReportTopCustomer>[]>(
-    () =>
-      (report?.top_customers ?? []).slice(0, TOP_N).map((c) => ({
-        name: c.customer_name,
-        title: c.customer_name,
-        revenue: c.revenue,
-        source: c,
-      })),
-    [report],
-  )
-  const productRows = useMemo<RevenueRow<SalesReportTopProduct>[]>(
-    () =>
-      (report?.top_products ?? []).slice(0, TOP_N).map((p) => ({
-        name: p.name,
-        title: `${p.name} (${p.code})`,
-        revenue: p.revenue,
-        source: p,
-      })),
-    [report],
-  )
+  const customerRows = useMemo(() => customerRevenueRows(report?.top_customers), [report])
+  const productRows = useMemo(() => productRevenueRows(report?.top_products), [report])
 
   const drilldownPager = useClientPagination(drilldown, { resetKey: filter })
-
-  const yAxisWidth = narrow ? 36 : 44
-  /** The month a click on the trend chart refers to. A mouse hover gives
-   * recharts an active index first; a touch tap arrives with none, so fall
-   * back to mapping the tap's x-position onto the evenly spaced points. */
-  const monthFromChartClick = (
-    activeIndex: number | string | null | undefined,
-    event: ReactMouseEvent<SVGGraphicsElement> | undefined,
-  ): SalesReportMonthly | undefined => {
-    const months = report?.monthly ?? []
-    if (activeIndex !== null && activeIndex !== undefined) {
-      const i = Number(activeIndex)
-      return Number.isInteger(i) ? months[i] : undefined
-    }
-    const wrapper = (event?.target as Element | null)?.closest('.recharts-wrapper')
-    if (!event || !wrapper || months.length === 0) return undefined
-    const rect = wrapper.getBoundingClientRect()
-    const plotLeft = TREND_MARGIN.left + yAxisWidth
-    const plotWidth = rect.width - plotLeft - TREND_MARGIN.right
-    if (plotWidth <= 0) return undefined
-    const ratio = (event.clientX - rect.left - plotLeft) / plotWidth
-    if (ratio < -0.05 || ratio > 1.05) return undefined
-    return months[months.length === 1 ? 0 : Math.round(Math.min(Math.max(ratio, 0), 1) * (months.length - 1))]
-  }
 
   const selectMonth = (row: SalesReportMonthly) => setFilter({ year: row.year, month: row.month, label: row.label })
 
@@ -430,42 +251,7 @@ export function SalesReportPage() {
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1fr)]">
             <Panel title="Revenue trend" hint={`${CURRENCY_CODE} per month · click a month to see its orders`}>
               <div className="h-56 w-full sm:h-64">
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart
-                    data={report.monthly}
-                    margin={TREND_MARGIN}
-                    style={{ cursor: 'pointer' }}
-                    onClick={(state, event) => {
-                      const row = monthFromChartClick(state?.activeTooltipIndex, event)
-                      if (row) selectMonth(row)
-                    }}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
-                    <XAxis dataKey="label" tick={AXIS_TICK} interval="preserveStartEnd" minTickGap={14} />
-                    <YAxis
-                      tick={AXIS_TICK}
-                      width={yAxisWidth}
-                      allowDecimals={false}
-                      tickFormatter={(v: number) => compact(v)}
-                      domain={[0, maxMonthlyRevenue > 0 ? 'auto' : 1]}
-                    />
-                    <Tooltip
-                      cursor={{ stroke: 'rgba(255,255,255,0.15)' }}
-                      contentStyle={TOOLTIP_STYLE}
-                      labelStyle={TOOLTIP_LABEL_STYLE}
-                      formatter={(value: ValueType | undefined) => [formatCurrency(toNumber(value)), 'Revenue']}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="revenue"
-                      name="Revenue"
-                      stroke={REVENUE_COLOR}
-                      strokeWidth={2}
-                      dot={{ r: 2.5, fill: REVENUE_COLOR, strokeWidth: 0 }}
-                      activeDot={{ r: 5 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
+                <RevenueTrendChart months={report.monthly} onSelectMonth={selectMonth} />
               </div>
             </Panel>
 
@@ -545,7 +331,7 @@ export function SalesReportPage() {
               ) : (
                 <RevenueBars
                   rows={customerRows}
-                  narrow={narrow}
+                  height={Math.max(customerRows.length * 30 + 30, 120)}
                   onSelect={(c) => setFilter({ customerId: c.customer_id, label: c.customer_name })}
                 />
               )}
@@ -557,7 +343,7 @@ export function SalesReportPage() {
               ) : (
                 <RevenueBars
                   rows={productRows}
-                  narrow={narrow}
+                  height={Math.max(productRows.length * 30 + 30, 120)}
                   onSelect={(p) => setFilter({ productId: p.product_id, label: `${p.code} — ${p.name}` })}
                 />
               )}
