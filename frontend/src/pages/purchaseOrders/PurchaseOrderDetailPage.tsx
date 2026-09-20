@@ -164,7 +164,11 @@ export function PurchaseOrderDetailPage() {
   function defaultReceiveQuantities(data: PurchaseOrder): Record<number, string> {
     const defaults: Record<number, string> = {}
     for (const line of data.lines) {
-      const remaining = line.quantity - line.received_quantity
+      // A cancelled line gets no quantity input at all (see the table
+      // below), so it must default to '0' -- otherwise its leftover
+      // outstanding quantity sits invisibly in receiveQuantities and
+      // gets swept into the next receipt anyway (see handleReceive).
+      const remaining = line.is_cancelled ? 0 : line.quantity - line.received_quantity
       defaults[line.id] = remaining > 0 ? String(remaining) : '0'
     }
     return defaults
@@ -224,6 +228,7 @@ export function PurchaseOrderDetailPage() {
     setError(null)
     try {
       const lines = po.lines
+        .filter((l) => !l.is_cancelled)
         .map((l) => {
           const detail = receiveLineDetails[l.id]
           return {
@@ -344,7 +349,7 @@ export function PurchaseOrderDetailPage() {
   // been received -- nothing to send back before then.
   const canReturn = allowWrite && !justDeleted && (po.status === 'partially_received' || po.status === 'received')
   const hasPendingReceipt =
-    po.lines.some((l) => Number(receiveQuantities[l.id] ?? 0) > 0) &&
+    po.lines.some((l) => !l.is_cancelled && Number(receiveQuantities[l.id] ?? 0) > 0) &&
     !!receiptMeta.invoice_number &&
     !!receiptMeta.received_by &&
     !!receiptMeta.received_date

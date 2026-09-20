@@ -9,8 +9,8 @@ import { LoginPage } from '@/pages/LoginPage'
 import { FullScreenLoader } from '@/components/layout/FullScreenLoader'
 import { useCompanyName } from '@/hooks/useCompanyName'
 
-const DashboardPage = lazy(() =>
-  import('@/pages/DashboardPage').then((m) => ({ default: m.DashboardPage })),
+const DashboardRoute = lazy(() =>
+  import('@/pages/DashboardRoute').then((m) => ({ default: m.DashboardRoute })),
 )
 const DashboardCustomizePage = lazy(() =>
   import('@/pages/DashboardCustomizePage').then((m) => ({ default: m.DashboardCustomizePage })),
@@ -242,7 +242,7 @@ export function App() {
 
           <Route element={<ProtectedRoute />}>
            <Route element={<PagePermissionGuard />}>
-            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/dashboard" element={<DashboardRoute />} />
             <Route path="/dashboard/customize" element={<DashboardCustomizePage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/master-data" element={<MasterDataHomePage />} />
