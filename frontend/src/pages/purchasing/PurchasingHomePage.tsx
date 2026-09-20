@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Badge, EmptyState, GlassCard, PageHeader, Pagination, Spinner, StatusBadge } from '@/components/ui'
+import { Alert, Badge, Button, EmptyState, GlassCard, PageHeader, Pagination, Spinner, StatusBadge } from '@/components/ui'
 import { StatsWidget } from '@/components/dashboard/DashboardWidgets'
 import { PurchasingDashboardCharts } from './PurchasingDashboardCharts'
 import { getDashboardStats } from '@/api/dashboard'
@@ -15,6 +15,8 @@ import type { PurchaseOrder, PurchaseOrderStatus } from '@/types/purchaseOrder'
 import { useClientPagination } from '@/hooks/useClientPagination'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
+import { useAuth } from '@/hooks/useAuth'
+import { canWriteDepartment, canWritePage } from '@/lib/roles'
 
 // Same severity styling the main Dashboard's Needs Attention section
 // uses (see DashboardPage.tsx) -- kept in sync deliberately so an item
@@ -45,6 +47,10 @@ function isPurchasingNotification(n: Notification): boolean {
 const OPEN_PO_STATUSES: PurchaseOrderStatus[] = ['sent', 'confirmed', 'partially_received']
 
 export function PurchasingHomePage() {
+  const navigate = useNavigate()
+  const { user, permissions } = useAuth()
+  const canCreatePo = permissions ? canWritePage(permissions, 'purchase_orders') : canWriteDepartment(user, 'procurement')
+
   const [stats, setStats] = useState<DashboardStatsResponse | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
   const [statsError, setStatsError] = useState<string | null>(null)
@@ -112,6 +118,7 @@ export function PurchasingHomePage() {
       <PageHeader
         title="Purchasing"
         subtitle="Raw-material stock position first — what's on hand, what's already coming, and what that leaves to buy."
+        actions={canCreatePo ? <Button onClick={() => navigate('/purchase-orders/new')}>New purchase order</Button> : undefined}
       />
 
       <Alert variant="error">{statsError}</Alert>

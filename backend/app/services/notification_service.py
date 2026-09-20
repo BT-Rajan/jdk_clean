@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.timezone import today_kuwait
@@ -124,29 +125,33 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
                 }
             )
 
-    # 4. Raw materials at or below their reorder point.
+    # 4. Raw materials at or below their reorder point. Outer join: a
+    # material that has never been stocked has no inventory row yet and
+    # is at 0 on hand -- the lowest it can be -- so it must count as low,
+    # same as inventory_service.get_low_stock (the Low Stock list) does.
     if _visible(user, ("procurement", "warehouse")):
         low_stock = (
             db.query(RawMaterial, RawMaterialInventory)
-            .join(RawMaterialInventory, RawMaterialInventory.raw_material_id == RawMaterial.id)
+            .outerjoin(RawMaterialInventory, RawMaterialInventory.raw_material_id == RawMaterial.id)
             .filter(
                 RawMaterial.deleted_at.is_(None),
                 RawMaterial.status == "active",
-                RawMaterialInventory.quantity_on_hand <= RawMaterial.reorder_point,
+                func.coalesce(RawMaterialInventory.quantity_on_hand, 0) <= RawMaterial.reorder_point,
             )
             .order_by(RawMaterial.code)
             .all()
         )
         for material, inv in low_stock:
+            on_hand = float(inv.quantity_on_hand) if inv else 0.0
             items.append(
                 {
                     "id": f"low-stock-{material.id}",
                     "type": "low_stock",
                     "severity": "medium",
                     "title": f"{material.code} is low on stock",
-                    "message": f"{float(inv.quantity_on_hand)} {material.unit} on hand, reorder point is {float(material.reorder_point)} {material.unit}.",
+                    "message": f"{on_hand} {material.unit} on hand, reorder point is {float(material.reorder_point)} {material.unit}.",
                     "link": "/raw-materials",
-                    "created_at": inv.updated_at,
+                    "created_at": inv.updated_at if inv else material.updated_at,
                 }
             )
 
