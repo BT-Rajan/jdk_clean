@@ -53,6 +53,7 @@ IMPORT_EXPORT_COLUMNS = [
     "workers_required",
     "status",
     "reorder_point",
+    "maximum_stock",
 ]
 
 
@@ -72,6 +73,7 @@ def _product_to_csv_row(p: Product) -> dict:
         "workers_required": p.workers_required if p.workers_required is not None else "",
         "status": p.status,
         "reorder_point": p.reorder_point,
+        "maximum_stock": p.maximum_stock,
     }
 
 

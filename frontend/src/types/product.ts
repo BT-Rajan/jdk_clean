@@ -34,6 +34,9 @@ export interface Product {
   // Finished-goods equivalent of RawMaterial.reorder_point -- flags this
   // product as low stock once quantity_on_hand drops to/below it.
   reorder_point: number
+  // Ceiling side of the same pair -- mirrors RawMaterial.maximum_stock.
+  // 0 means no ceiling configured yet.
+  maximum_stock: number
   // Lightweight QC, mirroring RawMaterial's inspection_required/qc_notes.
   inspection_required: boolean
   qc_notes: string | null
@@ -79,6 +82,7 @@ export interface ProductImportRow {
   workers_required?: number
   status?: ActiveStatus
   reorder_point?: number
+  maximum_stock?: number
 }
 
 export interface ProductImportRowResult {
@@ -112,6 +116,7 @@ export interface ProductPayload {
   tags?: string[] | null
   properties?: Record<string, string> | null
   reorder_point?: number
+  maximum_stock?: number
   inspection_required?: boolean
   qc_notes?: string | null
 }

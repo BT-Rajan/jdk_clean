@@ -1,7 +1,17 @@
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Mirrors app/models/product.py's PRODUCT_UNITS.
 UNIT_PATTERN = "^(kg|20kg|25kg|ton|ml|litre)$"
+
+
+def _check_stock_thresholds(maximum_stock: float, reorder_point: float) -> None:
+    # Mirrors raw_material.py's identical check (minus safety_stock,
+    # which products don't have). Only enforced once a maximum is
+    # actually set -- 0 (the default) means "no ceiling configured yet".
+    if maximum_stock <= 0:
+        return
+    if reorder_point > maximum_stock:
+        raise ValueError("Reorder point cannot exceed maximum stock.")
 
 
 class ProductCreate(BaseModel):
@@ -28,8 +38,14 @@ class ProductCreate(BaseModel):
     tags: list[str] | None = None
     properties: dict[str, str] | None = None
     reorder_point: float = Field(default=0, ge=0)
+    maximum_stock: float = Field(default=0, ge=0)
     inspection_required: bool = False
     qc_notes: str | None = None
+
+    @model_validator(mode="after")
+    def _check_stock_thresholds(self):
+        _check_stock_thresholds(self.maximum_stock, self.reorder_point)
+        return self
 
 
 class ProductUpdate(BaseModel):
@@ -50,8 +66,20 @@ class ProductUpdate(BaseModel):
     tags: list[str] | None = None
     properties: dict[str, str] | None = None
     reorder_point: float | None = Field(default=None, ge=0)
+    maximum_stock: float | None = Field(default=None, ge=0)
     inspection_required: bool | None = None
     qc_notes: str | None = None
+
+    # A partial update only cross-checks fields present in this same
+    # payload -- the existing row fills the gaps (see
+    # app.crud.master_data.ProductCRUD._check_stock_thresholds), same
+    # convention as RawMaterialUpdate.
+    @model_validator(mode="after")
+    def _check_stock_thresholds(self):
+        if self.maximum_stock is not None and self.maximum_stock > 0:
+            if self.reorder_point is not None and self.reorder_point > self.maximum_stock:
+                raise ValueError("Reorder point cannot exceed maximum stock.")
+        return self
 
 
 class ProductOut(BaseModel):
@@ -72,6 +100,7 @@ class ProductOut(BaseModel):
     tags: list[str] | None = None
     properties: dict[str, str] | None = None
     reorder_point: float
+    maximum_stock: float
     inspection_required: bool
     qc_notes: str | None
 
@@ -108,6 +137,7 @@ class ProductImportRow(BaseModel):
     workers_required: int | None = None
     status: str | None = None
     reorder_point: float | None = None
+    maximum_stock: float | None = None
 
 
 class ProductImportRequest(BaseModel):

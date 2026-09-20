@@ -68,6 +68,12 @@ class Product(Base, TimestampMixin, SoftDeleteMixin):
     # (quantity_on_hand <= reorder_point) the same way raw materials
     # already are. Default 0 means "never flag" until explicitly set.
     reorder_point: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
+    # The ceiling side of the same replenishment pair -- how much of this
+    # product the warehouse should hold at most. Default 0 means "no
+    # ceiling configured yet", same convention as RawMaterial.maximum_stock
+    # (see app/schemas/product.py's cross-field check against
+    # reorder_point).
+    maximum_stock: Mapped[float] = mapped_column(DECIMAL(14, 4), nullable=False, default=0)
 
     # Lightweight QC, mirroring raw_materials.inspection_required/qc_notes
     # -- not a QMS, just whether finished units need inspecting before

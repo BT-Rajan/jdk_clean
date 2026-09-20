@@ -67,6 +67,7 @@ const DEFAULT_VALUES = {
   tags: '',
   properties: '',
   reorder_point: 0,
+  maximum_stock: 0,
   inspection_required: false,
   qc_notes: '',
 }
@@ -128,16 +129,25 @@ function ProductCreateForm() {
             <option value="inactive">Inactive</option>
           </SelectField>
         </div>
-        <TextField
-          label="Reorder point"
-          type="number"
-          step="0.01"
-          error={errors.reorder_point?.message}
-          {...register('reorder_point')}
-        />
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <TextField
+            label="Minimum inventory"
+            type="number"
+            step="0.01"
+            error={errors.reorder_point?.message}
+            {...register('reorder_point')}
+          />
+          <TextField
+            label="Maximum inventory"
+            type="number"
+            step="0.01"
+            error={errors.maximum_stock?.message}
+            {...register('maximum_stock')}
+          />
+        </div>
         <p className="text-xs text-white/40">
-          When on-hand finished-goods stock drops to or below this, the product shows up under Inventory → Finished
-          goods → Low stock.
+          When on-hand finished-goods stock drops to or below the minimum, the product shows up under Inventory →
+          Finished goods → Low stock. Maximum is the ceiling to replenish stock up to; leave at 0 for no ceiling.
         </p>
 
         <FormSectionHeading>Production</FormSectionHeading>
@@ -266,6 +276,7 @@ function ProductEditForm({ id }: { id: number }) {
           tags: tagsToInput(product.tags),
           properties: propertiesToInput(product.properties),
           reorder_point: product.reorder_point,
+          maximum_stock: product.maximum_stock,
           inspection_required: product.inspection_required,
           qc_notes: product.qc_notes ?? '',
         })
@@ -320,13 +331,22 @@ function ProductEditForm({ id }: { id: number }) {
               <option value="inactive">Inactive</option>
             </SelectField>
           </div>
-          <TextField
-            label="Reorder point"
-            type="number"
-            step="0.01"
-            error={errors.reorder_point?.message}
-            {...register('reorder_point')}
-          />
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+            <TextField
+              label="Minimum inventory"
+              type="number"
+              step="0.01"
+              error={errors.reorder_point?.message}
+              {...register('reorder_point')}
+            />
+            <TextField
+              label="Maximum inventory"
+              type="number"
+              step="0.01"
+              error={errors.maximum_stock?.message}
+              {...register('maximum_stock')}
+            />
+          </div>
 
           <FormSectionHeading>Production</FormSectionHeading>
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">

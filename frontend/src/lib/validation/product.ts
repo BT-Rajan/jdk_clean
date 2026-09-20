@@ -39,7 +39,11 @@ export function propertiesToInput(properties: Record<string, string> | null | un
 }
 
 // Mirrors backend/app/schemas/product.py.
-export const productSchema = z.object({
+//
+// Base shape kept separate from the refined schema below -- same reason
+// as lib/validation/rawMaterial.ts's identical split: zod's `.omit()`
+// cannot be called on a schema that already has `.refine()` applied.
+const productBaseSchema = z.object({
   code: z.string().trim().min(1, 'Code is required').max(30),
   name: z.string().trim().min(1, 'Name is required').max(150),
   unit: z.enum(PRODUCT_UNITS),
@@ -56,16 +60,30 @@ export const productSchema = z.object({
   tags: z.string().optional().transform(parseTags),
   properties: z.string().optional().transform(parseProperties),
   reorder_point: z.coerce.number().min(0, 'Must be 0 or more').optional().or(z.literal('').transform(() => undefined)),
+  maximum_stock: z.coerce.number().min(0, 'Must be 0 or more').optional().or(z.literal('').transform(() => undefined)),
   inspection_required: z.boolean(),
   qc_notes: z.string().optional().or(z.literal('').transform(() => undefined)),
 })
+
+// Mirrors rawMaterial.ts's withStockThresholdChecks -- products only
+// have the reorder_point/maximum_stock pair, no safety_stock.
+function withStockThresholdCheck<T extends z.ZodType<{ maximum_stock?: number; reorder_point?: number }>>(
+  schema: T,
+) {
+  return schema.refine((v) => !v.maximum_stock || !v.reorder_point || v.reorder_point <= v.maximum_stock, {
+    message: 'Reorder point cannot exceed maximum stock.',
+    path: ['reorder_point'],
+  })
+}
+
+export const productSchema = withStockThresholdCheck(productBaseSchema)
 
 export type ProductFormValues = z.input<typeof productSchema>
 export type ProductSubmitValues = z.output<typeof productSchema>
 
 // ProductOut round-trips every Update field, so the edit form only drops
 // the immutable `code`.
-export const productEditSchema = productSchema.omit({ code: true })
+export const productEditSchema = withStockThresholdCheck(productBaseSchema.omit({ code: true }))
 
 export type ProductEditFormValues = z.input<typeof productEditSchema>
 export type ProductEditSubmitValues = z.output<typeof productEditSchema>
