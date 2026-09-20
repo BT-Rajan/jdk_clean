@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Badge, Button, EmptyState, GlassCard, PageHeader, Spinner } from '@/components/ui'
+import { useClientPagination } from '@/hooks/useClientPagination'
+import { Alert, Badge, Button, EmptyState, GlassCard, PageHeader, Pagination, Spinner } from '@/components/ui'
 import { getMrpReport } from '@/api/mrp'
 import { autoDraftFromMrp } from '@/api/purchaseOrders'
 import type { MrpReport } from '@/types/mrp'
@@ -18,6 +19,7 @@ export function MrpPage() {
   const [error, setError] = useState<string | null>(null)
   const [drafting, setDrafting] = useState(false)
   const [draftedIds, setDraftedIds] = useState<number[] | null>(null)
+  const itemsPager = useClientPagination(report?.items)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -120,7 +122,7 @@ export function MrpPage() {
                 </tr>
               </thead>
               <tbody>
-                {report.items.map((item) => (
+                {itemsPager.pageItems.map((item) => (
                   <tr key={item.raw_material_id} className="border-b border-white/5 last:border-0 align-top">
                     <td className="px-6 py-4">
                       <Link
@@ -181,6 +183,7 @@ export function MrpPage() {
             </table>
           </div>
         )}
+        <Pagination className="px-6 pb-4" {...itemsPager.pagerProps} />
       </GlassCard>
     </AppLayout>
   )

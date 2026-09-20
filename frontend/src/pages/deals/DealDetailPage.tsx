@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { useClientPagination } from '@/hooks/useClientPagination'
+import { Alert, GlassCard, PageHeader, Pagination, Spinner, StatusBadge } from '@/components/ui'
 import { getDeal } from '@/api/deals'
 import type { DealDetail } from '@/types/deal'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -17,14 +18,16 @@ const STAGE_LABELS: Record<string, string> = {
   delivery: 'Delivery',
 }
 
-function Section({ title, count, children }: { title: string; count: number; children: ReactNode }) {
-  if (count === 0) return null
+function Section<T>({ title, items, children }: { title: string; items: T[]; children: (item: T) => ReactNode }) {
+  const pager = useClientPagination(items)
+  if (items.length === 0) return null
   return (
     <GlassCard className="p-6">
       <h2 className="mb-4 font-display text-base font-medium text-white">
-        {title} <span className="text-sm text-white/40">({count})</span>
+        {title} <span className="text-sm text-white/40">({items.length})</span>
       </h2>
-      <div className="space-y-2">{children}</div>
+      <div className="space-y-2">{pager.pageItems.map((item) => children(item))}</div>
+      <Pagination className="mt-4" {...pager.pagerProps} />
     </GlassCard>
   )
 }
@@ -85,8 +88,8 @@ export function DealDetailPage() {
       </GlassCard>
 
       <div className="flex flex-col gap-6">
-        <Section title="Feasibility checks" count={deal.feasibility_checks.length}>
-          {deal.feasibility_checks.map((f) => (
+        <Section title="Feasibility checks" items={deal.feasibility_checks}>
+          {(f) => (
             <Link
               key={f.id}
               to={`/feasibilities/${f.id}`}
@@ -95,11 +98,11 @@ export function DealDetailPage() {
               <span className="font-medium text-white">{f.feasibility_number}</span>
               <StatusBadge status={f.status} />
             </Link>
-          ))}
+          )}
         </Section>
 
-        <Section title="Quotations" count={deal.quotations.length}>
-          {deal.quotations.map((q) => (
+        <Section title="Quotations" items={deal.quotations}>
+          {(q) => (
             <Link
               key={q.id}
               to={`/quotations/${q.id}`}
@@ -118,11 +121,11 @@ export function DealDetailPage() {
                 <StatusBadge status={q.status} />
               </span>
             </Link>
-          ))}
+          )}
         </Section>
 
-        <Section title="Orders" count={deal.orders.length}>
-          {deal.orders.map((o) => (
+        <Section title="Orders" items={deal.orders}>
+          {(o) => (
             <Link
               key={o.id}
               to={`/orders/${o.id}`}
@@ -134,11 +137,11 @@ export function DealDetailPage() {
                 <StatusBadge status={o.status} />
               </span>
             </Link>
-          ))}
+          )}
         </Section>
 
-        <Section title="Production batches" count={deal.production_batches.length}>
-          {deal.production_batches.map((b) => (
+        <Section title="Production batches" items={deal.production_batches}>
+          {(b) => (
             <div
               key={b.id}
               className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3"
@@ -148,11 +151,11 @@ export function DealDetailPage() {
               </span>
               <StatusBadge status={b.status} />
             </div>
-          ))}
+          )}
         </Section>
 
-        <Section title="Delivery notes" count={deal.delivery_notes.length}>
-          {deal.delivery_notes.map((d) => (
+        <Section title="Delivery notes" items={deal.delivery_notes}>
+          {(d) => (
             <Link
               key={d.id}
               to={`/delivery-notes/${d.id}`}
@@ -161,7 +164,7 @@ export function DealDetailPage() {
               <span className="font-medium text-white">{d.delivery_note_number}</span>
               <StatusBadge status={d.status} />
             </Link>
-          ))}
+          )}
         </Section>
       </div>
     </AppLayout>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Bar, BarChart, CartesianGrid, Cell, ComposedChart, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { useClientPagination } from '@/hooks/useClientPagination'
 import { StatsWidget } from '@/components/dashboard/DashboardWidgets'
 import {
   Alert,
@@ -9,6 +10,7 @@ import {
   EmptyState,
   GlassCard,
   PageHeader,
+  Pagination,
   SelectField,
   Spinner,
   StatusBadge,
@@ -108,6 +110,8 @@ export function PurchasingReportPage() {
     )
     return { ...t, avg: t.pos > 0 ? t.spend / t.pos : 0 }
   }, [report])
+
+  const drilldownPager = useClientPagination(drilldown, { resetKey: filter })
 
   return (
     <AppLayout>
@@ -366,7 +370,7 @@ export function PurchasingReportPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {drilldown.map((po) => (
+                      {drilldownPager.pageItems.map((po) => (
                         <tr key={po.id} className="border-b border-white/5 last:border-0 hover:bg-white/[0.03]">
                           <td className="px-6 py-4">
                             <Link
@@ -388,6 +392,7 @@ export function PurchasingReportPage() {
                   </table>
                 </div>
               )}
+              <Pagination className="px-6 pb-4" {...drilldownPager.pagerProps} />
             </GlassCard>
           )}
         </>
