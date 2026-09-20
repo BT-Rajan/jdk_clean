@@ -28,7 +28,7 @@ import { formatCurrency } from '@/lib/currency'
 import { clampNonNegativeString } from '@/lib/number'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
-import { canWriteDepartment, isAdmin } from '@/lib/roles'
+import { canWriteDepartment, canWritePage, isAdmin } from '@/lib/roles'
 import { PURCHASE_ORDER_STATUSES_REQUIRING_REASON, PURCHASE_ORDER_TRANSITIONS } from '@/lib/statusTransitions'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
 import { purchaseOrderAdminReviewSchema, type PurchaseOrderAdminReviewFormValues } from '@/lib/validation'
@@ -68,7 +68,6 @@ function AdminReviewModal({
 
 function buildTabs(lineCount: number, returnCount: number): TabItem[] {
   return [
-    { id: 'overview', label: 'Overview' },
     { id: 'lines', label: 'Line items', badge: lineCount > 0 ? lineCount : undefined },
     { id: 'returns', label: 'Supplier returns', badge: returnCount > 0 ? returnCount : undefined },
     { id: 'history', label: 'History' },
@@ -135,8 +134,10 @@ export function PurchaseOrderDetailPage() {
   const { id } = useParams()
   const poId = Number(id)
   const navigate = useNavigate()
-  const { user } = useAuth()
-  const allowWrite = canWriteDepartment(user, 'procurement')
+  const { user, permissions } = useAuth()
+  // The matrix is what the server enforces (purchase_orders write is also what
+  // /receive requires); only fall back to the department guess while it loads.
+  const allowWrite = permissions ? canWritePage(permissions, 'purchase_orders') : canWriteDepartment(user, 'procurement')
   const allowAdmin = isAdmin(user?.role)
 
   const [po, setPo] = useState<PurchaseOrder | null>(null)
@@ -159,7 +160,7 @@ export function PurchaseOrderDetailPage() {
   )
   const supplierReturns = usePagedResource(fetchSupplierReturns)
   const [cancelLineTarget, setCancelLineTarget] = useState<PurchaseOrderLine | null>(null)
-  const [activeTab, setActiveTab] = useState('overview')
+  const [activeTab, setActiveTab] = useState('lines')
 
   function defaultReceiveQuantities(data: PurchaseOrder): Record<number, string> {
     const defaults: Record<number, string> = {}
@@ -493,6 +494,12 @@ export function PurchaseOrderDetailPage() {
       <Tabs items={buildTabs(po.lines.length, supplierReturns.total)} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
 
       <TabPanel id="lines" activeId={activeTab}>
+      {allowWrite && !justDeleted && po.status === 'sent' && (
+        <div className="mb-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          Goods can be received once this order is Confirmed. When the supplier acknowledges or ships it, mark it
+          Confirmed above and the receiving form will appear here.
+        </div>
+      )}
       <GlassCard className="mb-6 overflow-hidden">
         <div className="border-b border-white/10 px-6 py-4">
           <h2 className="font-display text-lg font-medium text-white">Line items</h2>
