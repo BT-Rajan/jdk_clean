@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
+import { usePagedResource } from '@/hooks/usePagedResource'
+import type { PagedParams } from '@/hooks/usePagedResource'
 import {
   Alert,
   Badge,
@@ -12,6 +14,7 @@ import {
   Field,
   GlassCard,
   PageHeader,
+  Pagination,
   RatingStars,
   Spinner,
   StatusBadge,
@@ -36,8 +39,6 @@ import {
 import { listPurchaseOrders } from '@/api/purchaseOrders'
 import { listSupplierReturns } from '@/api/supplierReturns'
 import type { Supplier } from '@/types/supplier'
-import type { PurchaseOrder } from '@/types/purchaseOrder'
-import type { SupplierReturn } from '@/types/supplierReturn'
 import { formatCurrency } from '@/lib/currency'
 import { formatDate } from '@/lib/dateFormat'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -83,37 +84,26 @@ export function SupplierDetailPage() {
   // Supplier Returns already carry supplier_id, so this is a plain
   // filtered read of the same list APIs the Purchasing pages use, not a
   // duplicate record.
-  const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([])
-  const [purchaseOrdersTotal, setPurchaseOrdersTotal] = useState(0)
-  const [supplierReturns, setSupplierReturns] = useState<SupplierReturn[]>([])
-  const [supplierReturnsTotal, setSupplierReturnsTotal] = useState(0)
+  // Both are server-paged (usePagedResource, same as the list pages).
+  const fetchPurchaseOrders = useCallback(
+    (params: PagedParams) => listPurchaseOrders({ ...params, supplier_id: supplierId }),
+    [supplierId],
+  )
+  const purchaseOrders = usePagedResource(fetchPurchaseOrders)
+  const fetchSupplierReturns = useCallback(
+    (params: PagedParams) => listSupplierReturns({ ...params, supplier_id: supplierId }),
+    [supplierId],
+  )
+  const supplierReturns = usePagedResource(fetchSupplierReturns)
 
   useEffect(() => {
     getSupplier(supplierId)
       .then(setSupplier)
       .catch((err) => setError(getApiErrorMessage(err)))
       .finally(() => setLoading(false))
-    listPurchaseOrders({ supplier_id: supplierId, page: 1, page_size: 20 })
-      .then((result) => {
-        setPurchaseOrders(result.items)
-        setPurchaseOrdersTotal(result.total)
-      })
-      .catch(() => {
-        setPurchaseOrders([])
-        setPurchaseOrdersTotal(0)
-      })
-    listSupplierReturns({ supplier_id: supplierId, page: 1, page_size: 20 })
-      .then((result) => {
-        setSupplierReturns(result.items)
-        setSupplierReturnsTotal(result.total)
-      })
-      .catch(() => {
-        setSupplierReturns([])
-        setSupplierReturnsTotal(0)
-      })
   }, [supplierId])
 
-  const purchasingCount = purchaseOrdersTotal + supplierReturnsTotal
+  const purchasingCount = purchaseOrders.total + supplierReturns.total
 
   async function handleDelete() {
     setBusy(true)
@@ -299,10 +289,14 @@ export function SupplierDetailPage() {
           <GlassCard className="overflow-hidden">
             <div className="border-b border-white/10 px-6 py-4">
               <h2 className="font-display text-base font-medium text-white">
-                Purchase orders {purchaseOrdersTotal > 0 && <span className="text-sm text-white/40">({purchaseOrdersTotal})</span>}
+                Purchase orders {purchaseOrders.total > 0 && <span className="text-sm text-white/40">({purchaseOrders.total})</span>}
               </h2>
             </div>
-            {purchaseOrders.length === 0 ? (
+            {purchaseOrders.loading && purchaseOrders.items.length === 0 ? (
+              <div className="flex justify-center py-12">
+                <Spinner size={24} className="text-gold-300" />
+              </div>
+            ) : purchaseOrders.items.length === 0 ? (
               <EmptyState title="No purchase orders yet" message="Nothing has been ordered from this supplier." />
             ) : (
               <div className="overflow-x-auto">
@@ -316,7 +310,7 @@ export function SupplierDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {purchaseOrders.map((po) => (
+                    {purchaseOrders.items.map((po) => (
                       <tr key={po.id} className="border-b border-white/5 last:border-0">
                         <td className="px-6 py-4">
                           <Link to={`/purchase-orders/${po.id}`} className="font-medium text-gold-300 hover:text-gold-200">
@@ -334,20 +328,26 @@ export function SupplierDetailPage() {
                 </table>
               </div>
             )}
-            {purchaseOrdersTotal > purchaseOrders.length && (
-              <p className="px-6 pb-4 text-xs text-white/40">
-                +{purchaseOrdersTotal - purchaseOrders.length} more purchase order{purchaseOrdersTotal - purchaseOrders.length === 1 ? '' : 's'} for this supplier not shown here.
-              </p>
-            )}
+            <Pagination
+              className="px-6 pb-4"
+              page={purchaseOrders.page}
+              totalPages={purchaseOrders.totalPages}
+              total={purchaseOrders.total}
+              onPageChange={purchaseOrders.setPage}
+            />
           </GlassCard>
 
           <GlassCard className="overflow-hidden">
             <div className="border-b border-white/10 px-6 py-4">
               <h2 className="font-display text-base font-medium text-white">
-                Supplier returns {supplierReturnsTotal > 0 && <span className="text-sm text-white/40">({supplierReturnsTotal})</span>}
+                Supplier returns {supplierReturns.total > 0 && <span className="text-sm text-white/40">({supplierReturns.total})</span>}
               </h2>
             </div>
-            {supplierReturns.length === 0 ? (
+            {supplierReturns.loading && supplierReturns.items.length === 0 ? (
+              <div className="flex justify-center py-12">
+                <Spinner size={24} className="text-gold-300" />
+              </div>
+            ) : supplierReturns.items.length === 0 ? (
               <EmptyState title="No supplier returns" message="Nothing has been returned to this supplier." />
             ) : (
               <div className="overflow-x-auto">
@@ -361,7 +361,7 @@ export function SupplierDetailPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {supplierReturns.map((r) => (
+                    {supplierReturns.items.map((r) => (
                       <tr key={r.id} className="border-b border-white/5 last:border-0">
                         <td className="px-6 py-4">
                           <Link to={`/supplier-returns/${r.id}`} className="font-medium text-gold-300 hover:text-gold-200">
@@ -385,11 +385,13 @@ export function SupplierDetailPage() {
                 </table>
               </div>
             )}
-            {supplierReturnsTotal > supplierReturns.length && (
-              <p className="px-6 pb-4 text-xs text-white/40">
-                +{supplierReturnsTotal - supplierReturns.length} more return{supplierReturnsTotal - supplierReturns.length === 1 ? '' : 's'} for this supplier not shown here.
-              </p>
-            )}
+            <Pagination
+              className="px-6 pb-4"
+              page={supplierReturns.page}
+              totalPages={supplierReturns.totalPages}
+              total={supplierReturns.total}
+              onPageChange={supplierReturns.setPage}
+            />
           </GlassCard>
         </div>
       </TabPanel>

@@ -5,6 +5,15 @@ import { DEFAULT_PAGE_SIZE } from '@/lib/constants'
 
 const SEARCH_DEBOUNCE_MS = 350
 
+/** What a fetcher passed to usePagedResource receives. */
+export interface PagedParams {
+  page: number
+  page_size: number
+  search?: string
+  status?: string
+  sort?: string
+}
+
 /**
  * Drives a single list page: page number, a debounced search box, an
  * optional status filter, and the fetch/loading/error state around it.
@@ -14,15 +23,7 @@ const SEARCH_DEBOUNCE_MS = 350
  * Always requests DEFAULT_PAGE_SIZE rows/page -- see lib/constants.ts --
  * so every list table in the app paginates identically.
  */
-export function usePagedResource<T>(
-  fetcher: (params: {
-    page: number
-    page_size: number
-    search?: string
-    status?: string
-    sort?: string
-  }) => Promise<PagedResponse<T>>,
-) {
+export function usePagedResource<T>(fetcher: (params: PagedParams) => Promise<PagedResponse<T>>) {
   const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')

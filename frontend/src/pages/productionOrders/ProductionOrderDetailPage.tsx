@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Badge, Field, GlassCard, PageHeader, SelectField, Spinner, StatusBadge } from '@/components/ui'
+import { useClientPagination } from '@/hooks/useClientPagination'
+import { Alert, Badge, Field, GlassCard, PageHeader, Pagination, SelectField, Spinner, StatusBadge } from '@/components/ui'
 import { Button, EmptyState, TextField } from '@/components/ui'
 import {
   allocateMaterial,
@@ -141,6 +142,9 @@ export function ProductionOrderDetailPage() {
 
   const [qcAgents, setQcAgents] = useState<QcAgent[]>([])
   const [qcRequests, setQcRequests] = useState<QcRequest[]>([])
+  const schedulesPager = useClientPagination(schedules?.schedules)
+  const runsPager = useClientPagination(executions?.runs)
+  const qcRequestsPager = useClientPagination(qcRequests)
   const [qcForm, setQcForm] = useState({ executionId: '', agentId: '', quantity: '', sampleQuantity: '', expectedDate: '' })
   const [qcFormBusy, setQcFormBusy] = useState(false)
   const [showNewAgent, setShowNewAgent] = useState(false)
@@ -834,7 +838,7 @@ export function ProductionOrderDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {schedules.schedules.map((s) => (
+                {schedulesPager.pageItems.map((s) => (
                   <tr key={s.id} className="border-b border-white/5 last:border-0 align-top">
                     <td className="px-6 py-4 text-white">{s.machine_name ?? '—'}</td>
                     <td className="px-6 py-4 text-right text-white/60">{s.planned_quantity}</td>
@@ -883,6 +887,7 @@ export function ProductionOrderDetailPage() {
             </table>
           </div>
         )}
+        <Pagination className="px-6 pb-4" {...schedulesPager.pagerProps} />
 
         {(!schedules || schedules.schedules.length === 0) && (
           <EmptyState
@@ -984,9 +989,9 @@ export function ProductionOrderDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {executions.runs.map((run, index) => (
+                {runsPager.pageItems.map((run, index) => (
                   <tr key={run.id} className="border-b border-white/5 last:border-0 align-top">
-                    <td className="px-6 py-4 text-white">#{index + 1}</td>
+                    <td className="px-6 py-4 text-white">#{runsPager.offset + index + 1}</td>
                     <td className="px-6 py-4 text-white/60">{run.machine_name ?? '—'}</td>
                     <td className="px-6 py-4 text-right text-white/60">{run.planned_quantity}</td>
                     <td className="px-6 py-4 text-right text-white/60">
@@ -1073,6 +1078,7 @@ export function ProductionOrderDetailPage() {
             </table>
           </div>
         )}
+        <Pagination className="px-6 pb-4" {...runsPager.pagerProps} />
 
         {(!executions || executions.runs.length === 0) && (
           <EmptyState title="Not started" message="No production has been started against this production order yet." />
@@ -1151,7 +1157,7 @@ export function ProductionOrderDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {qcRequests.map((request) => {
+                {qcRequestsPager.pageItems.map((request) => {
                   const runIndex = executions?.runs.findIndex((r) => r.id === request.production_execution_id) ?? -1
                   return (
                     <tr key={request.id} className="border-b border-white/5 last:border-0 align-top">
@@ -1341,6 +1347,7 @@ export function ProductionOrderDetailPage() {
             </table>
           </div>
         )}
+        <Pagination className="px-6 pb-4" {...qcRequestsPager.pagerProps} />
 
         {qcRequests.length === 0 && (
           <EmptyState

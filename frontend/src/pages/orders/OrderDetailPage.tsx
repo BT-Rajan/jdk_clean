@@ -3,7 +3,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, BanknoteIcon, Badge, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, Modal, MovingCartIcon, PageHeader, Spinner, StatusBadge, TextareaField, TextField, ThumbsUpIcon, TornPaperIcon } from '@/components/ui'
+import { useClientPagination } from '@/hooks/useClientPagination'
+import { Alert, BanknoteIcon, Badge, Button, ConfirmDialog, DeleteIcon, DownloadMenu, EditIcon, EmailIcon, Field, GlassCard, Modal, MovingCartIcon, PageHeader, Pagination, Spinner, StatusBadge, TextareaField, TextField, ThumbsUpIcon, TornPaperIcon } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
   adminReviewOrder,
@@ -270,6 +271,9 @@ export function OrderDetailPage() {
   // production waiting on QC" without building one.
   const [qcByProductionOrder, setQcByProductionOrder] = useState<Record<number, QcRequest[]>>({})
   const [blockStatus, setBlockStatus] = useState<OrderBlockStatus | null>(null)
+  const productionOrdersPager = useClientPagination(productionOrders)
+  const deliveryNotesPager = useClientPagination(deliveryNotes)
+  const childOrdersPager = useClientPagination(order?.child_orders)
   const [deliveryDateOpen, setDeliveryDateOpen] = useState(false)
 
   function load() {
@@ -783,7 +787,7 @@ export function OrderDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {productionOrders.map((po) => {
+                {productionOrdersPager.pageItems.map((po) => {
                   const qcRequests = qcByProductionOrder[po.id] ?? []
                   const latestQc = qcRequests[0]
                   return (
@@ -819,6 +823,7 @@ export function OrderDetailPage() {
             </table>
           </div>
         )}
+        <Pagination className="px-6 pb-4" {...productionOrdersPager.pagerProps} />
       </GlassCard>
 
       {deliveryNotes.length > 0 && (
@@ -838,7 +843,7 @@ export function OrderDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {deliveryNotes.map((n) => (
+                {deliveryNotesPager.pageItems.map((n) => (
                   <tr key={n.id} className="border-b border-white/5 last:border-0">
                     <td className="px-6 py-4">
                       <Link to={`/delivery-notes/${n.id}`} className="font-medium text-gold-300 hover:text-gold-200">
@@ -852,6 +857,7 @@ export function OrderDetailPage() {
               </tbody>
             </table>
           </div>
+          <Pagination className="px-6 pb-4" {...deliveryNotesPager.pagerProps} />
         </GlassCard>
       )}
 
@@ -861,7 +867,7 @@ export function OrderDetailPage() {
             Split into <span className="text-sm text-white/40">({order.child_orders.length})</span>
           </h2>
           <div className="flex flex-col gap-2">
-            {order.child_orders.map((child) => (
+            {childOrdersPager.pageItems.map((child) => (
               <Link
                 key={child.id}
                 to={`/orders/${child.id}`}
@@ -875,6 +881,7 @@ export function OrderDetailPage() {
               </Link>
             ))}
           </div>
+          <Pagination className="mt-4" {...childOrdersPager.pagerProps} />
         </GlassCard>
       )}
 

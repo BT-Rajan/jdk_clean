@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadIcon, EditIcon, EmailIcon, Field, GlassCard, Modal, PageHeader, Spinner, StatusBadge, TabPanel, Tabs, TextField, TextareaField, ThumbsUpIcon } from '@/components/ui'
+import { usePagedResource } from '@/hooks/usePagedResource'
+import type { PagedParams } from '@/hooks/usePagedResource'
+import { Alert, Button, ConfirmDialog, DeleteIcon, DownloadIcon, EditIcon, EmailIcon, Field, GlassCard, Modal, PageHeader, Pagination, Spinner, StatusBadge, TabPanel, Tabs, TextField, TextareaField, ThumbsUpIcon } from '@/components/ui'
 import type { TabItem } from '@/components/ui'
 import { SendEmailDialog } from '@/components/documents/SendEmailDialog'
 import {
@@ -20,7 +22,6 @@ import {
 } from '@/api/purchaseOrders'
 import { listSupplierReturns } from '@/api/supplierReturns'
 import type { PurchaseOrder, PurchaseOrderLine } from '@/types/purchaseOrder'
-import type { SupplierReturn } from '@/types/supplierReturn'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
@@ -152,7 +153,11 @@ export function PurchaseOrderDetailPage() {
     Record<number, { unit_cost: string; batch_number: string; expiry_date: string }>
   >({})
   const [receiptMeta, setReceiptMeta] = useState({ invoice_number: '', received_by: '', received_date: '' })
-  const [supplierReturns, setSupplierReturns] = useState<SupplierReturn[]>([])
+  const fetchSupplierReturns = useCallback(
+    (params: PagedParams) => listSupplierReturns({ ...params, purchase_order_id: poId }),
+    [poId],
+  )
+  const supplierReturns = usePagedResource(fetchSupplierReturns)
   const [cancelLineTarget, setCancelLineTarget] = useState<PurchaseOrderLine | null>(null)
   const [activeTab, setActiveTab] = useState('overview')
 
@@ -184,14 +189,6 @@ export function PurchaseOrderDetailPage() {
   }
 
   useEffect(load, [poId])
-
-  useEffect(() => {
-    listSupplierReturns({ purchase_order_id: poId, page: 1, page_size: 50 })
-      .then((result) => setSupplierReturns(result.items))
-      .catch(() => {
-        // Best-effort -- the PO page itself still works fine without this.
-      })
-  }, [poId])
 
   async function handleStatusChange(status: 'sent' | 'confirmed' | 'cancelled', reason?: string) {
     setBusy(true)
@@ -488,7 +485,7 @@ export function PurchaseOrderDetailPage() {
         )}
       </GlassCard>
 
-      <Tabs items={buildTabs(po.lines.length, supplierReturns.length)} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
+      <Tabs items={buildTabs(po.lines.length, supplierReturns.total)} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
 
       <TabPanel id="lines" activeId={activeTab}>
       <GlassCard className="mb-6 overflow-hidden">
@@ -663,7 +660,7 @@ export function PurchaseOrderDetailPage() {
             </Button>
           )}
         </div>
-        {supplierReturns.length > 0 ? (
+        {supplierReturns.items.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
@@ -674,7 +671,7 @@ export function PurchaseOrderDetailPage() {
                 </tr>
               </thead>
               <tbody>
-                {supplierReturns.map((r) => (
+                {supplierReturns.items.map((r) => (
                   <tr key={r.id} className="border-b border-white/5 last:border-0">
                     <td className="px-6 py-4">
                       <Link to={`/supplier-returns/${r.id}`} className="font-medium text-gold-300 hover:text-gold-200">
@@ -691,6 +688,13 @@ export function PurchaseOrderDetailPage() {
         ) : (
           <p className="px-6 py-4 text-sm text-white/50">Nothing returned to the supplier against this PO.</p>
         )}
+        <Pagination
+          className="px-6 pb-4"
+          page={supplierReturns.page}
+          totalPages={supplierReturns.totalPages}
+          total={supplierReturns.total}
+          onPageChange={supplierReturns.setPage}
+        />
       </GlassCard>
       </TabPanel>
 

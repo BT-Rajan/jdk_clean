@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, EmptyState, GlassCard, PageHeader, Spinner, StatusBadge } from '@/components/ui'
+import { useClientPagination } from '@/hooks/useClientPagination'
+import { Alert, EmptyState, GlassCard, PageHeader, Pagination, Spinner, StatusBadge } from '@/components/ui'
 import { getReconciliationExceptions } from '@/api/reconciliation'
 import type { ReconciliationException } from '@/types/reconciliation'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -15,6 +16,7 @@ export function ReconciliationPage() {
   const [exceptions, setExceptions] = useState<ReconciliationException[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const exceptionsPager = useClientPagination(exceptions)
 
   function load() {
     setLoading(true)
@@ -61,7 +63,7 @@ export function ReconciliationPage() {
                 </tr>
               </thead>
               <tbody>
-                {exceptions.map((e, i) => (
+                {exceptionsPager.pageItems.map((e, i) => (
                   <tr key={i} className="border-b border-white/5 last:border-0">
                     <td className="px-6 py-4 text-white">{e.area}</td>
                     <td className="px-6 py-4 text-white/60">{e.document}</td>
@@ -81,6 +83,7 @@ export function ReconciliationPage() {
             </table>
           </div>
         )}
+        <Pagination className="px-6 pb-4" {...exceptionsPager.pagerProps} />
       </GlassCard>
     </AppLayout>
   )
