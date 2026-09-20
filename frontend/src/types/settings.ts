@@ -55,6 +55,10 @@ export interface Settings {
    * single line's discount, at/above this can't leave draft until an
    * admin approves it. */
   large_discount_approval_threshold: string
+  /** Quantity amount, or "" to disable. A manual stock adjustment whose
+   * |quantity| is at/above this can't apply immediately until an admin
+   * approves it. */
+  large_stock_adjustment_threshold: string
 }
 
 export type SettingsPayload = Partial<Settings>

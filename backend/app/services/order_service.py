@@ -729,7 +729,10 @@ def change_status(
     # - cancelling from any state that had reserved stock releases it.
     if new_status == "confirmed":
         for line in order.lines:
-            inventory_service.reserve_stock(db, "product", line.product_id, float(line.quantity), commit=False)
+            inventory_service.reserve_stock(
+                db, "product", line.product_id, float(line.quantity),
+                reference_type="order", reference_id=order.id, user_id=user_id, commit=False,
+            )
     elif new_status == "shipped":
         # Issue against what actually left the building, not what was
         # originally ordered -- delivery_note_service passes its own
@@ -777,7 +780,11 @@ def change_status(
         # dangling under this scheme -- same known imprecision as before
         # multi-shipment existed, not a new one.
         for product_id, quantity in lines_to_issue:
-            inventory_service.release_reservation(db, "product", product_id, quantity, commit=False)
+            inventory_service.release_reservation(
+                db, "product", product_id, quantity,
+                reference_type=movement_reference_type, reference_id=movement_reference_id,
+                user_id=user_id, commit=False,
+            )
 
         # P8 spec section 13: once every line is legitimately covered by
         # what's actually been shipped, the order is done -- move it
@@ -810,7 +817,10 @@ def change_status(
             new_status = "delivered"
     elif new_status == "cancelled" and old_status in RESERVED_STATUSES:
         for line in order.lines:
-            inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity), commit=False)
+            inventory_service.release_reservation(
+                db, "product", line.product_id, float(line.quantity),
+                reference_type="order", reference_id=order.id, user_id=user_id, commit=False,
+            )
             cancellation_effects["released_reservations"].append(
                 {
                     "product_id": line.product_id,
@@ -895,7 +905,10 @@ def change_status(
         for line in order.lines:
             remaining = float(line.quantity) - delivered_totals.get(line.product_id, 0.0)
             if remaining > 0:
-                inventory_service.release_reservation(db, "product", line.product_id, remaining, commit=False)
+                inventory_service.release_reservation(
+                    db, "product", line.product_id, remaining,
+                    reference_type="order", reference_id=order.id, user_id=user_id, commit=False,
+                )
                 cancellation_effects["released_reservations"].append(
                     {
                         "product_id": line.product_id,

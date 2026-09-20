@@ -20,12 +20,13 @@ import type { TabItem } from '@/components/ui'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { WhereUsedPanel } from '@/components/master/WhereUsedPanel'
 import { deleteRawMaterial, getRawMaterial, restoreRawMaterial } from '@/api/rawMaterials'
-import { getStock } from '@/api/inventory'
+import { getMovements, getStock } from '@/api/inventory'
 import { getSupplier } from '@/api/suppliers'
 import { getMrpReport } from '@/api/mrp'
 import { RAW_MATERIAL_TYPE_LABELS } from '@/types/rawMaterial'
 import type { RawMaterial } from '@/types/rawMaterial'
-import type { StockLevel } from '@/types/inventory'
+import type { StockLevel, StockMovement } from '@/types/inventory'
+import { formatDateTime } from '@/lib/dateFormat'
 import type { SupplierMaterial } from '@/types/supplierMaterial'
 import type { MrpRequirementLine } from '@/types/mrp'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -65,6 +66,7 @@ export function RawMaterialDetailPage() {
   // material requirements are an input to the purchasing decision, not
   // shown here as a separate calculation (reuses GET /api/mrp as-is).
   const [mrpRequirement, setMrpRequirement] = useState<MrpRequirementLine | null>(null)
+  const [movements, setMovements] = useState<StockMovement[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -88,6 +90,9 @@ export function RawMaterialDetailPage() {
       .catch(() => {})
     getMrpReport()
       .then((report) => setMrpRequirement(report.items.find((item) => item.raw_material_id === materialId) ?? null))
+      .catch(() => {})
+    getMovements({ item_type: 'raw_material', item_id: materialId, page_size: 10, sort: '-created_at' })
+      .then((result) => setMovements(result.items))
       .catch(() => {})
   }, [materialId])
 
@@ -282,6 +287,44 @@ export function RawMaterialDetailPage() {
             <Field label="Maximum stock" value={material.maximum_stock > 0 ? `${material.maximum_stock} ${material.unit}` : 'No ceiling set'} />
             <Field label="Storage location" value={material.storage_location} />
           </dl>
+        </GlassCard>
+
+        <GlassCard className="mt-6 overflow-hidden">
+          <div className="border-b border-white/10 px-6 py-4">
+            <h2 className="font-display text-base font-medium text-white">Recent stock movements</h2>
+          </div>
+          {movements.length === 0 ? (
+            <p className="p-6 text-sm text-white/40">No movements yet.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                    <th className="px-6 py-4 font-medium">Date</th>
+                    <th className="px-6 py-4 font-medium">Type</th>
+                    <th className="px-6 py-4 font-medium">Quantity</th>
+                    <th className="px-6 py-4 font-medium">Reference</th>
+                    <th className="px-6 py-4 font-medium">Batch/Lot</th>
+                    <th className="px-6 py-4 font-medium">Notes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {movements.map((m) => (
+                    <tr key={m.id} className="border-b border-white/5 last:border-0">
+                      <td className="px-6 py-4 text-white/60">{formatDateTime(m.created_at)}</td>
+                      <td className="px-6 py-4 text-white">{m.movement_type}</td>
+                      <td className="px-6 py-4 text-white/60">{m.quantity}</td>
+                      <td className="px-6 py-4 text-white/60">
+                        {m.reference_type ? `${m.reference_type} #${m.reference_id}` : '—'}
+                      </td>
+                      <td className="px-6 py-4 text-white/60">{m.batch_number ?? '—'}</td>
+                      <td className="px-6 py-4 text-white/40">{m.notes ?? '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </GlassCard>
       </TabPanel>
 

@@ -246,7 +246,10 @@ def _reserve_batch_materials(db: Session, batch: ProductionSchedule) -> None:
     requirements = bom_service.explode_requirements(db, batch.product_id, float(batch.planned_quantity))
     for raw_material_id, required_qty in requirements.items():
         if required_qty > 0:
-            inventory_service.reserve_stock(db, "raw_material", raw_material_id, required_qty)
+            inventory_service.reserve_stock(
+                db, "raw_material", raw_material_id, required_qty,
+                reference_type="production_schedule", reference_id=batch.id,
+            )
 
 
 def _release_reservation_for_quantity(
@@ -262,7 +265,10 @@ def _release_reservation_for_quantity(
     requirements = bom_service.explode_requirements(db, batch.product_id, quantity)
     for raw_material_id, required_qty in requirements.items():
         if required_qty > 0:
-            inventory_service.release_reservation(db, "raw_material", raw_material_id, required_qty, commit=commit)
+            inventory_service.release_reservation(
+                db, "raw_material", raw_material_id, required_qty,
+                reference_type="production_schedule", reference_id=batch.id, commit=commit,
+            )
 
 
 def _release_batch_materials(db: Session, batch: ProductionSchedule, commit: bool = True) -> None:
