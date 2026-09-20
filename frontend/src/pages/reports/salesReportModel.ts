@@ -133,6 +133,101 @@ export function buildFunnel(report: SalesReport, data: PipelineData): FunnelStag
   return stages
 }
 
+/** One record behind a funnel stage -- a feasibility check, a quotation, or
+ * a quotation that became an order. */
+export interface FunnelRecord {
+  id: number
+  number: string
+  customer: string | null
+  /** ISO date or timestamp the record is placed in the range by. */
+  date: string
+  status: string
+  /** Null for records that carry no amount (feasibility checks). */
+  amount: number | null
+  /** The record's own detail page. */
+  to: string
+  /** The order a converted quotation became. */
+  orderTo?: string
+}
+
+export interface FunnelStageRecords {
+  records: FunnelRecord[]
+  /** Singular noun for the records ("feasibility check", "quotation"). */
+  noun: string
+  /** The full list page for this kind of record. */
+  listTo: string
+}
+
+const byNewest = (a: FunnelRecord, b: FunnelRecord) => (a.date < b.date ? 1 : a.date > b.date ? -1 : b.id - a.id)
+
+/**
+ * The records behind one funnel stage, for the stage's drill-down. Built
+ * from the same lists and the same range test buildFunnel counts with, so
+ * the rows are exactly what the stage's number was counted from. Null when
+ * the list a stage depends on isn't available (failed, or too large to have
+ * been fetched completely) -- the caller says so rather than showing a
+ * short list as if it were whole.
+ */
+export function buildFunnelRecords(
+  stageKey: string,
+  report: SalesReport,
+  data: PipelineData,
+): FunnelStageRecords | null {
+  const from = isoDay(report.range_start)
+  const to = isoDay(report.range_end)
+  const inRange = (value: string) => {
+    const day = isoDay(value)
+    return day >= from && day <= to
+  }
+
+  if (stageKey === 'feasibility') {
+    if (!data.feasibilities) return null
+    return {
+      noun: 'feasibility check',
+      listTo: '/feasibilities',
+      records: data.feasibilities
+        .filter((f) => inRange(f.created_at))
+        .map((f) => ({
+          id: f.id,
+          number: f.feasibility_number,
+          customer: f.customer_name,
+          date: f.created_at,
+          status: f.status,
+          amount: null,
+          to: `/feasibilities/${f.id}`,
+        }))
+        .sort(byNewest),
+    }
+  }
+
+  if (stageKey !== 'quotations' && stageKey !== 'accepted' && stageKey !== 'orders') return null
+  if (!data.quotations) return null
+
+  const statuses: Record<string, string[] | null> = {
+    quotations: null,
+    accepted: ['accepted', 'converted'],
+    orders: ['converted'],
+  }
+  const wanted = statuses[stageKey]
+  return {
+    noun: stageKey === 'orders' ? 'order' : 'quotation',
+    listTo: stageKey === 'orders' ? '/orders' : '/quotations',
+    records: data.quotations
+      .filter((q) => inRange(q.quotation_date) && (wanted === null || wanted.includes(q.status)))
+      .map((q) => ({
+        id: q.id,
+        number: q.quotation_number,
+        customer: q.customer_name,
+        date: q.quotation_date,
+        status: q.status,
+        amount: q.total_amount,
+        to: `/quotations/${q.id}`,
+        orderTo: q.converted_order_id !== null ? `/orders/${q.converted_order_id}` : undefined,
+      }))
+      .sort(byNewest),
+  }
+}
+
 export type AttentionTone = 'alert' | 'warn' | 'info'
 
 export interface AttentionItem {

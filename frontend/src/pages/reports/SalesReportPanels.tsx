@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { GlassCard, Spinner } from '@/components/ui'
 import { cn } from '@/lib/cn'
@@ -61,11 +61,54 @@ export function KpiTile({
   )
 }
 
+/** A funnel stage's box: a plain div, or -- when the stage can be drilled
+ * into -- a real button so it is keyboard- and screen-reader-operable. */
+function StageTag({
+  onClick,
+  pressed,
+  label,
+  className,
+  style,
+  children,
+}: {
+  onClick?: () => void
+  pressed?: boolean
+  label: string
+  className: string
+  style: CSSProperties
+  children: ReactNode
+}) {
+  if (!onClick) {
+    return (
+      <div style={style} className={className}>
+        {children}
+      </div>
+    )
+  }
+  return (
+    <button type="button" onClick={onClick} aria-pressed={pressed} aria-label={label} style={style} className={className}>
+      {children}
+    </button>
+  )
+}
+
 const FUNNEL_MIN_WIDTH = 58 // % of the panel -- keeps the smallest stage's label readable
 
 /** `fill` spreads the stages over the height of the parent instead of
  * stacking them at the top -- for a panel that is taller than the funnel. */
-export function SalesFunnel({ stages, fill = false }: { stages: FunnelStage[]; fill?: boolean }) {
+export function SalesFunnel({
+  stages,
+  fill = false,
+  activeKey = null,
+  onSelectStage,
+}: {
+  stages: FunnelStage[]
+  fill?: boolean
+  /** Stage whose drill-down is currently open. */
+  activeKey?: string | null
+  /** When given, each stage becomes a button that opens its records. */
+  onSelectStage?: (key: string) => void
+}) {
   const max = Math.max(...stages.map((s) => s.count), 1)
 
   return (
@@ -75,13 +118,20 @@ export function SalesFunnel({ stages, fill = false }: { stages: FunnelStage[]; f
         const isOutcome = i === stages.length - 1
         return (
           <li key={stage.key} className="flex w-full flex-col items-center">
-            <div
+            <StageTag
               style={{ width: `${width}%` }}
+              onClick={onSelectStage ? () => onSelectStage(stage.key) : undefined}
+              pressed={onSelectStage ? activeKey === stage.key : undefined}
+              label={`${stage.label}: ${stage.count} — show records`}
               className={cn(
                 'flex min-w-[10.5rem] items-center justify-between gap-3 rounded-xl border px-3.5 py-1.5',
                 isOutcome
                   ? 'border-emerald-400/30 bg-emerald-400/10'
                   : 'border-gold-300/25 bg-gold-400/10',
+                onSelectStage &&
+                  'cursor-pointer text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gold-300',
+                onSelectStage && (isOutcome ? 'hover:bg-emerald-400/20' : 'hover:border-gold-300/50 hover:bg-gold-400/20'),
+                activeKey === stage.key && (isOutcome ? 'border-emerald-300/70 bg-emerald-400/20' : 'border-gold-300/70 bg-gold-400/25'),
               )}
             >
               <div className="min-w-0">
@@ -89,7 +139,7 @@ export function SalesFunnel({ stages, fill = false }: { stages: FunnelStage[]; f
                 {stage.note && <p className="truncate text-[11px] text-white/40">{stage.note}</p>}
               </div>
               <p className="text-lg leading-none font-semibold text-white tabular-nums">{stage.count}</p>
-            </div>
+            </StageTag>
 
             {stage.conversion && (
               <div className="my-1 flex items-center gap-1.5 text-[11px] text-white/45">
