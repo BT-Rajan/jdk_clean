@@ -62,6 +62,11 @@ PAGE_KEYS = (
     "quotations",
     "orders",
     "production",
+    # A Finance department gets this rather than full "orders" access --
+    # payment acknowledgment, the collection queue, and payment-plan
+    # completion are finance's own job, distinct from Sales owning the
+    # order itself. See payment_service.py.
+    "payments",
 )
 
 # Single canonical label for each page_key -- the Access Control grid's
@@ -85,6 +90,7 @@ PAGE_KEY_LABELS: dict[str, str] = {
     "quotations": "Quotations",
     "orders": "Orders",
     "production": "Production",
+    "payments": "Payments",
 }
 
 _LEVEL_RANK = {"none": 0, "read": 1, "write": 2}

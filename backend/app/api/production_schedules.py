@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
@@ -47,6 +49,7 @@ def list_batches(
     # filter set: NOT_CHECKED just means "not planned", already reachable
     # via the existing `status` filter.
     readiness: str | None = Query(None, pattern="^(?i:ready|blocked)$"),
+    overdue: bool | None = Query(None),
     db: Session = Depends(get_db),
     _: User = Depends(read_guard),
 ):
@@ -60,9 +63,29 @@ def list_batches(
         order_id=order_id,
         sort=sort,
         readiness=readiness,
+        overdue=overdue,
     )
     result["items"] = [_with_readiness(db, b, ProductionScheduleOut.from_model(b)) for b in result["items"]]
     return result
+
+
+@router.get("/check-readiness", response_model=ReadinessResult)
+def check_readiness_precreate(
+    product_id: int = Query(...),
+    quantity: float = Query(..., gt=0),
+    scheduled_start: date | None = Query(None),
+    scheduled_end: date | None = Query(None),
+    machine_id: int | None = Query(None),
+    db: Session = Depends(get_db),
+    _: User = Depends(read_guard),
+):
+    """The "New batch" form's live materials/machine/worker preview --
+    see production_service.check_readiness_for_candidate_batch. Declared
+    before /{batch_id} so "check-readiness" is never swallowed by that
+    route's int path param."""
+    return production_service.check_readiness_for_candidate_batch(
+        db, product_id, quantity, scheduled_start, scheduled_end, machine_id
+    )
 
 
 @router.get("/{batch_id}", response_model=ProductionScheduleOut)
@@ -72,7 +95,13 @@ def get_batch(
     _: User = Depends(read_guard),
 ):
     batch = production_service.get_batch(db, batch_id)
-    return _with_readiness(db, batch, ProductionScheduleOut.from_model(batch))
+    out = _with_readiness(db, batch, ProductionScheduleOut.from_model(batch))
+    if batch.order_id is not None:
+        out.order_quantity_summary = production_service.get_order_product_quantity_summary(
+            db, batch.order_id, batch.product_id
+        )
+    out.machine_conflicts = production_service.get_machine_conflicts(db, batch)
+    return out
 
 
 @router.get("/{batch_id}/readiness", response_model=ReadinessResult)
@@ -187,7 +216,9 @@ def update_status(
         reason=payload.reason,
         user_id=user.id,
     )
-    return ProductionScheduleOut.from_model(batch)
+    out = ProductionScheduleOut.from_model(batch)
+    out.resulting_unscheduled_quantity = production_service.get_resulting_unscheduled_quantity(db, batch)
+    return out
 
 
 @router.delete("/{batch_id}")

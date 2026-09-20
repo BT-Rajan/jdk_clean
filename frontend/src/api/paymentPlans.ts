@@ -16,3 +16,12 @@ export async function deletePaymentPlan(orderId: number, paymentPlanId: number):
   const { data } = await apiClient.delete<MessageResponse>(`/api/orders/${orderId}/payment-plans/${paymentPlanId}`)
   return data
 }
+
+/** Refused server-side while the order still has an outstanding
+ * acknowledged balance -- see payment_plan_service.complete_payment_plan. */
+export async function completePaymentPlan(orderId: number, paymentPlanId: number): Promise<PaymentPlan> {
+  const { data } = await apiClient.post<PaymentPlan>(
+    `/api/orders/${orderId}/payment-plans/${paymentPlanId}/complete`,
+  )
+  return data
+}

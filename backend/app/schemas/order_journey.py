@@ -10,6 +10,11 @@ class JourneyFeasibility(BaseModel):
     required_by_date: date | None
     created_at: datetime
     checked_at: datetime | None
+    # See feasibility_service.get_blocker_summary -- a still-relevant
+    # concern (approved despite a shortfall, or revived/re-run since this
+    # order's quotation was raised) surfaced here instead of making a
+    # person click through to the feasibility check to find out.
+    blocker: str | None = None
 
 
 class JourneyQuotation(BaseModel):
@@ -31,6 +36,10 @@ class JourneyOrder(BaseModel):
     total_amount: float
     customer_name: str | None
     admin_review_required: bool
+    # See order_service.get_next_action -- a single sentence for "what
+    # should happen to this order next", derived from its status plus its
+    # real production/delivery/payment state.
+    next_action: str
     created_at: datetime
 
 

@@ -45,6 +45,11 @@ class SettingsOut(BaseModel):
     # admin approves it. See settings_service.
     # get_large_discount_approval_threshold.
     large_discount_approval_threshold: str
+    # Quantity amount, or "" to disable. A manual stock adjustment whose
+    # |quantity| is at/above this can't apply immediately -- it's held
+    # for admin approval. See settings_service.
+    # get_large_stock_adjustment_threshold.
+    large_stock_adjustment_threshold: str
 
 
 class CompanyNameOut(BaseModel):
@@ -76,3 +81,4 @@ class SettingsUpdate(BaseModel):
     # get_large_discount_approval_threshold.
     large_po_approval_threshold: str | None = Field(default=None, pattern=r"^$|^\d+(\.\d+)?$")
     large_discount_approval_threshold: str | None = Field(default=None, pattern=r"^$|^\d+(\.\d+)?$")
+    large_stock_adjustment_threshold: str | None = Field(default=None, pattern=r"^$|^\d+(\.\d+)?$")

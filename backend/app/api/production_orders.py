@@ -43,6 +43,16 @@ write_guard = require_page_access("production", "write")
 def _with_remaining(db: Session, po, out: ProductionOrderOut) -> ProductionOrderOut:
     if po.order_detail_id is not None:
         out.remaining_order_quantity = production_order_service.get_remaining_quantity(db, po.order_detail_id)
+    # required/scheduled/produced/remaining/unscheduled -- see
+    # ProductionOrderOut's own comment on why these live here rather
+    # than on from_model (each needs its own query, same reasoning
+    # remaining_order_quantity above already follows).
+    scheduled = production_order_schedule_service.get_scheduled_quantity(db, po.id)
+    produced = production_execution_service.get_produced_quantity(db, po.id)
+    out.scheduled_quantity = scheduled
+    out.produced_quantity = produced
+    out.remaining_quantity = max(round(float(po.planned_quantity) - produced, 4), 0)
+    out.unscheduled_quantity = max(round(float(po.planned_quantity) - scheduled, 4), 0)
     return out
 
 
@@ -164,8 +174,16 @@ def _schedule_summary_out(summary: dict) -> ProductionOrderScheduleSummaryOut:
         scheduled_quantity=summary["scheduled_quantity"],
         remaining_to_schedule=summary["remaining_to_schedule"],
         schedule_status=summary["schedule_status"],
-        schedules=[
-            ProductionOrderScheduleItemOut.from_schedule(s, summary["due_date"]) for s in summary["schedules"]
+        earliest_completion_date=summary["earliest_completion_date"],
+        latest_completion_date=summary["latest_completion_date"],
+        machine_status=summary["machine_status"],
+        machine_issues=summary["machine_issues"],
+        active_schedules=[
+            ProductionOrderScheduleItemOut.from_schedule(s, summary["due_date"]) for s in summary["active_schedules"]
+        ],
+        cancelled_schedules=[
+            ProductionOrderScheduleItemOut.from_schedule(s, summary["due_date"])
+            for s in summary["cancelled_schedules"]
         ],
     )
 

@@ -8,7 +8,7 @@ from app.models.customer import Customer
 from app.models.deal import Deal
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.product import Product
-from app.models.user import BigPK
+from app.models.user import BigPK, User
 
 FEASIBILITY_STATUSES = (
     "draft",
@@ -81,6 +81,10 @@ class FeasibilityCheck(Base, TimestampMixin, SoftDeleteMixin):
     # the mandatory comment explaining why.
     exception_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     exception_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+    # When Sales made that decision -- exception_by/exception_reason had
+    # no timestamp of their own before this (only updated_at, which any
+    # other field change could also bump).
+    exception_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     # Set when Sales closes this check without generating a quotation from it.
     close_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -97,6 +101,16 @@ class FeasibilityCheck(Base, TimestampMixin, SoftDeleteMixin):
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     deal: Mapped[Deal | None] = relationship(lazy="joined")
+    # Who raised this check -- surfaced as this feasibility "stage"'s
+    # owner on the list/detail views (see schemas.feasibility.FeasibilityOut
+    # .owner_name). created_by itself already exists via TimestampMixin;
+    # this just gives it a queryable relationship the same way
+    # Payment.creator does.
+    creator: Mapped[User | None] = relationship(foreign_keys="FeasibilityCheck.created_by", lazy="joined")
+    # Who made each decision -- see schemas.feasibility.FeasibilityOut's
+    # exception_by_name/admin_reviewed_by_name.
+    exception_decider: Mapped[User | None] = relationship(foreign_keys="FeasibilityCheck.exception_by", lazy="joined")
+    admin_reviewer: Mapped[User | None] = relationship(foreign_keys="FeasibilityCheck.admin_reviewed_by", lazy="joined")
     lines: Mapped[list["FeasibilityLine"]] = relationship(
         back_populates="feasibility",
         cascade="all, delete-orphan",

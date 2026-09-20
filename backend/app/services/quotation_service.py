@@ -49,9 +49,84 @@ _OPEN_QUOTATION_STATUSES = ("draft", "sent")
 # independently of the quotation's own date.
 QUOTATION_VALIDITY_DAYS = 7
 
+# How far out a one-click "Follow up" (record_followup) pushes
+# next_followup_date when the caller doesn't pick a specific date.
+FOLLOWUP_INTERVAL_DAYS = 3
+
+# A quotation in any of these statuses is a closed matter -- accepted-or-
+# not has already been decided, so there is nothing left to chase.
+# get_followup_status reports 'completed' for these regardless of
+# next_followup_date; record_followup refuses to log a new follow-up on
+# one (renew_quotation is the way back from 'expired' into 'sent', where
+# follow-up applies again).
+_FOLLOWUP_TERMINAL_STATUSES = ("rejected", "expired", "converted")
+
 
 def _compute_valid_until(quotation_date: date) -> date:
     return quotation_date + timedelta(days=QUOTATION_VALIDITY_DAYS)
+
+
+def get_followup_status(quotation: Quotation, today: date | None = None) -> str:
+    """'not_due' | 'due' | 'overdue' | 'completed' -- purely derived from
+    fields already on the quotation (status, next_followup_date), so it
+    costs nothing extra to include on every list row.
+    """
+    if quotation.status in _FOLLOWUP_TERMINAL_STATUSES:
+        return "completed"
+    if quotation.next_followup_date is None:
+        return "not_due"
+    as_of = today or today_kuwait()
+    if quotation.next_followup_date < as_of:
+        return "overdue"
+    if quotation.next_followup_date == as_of:
+        return "due"
+    return "not_due"
+
+
+def get_conversion_status(quotation: Quotation) -> tuple[str, list[str]]:
+    """'converted' | 'ready' | 'blocked', plus -- for 'blocked' -- exactly
+    why order_service.create_order_from_quotation would refuse this
+    quotation right now. The same two checks that function enforces
+    (status must be 'accepted', a payment link must be set), computed
+    here once so the quotations list/detail can show it without a
+    second copy of the real gate drifting out of sync.
+    """
+    if quotation.status == "converted":
+        return "converted", []
+
+    reasons: list[str] = []
+    if quotation.status != "accepted":
+        reasons.append(
+            f"Quotation must be accepted before it can be converted to an order (currently '{quotation.status}')."
+        )
+    if not quotation.payment_link:
+        reasons.append(
+            "A payment link must be entered on this quotation before it can be converted to an order."
+        )
+    return ("blocked", reasons) if reasons else ("ready", [])
+
+
+def assert_sendable(quotation: Quotation) -> None:
+    """Blocks emailing an expired quotation -- see api/quotations.py's
+    email_quotation_pdf. Sending a customer a PDF that quietly no longer
+    honors the price/validity it prints is exactly the mistake this
+    exists to stop; renew_quotation is the explicit, deliberate way past
+    it (extends valid_until and reopens the quotation to 'sent')."""
+    if quotation.status == "expired":
+        raise ConflictError(
+            f"{quotation.quotation_number} has expired and can no longer be sent -- renew it first."
+        )
+
+
+def get_feasibility_blocker(quotation: Quotation) -> str | None:
+    """A one-line summary of a still-relevant concern from the
+    feasibility check this quotation was raised from, if any -- see
+    feasibility_service.get_blocker_summary for the two cases this
+    covers. None for a standalone quotation (no feasibility_id) or one
+    whose check is a clean 'feasible'/'converted'."""
+    if quotation.feasibility is None:
+        return None
+    return feasibility_service.get_blocker_summary(quotation.feasibility)
 
 
 def _explode_lines_requirement(db: Session, lines: list) -> dict[int, float]:
@@ -208,8 +283,10 @@ def get_quotation(db: Session, quotation_id: int, include_deleted: bool = False)
 _QUOTATION_SORTABLE_FIELDS = {
     "quotation_number": Quotation.quotation_number,
     "quotation_date": Quotation.quotation_date,
+    "valid_until": Quotation.valid_until,
     "total_amount": Quotation.total_amount,
     "status": Quotation.status,
+    "next_followup_date": Quotation.next_followup_date,
     "created_at": Quotation.created_at,
 }
 
@@ -572,3 +649,76 @@ def escalate_expired_quotations(db: Session, as_of: date | None = None) -> list[
             deal_service.reconcile_deal_status(db, quotation.deal_id, None)
         db.commit()
     return expired
+
+
+def record_followup(
+    db: Session, quotation_id: int, next_followup_date: date | None = None, user_id: int | None = None
+) -> Quotation:
+    """The one-click "Follow up" action: stamps that Sales just followed
+    up with this customer (a call, an email outside this app -- see
+    last_followup_at's own docstring for how this differs from
+    last_emailed_at) and schedules the next one. `next_followup_date`
+    defaults to today + FOLLOWUP_INTERVAL_DAYS when not given, so a
+    single click with no form needed is enough; a caller can still pass
+    a specific date to schedule further out (or sooner) instead.
+    """
+    quotation = get_quotation(db, quotation_id)
+    if quotation.status in _FOLLOWUP_TERMINAL_STATUSES:
+        raise ConflictError(f"No follow-up is needed on a '{quotation.status}' quotation.")
+
+    now = now_kuwait_naive()
+    old_next = quotation.next_followup_date
+    quotation.last_followup_at = now
+    quotation.next_followup_date = next_followup_date or (today_kuwait() + timedelta(days=FOLLOWUP_INTERVAL_DAYS))
+    quotation.updated_by = user_id
+    audit_service.log_update(
+        db,
+        TABLE_NAME,
+        quotation_id,
+        {
+            "last_followup_at": (None, now.isoformat()),
+            "next_followup_date": (str(old_next) if old_next else None, str(quotation.next_followup_date)),
+        },
+        user_id,
+    )
+    db.commit()
+    return get_quotation(db, quotation_id)
+
+
+def renew_quotation(
+    db: Session, quotation_id: int, valid_until: date | None = None, user_id: int | None = None
+) -> Quotation:
+    """The explicit, deliberate way past assert_sendable's block on
+    emailing an expired quotation: extends its validity and reopens it
+    to 'sent' (ALLOWED_TRANSITIONS otherwise treats 'expired' as
+    terminal -- this is a dedicated action, not a generic status jump,
+    precisely so a quotation never slides back to 'sent' by accident).
+    `valid_until` defaults to today + QUOTATION_VALIDITY_DAYS and must be
+    in the future either way.
+    """
+    quotation = get_quotation(db, quotation_id)
+    if quotation.status != "expired":
+        raise ConflictError(f"Only an expired quotation can be renewed (current status: '{quotation.status}').")
+
+    today = today_kuwait()
+    new_valid_until = valid_until or _compute_valid_until(today)
+    if new_valid_until <= today:
+        raise ValidationAppError("The renewed validity date must be in the future.")
+
+    old_valid_until = quotation.valid_until
+    quotation.valid_until = new_valid_until
+    quotation.status = "sent"
+    quotation.updated_by = user_id
+    audit_service.log_update(
+        db,
+        TABLE_NAME,
+        quotation_id,
+        {
+            "status": ("expired", "sent"),
+            "valid_until": (str(old_valid_until) if old_valid_until else None, str(new_valid_until)),
+        },
+        user_id,
+    )
+    db.commit()
+    deal_service.reopen_deal(db, quotation.deal_id, user_id)
+    return get_quotation(db, quotation_id)

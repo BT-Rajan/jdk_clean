@@ -73,13 +73,20 @@ def test_machine_capacity_failure_blocks_start(db):
     set_stock(db, material.id, 100)  # materials never the issue here
 
     window_start = _next_working_day(db)
-    # Someone else already has this machine's entire day booked.
+    # Both seeded directly, not via create_batch -- two overlapping
+    # bookings on one machine can no longer be *created* through the
+    # service at all (production_service._assert_no_machine_conflict),
+    # so this is what such capacity-exceeding data would have to look
+    # like if it predates that guard; the readiness/capacity gate below
+    # is still expected to catch it independently, defense in depth.
     make_production_schedule(
         db, product_id=product.id, machine_id=machine.id, planned_quantity=1,
         scheduled_start=window_start, scheduled_end=window_start,
     )
-
-    batch = _create_batch(db, product.id, planned_quantity=1, machine_id=machine.id, start_offset=1, duration=1)
+    batch = make_production_schedule(
+        db, product_id=product.id, machine_id=machine.id, planned_quantity=1,
+        scheduled_start=window_start, scheduled_end=window_start,
+    )
 
     with pytest.raises(ConflictError):
         production_service.change_status(db, batch.id, "in_progress")

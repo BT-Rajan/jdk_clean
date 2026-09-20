@@ -20,7 +20,9 @@ const adjustSchema = z
     item_id: z.coerce.number().int().positive('Choose an item'),
     quantity: z.coerce.number().refine((v) => v !== 0, 'Quantity cannot be 0'),
     movement_type: z.enum(['receipt', 'issue', 'adjustment', 'return']),
-    notes: z.string().trim().optional().or(z.literal('')),
+    // Mandatory for every manual adjustment -- see
+    // backend/app/services/inventory_service.py's submit_manual_adjustment.
+    notes: z.string().trim().min(1, 'A reason is required for a manual stock adjustment.'),
     // Only actually required when a raw material is being received (see
     // the .superRefine below) -- optional here so the schema accepts the
     // form's default empty values for every other item/movement combo.
@@ -64,6 +66,7 @@ type AdjustSubmitValues = z.output<typeof adjustSchema>
 export function InventoryAdjustPage() {
   const navigate = useNavigate()
   const [formError, setFormError] = useState<string | null>(null)
+  const [pendingApprovalMessage, setPendingApprovalMessage] = useState<string | null>(null)
   const productsFetcher = useCallback(() => listProducts({ page: 1, page_size: 200, status: 'active' }), [])
   const materialsFetcher = useCallback(() => listRawMaterials({ page: 1, page_size: 200, status: 'active' }), [])
   const suppliersFetcher = useCallback(() => listSuppliers({ page: 1, page_size: 200 }), [])
@@ -99,8 +102,9 @@ export function InventoryAdjustPage() {
 
   async function onSubmit(values: AdjustSubmitValues) {
     setFormError(null)
+    setPendingApprovalMessage(null)
     try {
-      await adjustStock({
+      const result = await adjustStock({
         ...values,
         supplier_id: isRawMaterialReceipt ? values.supplier_id || null : null,
         unit_cost: isRawMaterialReceipt && values.unit_cost !== undefined ? Number(values.unit_cost) : null,
@@ -110,6 +114,16 @@ export function InventoryAdjustPage() {
         received_by: isRawMaterialReceipt ? values.received_by || null : null,
         received_date: isRawMaterialReceipt ? values.received_date || null : null,
       })
+      if (result.status === 'pending_approval') {
+        // Large enough to need admin sign-off first -- see
+        // backend/app/services/inventory_service.py's
+        // submit_manual_adjustment. Stay on the page so the person sees
+        // this rather than assuming the adjustment already applied.
+        setPendingApprovalMessage(
+          'This adjustment is above the approval threshold and has been submitted for admin approval -- it has not been applied yet.',
+        )
+        return
+      }
       navigate('/inventory')
     } catch (err) {
       setFormError(getApiErrorMessage(err))
@@ -125,6 +139,7 @@ export function InventoryAdjustPage() {
         </p>
         <GlassCard className="mt-8 p-8">
           <Alert variant="error">{formError}</Alert>
+          <Alert variant="success">{pendingApprovalMessage}</Alert>
           <form onSubmit={handleSubmit(onSubmit)} noValidate className="flex flex-col gap-5">
             <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
               <SelectField label="Item type" {...register('item_type')}>
@@ -200,7 +215,7 @@ export function InventoryAdjustPage() {
                 </div>
               </div>
             )}
-            <TextField label="Notes" {...register('notes')} />
+            <TextField label="Reason (required)" error={errors.notes?.message} {...register('notes')} />
             <div className="mt-2 flex justify-end gap-3">
               <Button variant="ghost" type="button" onClick={() => navigate('/inventory')}>
                 Cancel

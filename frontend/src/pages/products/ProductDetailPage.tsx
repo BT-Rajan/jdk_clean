@@ -20,16 +20,17 @@ import type { TabItem } from '@/components/ui'
 import { MultiHistoryTimeline } from '@/components/history/MultiHistoryTimeline'
 import { WhereUsedPanel } from '@/components/master/WhereUsedPanel'
 import { activateProduct, deactivateProduct, deleteProduct, getProduct, restoreProduct } from '@/api/products'
-import { getStock } from '@/api/inventory'
+import { getMovements, getStock } from '@/api/inventory'
 import { getMachine } from '@/api/machines'
 import type { Product } from '@/types/product'
-import type { StockLevel } from '@/types/inventory'
+import type { StockLevel, StockMovement } from '@/types/inventory'
 import type { Machine } from '@/types/machine'
 import type { BomHeader } from '@/types/bom'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { useAuth } from '@/hooks/useAuth'
 import { canWrite, isAdmin } from '@/lib/roles'
 import { formatCurrency } from '@/lib/currency'
+import { formatDateTime } from '@/lib/dateFormat'
 import { clampNonNegativeString } from '@/lib/number'
 import { BomEditor } from './BomEditor'
 import { PackagingEditor } from './PackagingEditor'
@@ -61,6 +62,7 @@ export function ProductDetailPage() {
   const [product, setProduct] = useState<Product | null>(null)
   const [machine, setMachine] = useState<Machine | null>(null)
   const [stock, setStock] = useState<StockLevel | null>(null)
+  const [movements, setMovements] = useState<StockMovement[]>([])
   const [componentCount, setComponentCount] = useState<number | null>(null)
   const [bomHeader, setBomHeader] = useState<BomHeader | null>(null)
   const [loading, setLoading] = useState(true)
@@ -84,6 +86,9 @@ export function ProductDetailPage() {
       .finally(() => setLoading(false))
     getStock('product', productId)
       .then(setStock)
+      .catch(() => {})
+    getMovements({ item_type: 'product', item_id: productId, page_size: 10, sort: '-created_at' })
+      .then((result) => setMovements(result.items))
       .catch(() => {})
   }, [productId])
 
@@ -301,6 +306,42 @@ export function ProductDetailPage() {
               />
               <Field label="Reorder point" value={`${product.reorder_point} ${product.unit}`} />
             </dl>
+          </GlassCard>
+
+          <GlassCard className="overflow-hidden">
+            <div className="border-b border-white/10 px-6 py-4">
+              <h2 className="font-display text-base font-medium text-white">Recent stock movements</h2>
+            </div>
+            {movements.length === 0 ? (
+              <p className="p-6 text-sm text-white/40">No movements yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                      <th className="px-6 py-4 font-medium">Date</th>
+                      <th className="px-6 py-4 font-medium">Type</th>
+                      <th className="px-6 py-4 font-medium">Quantity</th>
+                      <th className="px-6 py-4 font-medium">Reference</th>
+                      <th className="px-6 py-4 font-medium">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {movements.map((m) => (
+                      <tr key={m.id} className="border-b border-white/5 last:border-0">
+                        <td className="px-6 py-4 text-white/60">{formatDateTime(m.created_at)}</td>
+                        <td className="px-6 py-4 text-white">{m.movement_type}</td>
+                        <td className="px-6 py-4 text-white/60">{m.quantity}</td>
+                        <td className="px-6 py-4 text-white/60">
+                          {m.reference_type ? `${m.reference_type} #${m.reference_id}` : '—'}
+                        </td>
+                        <td className="px-6 py-4 text-white/40">{m.notes ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </GlassCard>
 
           <GlassCard className="p-8">

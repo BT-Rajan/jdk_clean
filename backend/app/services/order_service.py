@@ -560,6 +560,102 @@ def get_order_block_status(db: Session, order_id: int) -> dict:
     }
 
 
+def _assert_order_completable(db: Session, order: Order) -> None:
+    """Blocks a manual jump to 'delivered' -- this app's terminal
+    "completed" state -- while this order still has real obligations
+    open: an unfinished production batch, order lines that haven't
+    actually shipped yet, or an unpaid balance. Without this, "delivered"
+    was reachable directly from 'shipped' with no check at all, so a
+    person could mark an order done while stock was still mid-production
+    or the customer still owed money for it.
+    """
+    from app.models.production_schedule import ProductionSchedule
+
+    open_batches = (
+        db.query(ProductionSchedule)
+        .filter(
+            ProductionSchedule.order_id == order.id,
+            ProductionSchedule.deleted_at.is_(None),
+            ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
+        )
+        .count()
+    )
+    if open_batches:
+        raise ConflictError(
+            f"Cannot mark this order delivered: {open_batches} production batch(es) are still open against it."
+        )
+
+    undelivered = round(sum(line["remaining_quantity"] for line in get_fulfillment(db, order.id)), 4)
+    if undelivered > 0.0001:
+        raise ConflictError(
+            f"Cannot mark this order delivered: {undelivered} unit(s) across its lines are still undelivered."
+        )
+
+    from app.services import payment_service
+
+    balance_due = round(float(order.total_amount) - payment_service.get_order_amount_paid(db, order.id), 2)
+    if balance_due > 0.01:
+        raise ConflictError(
+            f"Cannot mark this order delivered: {balance_due:.2f} is still outstanding on payment."
+        )
+
+
+def get_next_action(db: Session, order: Order) -> str:
+    """Single human-readable sentence for 'what should happen to this
+    order next', derived from its current status and the real state of
+    its production/delivery/payment obligations -- so a person can see
+    what's actually next without piecing it together from the order,
+    production, delivery and payment tabs separately.
+    """
+    if order.status == "cancelled":
+        return "None — order is cancelled."
+
+    if order.status == "draft":
+        if order.approved_at is None and get_confirm_block_reasons(db, order):
+            return "Awaiting admin approval before this order can be confirmed."
+        return "Confirm this order to reserve stock and begin fulfilment."
+
+    from app.services import payment_service
+
+    balance_due = round(float(order.total_amount) - payment_service.get_order_amount_paid(db, order.id), 2)
+
+    if order.status == "delivered":
+        if balance_due > 0.01:
+            return f"Collect the outstanding balance of {balance_due:.2f}."
+        return "None — order is fully delivered and paid."
+
+    if order.status in ("confirmed", "in_production"):
+        from app.models.production_schedule import ProductionSchedule
+
+        open_batches = (
+            db.query(ProductionSchedule)
+            .filter(
+                ProductionSchedule.order_id == order.id,
+                ProductionSchedule.deleted_at.is_(None),
+                ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
+            )
+            .count()
+        )
+        if open_batches:
+            return "Production in progress — wait for the scheduled batch(es) to complete."
+        if any(line["shortage"] > 0 for line in get_fulfillment(db, order.id)):
+            return "Schedule production to cover the remaining shortage."
+        return "Move this order to ready-to-ship — it's fully coverable from stock."
+
+    if order.status == "ready_to_ship":
+        return "Issue a delivery note to ship this order."
+
+    if order.status == "shipped":
+        remaining = sum(line["remaining_quantity"] for line in get_fulfillment(db, order.id))
+        if remaining > 0.0001:
+            return "Ship the remaining quantity to complete delivery."
+        if balance_due > 0.01:
+            return f"Collect the outstanding balance of {balance_due:.2f}."
+        return "Mark this order as delivered."
+
+    return "Review this order."
+
+
 def change_status(
     db: Session,
     order_id: int,
@@ -592,6 +688,15 @@ def change_status(
     order = get_order(db, order_id, for_update=True)
     assert_transition_allowed(ALLOWED_TRANSITIONS, order.status, new_status, "order")
 
+    # Only ever reachable here as a direct, manual call (ALLOWED_TRANSITIONS
+    # only allows 'delivered' from 'shipped') -- the automatic promotion to
+    # 'delivered' below (once every line is covered by an issued delivery
+    # note) never passes through here with new_status already 'delivered',
+    # so this only guards the "force it done" override, not the normal
+    # shipping flow.
+    if new_status == "delivered":
+        _assert_order_completable(db, order)
+
     if new_status == "confirmed" and order.approved_at is None:
         block_reasons = get_confirm_block_reasons(db, order)
         if block_reasons:
@@ -604,6 +709,18 @@ def change_status(
 
     old_status = order.status
 
+    # Populated only along the 'cancelled' branches below, then attached
+    # to the returned order as a transient (non-persisted) attribute --
+    # see the bottom of this function -- so the caller can tell a person
+    # exactly what this cancellation took down with it (reservations
+    # released, delivery notes reversed, production batches stopped)
+    # instead of a bare "status changed to cancelled".
+    cancellation_effects = {
+        "released_reservations": [],
+        "cancelled_delivery_notes": [],
+        "cancelled_production_batches": [],
+    }
+
     # Stock side-effects, kept simple until the MRP/feasibility engine exists:
     # - confirming an order reserves finished-goods stock for each line
     #   (allowed to exceed on-hand -- a shortfall is exactly what MRP will
@@ -612,7 +729,10 @@ def change_status(
     # - cancelling from any state that had reserved stock releases it.
     if new_status == "confirmed":
         for line in order.lines:
-            inventory_service.reserve_stock(db, "product", line.product_id, float(line.quantity), commit=False)
+            inventory_service.reserve_stock(
+                db, "product", line.product_id, float(line.quantity),
+                reference_type="order", reference_id=order.id, user_id=user_id, commit=False,
+            )
     elif new_status == "shipped":
         # Issue against what actually left the building, not what was
         # originally ordered -- delivery_note_service passes its own
@@ -660,7 +780,11 @@ def change_status(
         # dangling under this scheme -- same known imprecision as before
         # multi-shipment existed, not a new one.
         for product_id, quantity in lines_to_issue:
-            inventory_service.release_reservation(db, "product", product_id, quantity, commit=False)
+            inventory_service.release_reservation(
+                db, "product", product_id, quantity,
+                reference_type=movement_reference_type, reference_id=movement_reference_id,
+                user_id=user_id, commit=False,
+            )
 
         # P8 spec section 13: once every line is legitimately covered by
         # what's actually been shipped, the order is done -- move it
@@ -693,7 +817,17 @@ def change_status(
             new_status = "delivered"
     elif new_status == "cancelled" and old_status in RESERVED_STATUSES:
         for line in order.lines:
-            inventory_service.release_reservation(db, "product", line.product_id, float(line.quantity), commit=False)
+            inventory_service.release_reservation(
+                db, "product", line.product_id, float(line.quantity),
+                reference_type="order", reference_id=order.id, user_id=user_id, commit=False,
+            )
+            cancellation_effects["released_reservations"].append(
+                {
+                    "product_id": line.product_id,
+                    "product_name": line.product.name if line.product else None,
+                    "quantity": float(line.quantity),
+                }
+            )
     elif new_status == "cancelled" and old_status in ("shipped", "delivered"):
         # The goods already left the building -- cancelling here means the
         # customer is refusing or returning them, not that the order never
@@ -758,6 +892,9 @@ def change_status(
             audit_service.log_update(
                 db, "delivery_notes", note.id, {"status": ("issued", "cancelled")}, user_id
             )
+            cancellation_effects["cancelled_delivery_notes"].append(
+                {"id": note.id, "delivery_note_number": note.delivery_note_number}
+            )
         # Whatever's shipped is reversed above; whatever was reserved but
         # never got that far (a partially-shipped order cancelled before
         # the rest went out -- only possible now that shipping can span
@@ -768,7 +905,17 @@ def change_status(
         for line in order.lines:
             remaining = float(line.quantity) - delivered_totals.get(line.product_id, 0.0)
             if remaining > 0:
-                inventory_service.release_reservation(db, "product", line.product_id, remaining, commit=False)
+                inventory_service.release_reservation(
+                    db, "product", line.product_id, remaining,
+                    reference_type="order", reference_id=order.id, user_id=user_id, commit=False,
+                )
+                cancellation_effects["released_reservations"].append(
+                    {
+                        "product_id": line.product_id,
+                        "product_name": line.product.name if line.product else None,
+                        "quantity": remaining,
+                    }
+                )
 
     order.status = new_status
     if new_status == "confirmed":
@@ -807,10 +954,21 @@ def change_status(
     elif new_status == "ready_to_ship":
         _maybe_auto_create_delivery_note(db, order_id, user_id)
     elif new_status == "cancelled":
-        _cancel_active_production_batches(db, order_id, user_id)
+        cancellation_effects["cancelled_production_batches"] = _cancel_active_production_batches(
+            db, order_id, user_id
+        )
         deal_service.reconcile_deal_status(db, order.deal_id, user_id)
 
-    return get_order(db, order_id)
+    result = get_order(db, order_id)
+    if new_status == "cancelled":
+        # Transient (non-persisted) attribute -- see OrderOut.from_model,
+        # which reads it off the model instance to surface what this
+        # cancellation took down with it. get_order above returns the
+        # same identity-mapped instance within this session, so it
+        # carries this through even though it was set on `order` (or, for
+        # `cancelled_production_batches`, computed after re-fetching).
+        result.cancellation_effects = cancellation_effects
+    return result
 
 
 def _maybe_send_confirmation_email(db: Session, order_id: int, user_id: int | None = None) -> None:
@@ -1017,7 +1175,7 @@ def split_order(db: Session, order_id: int, lines: list[dict], user_id: int | No
     return get_order(db, child.id)
 
 
-def _cancel_active_production_batches(db: Session, order_id: int, user_id: int | None = None) -> None:
+def _cancel_active_production_batches(db: Session, order_id: int, user_id: int | None = None) -> list[dict]:
     """Fires when an order is cancelled: any production batch still tied
     to it that hasn't finished -- 'planned' (not yet started), 'in_progress',
     or 'paused' -- is cancelled too, freeing the machine time and
@@ -1057,12 +1215,13 @@ def _cancel_active_production_batches(db: Session, order_id: int, user_id: int |
         .all()
     )
     if not active_batches:
-        return
+        return []
 
     order = db.query(Order).filter(Order.id == order_id).first()
     order_number = order.order_number if order else f"#{order_id}"
     reason = f"Order {order_number} was cancelled" + (f": {order.close_reason}" if order and order.close_reason else ".")
 
+    cancelled: list[dict] = []
     for batch in active_batches:
         try:
             production_service.change_status(db, batch.id, "cancelled", reason=reason, user_id=user_id)
@@ -1071,6 +1230,8 @@ def _cancel_active_production_batches(db: Session, order_id: int, user_id: int |
             # reason, leave it for a person to sort out rather than
             # blocking the order cancellation itself.
             continue
+        cancelled.append({"id": batch.id, "batch_number": batch.batch_number, "status": "cancelled"})
+    return cancelled
 
 
 def _maybe_auto_schedule_production(db: Session, order_id: int, user_id: int | None = None) -> None:
@@ -1433,15 +1594,9 @@ def create_order_from_quotation(db: Session, quotation_id: int, user_id: int | N
     from app.services import quotation_service
 
     quotation = quotation_service.get_quotation(db, quotation_id)
-    if quotation.status != "accepted":
-        raise ConflictError(
-            f"Only accepted quotations can be converted to an order (current status: '{quotation.status}')."
-        )
-    if not quotation.payment_link:
-        raise ConflictError(
-            "A payment link must be entered on this quotation (see quotation_service.set_payment_link) "
-            "before it can be converted to an order."
-        )
+    conversion_status, block_reasons = quotation_service.get_conversion_status(quotation)
+    if conversion_status != "ready":
+        raise ConflictError(" ".join(block_reasons) or "This quotation cannot be converted to an order.")
 
     order_number = number_series_service.next_number(db, "ORDER")
     lines = [

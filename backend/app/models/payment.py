@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import DATE, DECIMAL, ForeignKey, String, Text
+from sqlalchemy import DATE, DECIMAL, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -23,6 +23,16 @@ class Payment(Base, TimestampMixin, SoftDeleteMixin):
     payment means reversing it and recording a fresh one, keeping the
     same "never silently rewrite a financial entry" stance the rest of
     this app takes with completed production/shipped orders.
+
+    acknowledged_at/acknowledged_by is Finance confirming the money
+    actually landed -- distinct from created_by, who merely logged the
+    claim (e.g. Sales entering "customer says they transferred it").
+    Only acknowledged payments count toward the amount that unblocks
+    production for a non-credit order or completes a payment plan; see
+    payment_service.get_order_amount_acknowledged. A payment created by
+    someone who already holds "payments" write access is auto-
+    acknowledged at creation, since there's no second person to confirm
+    it with.
     """
 
     __tablename__ = "payments"
@@ -43,7 +53,10 @@ class Payment(Base, TimestampMixin, SoftDeleteMixin):
     # this back to the real money movement outside the app.
     reference: Mapped[str | None] = mapped_column(String(120), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    acknowledged_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    acknowledged_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
 
     order: Mapped[Order] = relationship(lazy="joined")
     customer: Mapped[Customer] = relationship(lazy="joined")
     creator: Mapped[User | None] = relationship(foreign_keys="Payment.created_by", lazy="joined")
+    acknowledger: Mapped[User | None] = relationship(foreign_keys="Payment.acknowledged_by", lazy="joined")

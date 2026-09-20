@@ -22,7 +22,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.timezone import now_kuwait_naive, today_kuwait
-from app.core.workflow import assert_transition_allowed
+from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.core.pagination import sort_and_paginate
 from app.models.production_execution import ProductionExecution
 from app.models.qc_agent import QcAgent
@@ -271,6 +271,8 @@ def record_report(
     row = _lock_request_row(db, request_id)
     new_status = result if result else "report_received"
     assert_transition_allowed(ALLOWED_TRANSITIONS, row.status, new_status, "QC request")
+    if result == "rejected":
+        assert_reason_given(remarks, "A rejection reason is required when recording a rejected QC result.")
 
     values = {
         "report_number": report_number,
@@ -297,22 +299,28 @@ def record_report(
     return get_request(db, row.id)
 
 
-def record_result(db: Session, request_id: int, result: str, user_id: int | None = None) -> QcRequest:
+def record_result(
+    db: Session, request_id: int, result: str, remarks: str | None = None, user_id: int | None = None
+) -> QcRequest:
     """Finishes a request that was left at 'report_received' with no
     conclusion yet -- the follow-up half of record_report's own
     docstring. Only reachable from 'report_received', so this too is a
     one-time, immutable decision (accepted/rejected are terminal)."""
     row = _lock_request_row(db, request_id)
     assert_transition_allowed(ALLOWED_TRANSITIONS, row.status, result, "QC request")
+    if result == "rejected":
+        assert_reason_given(remarks, "A rejection reason is required when recording a rejected QC result.")
 
-    db.query(QcRequest).filter(QcRequest.id == row.id).update(
-        {
-            "status": result,
-            "decided_date": today_kuwait(),
-            "decided_by": user_id,
-            "updated_by": user_id,
-        }
-    )
+    values = {
+        "status": result,
+        "decided_date": today_kuwait(),
+        "decided_by": user_id,
+        "updated_by": user_id,
+    }
+    if remarks is not None:
+        values["notes"] = remarks
+
+    db.query(QcRequest).filter(QcRequest.id == row.id).update(values)
 
     if result == "accepted":
         _release_execution_fg(db, row.production_execution_id, row.quantity, row.id, user_id)

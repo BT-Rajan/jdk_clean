@@ -77,6 +77,26 @@ export async function convertQuotationToOrder(id: number): Promise<Order> {
   return data
 }
 
+/** The one-click "Follow up" action -- logs that Sales just followed up
+ * with this customer and schedules the next one. Omit nextFollowupDate
+ * for a true one click (defaults server-side to today + 3 days). */
+export async function recordQuotationFollowup(id: number, nextFollowupDate?: string): Promise<Quotation> {
+  const { data } = await apiClient.post<Quotation>(`/api/quotations/${id}/follow-up`, {
+    next_followup_date: nextFollowupDate || undefined,
+  })
+  return data
+}
+
+/** Explicitly extends an expired quotation's validity and reopens it to
+ * 'sent' -- the deliberate way past the block on emailing an expired
+ * quotation. Omit validUntil to default to today + 7 days. */
+export async function renewQuotation(id: number, validUntil?: string): Promise<Quotation> {
+  const { data } = await apiClient.post<Quotation>(`/api/quotations/${id}/renew`, {
+    valid_until: validUntil || undefined,
+  })
+  return data
+}
+
 /** Triggers a browser download of the quotation PDF via a Blob response. */
 export async function downloadQuotationPdf(id: number, quotationNumber: string): Promise<void> {
   const response = await apiClient.get(`/api/quotations/${id}/pdf`, { responseType: 'blob' })

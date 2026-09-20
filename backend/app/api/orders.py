@@ -96,7 +96,8 @@ def get_order(
         .filter(Quotation.converted_order_id == order_id, Quotation.deleted_at.is_(None))
         .scalar()
     )
-    return OrderOut.from_model(order, quotation_number=quotation_number)
+    next_action = order_service.get_next_action(db, order)
+    return OrderOut.from_model(order, quotation_number=quotation_number, next_action=next_action)
 
 
 @router.get("/{order_id}/journey", response_model=OrderJourneyOut)
@@ -213,7 +214,8 @@ def update_status(
     order = order_service.change_status(
         db, order_id, payload.status, reason=payload.reason, user_id=user.id
     )
-    return OrderOut.from_model(order)
+    next_action = order_service.get_next_action(db, order)
+    return OrderOut.from_model(order, next_action=next_action)
 
 
 @router.post("/{order_id}/delivery-date", response_model=OrderOut)

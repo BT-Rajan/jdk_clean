@@ -52,6 +52,10 @@ const STATUS_TONES: Record<string, Tone> = {
   under_review: 'gold',
   on_hold: 'danger',
   exception: 'danger',
+  ready: 'success',
+  not_due: 'neutral',
+  due: 'gold',
+  overdue: 'danger',
 }
 
 export function Badge({ children, tone = 'neutral', className }: BadgeProps) {

@@ -25,8 +25,11 @@ class PaymentPlanOut(BaseModel):
     amount: float
     target_date: date
     notes: str | None
+    status: str
     created_at: datetime
     recorded_by_name: str | None = None
+    completed_at: datetime | None = None
+    completed_by_name: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -36,4 +39,5 @@ class PaymentPlanOut(BaseModel):
         data.order_number = obj.order.order_number if obj.order else None
         data.customer_name = obj.customer.name if obj.customer else None
         data.recorded_by_name = obj.creator.full_name if getattr(obj, "creator", None) else None
+        data.completed_by_name = obj.completer.full_name if getattr(obj, "completer", None) else None
         return data

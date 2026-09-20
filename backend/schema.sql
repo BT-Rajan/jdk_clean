@@ -597,7 +597,7 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     item_type       ENUM('raw_material','product') NOT NULL,
     item_id         BIGINT UNSIGNED NOT NULL,
-    movement_type   ENUM('receipt','issue','adjustment','production_in','production_out','return','return_to_supplier') NOT NULL,
+    movement_type   ENUM('receipt','issue','adjustment','production_in','production_out','return','return_to_supplier','reserve','release') NOT NULL,
     quantity        DECIMAL(14,4) NOT NULL,           -- positive = in, negative = out
     reference_type  VARCHAR(40) NULL,                 -- e.g. 'order', 'production_schedule'
     reference_id    BIGINT UNSIGNED NULL,
@@ -620,6 +620,37 @@ CREATE TABLE IF NOT EXISTS stock_movements (
     INDEX idx_stock_mov_reference (reference_type, reference_id),
     INDEX idx_stock_mov_supplier (supplier_id),
     CONSTRAINT fk_stock_mov_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- A manual stock adjustment whose |quantity| is at/above the configurable
+-- large-stock-adjustment threshold is held here pending admin approval
+-- instead of applying immediately -- see inventory_service.
+-- submit_manual_adjustment/approve_stock_adjustment_request.
+CREATE TABLE IF NOT EXISTS stock_adjustment_requests (
+    id                  BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    item_type           ENUM('raw_material','product') NOT NULL,
+    item_id             BIGINT UNSIGNED NOT NULL,
+    quantity            DECIMAL(14,4) NOT NULL,
+    movement_type       VARCHAR(20) NOT NULL,
+    reason              TEXT NOT NULL,
+    supplier_id         BIGINT UNSIGNED NULL,
+    unit_cost           DECIMAL(14,4) NULL,
+    batch_number        VARCHAR(60) NULL,
+    expiry_date         DATE NULL,
+    invoice_number      VARCHAR(60) NULL,
+    received_by         VARCHAR(120) NULL,
+    received_date       DATE NULL,
+    status              ENUM('pending','applied','rejected') NOT NULL DEFAULT 'pending',
+    rejection_reason    TEXT NULL,
+    resulting_movement_id BIGINT UNSIGNED NULL,
+    requested_by        BIGINT UNSIGNED NULL,
+    requested_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    decided_by          BIGINT UNSIGNED NULL,
+    decided_at          DATETIME NULL,
+    INDEX idx_stock_adj_req_status (status),
+    INDEX idx_stock_adj_req_item (item_type, item_id),
+    CONSTRAINT fk_stock_adj_req_supplier FOREIGN KEY (supplier_id) REFERENCES suppliers(id),
+    CONSTRAINT fk_stock_adj_req_movement FOREIGN KEY (resulting_movement_id) REFERENCES stock_movements(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
@@ -669,6 +700,7 @@ CREATE TABLE IF NOT EXISTS feasibility_checks (
     checked_at          DATETIME NULL,
     exception_reason    TEXT NULL,        -- Sales' reason for approving/rejecting a shortfall exception (the "override" comment)
     exception_by        BIGINT UNSIGNED NULL,
+    exception_at        DATETIME NULL,    -- when that decision was made
     close_reason        TEXT NULL,        -- Sales' reason for closing without generating a quotation
     notes               TEXT NULL,
     -- Admin notification: flagged when Sales overrides an infeasible result
@@ -807,6 +839,20 @@ CREATE TABLE IF NOT EXISTS orders (
     -- own child, a completely normal order from here on. NULL for every
     -- order created the ordinary way.
     parent_order_id BIGINT UNSIGNED NULL,
+    -- Who at Finance is chasing this order's outstanding balance, and
+    -- when they're next due to follow up (see payment_service.
+    -- set_payment_followup) -- drives the collection queue's
+    -- owner/next-follow-up columns. Independent of admin_review_*
+    -- above: that's an automatic escalation, this is a worklist entry.
+    payment_followup_owner_id BIGINT UNSIGNED NULL,
+    payment_followup_date     DATE NULL,
+    -- Set when Finance proceeds a non-credit order into production
+    -- despite acknowledged payments falling short of total_amount (see
+    -- payment_service.override_payment_gate) -- the "otherwise take an
+    -- override confirmation" branch of the finance-amount check.
+    payment_override_at     DATETIME NULL,
+    payment_override_by     BIGINT UNSIGNED NULL,
+    payment_override_reason TEXT NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -817,10 +863,13 @@ CREATE TABLE IF NOT EXISTS orders (
     CONSTRAINT fk_orders_approved_by FOREIGN KEY (approved_by) REFERENCES users(id),
     CONSTRAINT fk_orders_deal FOREIGN KEY (deal_id) REFERENCES deals(id),
     CONSTRAINT fk_orders_parent_order FOREIGN KEY (parent_order_id) REFERENCES orders(id),
+    CONSTRAINT fk_orders_payment_followup_owner FOREIGN KEY (payment_followup_owner_id) REFERENCES users(id),
+    CONSTRAINT fk_orders_payment_override_by FOREIGN KEY (payment_override_by) REFERENCES users(id),
     INDEX idx_orders_status (status),
     INDEX idx_orders_deal (deal_id),
     INDEX idx_orders_deleted_at (deleted_at),
-    INDEX idx_orders_parent (parent_order_id)
+    INDEX idx_orders_parent (parent_order_id),
+    INDEX idx_orders_payment_followup_date (payment_followup_date)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS order_details (
@@ -850,8 +899,16 @@ CREATE TABLE IF NOT EXISTS payments (
     amount          DECIMAL(14,2) NOT NULL,
     payment_date    DATE NOT NULL,
     method          VARCHAR(60) NULL,   -- free text, e.g. "Bank transfer", "Cheque", "Cash"
-    reference       VARCHAR(120) NULL,  -- bank ref / cheque number / transaction id
+    reference       VARCHAR(120) NULL,  -- bank ref / cheque number / transaction id -- mandatory for non-cash methods, see payment_service.create_payment
     notes           TEXT NULL,
+    -- Finance confirming the money actually landed -- distinct from
+    -- created_by, who merely logged the claim. Only acknowledged
+    -- payments count toward unblocking production for a non-credit
+    -- order or completing a payment plan (see payment_service.
+    -- get_order_amount_acknowledged). Auto-set at creation when the
+    -- creator already holds "payments" write access.
+    acknowledged_at DATETIME NULL,
+    acknowledged_by BIGINT UNSIGNED NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -859,6 +916,7 @@ CREATE TABLE IF NOT EXISTS payments (
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_payments_order FOREIGN KEY (order_id) REFERENCES orders(id),
     CONSTRAINT fk_payments_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_payments_acknowledged_by FOREIGN KEY (acknowledged_by) REFERENCES users(id),
     INDEX idx_payments_order (order_id),
     INDEX idx_payments_customer (customer_id),
     INDEX idx_payments_deleted_at (deleted_at)
@@ -875,6 +933,12 @@ CREATE TABLE IF NOT EXISTS payment_plans (
     amount          DECIMAL(14,2) NOT NULL,
     target_date     DATE NOT NULL,
     notes           TEXT NULL,
+    -- 'completed' only settable via payment_plan_service.
+    -- complete_payment_plan, which refuses while the order still has an
+    -- outstanding acknowledged balance.
+    status          ENUM('open','completed') NOT NULL DEFAULT 'open',
+    completed_at    DATETIME NULL,
+    completed_by    BIGINT UNSIGNED NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -882,6 +946,7 @@ CREATE TABLE IF NOT EXISTS payment_plans (
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_payment_plans_order FOREIGN KEY (order_id) REFERENCES orders(id),
     CONSTRAINT fk_payment_plans_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_payment_plans_completed_by FOREIGN KEY (completed_by) REFERENCES users(id),
     INDEX idx_payment_plans_order (order_id),
     INDEX idx_payment_plans_customer (customer_id),
     INDEX idx_payment_plans_deleted_at (deleted_at)
@@ -1083,6 +1148,11 @@ CREATE TABLE IF NOT EXISTS quotations (
     -- quotation_email vs. quotation_followup_email template based on
     -- whether this is still NULL.
     last_emailed_at DATETIME NULL,
+    -- Stamped by quotation_service.record_followup every time Sales logs
+    -- a customer follow-up; next_followup_date drives the Not Due/Due/
+    -- Overdue/Completed verdict (see get_followup_status).
+    last_followup_at DATETIME NULL,
+    next_followup_date DATE NULL,
     deleted_at      DATETIME NULL,
     created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     created_by      BIGINT UNSIGNED NULL,
@@ -1201,6 +1271,15 @@ CREATE TABLE IF NOT EXISTS production_schedules (
     -- Mandatory when status becomes 'paused' -- see
     -- app/models/production_schedule.py's comment on this column.
     pause_reason    TEXT NULL,
+    -- Mandatory when completed with produced_quantity different from
+    -- planned_quantity (either direction) -- see
+    -- app/models/production_schedule.py's comment on this column.
+    quantity_discrepancy_reason TEXT NULL,
+    -- Mandatory when a Production-Order-driven schedule's quantity is
+    -- allowed to exceed the order's remaining unscheduled quantity --
+    -- see app/services/production_order_schedule_service.py's
+    -- allow_overproduction path.
+    overproduction_reason TEXT NULL,
     notes           TEXT NULL,
     -- Set on completion when actual raw-material usage (see
     -- app/api/production_schedules.py's actual_materials) either exceeds

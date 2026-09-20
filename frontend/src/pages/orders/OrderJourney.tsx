@@ -96,6 +96,11 @@ export function OrderJourney({ orderId }: OrderJourneyProps) {
                   : `Requested ${formatDateTime(feasibility.created_at)}`}
                 {feasibility.required_by_date && ` · required by ${formatDate(feasibility.required_by_date)}`}
               </p>
+              {feasibility.blocker && (
+                <p className="mt-2 rounded-lg border border-amber-400/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+                  {feasibility.blocker}
+                </p>
+              )}
             </>
           ) : (
             <p className="text-sm text-white/40">No feasibility check on record for this order.</p>
@@ -130,6 +135,7 @@ export function OrderJourney({ orderId }: OrderJourneyProps) {
             {order.confirmed_delivery_date && ` · due ${formatDate(order.confirmed_delivery_date)}`}
           </p>
           <p className="mt-1 text-sm text-white/40">Placed {formatDateTime(order.created_at)}</p>
+          <p className="mt-2 text-sm font-medium text-gold-300">Next action: {order.next_action}</p>
         </Stage>
 
         <Stage label="Production" reached={production_batches.length > 0}>

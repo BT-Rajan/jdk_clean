@@ -1,12 +1,16 @@
 from sqlalchemy.orm import Session, joinedload
 
-from app.core.exceptions import NotFoundError, ValidationAppError
+from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.timezone import now_kuwait_naive
 from app.models.order import Order
 from app.models.payment_plan import PaymentPlan
-from app.services import audit_service
+from app.services import audit_service, payment_service
 
 TABLE_NAME = "payment_plans"
+
+# Same rounding tolerance payment_service uses when comparing an amount
+# against a total.
+_AMOUNT_TOLERANCE = 0.01
 
 
 def _base_query(db: Session, include_deleted: bool = False):
@@ -70,3 +74,40 @@ def delete_payment_plan(db: Session, order_id: int, payment_plan_id: int, user_i
     plan.updated_by = user_id
     audit_service.log_delete(db, TABLE_NAME, payment_plan_id, user_id)
     db.commit()
+
+
+def complete_payment_plan(db: Session, order_id: int, payment_plan_id: int, user_id: int | None = None) -> PaymentPlan:
+    """Marks a plan settled -- refused while its order still has an
+    outstanding acknowledged balance (payment_service.
+    get_order_amount_acknowledged), so a plan can't be closed out just
+    because its target date arrived if the money never actually landed
+    and was confirmed. Measured against the order's balance as a whole,
+    not this plan's own amount -- a plan is a commitment on the order,
+    not a ring-fenced sub-total distinct from any other payment against
+    it.
+    """
+    plan = get_payment_plan(db, payment_plan_id)
+    if plan.order_id != order_id:
+        raise NotFoundError("Payment plan")
+    if plan.status == "completed":
+        raise ConflictError("This payment plan has already been completed.")
+
+    outstanding = round(
+        float(plan.order.total_amount) - payment_service.get_order_amount_acknowledged(db, order_id), 2
+    )
+    if outstanding > _AMOUNT_TOLERANCE:
+        raise ConflictError(
+            f"Cannot complete this payment plan: {outstanding:.2f} is still outstanding and "
+            "unacknowledged on the order."
+        )
+
+    plan.status = "completed"
+    plan.completed_at = now_kuwait_naive()
+    plan.completed_by = user_id
+    plan.updated_by = user_id
+    audit_service.log_update(
+        db, TABLE_NAME, plan.id, {"status": ("open", "completed")}, user_id
+    )
+    db.commit()
+    db.refresh(plan)
+    return get_payment_plan(db, plan.id)

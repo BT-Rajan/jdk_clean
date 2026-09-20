@@ -1,6 +1,6 @@
-from datetime import date
+from datetime import date, datetime
 
-from sqlalchemy import DATE, DECIMAL, ForeignKey, Text
+from sqlalchemy import DATE, DECIMAL, DateTime, Enum, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -8,6 +8,8 @@ from app.models.customer import Customer
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.order import Order
 from app.models.user import BigPK, User
+
+PAYMENT_PLAN_STATUSES = ("open", "completed")
 
 
 class PaymentPlan(Base, TimestampMixin, SoftDeleteMixin):
@@ -30,6 +32,12 @@ class PaymentPlan(Base, TimestampMixin, SoftDeleteMixin):
     to it. Soft-deletable rather than editable, same "never silently
     rewrite a financial entry" stance as Payment: correcting a wrongly
     recorded plan means reversing it and recording a fresh one.
+
+    status starts 'open' and can only move to 'completed' via
+    payment_plan_service.complete_payment_plan, which refuses while the
+    order still has an outstanding balance (see get_order_amount_
+    acknowledged) -- a plan can't be marked done just because its target
+    date arrived if the money never actually did.
     """
 
     __tablename__ = "payment_plans"
@@ -42,7 +50,13 @@ class PaymentPlan(Base, TimestampMixin, SoftDeleteMixin):
     # The single date this amount is committed to be settled by.
     target_date: Mapped[date] = mapped_column(DATE, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(
+        Enum(*PAYMENT_PLAN_STATUSES, name="payment_plan_status"), nullable=False, default="open"
+    )
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
 
     order: Mapped[Order] = relationship(lazy="joined")
     customer: Mapped[Customer] = relationship(lazy="joined")
     creator: Mapped[User | None] = relationship(foreign_keys="PaymentPlan.created_by", lazy="joined")
+    completer: Mapped[User | None] = relationship(foreign_keys="PaymentPlan.completed_by", lazy="joined")

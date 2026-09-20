@@ -9,12 +9,18 @@ from datetime import date, datetime
 import pytest
 
 from app.core.exceptions import ConflictError, ValidationAppError
-from app.services import production_order_material_service, production_order_service
+from app.services import (
+    production_execution_service,
+    production_order_material_service,
+    production_order_schedule_service,
+    production_order_service,
+)
 
 from .factories import (
     make_bom,
     make_bom_line,
     make_customer,
+    make_machine,
     make_order,
     make_packaging_line,
     make_product,
@@ -204,3 +210,47 @@ def test_calculation_rejected_for_inactive_bom(db):
 
     with pytest.raises(ValidationAppError):
         production_order_material_service.calculate(db, po.id)
+
+
+def test_recalculation_rejected_once_execution_has_started(db):
+    # The Production Order's own status stays 'planned' throughout
+    # scheduling/allocation/execution (only 'cancelled' exists as the
+    # alternative), so that status guard alone doesn't stop a
+    # recalculation from silently wiping requirement rows that real
+    # consumption/allocation history has already been recorded against
+    # -- calculate() must also check for a started execution directly.
+    po, product = _planned_production_order(db, 100)
+    cement = make_raw_material(db)
+    make_bom(db, product.id, output_quantity=1)
+    make_bom_line(db, product.id, "raw_material", cement.id, quantity=1)
+    set_stock(db, cement.id, 1000)
+    production_order_material_service.calculate(db, po.id)
+
+    machine = make_machine(db)
+    schedule = production_order_schedule_service.create_schedule(
+        db,
+        po.id,
+        {"machine_id": machine.id, "planned_start": datetime(2026, 9, 25, 8, 0), "planned_end": datetime(2026, 9, 25, 20, 0)},
+    )
+    production_execution_service.start_execution(db, po.id, schedule.id)
+
+    with pytest.raises(ConflictError, match="execution has started"):
+        production_order_material_service.calculate(db, po.id)
+
+
+def test_recalculation_still_allowed_before_execution_starts(db):
+    po, product = _planned_production_order(db, 100)
+    cement = make_raw_material(db)
+    make_bom(db, product.id, output_quantity=1)
+    make_bom_line(db, product.id, "raw_material", cement.id, quantity=1)
+    production_order_material_service.calculate(db, po.id)
+
+    machine = make_machine(db)
+    production_order_schedule_service.create_schedule(
+        db,
+        po.id,
+        {"machine_id": machine.id, "planned_start": datetime(2026, 9, 25, 8, 0), "planned_end": datetime(2026, 9, 25, 20, 0)},
+    )
+
+    requirements = production_order_material_service.calculate(db, po.id)
+    assert len(requirements) == 1

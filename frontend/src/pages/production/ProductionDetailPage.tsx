@@ -49,6 +49,33 @@ import { StatusTransitionButtons } from '@/components/status/StatusTransitionBut
 import { productionAdminReviewSchema, type ProductionAdminReviewFormValues } from '@/lib/validation'
 import { ProductionReadinessPanel } from './ProductionReadinessPanel'
 
+/** Calendar days scheduled_start through scheduled_end, inclusive -- a
+ * batch scheduled start==end is a 1-day job. */
+function plannedDurationDays(startISO: string, endISO: string): number {
+  const start = new Date(`${startISO}T00:00:00`)
+  const end = new Date(`${endISO}T00:00:00`)
+  return Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)) + 1
+}
+
+function actualDurationHours(startISO: string, endISO: string): number {
+  return (new Date(endISO).getTime() - new Date(startISO).getTime()) / (1000 * 60 * 60)
+}
+
+function formatHoursAsDaysHours(hours: number): string {
+  const days = Math.floor(hours / 24)
+  const remainder = Math.round((hours - days * 24) * 10) / 10
+  return days === 0 ? `${remainder}h` : `${days}d ${remainder}h`
+}
+
+/** produced_quantity - planned_quantity, signed -- "+3 over plan" /
+ * "-4 under plan" / "on plan". */
+function formatQuantityVariance(delta: number, unit: string | null): string {
+  const rounded = Math.round(delta * 10000) / 10000
+  if (Math.abs(rounded) < 0.0001) return 'On plan'
+  const sign = rounded > 0 ? '+' : ''
+  return `${sign}${rounded} ${unit ?? ''} ${rounded > 0 ? 'over' : 'under'} plan`
+}
+
 function AdminReviewModal({
   open,
   onClose,
@@ -112,6 +139,11 @@ export function ProductionDetailPage() {
   const [adminReviewOpen, setAdminReviewOpen] = useState(false)
   const [justDeleted, setJustDeleted] = useState(false)
   const [producedQuantity, setProducedQuantity] = useState('')
+  // Only asked for -- and only required -- when completing would leave
+  // produced_quantity different from planned_quantity (see the backend's
+  // own tolerance in production_service.QUANTITY_DISCREPANCY_TOLERANCE).
+  const [discrepancyReason, setDiscrepancyReason] = useState('')
+  const [discrepancyReasonError, setDiscrepancyReasonError] = useState<string | null>(null)
   const [materialRequirements, setMaterialRequirements] = useState<MaterialRequirement[]>([])
   // User-entered overrides only -- a material with no entry here shows
   // (and, on submit, uses) the BOM's planned figure scaled to whatever
@@ -217,12 +249,39 @@ export function ProductionDetailPage() {
     try {
       const updated = await updateProductionBatchStatus(batchId, status, undefined, reason)
       setBatch(updated)
-      setNotice(`Status changed to ${status.replace(/_/g, ' ')}.`)
+      const unscheduled = updated.resulting_unscheduled_quantity
+      setNotice(
+        `Status changed to ${status.replace(/_/g, ' ')}.` +
+          (unscheduled != null
+            ? ` This order now has ${unscheduled} ${updated.unit ?? ''} of ${updated.product_name ?? 'this product'} unscheduled.`
+            : ''),
+      )
     } catch (err) {
       setError(getApiErrorMessage(err))
     } finally {
       setBusy(false)
     }
+  }
+
+  /** Pre-fills the "New batch" form with this batch's product/order/
+   * machine and however much of the order line is still unsatisfied
+   * (order_quantity_summary.remaining -- accounts for every other batch
+   * on the same order+product, not just this one's own shortfall), so
+   * rescheduling cancelled or under-completed production is a couple of
+   * clicks instead of re-entering everything from scratch. Dates aren't
+   * pre-filled: whatever this batch was scheduled for is in the past by
+   * now, so a fresh pair is always needed. */
+  function handleReschedule() {
+    if (!batch) return
+    const remaining = batch.order_quantity_summary
+      ? batch.order_quantity_summary.remaining
+      : Math.max(batch.planned_quantity - batch.produced_quantity, 0)
+    const params = new URLSearchParams({
+      product_id: String(batch.product_id),
+      planned_quantity: String(remaining || batch.planned_quantity),
+    })
+    if (batch.order_id) params.set('order_id', String(batch.order_id))
+    navigate(`/production/new?${params.toString()}`)
   }
 
   function buildActualMaterials(): ActualMaterialUsed[] | undefined {
@@ -244,18 +303,28 @@ export function ProductionDetailPage() {
   }
 
   async function handleComplete() {
+    if (!batch) return
+    const quantity = Number(producedQuantity)
+    const thisRound = Number.isFinite(quantity) && quantity > 0 ? quantity : 0
+    const finalQuantity = batch.produced_quantity + thisRound
+    const hasDiscrepancy = Math.abs(finalQuantity - batch.planned_quantity) > 0.0001
+    if (hasDiscrepancy && !discrepancyReason.trim()) {
+      setDiscrepancyReasonError('A reason is required: this would complete at a different quantity than planned.')
+      return
+    }
+    setDiscrepancyReasonError(null)
     setBusy(true)
     setError(null)
     try {
-      const quantity = Number(producedQuantity)
       const updated = await updateProductionBatchStatus(
         batchId,
         'completed',
-        Number.isFinite(quantity) && quantity > 0 ? quantity : undefined,
-        undefined,
+        thisRound > 0 ? thisRound : undefined,
+        hasDiscrepancy ? discrepancyReason.trim() : undefined,
         buildActualMaterials(),
       )
       setBatch(updated)
+      setDiscrepancyReason('')
       setNotice(
         updated.material_discrepancy_flag
           ? 'Batch completed, but actual material usage needs a look -- see below.'
@@ -350,6 +419,22 @@ export function ProductionDetailPage() {
   const nextStatuses = PRODUCTION_TRANSITIONS[batch.status]
   const canComplete = allowWrite && !justDeleted && nextStatuses.includes('completed')
   const otherTransitions = nextStatuses.filter((s) => s !== 'completed')
+  // Readiness only gates the 'planned' -> 'in_progress' transition --
+  // shown right beside the Start button instead of only discoverable by
+  // scrolling down to the readiness panel.
+  const startBlockedReason =
+    batch.status === 'planned' && readiness && readiness.status !== 'READY' ? readiness.summary : undefined
+  const canReschedule =
+    allowWrite &&
+    !justDeleted &&
+    (batch.status === 'cancelled' || (batch.status === 'completed' && batch.produced_quantity < batch.planned_quantity))
+  // Live projection of whether completing right now, with whatever's
+  // currently typed into the quantity box, would leave produced_quantity
+  // different from planned_quantity -- same tolerance the backend itself
+  // enforces (production_service.QUANTITY_DISCREPANCY_TOLERANCE).
+  const projectedProducedQuantity =
+    batch.produced_quantity + (Number.isFinite(Number(producedQuantity)) ? Number(producedQuantity) || 0 : 0)
+  const hasProjectedDiscrepancy = Math.abs(projectedProducedQuantity - batch.planned_quantity) > 0.0001
 
   // A material's approved alternatives, keyed by the BOM material's own id
   // -- read straight from the one readiness computation, never re-derived.
@@ -363,6 +448,9 @@ export function ProductionDetailPage() {
         actions={
           !justDeleted ? (
             <>
+              {canReschedule && (
+                <Button size="sm" onClick={handleReschedule}>Reschedule</Button>
+              )}
               {allowWrite && batch.status === 'planned' && (
                 <Button
                   variant="primary"
@@ -400,6 +488,29 @@ export function ProductionDetailPage() {
         </div>
       )}
 
+      {batch.days_overdue != null && (
+        <div className="mb-6 rounded-xl border border-red-400/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+          {batch.days_overdue} day{batch.days_overdue === 1 ? '' : 's'} overdue -- past its scheduled end of{' '}
+          {formatDate(batch.scheduled_end)}.
+        </div>
+      )}
+
+      {batch.machine_conflicts.length > 0 && (
+        <div className="mb-6 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+          <p className="font-medium">Machine conflict -- {batch.machine_name} is also booked for:</p>
+          <ul className="mt-1 list-inside list-disc">
+            {batch.machine_conflicts.map((c) => (
+              <li key={c.id}>
+                <Link to={`/production/${c.id}`} className="underline hover:text-amber-100">
+                  {c.batch_number}
+                </Link>{' '}
+                ({formatDate(c.scheduled_start)} – {formatDate(c.scheduled_end)})
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {batch.admin_review_required && allowAdmin && (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
           <span>This batch is behind schedule and flagged for admin review.</span>
@@ -423,11 +534,38 @@ export function ProductionDetailPage() {
                 reasonLabel="Reason"
                 busy={busy}
                 onChange={handleStatusChange}
+                disabledStatuses={startBlockedReason ? { in_progress: startBlockedReason } : undefined}
               />
             </div>
           )}
         </div>
       </GlassCard>
+
+      {batch.order_quantity_summary && (
+        <GlassCard className="mb-6 p-6">
+          <p className="mb-3 text-xs font-medium tracking-wide text-white/50 uppercase">
+            This order's {batch.product_code ?? 'product'} line
+          </p>
+          <div className="flex flex-wrap gap-x-8 gap-y-2 text-sm">
+            <span className="text-white/60">
+              Ordered <span className="font-medium text-white">{batch.order_quantity_summary.ordered}</span>{' '}
+              {batch.unit}
+            </span>
+            <span className="text-white/60">
+              Scheduled <span className="font-medium text-white">{batch.order_quantity_summary.scheduled}</span>{' '}
+              {batch.unit}
+            </span>
+            <span className="text-white/60">
+              Produced <span className="font-medium text-white">{batch.order_quantity_summary.produced}</span>{' '}
+              {batch.unit}
+            </span>
+            <span className={batch.order_quantity_summary.remaining > 0 ? 'text-amber-300' : 'text-white/60'}>
+              Remaining{' '}
+              <span className="font-medium">{batch.order_quantity_summary.remaining}</span> {batch.unit}
+            </span>
+          </div>
+        </GlassCard>
+      )}
 
       {isActive && (
         <ProductionReadinessPanel readiness={readiness} loading={readinessLoading} error={readinessError} />
@@ -439,17 +577,37 @@ export function ProductionDetailPage() {
         <TabPanel id="summary" activeId={activeTab}>
           <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
             <Field label="Order" value={batch.order_number} />
+            <Field label="Machine" value={batch.machine_name} />
             <Field label="Planned quantity" value={`${batch.planned_quantity} ${batch.unit ?? ''}`} />
             <Field
               label="Produced quantity"
               value={batch.produced_quantity ? `${batch.produced_quantity} ${batch.unit ?? ''}` : null}
             />
+            {batch.produced_quantity > 0 && (
+              <Field
+                label="Planned vs actual quantity"
+                value={formatQuantityVariance(batch.produced_quantity - batch.planned_quantity, batch.unit)}
+              />
+            )}
             <Field label="Scheduled start" value={formatDate(batch.scheduled_start)} />
             <Field label="Scheduled end" value={formatDate(batch.scheduled_end)} />
+            <Field
+              label="Planned duration"
+              value={`${plannedDurationDays(batch.scheduled_start, batch.scheduled_end)} day(s)`}
+            />
             <Field label="Actual start" value={batch.actual_start ? formatDateTime(batch.actual_start) : null} />
             <Field label="Actual end" value={batch.actual_end ? formatDateTime(batch.actual_end) : null} />
+            {batch.actual_start && batch.actual_end && (
+              <Field
+                label="Actual duration"
+                value={formatHoursAsDaysHours(actualDurationHours(batch.actual_start, batch.actual_end))}
+              />
+            )}
             {batch.status === 'paused' && <Field label="Paused because" value={batch.pause_reason} />}
             {batch.status === 'cancelled' && <Field label="Cancelled because" value={batch.cancel_reason} />}
+            {batch.quantity_discrepancy_reason && (
+              <Field label="Quantity discrepancy reason" value={batch.quantity_discrepancy_reason} />
+            )}
           </dl>
           {batch.notes && (
             <div className="mt-6">
@@ -533,6 +691,18 @@ export function ProductionDetailPage() {
                 </Button>
                 <Button isLoading={busy} onClick={handleComplete}>Complete batch</Button>
               </div>
+              {hasProjectedDiscrepancy && (
+                <TextareaField
+                  label="Discrepancy reason"
+                  hint={`Completing at ${projectedProducedQuantity} ${batch.unit ?? ''} against a plan of ${batch.planned_quantity} ${batch.unit ?? ''} -- why?`}
+                  value={discrepancyReason}
+                  onChange={(e) => {
+                    setDiscrepancyReason(e.target.value)
+                    if (discrepancyReasonError) setDiscrepancyReasonError(null)
+                  }}
+                  error={discrepancyReasonError ?? undefined}
+                />
+              )}
               <p className="text-xs text-white/40">
                 <strong className="text-white/60">Log production</strong> records this round's output and keeps the
                 batch running -- pause it, or come back and log more later. <strong className="text-white/60">

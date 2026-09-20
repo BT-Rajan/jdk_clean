@@ -11,6 +11,9 @@ from app.services import payment_plan_service
 router = APIRouter(prefix="/api/orders/{order_id}/payment-plans", tags=["payment-plans"])
 read_guard = require_page_access("orders", "read")
 write_guard = require_page_access("orders", "write")
+# Completing a plan is Finance's own job, same as acknowledging a
+# payment -- see core/permissions.py's PAGE_KEYS comment.
+finance_guard = require_page_access("payments", "write")
 # Same as payments.py: reversing a recorded plan stays admin-only
 # regardless of "orders" write permission.
 admin_guard = require_role("admin")
@@ -46,3 +49,14 @@ def delete_payment_plan(
 ):
     payment_plan_service.delete_payment_plan(db, order_id, payment_plan_id, user_id=user.id)
     return {"message": "Deleted."}
+
+
+@router.post("/{payment_plan_id}/complete", response_model=PaymentPlanOut)
+def complete_payment_plan(
+    order_id: int,
+    payment_plan_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(finance_guard),
+):
+    plan = payment_plan_service.complete_payment_plan(db, order_id, payment_plan_id, user_id=user.id)
+    return PaymentPlanOut.from_model(plan)

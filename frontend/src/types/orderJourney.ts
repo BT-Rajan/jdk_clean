@@ -7,6 +7,9 @@ export interface JourneyFeasibility {
   required_by_date: string | null
   created_at: string
   checked_at: string | null
+  /** A still-relevant feasibility concern, if any -- see
+   * feasibility_service.get_blocker_summary. */
+  blocker: string | null
 }
 
 export interface JourneyQuotation {
@@ -28,6 +31,9 @@ export interface JourneyOrder {
   total_amount: number
   customer_name: string | null
   admin_review_required: boolean
+  /** A single "what to do next" sentence derived from this order's
+   * current status and its real production/delivery/payment state. */
+  next_action: string
   created_at: string
 }
 

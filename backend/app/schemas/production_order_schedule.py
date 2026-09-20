@@ -23,6 +23,13 @@ class ProductionOrderScheduleCreate(BaseModel):
     # before submitting.
     planned_end: datetime | None = None
     notes: str | None = Field(default=None, max_length=5000)
+    # When planned_quantity would exceed the production order's remaining
+    # unscheduled quantity, the request is rejected unless this is true --
+    # and then overproduction_reason becomes mandatory. See
+    # production_order_schedule_service._assert_within_requirement_or_
+    # overproduction_allowed.
+    allow_overproduction: bool = False
+    overproduction_reason: str | None = Field(default=None, max_length=5000)
 
 
 class ProductionOrderScheduleUpdate(BaseModel):
@@ -39,6 +46,8 @@ class ProductionOrderScheduleUpdate(BaseModel):
     planned_start: datetime | None = None
     planned_end: datetime | None = None
     notes: str | None = Field(default=None, max_length=5000)
+    allow_overproduction: bool = False
+    overproduction_reason: str | None = Field(default=None, max_length=5000)
 
 
 class ProductionOrderScheduleCancel(BaseModel):
@@ -73,4 +82,13 @@ class ProductionOrderScheduleSummaryOut(BaseModel):
     # production_order_schedule_service.get_schedule_summary's own
     # comment on why this stays a 3-state verdict, not a richer one.
     schedule_status: str
-    schedules: list[ProductionOrderScheduleItemOut]
+    # Earliest/latest planned_end across whatever's still active --
+    # None when nothing active exists yet to estimate from.
+    earliest_completion_date: datetime | None = None
+    latest_completion_date: datetime | None = None
+    # 'ready' | 'not_ready' | 'not_applicable' -- see
+    # production_order_schedule_service._machine_readiness.
+    machine_status: str = "not_applicable"
+    machine_issues: list[str] = []
+    active_schedules: list[ProductionOrderScheduleItemOut]
+    cancelled_schedules: list[ProductionOrderScheduleItemOut]

@@ -9,6 +9,8 @@ export interface ProductionBatch {
   product_code: string | null
   product_name: string | null
   unit: string | null
+  machine_id: number | null
+  machine_name: string | null
   order_id: number | null
   order_number: string | null
   planned_quantity: number
@@ -25,6 +27,9 @@ export interface ProductionBatch {
   /** Why production last stopped -- only meaningful while status is
    * 'paused' (or as history once resumed/closed out). */
   pause_reason: string | null
+  /** Why produced_quantity ended up different from planned_quantity --
+   * mandatory whenever it does, on completion. */
+  quantity_discrepancy_reason: string | null
   notes: string | null
   /** True when completing this batch found actual raw-material usage
    * either over a material's BOM-configured scrap allowance or below
@@ -42,8 +47,38 @@ export interface ProductionBatch {
    * production_readiness_service.quick_status). Populated by the list/get
    * endpoints, not the full breakdown -- see ReadinessResult for that. */
   readiness_status: ReadinessStatus | null
+  /** Only set on the response to the status-change call that just
+   * cancelled this batch, and only when it was tied to a still-active
+   * order -- how much of that order's demand for this product now has
+   * no batch scheduled against it at all. Null otherwise (including for
+   * every status other than 'cancelled'). */
+  resulting_unscheduled_quantity: number | null
+  /** ordered / scheduled / produced / remaining for this batch's own
+   * order+product -- only set on the single-batch GET, and only when
+   * this batch is tied to an order. */
+  order_quantity_summary: OrderProductQuantitySummary | null
+  /** How many days past scheduled_end this batch is right now -- null
+   * once closed out (completed/cancelled) or not overdue. */
+  days_overdue: number | null
+  /** Other booked batches sharing this batch's machine with an
+   * overlapping scheduled window -- only set on the single-batch GET. */
+  machine_conflicts: MachineConflict[]
   created_at: string
   updated_at: string
+}
+
+export interface MachineConflict {
+  id: number
+  batch_number: string
+  scheduled_start: string
+  scheduled_end: string
+}
+
+export interface OrderProductQuantitySummary {
+  ordered: number
+  scheduled: number
+  produced: number
+  remaining: number
 }
 
 /** Mirrors backend/app/schemas/production_readiness.py. */

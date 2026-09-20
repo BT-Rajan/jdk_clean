@@ -251,6 +251,18 @@ def make_customer(db: Session, **overrides) -> Customer:
     customer = Customer(
         customer_number=overrides.pop("customer_number", f"TESTCUST-{n}"),
         name=overrides.pop("name", f"Test Customer {n}"),
+        # Defaults to a credit facility -- id_verified so confirming an
+        # order for this customer doesn't hit order_service.
+        # get_confirm_block_reasons' own id-verification gate, and a
+        # large credit_limit so ordinary production/order/QC test setup
+        # doesn't get caught by payment_service.
+        # get_production_payment_block_reason's "no credit facility ->
+        # paid in full before production" rule -- neither of which is
+        # what most of those tests exercise. Tests specifically covering
+        # either gate pass credit_limit=0 and/or id_verified=False
+        # explicitly to opt back into an unverified "cash customer".
+        credit_limit=overrides.pop("credit_limit", 100_000_000),
+        id_verified=overrides.pop("id_verified", True),
         **overrides,
     )
     db.add(customer)

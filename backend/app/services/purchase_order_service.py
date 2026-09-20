@@ -242,6 +242,61 @@ def auto_draft_from_mrp_shortages(db: Session, user_id: int | None = None) -> li
     return created
 
 
+def create_purchase_order_for_shortage(
+    db: Session, raw_material_id: int, supplier_id: int, quantity: float, user_id: int | None = None
+) -> PurchaseOrder:
+    """Single-shortage counterpart to auto_draft_from_mrp_shortages -- for
+    the MRP report's own per-row "Create PO" action against one specific
+    suggested purchase, rather than drafting every current shortage's
+    suggestions at once. Same shape as that bulk pass's own PO
+    construction (one line, draft status, an expected_delivery_date
+    projected from the supplier's own lead time), just for exactly the
+    material/supplier/quantity the caller already has in front of them
+    on the report -- so the shortage row can show the resulting PO
+    number immediately (see api/mrp.py's create_po_for_shortage).
+    """
+    if quantity <= 0:
+        raise ValidationAppError("Quantity must be positive.")
+
+    material = (
+        db.query(RawMaterial).filter(RawMaterial.id == raw_material_id, RawMaterial.deleted_at.is_(None)).first()
+    )
+    if material is None:
+        raise ValidationAppError("This raw material no longer exists.")
+
+    supplier_line = (
+        db.query(SupplierMaterial)
+        .join(Supplier, SupplierMaterial.supplier_id == Supplier.id)
+        .filter(
+            SupplierMaterial.raw_material_id == raw_material_id,
+            SupplierMaterial.supplier_id == supplier_id,
+            SupplierMaterial.deleted_at.is_(None),
+            Supplier.deleted_at.is_(None),
+            Supplier.status == "active",
+        )
+        .first()
+    )
+    if supplier_line is None:
+        raise ValidationAppError("This supplier no longer supplies this material.")
+
+    today = today_kuwait()
+    lead_time = supplier_line.lead_time_days or 7
+    return create_purchase_order(
+        db,
+        {
+            "supplier_id": supplier_id,
+            "order_date": today,
+            "expected_delivery_date": today + timedelta(days=lead_time),
+            "notes": "Created from an MRP shortage.",
+            "auto_created": True,
+            "lines": [
+                {"raw_material_id": raw_material_id, "quantity": quantity, "unit_price": float(material.unit_cost)}
+            ],
+        },
+        user_id=user_id,
+    )
+
+
 def update_purchase_order(
     db: Session, po_id: int, data: dict, user_id: int | None = None
 ) -> PurchaseOrder:

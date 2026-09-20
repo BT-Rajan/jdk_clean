@@ -5,6 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 from app.core.validators import not_in_past
+from app.services import quotation_service
 
 
 class QuotationLineIn(BaseModel):
@@ -128,6 +129,28 @@ class QuotationPaymentLinkIn(BaseModel):
     payment_link: str = Field(min_length=1, max_length=500)
 
 
+class QuotationFollowupIn(BaseModel):
+    """The one-click "Follow up" action -- see quotation_service.
+    record_followup. next_followup_date is optional: omit it for a true
+    one-click follow-up (defaults to today + FOLLOWUP_INTERVAL_DAYS), or
+    give a specific date to schedule the next one further out."""
+
+    next_followup_date: date | None = None
+
+    @field_validator("next_followup_date")
+    @classmethod
+    def _next_followup_not_past(cls, v: date | None) -> date | None:
+        return not_in_past(v)
+
+
+class QuotationRenewIn(BaseModel):
+    """See quotation_service.renew_quotation -- the explicit, deliberate
+    way past an expired quotation's send-block. valid_until is optional
+    (defaults to today + QUOTATION_VALIDITY_DAYS)."""
+
+    valid_until: date | None = None
+
+
 class MaterialConflictOut(BaseModel):
     raw_material_id: int
     code: str
@@ -158,6 +181,12 @@ class QuotationOut(BaseModel):
     notes: str | None
     converted_order_id: int | None
     feasibility_id: int | None
+    # A still-relevant concern from the feasibility check this was raised
+    # from (approved despite a shortfall, or the check has since been
+    # revived and no longer reflects the approval this relied on) -- see
+    # quotation_service.get_feasibility_blocker. None for a standalone
+    # quotation or one whose check is a clean pass.
+    feasibility_blocker: str | None = None
     auto_created: bool
     close_reason: str | None
     payment_link: str | None = None
@@ -169,6 +198,17 @@ class QuotationOut(BaseModel):
     # fail before from_model ever gets to parse it.
     material_conflict_details: list[MaterialConflictOut] | None = None
     lines: list[QuotationLineOut] = []
+    last_followup_at: datetime | None = None
+    next_followup_date: date | None = None
+    # 'not_due' | 'due' | 'overdue' | 'completed' -- see
+    # quotation_service.get_followup_status.
+    followup_status: str = "not_due"
+    # 'converted' | 'ready' | 'blocked' -- see
+    # quotation_service.get_conversion_status. Computed on every row
+    # (list included), since it's derived purely from fields already
+    # loaded here -- no extra query.
+    conversion_status: str = "blocked"
+    conversion_block_reasons: list[str] = []
     created_at: datetime
     updated_at: datetime
 
@@ -180,6 +220,7 @@ class QuotationOut(BaseModel):
         data.customer_name = obj.customer.name if obj.customer else None
         data.customer_email = obj.customer.email if obj.customer else None
         data.deal_number = obj.deal.deal_number if obj.deal else None
+        data.feasibility_blocker = quotation_service.get_feasibility_blocker(obj)
         data.material_conflict_details = (
             json.loads(obj.material_conflict_notes) if obj.material_conflict_notes else None
         )
@@ -187,4 +228,6 @@ class QuotationOut(BaseModel):
             line.product_code = src.product.code if src.product else None
             line.product_name = src.product.name if src.product else None
             line.unit = src.product.unit if src.product else None
+        data.followup_status = quotation_service.get_followup_status(obj)
+        data.conversion_status, data.conversion_block_reasons = quotation_service.get_conversion_status(obj)
         return data

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.customer import Customer
 from app.models.deal import Deal
+from app.models.feasibility import FeasibilityCheck
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.product import Product
 from app.models.user import BigPK
@@ -102,9 +103,26 @@ class Quotation(Base, TimestampMixin, SoftDeleteMixin):
     # quotation_email vs. quotation_followup_email template based on
     # whether this is still NULL, then stamps it on send.
     last_emailed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Stamped by quotation_service.record_followup every time Sales logs a
+    # customer follow-up (a call, an email outside this app, ...) --
+    # distinct from last_emailed_at, which only ever reflects this app's
+    # own "Send email" action.
+    last_followup_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # When the next follow-up is due -- set by record_followup (defaults
+    # to today + FOLLOWUP_INTERVAL_DAYS there) or picked explicitly by
+    # Sales. Drives get_followup_status's Not Due/Due/Overdue verdict.
+    next_followup_date: Mapped[date | None] = mapped_column(DATE, nullable=True)
 
     customer: Mapped[Customer] = relationship(lazy="joined")
     deal: Mapped[Deal | None] = relationship(lazy="joined")
+    # The feasibility check this quotation was raised from, if any -- see
+    # quotation_service.get_feasibility_blocker, which surfaces a still-
+    # relevant concern from it (an approved-despite-shortfall override,
+    # or a status change since this quotation was created) directly on
+    # the quotation instead of making a person click through to find out.
+    feasibility: Mapped[FeasibilityCheck | None] = relationship(
+        foreign_keys="Quotation.feasibility_id", lazy="joined", viewonly=True
+    )
     lines: Mapped[list["QuotationDetail"]] = relationship(
         back_populates="quotation",
         cascade="all, delete-orphan",

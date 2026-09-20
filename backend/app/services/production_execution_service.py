@@ -25,7 +25,7 @@ from app.models.machine import Machine
 from app.models.production_execution import ALLOWED_TRANSITIONS, ProductionExecution
 from app.models.production_order import ProductionOrder
 from app.models.production_schedule import ProductionSchedule
-from app.services import audit_service, bom_service, production_order_material_service
+from app.services import audit_service, bom_service, packaging_service, production_order_material_service
 
 TABLE_NAME = "production_executions"
 
@@ -76,6 +76,13 @@ def _completed_quantity(db: Session, production_order_id: int, for_update: bool 
     return sum(float(row[0]) for row in query.all())
 
 
+def get_produced_quantity(db: Session, production_order_id: int) -> float:
+    """Public, read-only entry point for _completed_quantity -- for
+    callers (the Production Order resource itself) that just want the
+    current total, not the write-path's locking/exclusion options."""
+    return round(_completed_quantity(db, production_order_id), 4)
+
+
 def get_progress(db: Session, production_order_id: int) -> dict:
     """Planned/produced/remaining for a Production Order, plus every
     execution run -- always derived from this table's own rows, never a
@@ -114,7 +121,12 @@ def _lock_production_order(db: Session, production_order_id: int):
     lazy="joined" at the model level, so a plain entity query under
     with_for_update() would implicitly outer-join them."""
     locked = (
-        db.query(ProductionOrder.status, ProductionOrder.product_id, ProductionOrder.planned_quantity)
+        db.query(
+            ProductionOrder.status,
+            ProductionOrder.product_id,
+            ProductionOrder.planned_quantity,
+            ProductionOrder.order_id,
+        )
         .filter(ProductionOrder.id == production_order_id)
         .with_for_update()
         .first()
@@ -194,6 +206,16 @@ def start_execution(
     if po.status != "planned":
         raise ConflictError(f"Cannot start production for a production order in '{po.status}' status.")
 
+    if po.order_id:
+        from app.models.order import Order
+        from app.services import payment_service
+
+        order = db.query(Order).filter(Order.id == po.order_id, Order.deleted_at.is_(None)).first()
+        if order is not None:
+            block_reason = payment_service.get_production_payment_block_reason(db, order)
+            if block_reason:
+                raise ConflictError(f"Cannot start production: {block_reason}")
+
     schedule = _lock_schedule_row(db, schedule_id)
     if schedule.production_order_id != production_order_id:
         raise ValidationAppError("This schedule does not belong to the given production order.")
@@ -258,9 +280,9 @@ def complete_execution(
     actual_materials: list[dict] | None = None,
 ) -> ProductionExecution:
     """Closes out a run: records the actual quantity produced, consumes
-    the BOM-scaled raw materials for that quantity from whatever's
-    allocated to this Production Order, and locks the run against
-    further changes.
+    the BOM-scaled raw materials AND packaging materials for that
+    quantity from whatever's allocated to this Production Order, and
+    locks the run against further changes.
 
     Overproduction guard (spec P6 section 6) is enforced here against
     the Production Order's total, not this run's own planned_quantity --
@@ -328,6 +350,22 @@ def complete_execution(
     if actual_by_material:
         unknown = ", ".join(str(rid) for rid in actual_by_material)
         raise ValidationAppError(f"Raw material(s) {unknown} are not part of this product's BOM.")
+
+    # Packaging materials required for this quantity -- per finished-
+    # product unit, not scrap-inflated like a BOM line (see
+    # product_packaging.py's own docstring). Consumed the same way as any
+    # BOM material, through the same allocation-protected consume(): a
+    # packaging requirement row (source='packaging') is created by
+    # calculate() and allocatable exactly like a BOM row, so completion
+    # must actually draw it down too, not just calculate it (P3) and let
+    # it sit allocated-but-never-consumed forever.
+    for line in packaging_service.get_packaging(db, row.product_id):
+        quantity_needed = round(float(line.quantity_per_unit) * produced_quantity, 4)
+        if quantity_needed > 0:
+            production_order_material_service.consume(
+                db, row.production_order_id, line.packaging_material_id, quantity_needed, execution_id,
+                user_id=user_id, commit=False, source="packaging",
+            )
 
     ended_at = now_kuwait_naive()
     db.query(ProductionExecution).filter(ProductionExecution.id == row.id).update(

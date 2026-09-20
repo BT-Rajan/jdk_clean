@@ -130,14 +130,21 @@ export interface Feasibility {
   deal_id: number | null
   deal_number: string | null
   status: FeasibilityStatus
+  /** Who raised this check -- resolved from created_by. */
+  owner_name: string | null
   required_by_date: string | null
   checked_at: string | null
   exception_reason: string | null
+  /** Who made the reject/override-request decision, and when. */
+  exception_by_name: string | null
+  exception_at: string | null
   close_reason: string | null
   notes: string | null
   admin_review_required: boolean
   admin_review_reason: AdminReviewReason | null
   admin_reviewed_at: string | null
+  /** Who made the admin override decision. */
+  admin_reviewed_by_name: string | null
   admin_review_notes: string | null
   lines: FeasibilityLine[]
   created_at: string
@@ -146,7 +153,7 @@ export interface Feasibility {
 
 export interface FeasibilityPayload {
   customer_id: number
-  required_by_date?: string | null
+  required_by_date: string
   notes?: string | null
   lines: FeasibilityLineInput[]
 }

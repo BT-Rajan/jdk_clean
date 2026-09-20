@@ -31,7 +31,7 @@ import { todayDateInputMin } from '@/lib/validation'
 import { PaymentsPanel } from './PaymentsPanel'
 import { PaymentPlansPanel } from './PaymentPlansPanel'
 import { CreateProductionOrderModal } from './CreateProductionOrderModal'
-import type { Order, OrderFulfillmentLine } from '@/types/order'
+import type { Order, OrderCancellationEffects, OrderFulfillmentLine } from '@/types/order'
 import type { DeliveryNote } from '@/types/deliveryNote'
 import type { ProductionOrder } from '@/types/productionOrder'
 import type { QcRequest } from '@/types/qcRequest'
@@ -40,11 +40,38 @@ import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
 import { HistoryTimeline } from '@/components/history/HistoryTimeline'
 import { useAuth } from '@/hooks/useAuth'
-import { canWriteDepartment, isAdmin } from '@/lib/roles'
+import { canWriteDepartment, canWritePage, isAdmin } from '@/lib/roles'
 import { ORDER_STATUSES_REQUIRING_REASON, ORDER_TRANSITIONS } from '@/lib/statusTransitions'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
 import { orderAdminReviewSchema, type OrderAdminReviewFormValues } from '@/lib/validation'
 import { OrderJourney } from './OrderJourney'
+
+/** Turns what a cancellation took down with it into a short trailing
+ * clause for the status-change notice -- so cancelling an order shows
+ * which production batches, reservations and deliveries it just
+ * cancelled instead of a bare "Status changed to cancelled." */
+function describeCancellationEffects(effects: OrderCancellationEffects | null): string {
+  if (!effects) return ''
+  const parts: string[] = []
+  if (effects.cancelled_production_batches.length > 0) {
+    parts.push(
+      `production batch(es) ${effects.cancelled_production_batches.map((b) => b.batch_number).join(', ')} cancelled`,
+    )
+  }
+  if (effects.released_reservations.length > 0) {
+    parts.push(
+      `stock reservation(s) released for ${effects.released_reservations
+        .map((r) => `${r.quantity} × ${r.product_name ?? `product #${r.product_id}`}`)
+        .join(', ')}`,
+    )
+  }
+  if (effects.cancelled_delivery_notes.length > 0) {
+    parts.push(
+      `delivery note(s) ${effects.cancelled_delivery_notes.map((d) => d.delivery_note_number).join(', ')} reversed`,
+    )
+  }
+  return parts.length > 0 ? ` As a result: ${parts.join('; ')}.` : ''
+}
 
 function AdminReviewModal({
   open,
@@ -262,9 +289,15 @@ export function OrderDetailPage() {
   const { id } = useParams()
   const orderId = Number(id)
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, permissions } = useAuth()
   const allowWrite = canWriteDepartment(user, 'sales')
   const allowAdmin = isAdmin(user?.role)
+  // Finance's own actions (acknowledging a payment, overriding the
+  // production gate, setting a follow-up, completing a plan) are gated
+  // by the "payments" page_key rather than the fixed 'sales' department
+  // canWriteDepartment assumes -- Finance is an admin-created department
+  // like any other, not one of the handful this shortcut hardcodes.
+  const allowFinance = canWritePage(permissions, 'payments')
 
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
@@ -352,7 +385,7 @@ export function OrderDetailPage() {
     try {
       const updated = await updateOrderStatus(orderId, status, reason)
       setOrder(updated)
-      setNotice(`Status changed to ${status}.`)
+      setNotice(`Status changed to ${status}.${describeCancellationEffects(updated.cancellation_effects)}`)
       loadFulfillment()
       loadBlockStatus()
     } catch (err) {
@@ -572,6 +605,12 @@ export function OrderDetailPage() {
             <button type="button" onClick={handleRestore} className="font-medium text-gold-300 underline">Undo</button>
           )}
         </div>
+      )}
+
+      {order.next_action && (
+        <Alert variant="info">
+          <span className="font-medium">Next action:</span> {order.next_action}
+        </Alert>
       )}
 
       {order.status === 'draft' && blockStatus?.blocked && (
@@ -935,8 +974,8 @@ export function OrderDetailPage() {
       </TabPanel>
 
       <TabPanel id="payments" activeId={currentTab} className="flex flex-col gap-6">
-        <PaymentsPanel orderId={orderId} orderTotal={order.total_amount} allowWrite={allowWrite} allowAdmin={allowAdmin} />
-        <PaymentPlansPanel orderId={orderId} allowWrite={allowWrite} allowAdmin={allowAdmin} />
+        <PaymentsPanel orderId={orderId} orderTotal={order.total_amount} allowWrite={allowWrite} allowAdmin={allowAdmin} allowFinance={allowFinance} />
+        <PaymentPlansPanel orderId={orderId} allowWrite={allowWrite} allowAdmin={allowAdmin} allowFinance={allowFinance} />
       </TabPanel>
 
       <TabPanel id="journey" activeId={currentTab}>

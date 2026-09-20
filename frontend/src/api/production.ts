@@ -16,6 +16,9 @@ export interface ProductionListParams extends ListQueryParams {
   /** Only ever matches 'planned' batches -- see
    * production_service._list_planned_by_readiness. */
   readiness?: 'ready' | 'blocked'
+  /** Past scheduled_end and not completed/cancelled -- see
+   * production_service.get_days_overdue. */
+  overdue?: boolean
 }
 
 export async function listProductionBatches(
@@ -108,6 +111,23 @@ export async function getMaterialRequirements(batchId: number): Promise<Material
  * backend/app/services/production_readiness_service.py. */
 export async function getProductionReadiness(batchId: number): Promise<ReadinessResult> {
   const { data } = await apiClient.get<ReadinessResult>(`/api/production-schedules/${batchId}/readiness`)
+  return data
+}
+
+/** The same materials/machine/worker readiness breakdown as
+ * getProductionReadiness, but for a batch that doesn't exist yet -- lets
+ * the "New batch" form preview machine availability and worker
+ * requirement vs. available before the user commits to a schedule. See
+ * backend/app/services/production_service.py's
+ * check_readiness_for_candidate_batch. */
+export async function checkProductionReadinessPrecreate(params: {
+  product_id: number
+  quantity: number
+  scheduled_start?: string
+  scheduled_end?: string
+  machine_id?: number
+}): Promise<ReadinessResult> {
+  const { data } = await apiClient.get<ReadinessResult>('/api/production-schedules/check-readiness', { params })
   return data
 }
 

@@ -2,6 +2,10 @@
 
 export type ProductionOrderStatus = 'planned' | 'cancelled'
 export type ProductionOrderPriority = 'low' | 'normal' | 'high' | 'urgent'
+/** 'make_to_order' when order_detail_id is set, 'make_to_stock'
+ * otherwise -- purely derived server-side, never a separately stored
+ * choice (see backend/app/schemas/production_order.py). */
+export type ProductionType = 'make_to_order' | 'make_to_stock'
 
 export interface ProductionOrder {
   id: number
@@ -14,16 +18,29 @@ export interface ProductionOrder {
   customer_id: number | null
   customer_name: string | null
   order_detail_id: number | null
+  /** The source order line's own unit price -- alongside
+   * ordered_quantity, identifies which line the production order was
+   * raised against. null for a stock-only order. */
+  order_line_unit_price: number | null
   product_id: number
   product_code: string | null
   product_name: string | null
   unit: string | null
   ordered_quantity: number | null
   planned_quantity: number
+  production_type: ProductionType
   /** How much of this order line has yet to be committed to ANY
    * Production Order -- computed server-side, not stored. Does not net
    * off actual output (there is none yet -- execution is a later pass). */
   remaining_order_quantity: number | null
+  /** required/scheduled/produced/remaining/unscheduled, all computed
+   * server-side and never stored -- see ProductionOrderOut's own
+   * comment. required_quantity mirrors planned_quantity. */
+  required_quantity: number | null
+  scheduled_quantity: number | null
+  produced_quantity: number | null
+  remaining_quantity: number | null
+  unscheduled_quantity: number | null
   due_date: string
   priority: ProductionOrderPriority
   status: ProductionOrderStatus

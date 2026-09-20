@@ -8,7 +8,7 @@ from app.models.customer import Customer
 from app.models.deal import Deal
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.product import Product
-from app.models.user import BigPK
+from app.models.user import BigPK, User
 
 ORDER_STATUSES = (
     "draft",
@@ -128,6 +128,25 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     # informational, so Sales can see it never actually went out and
     # resend by hand via the ordinary "Send email" button.
     confirmation_emailed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Who at Finance is chasing this order's outstanding balance, and
+    # when they're next due to follow up -- both purely informational
+    # (set via payment_service.set_payment_followup), drive the
+    # collection queue's "owner"/"next follow-up" columns. Independent
+    # of admin_review_required/payment_overdue: that's an automatic
+    # escalation trigger, this is a person's own worklist entry.
+    payment_followup_owner_id: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+    payment_followup_date: Mapped[date | None] = mapped_column(DATE, nullable=True)
+    # Set when Finance proceeds a non-credit order into production despite
+    # acknowledged payments falling short of total_amount (see
+    # payment_service.override_payment_gate) -- the "otherwise take an
+    # override confirmation" branch of the finance-amount check. NULL
+    # whenever production was gated on payment in full the ordinary way.
+    payment_override_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    payment_override_by: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+    payment_override_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    payment_followup_owner: Mapped[User | None] = relationship(
+        foreign_keys=[payment_followup_owner_id], lazy="joined"
+    )
     # Set when this order was itself born out of order_service.split_order
     # -- carving a deliverable-now quantity off a 'ready_to_ship' order
     # that stock can't fully cover yet (see that function's docstring).

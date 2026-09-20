@@ -1,6 +1,7 @@
 import json
 from datetime import date
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError, ValidationAppError
@@ -8,7 +9,7 @@ from app.core.pagination import sort_and_paginate
 from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed, assert_within_backdate_window
 from app.models.machine import Machine
-from app.models.order import Order
+from app.models.order import OPEN_STATUSES, Order, OrderDetail
 from app.models.product import Product
 from app.models.production_schedule import ALLOWED_TRANSITIONS, ProductionSchedule
 from app.models.raw_material import RawMaterial
@@ -23,6 +24,12 @@ from app.services import (
 )
 
 TABLE_NAME = "production_schedules"
+
+# How far produced_quantity can drift from planned_quantity on
+# completion before it counts as a genuine discrepancy requiring a
+# reason -- just enough to absorb floating-point/rounding noise on a
+# DECIMAL(14,4) column, not a real under/over-run.
+QUANTITY_DISCREPANCY_TOLERANCE = 1e-4
 
 
 def _base_query(db: Session, include_deleted: bool = False):
@@ -73,6 +80,7 @@ def list_batches(
     order_id: int | None = None,
     sort: str | None = None,
     readiness: str | None = None,
+    overdue: bool | None = None,
 ) -> dict:
     query = _base_query(db)
 
@@ -84,6 +92,14 @@ def list_batches(
         query = query.filter(ProductionSchedule.order_id == order_id)
     if search:
         query = query.filter(ProductionSchedule.batch_number.ilike(f"%{search}%"))
+    if overdue:
+        # Same condition escalate_overdue_batches flags for admin review
+        # -- past its expected completion date and not yet closed out
+        # one way or another, whatever its current status.
+        query = query.filter(
+            ProductionSchedule.status.notin_(("completed", "cancelled")),
+            ProductionSchedule.scheduled_end < today_kuwait(),
+        )
 
     if readiness:
         # Readiness isn't a stored column (see production_readiness_service)
@@ -119,6 +135,35 @@ def _list_planned_by_readiness(
         "page_size": page_size,
         "total_pages": (total + page_size - 1) // page_size if page_size else 0,
     }
+
+
+def check_readiness_for_candidate_batch(
+    db: Session,
+    product_id: int,
+    quantity: float,
+    scheduled_start: date | None = None,
+    scheduled_end: date | None = None,
+    machine_id: int | None = None,
+) -> dict:
+    """The same materials/machine/worker readiness check an existing
+    batch's own GET /{batch_id}/readiness runs, but for a batch that
+    doesn't exist yet -- lets the "New batch" form show machine
+    availability and worker requirement vs. available *before* the user
+    commits to a schedule, instead of only finding out via a
+    ConflictError after submitting. production_readiness_service.
+    check_readiness already takes a plain product/quantity/window/
+    machine rather than requiring a real batch row, so this is just the
+    product lookup in front of it.
+    """
+    product = _validate_product(db, product_id)
+    return production_readiness_service.check_readiness(
+        db,
+        product=product,
+        quantity=quantity,
+        scheduled_start=scheduled_start,
+        scheduled_end=scheduled_end,
+        machine_id=machine_id,
+    )
 
 
 def _reject_production_order_linked(batch: ProductionSchedule) -> None:
@@ -201,7 +246,10 @@ def _reserve_batch_materials(db: Session, batch: ProductionSchedule) -> None:
     requirements = bom_service.explode_requirements(db, batch.product_id, float(batch.planned_quantity))
     for raw_material_id, required_qty in requirements.items():
         if required_qty > 0:
-            inventory_service.reserve_stock(db, "raw_material", raw_material_id, required_qty)
+            inventory_service.reserve_stock(
+                db, "raw_material", raw_material_id, required_qty,
+                reference_type="production_schedule", reference_id=batch.id,
+            )
 
 
 def _release_reservation_for_quantity(
@@ -217,7 +265,10 @@ def _release_reservation_for_quantity(
     requirements = bom_service.explode_requirements(db, batch.product_id, quantity)
     for raw_material_id, required_qty in requirements.items():
         if required_qty > 0:
-            inventory_service.release_reservation(db, "raw_material", raw_material_id, required_qty, commit=commit)
+            inventory_service.release_reservation(
+                db, "raw_material", raw_material_id, required_qty,
+                reference_type="production_schedule", reference_id=batch.id, commit=commit,
+            )
 
 
 def _release_batch_materials(db: Session, batch: ProductionSchedule, commit: bool = True) -> None:
@@ -290,15 +341,40 @@ def get_material_requirements(db: Session, batch_id: int) -> list[dict]:
     return results
 
 
+def _assert_no_duplicate_scheduling(
+    db: Session, order_id: int, product_id: int, planned_quantity: float, exclude_batch_id: int | None = None
+) -> None:
+    """Blocks scheduling more against an order line than it actually
+    still needs -- see get_order_product_quantity_summary's own
+    docstring for how 'remaining' is derived. Without this, nothing
+    stopped several batches from independently covering the same
+    already-satisfied quantity (each individually valid, but jointly
+    scheduling more than the order line could ever need)."""
+    summary = get_order_product_quantity_summary(db, order_id, product_id, exclude_batch_id=exclude_batch_id)
+    if summary["ordered"] <= 0:
+        # Not actually a line on this order -- _validate_order/
+        # _validate_product already gate the order/product existing at
+        # all; nothing further to guard here.
+        return
+    if planned_quantity > summary["remaining"] + 1e-6:
+        raise ConflictError(
+            f"This order's line for this product only has {summary['remaining']} unit(s) still "
+            f"unsatisfied ({summary['produced']} produced and {summary['scheduled']} already scheduled "
+            f"against {summary['ordered']} ordered) -- {planned_quantity} would over-schedule it."
+        )
+
+
 def create_batch(db: Session, data: dict, user_id: int | None = None) -> ProductionSchedule:
     product = _validate_product(db, data["product_id"])
     order = None
     if data.get("order_id"):
         order = _validate_order(db, data["order_id"])
+        _assert_no_duplicate_scheduling(db, data["order_id"], data["product_id"], float(data["planned_quantity"]))
     if not data.get("machine_id"):
         data["machine_id"] = product.machine_id
     if data.get("machine_id"):
         _validate_machine(db, data["machine_id"])
+        _assert_no_machine_conflict(db, data["machine_id"], data["scheduled_start"], data["scheduled_end"])
 
     batch_number = number_series_service.next_number(db, "PRODUCTION_BATCH")
     batch = ProductionSchedule(batch_number=batch_number, created_by=user_id, **data)
@@ -326,6 +402,18 @@ def update_batch(db: Session, batch_id: int, data: dict, user_id: int | None = N
     if "machine_id" in data and data["machine_id"] and data["machine_id"] != batch.machine_id:
         _validate_machine(db, data["machine_id"])
 
+    new_machine_id = data["machine_id"] if "machine_id" in data else batch.machine_id
+    new_scheduled_start = data.get("scheduled_start", batch.scheduled_start)
+    new_scheduled_end = data.get("scheduled_end", batch.scheduled_end)
+    if (
+        new_machine_id != batch.machine_id
+        or new_scheduled_start != batch.scheduled_start
+        or new_scheduled_end != batch.scheduled_end
+    ):
+        _assert_no_machine_conflict(
+            db, new_machine_id, new_scheduled_start, new_scheduled_end, exclude_batch_id=batch.id
+        )
+
     # Whatever's currently reserved was reserved against the batch's
     # *current* product/quantity -- if either is about to change, release
     # that exact hold before touching the fields, then re-reserve against
@@ -334,6 +422,17 @@ def update_batch(db: Session, batch_id: int, data: dict, user_id: int | None = N
     material_inputs_changed = ("product_id" in data and data["product_id"] != batch.product_id) or (
         "planned_quantity" in data and float(data["planned_quantity"]) != float(batch.planned_quantity)
     )
+    scheduling_inputs_changed = material_inputs_changed or (
+        "order_id" in data and data["order_id"] != batch.order_id
+    )
+    new_order_id = data["order_id"] if "order_id" in data else batch.order_id
+    if scheduling_inputs_changed and new_order_id:
+        new_product_id = data.get("product_id", batch.product_id)
+        new_planned_quantity = float(data.get("planned_quantity", batch.planned_quantity))
+        _assert_no_duplicate_scheduling(
+            db, new_order_id, new_product_id, new_planned_quantity, exclude_batch_id=batch.id
+        )
+
     if material_inputs_changed:
         _release_batch_materials(db, batch)
 
@@ -650,6 +749,12 @@ def change_status(
             readiness = production_readiness_service.check_batch_readiness(db, batch_id)
             if readiness["status"] != "READY":
                 raise ConflictError(f"Cannot start production: {readiness['summary']}")
+            if batch.order_id:
+                from app.services import payment_service
+
+                block_reason = payment_service.get_production_payment_block_reason(db, batch.order)
+                if block_reason:
+                    raise ConflictError(f"Cannot start production: {block_reason}")
             _start_batch(db, batch, user_id)
         # else old_status == "paused": resuming right where it left off --
         # actual_start/reservation/produced_quantity are all untouched, no
@@ -670,7 +775,16 @@ def change_status(
         # Whatever's left of the reservation beyond what's actually been
         # produced (across this call and any log_partial_production calls
         # before it) is forfeit -- closing out at less than planned_quantity
-        # is a deliberate choice to stop here, not an error.
+        # (or, less commonly, over it) is a deliberate choice, but one
+        # that now has to be explained: QUANTITY_DISCREPANCY_TOLERANCE
+        # allows for harmless rounding, not a genuine under/over-run.
+        if abs(float(batch.produced_quantity) - float(batch.planned_quantity)) > QUANTITY_DISCREPANCY_TOLERANCE:
+            assert_reason_given(
+                reason,
+                f"Produced quantity ({batch.produced_quantity}) differs from planned "
+                f"({batch.planned_quantity}) -- a reason is required to complete this batch.",
+            )
+            batch.quantity_discrepancy_reason = reason
         _release_batch_materials(db, batch, commit=False)
         batch.actual_end = now_kuwait_naive()
     elif new_status == "cancelled":
@@ -690,6 +804,172 @@ def change_status(
         _maybe_advance_order_to_ready_to_ship(db, batch.order_id, user_id)
 
     return get_batch(db, batch_id)
+
+
+def get_order_product_quantity_summary(
+    db: Session, order_id: int, product_id: int, exclude_batch_id: int | None = None
+) -> dict:
+    """The single "where does this order's production for this product
+    actually stand" figure -- ordered / scheduled / produced / remaining
+    -- combining every batch tied to that order+product instead of
+    making a person piece it together by hand from however many batches
+    exist. Used both to display that row directly on the production
+    batch detail page and, via `remaining`, to guard against scheduling
+    more than an order's line actually still needs (see
+    _assert_no_duplicate_scheduling) and to compute what's left to
+    reschedule after a cancellation (get_resulting_unscheduled_quantity).
+
+    - ordered: the order line's quantity for this product (0 if this
+      product isn't actually on the order).
+    - produced: cumulative produced_quantity across every batch tied to
+      this order+product, whatever its current status -- output already
+      made is real regardless of what happened to the batch afterward.
+    - scheduled: planned_quantity minus produced_quantity, summed across
+      only still-active (planned/in_progress/paused) batches -- capacity
+      genuinely committed but not yet delivered as output.
+    - remaining: max(ordered - produced - scheduled, 0) -- what's
+      neither been made nor has a batch covering it yet.
+
+    `exclude_batch_id` leaves one batch out of both produced and
+    scheduled entirely -- used when checking whether *that* batch's own
+    quantity would over-schedule the line (its own existing contribution
+    shouldn't count against itself), and when a cancelled batch (already
+    excluded from `scheduled` by its own status, but its produced_quantity
+    would otherwise still count) needs to be left out of `produced` too.
+    """
+    query = db.query(ProductionSchedule).filter(
+        ProductionSchedule.order_id == order_id,
+        ProductionSchedule.product_id == product_id,
+        ProductionSchedule.deleted_at.is_(None),
+    )
+    if exclude_batch_id is not None:
+        query = query.filter(ProductionSchedule.id != exclude_batch_id)
+    batches = query.all()
+
+    ordered = float(
+        db.query(func.coalesce(func.sum(OrderDetail.quantity), 0))
+        .filter(OrderDetail.order_id == order_id, OrderDetail.product_id == product_id)
+        .scalar()
+    )
+    produced = round(sum(float(b.produced_quantity) for b in batches), 4)
+    scheduled = round(
+        sum(
+            max(float(b.planned_quantity) - float(b.produced_quantity), 0.0)
+            for b in batches
+            if b.status in ("planned", "in_progress", "paused")
+        ),
+        4,
+    )
+    remaining = round(max(ordered - produced - scheduled, 0.0), 4)
+    return {"ordered": ordered, "scheduled": scheduled, "produced": produced, "remaining": remaining}
+
+
+def get_resulting_unscheduled_quantity(db: Session, batch: ProductionSchedule) -> float | None:
+    """After cancelling a batch tied to a still-active order, how much of
+    that order's demand for the batch's product now has no production
+    scheduled against it at all -- the exact number that would otherwise
+    only surface later, indirectly, via the MRP screen's "outstanding
+    order with no batch scheduled" pass (see mrp_service._quantity_to_produce).
+    Returned straight off the cancellation instead, so nobody has to go
+    looking for it.
+
+    None when the batch isn't cancelled, isn't tied to an order, or that
+    order is no longer active (cancelled, or already fully
+    shipped/delivered) -- the question is moot then.
+    """
+    if batch.status != "cancelled" or batch.order_id is None:
+        return None
+
+    order = db.query(Order).filter(Order.id == batch.order_id).first()
+    if order is None or order.status not in OPEN_STATUSES:
+        return None
+
+    summary = get_order_product_quantity_summary(db, order.id, batch.product_id, exclude_batch_id=batch.id)
+    if summary["ordered"] <= 0:
+        return None
+    return summary["remaining"]
+
+
+def get_days_overdue(batch: ProductionSchedule, today: date | None = None) -> int | None:
+    """How many days past scheduled_end this batch is -- the same
+    condition escalate_overdue_batches flags for admin review, but as a
+    number instead of a boolean, and computed live off the batch's
+    current fields rather than only whenever the periodic scan last ran.
+    None once it's closed out (completed/cancelled) or not yet overdue.
+    """
+    if batch.status in ("completed", "cancelled"):
+        return None
+    as_of = today or today_kuwait()
+    days = (as_of - batch.scheduled_end).days
+    return days if days > 0 else None
+
+
+def _find_machine_conflicts(
+    db: Session, machine_id: int, start: date, end: date, exclude_batch_id: int | None = None
+) -> list[ProductionSchedule]:
+    """Other booked batches (planned/in_progress/paused) on `machine_id`
+    whose own [scheduled_start, scheduled_end] overlaps [start, end] --
+    the shared window-overlap query behind both get_machine_conflicts
+    (an existing batch checking itself) and _assert_no_machine_conflict
+    (a not-yet-created/not-yet-changed batch checking a candidate
+    window before committing to it)."""
+    query = db.query(ProductionSchedule).filter(
+        ProductionSchedule.machine_id == machine_id,
+        ProductionSchedule.deleted_at.is_(None),
+        ProductionSchedule.status.in_(("planned", "in_progress", "paused")),
+        ProductionSchedule.scheduled_end >= start,
+        ProductionSchedule.scheduled_start <= end,
+    )
+    if exclude_batch_id is not None:
+        query = query.filter(ProductionSchedule.id != exclude_batch_id)
+    return query.all()
+
+
+def get_machine_conflicts(db: Session, batch: ProductionSchedule) -> list[dict]:
+    """Other booked batches sharing this batch's machine with an
+    overlapping scheduled window -- the literal, batch-level "what else
+    is fighting for this same machine slot" question, distinct from
+    production_readiness_service's hours-based capacity check (which
+    answers "is there enough free time in this window", not "which
+    specific other batch is double-booking it"). Empty when this batch
+    has no machine assigned, or isn't itself still occupying a slot
+    (completed/cancelled).
+    """
+    if batch.machine_id is None or batch.status not in ("planned", "in_progress", "paused"):
+        return []
+
+    others = _find_machine_conflicts(db, batch.machine_id, batch.scheduled_start, batch.scheduled_end, batch.id)
+    return [
+        {
+            "id": other.id,
+            "batch_number": other.batch_number,
+            "scheduled_start": other.scheduled_start,
+            "scheduled_end": other.scheduled_end,
+        }
+        for other in others
+    ]
+
+
+def _assert_no_machine_conflict(
+    db: Session, machine_id: int | None, scheduled_start: date, scheduled_end: date, exclude_batch_id: int | None = None
+) -> None:
+    """Blocks creating/editing a batch into a window that overlaps
+    another already-booked batch on the same machine -- the legacy
+    flow's own version of production_order_schedule_service._check_
+    conflict, which already prevents this for Production-Order-driven
+    schedules. Same table, same BOOKED_PRODUCTION_STATUSES-equivalent
+    filter (see _find_machine_conflicts), so a legacy batch and a
+    Production Order schedule on the same machine conflict with each
+    other exactly as two of either kind would."""
+    if machine_id is None:
+        return
+    conflicts = _find_machine_conflicts(db, machine_id, scheduled_start, scheduled_end, exclude_batch_id)
+    if conflicts:
+        other = conflicts[0]
+        raise ConflictError(
+            f"This machine is already booked by {other.batch_number} from "
+            f"{other.scheduled_start} to {other.scheduled_end}."
+        )
 
 
 def log_partial_production(

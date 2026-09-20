@@ -318,6 +318,24 @@ export function GeneralSettingsForm({ activeSection }: GeneralSettingsFormProps)
             />
           </div>
         </GlassCard>
+
+        <GlassCard className="p-8">
+          <h2 className="font-display text-lg font-medium text-white">Large stock adjustment approval</h2>
+          <p className="mt-1 text-sm text-white/50">
+            A manual stock adjustment whose quantity is at or above this can't apply immediately -- it's held for
+            an admin to approve or reject first. Leave blank to turn this off entirely.
+          </p>
+          <div className="mt-6">
+            <TextField
+              label="Approval threshold (quantity)"
+              type="number"
+              step="0.0001"
+              min="0"
+              placeholder="No threshold set -- approval not required"
+              {...register('large_stock_adjustment_threshold')}
+            />
+          </div>
+        </GlassCard>
       </TabPanel>
 
       <TabPanel id="ai-assistant" activeId={activeSection} keepMounted className="flex flex-col gap-8">

@@ -41,6 +41,10 @@ function isProductionNotification(n: Notification): boolean {
 }
 
 const ACTIVE_BATCH_STATUSES: ProductionStatus[] = ['planned', 'in_progress', 'paused']
+// Paused batches aren't paginated (a small, always-visible "needs
+// attention" list, not the main running-batches table) -- capped here
+// instead so an unusually long paused list can't blow out the page.
+const MAX_BATCHES = 5
 
 export function ProductionHomePage() {
   const [stats, setStats] = useState<DashboardStatsResponse | null>(null)
@@ -97,8 +101,19 @@ export function ProductionHomePage() {
     () => batches.filter((b) => ACTIVE_BATCH_STATUSES.includes(b.status)),
     [batches],
   )
+  const runningBatches = useMemo(() => activeBatches.filter((b) => b.status !== 'paused'), [activeBatches])
   const sortedBatches = useMemo(
-    () => [...activeBatches].sort((a, b) => a.scheduled_end.localeCompare(b.scheduled_end)),
+    () => [...runningBatches].sort((a, b) => a.scheduled_end.localeCompare(b.scheduled_end)),
+    [runningBatches],
+  )
+  // Shown as its own section, not folded into "what's running now" --
+  // a paused batch isn't actually running, and needs someone to notice
+  // it and resume/close it out, not just blend in with planned work.
+  const pausedBatches = useMemo(
+    () =>
+      activeBatches
+        .filter((b) => b.status === 'paused')
+        .sort((a, b) => a.scheduled_end.localeCompare(b.scheduled_end)),
     [activeBatches],
   )
 
@@ -226,7 +241,7 @@ export function ProductionHomePage() {
                   <Spinner size={24} className="text-gold-300" />
                 </div>
               ) : sortedBatches.length === 0 ? (
-                <EmptyState title="Nothing running" message="No batch is currently planned, in progress, or paused." />
+                <EmptyState title="Nothing running" message="No batch is currently planned or in progress." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
@@ -260,6 +275,45 @@ export function ProductionHomePage() {
               <Pagination className="px-6 pb-4" {...batchesPager.pagerProps} />
             </GlassCard>
           </div>
+
+          {!batchesLoading && pausedBatches.length > 0 && (
+            <div>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="font-display text-lg font-medium text-white">
+                  Paused ({pausedBatches.length})
+                </h2>
+                <Link to="/production" className="text-sm text-gold-300 hover:text-gold-200">
+                  View in production schedule →
+                </Link>
+              </div>
+              <GlassCard className="min-w-0 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                        <th className="px-6 py-4 font-medium">Batch</th>
+                        <th className="px-6 py-4 font-medium">Product</th>
+                        <th className="px-6 py-4 font-medium">Paused because</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pausedBatches.slice(0, MAX_BATCHES).map((b) => (
+                        <tr key={b.id} className="border-b border-white/5 last:border-0">
+                          <td className="px-6 py-4">
+                            <Link to={`/production/${b.id}`} className="font-medium text-gold-300 hover:text-gold-200">
+                              {b.batch_number}
+                            </Link>
+                          </td>
+                          <td className="px-6 py-4 text-white/60">{b.product_name ?? `#${b.product_id}`}</td>
+                          <td className="px-6 py-4 text-white/60">{b.pause_reason ?? '—'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </GlassCard>
+            </div>
+          )}
         </div>
       </div>
     </AppLayout>

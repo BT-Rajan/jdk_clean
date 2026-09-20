@@ -43,6 +43,11 @@ export interface Quotation {
   total_amount: number
   notes: string | null
   converted_order_id: number | null
+  /** A still-relevant concern from the feasibility check this was raised
+   * from (approved despite a shortfall, or the check has since been
+   * revived and no longer reflects the approval this relied on). Null
+   * for a standalone quotation or one whose check is a clean pass. */
+  feasibility_blocker: string | null
   /** Manually entered (from an external payment system) once this
    * quotation is 'accepted' -- required before it can be converted to
    * an order (see convertQuotationToOrder). Printed as a QR code on the
@@ -58,9 +63,22 @@ export interface Quotation {
   material_conflict_acknowledged: boolean
   material_conflict_details: MaterialConflict[] | null
   lines: QuotationLine[]
+  /** Stamped every time Sales logs a customer follow-up (a call, an
+   * email outside this app) -- distinct from being emailed through
+   * this app. See next_followup_date/followup_status. */
+  last_followup_at: string | null
+  next_followup_date: string | null
+  followup_status: FollowupStatus
+  /** Where this quotation stands re: becoming an order, and (for
+   * 'blocked') exactly why -- see conversion_block_reasons. */
+  conversion_status: ConversionStatus
+  conversion_block_reasons: string[]
   created_at: string
   updated_at: string
 }
+
+export type FollowupStatus = 'not_due' | 'due' | 'overdue' | 'completed'
+export type ConversionStatus = 'converted' | 'ready' | 'blocked'
 
 export interface MaterialConflictCompetitor {
   quotation_id: number

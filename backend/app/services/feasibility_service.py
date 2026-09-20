@@ -54,18 +54,31 @@ def _expiry_deadline_kuwait(feasibility: FeasibilityCheck) -> datetime | None:
     return datetime.combine(feasibility.created_at.date(), time(23, 59, 59))
 
 
+def _past_required_by_date(feasibility: FeasibilityCheck, today: date) -> bool:
+    """A second, independent expiry trigger alongside the same-day cutoff
+    above: even in the unlikely event a check somehow survives past the
+    day it was generated, it's moot once the customer's own required-by
+    date has passed -- there's no point holding it open for a need
+    that's already gone by. required_by_date is mandatory on every check
+    created from FeasibilityCreate onward (see that schema's own
+    docstring); still nullable at the column level for pre-existing
+    rows, which this simply never fires for."""
+    return feasibility.required_by_date is not None and today > feasibility.required_by_date
+
+
 def _expire_if_due(db: Session, feasibility: FeasibilityCheck) -> bool:
     """Expires a single check in place, right now, if it's open and past
-    its Kuwait-time cutoff -- called on every read/action path (not just
-    the periodic scan in core/scheduler.py) so a check never *displays*
-    or *acts* on a status that's already a few hours stale. The periodic
-    scan still exists to catch checks nobody happens to look at."""
+    either its Kuwait-time same-day cutoff or its own required-by date --
+    called on every read/action path (not just the periodic scan in
+    core/scheduler.py) so a check never *displays* or *acts* on a status
+    that's already stale. The periodic scan still exists to catch checks
+    nobody happens to look at."""
     if feasibility.deleted_at is not None or feasibility.status not in OPEN_STATUSES:
         return False
+    now = now_kuwait_naive()
     deadline = _expiry_deadline_kuwait(feasibility)
-    if deadline is None:
-        return False
-    if now_kuwait_naive() <= deadline:
+    past_same_day_cutoff = deadline is not None and now > deadline
+    if not past_same_day_cutoff and not _past_required_by_date(feasibility, now.date()):
         return False
 
     old_status = feasibility.status
@@ -87,6 +100,7 @@ def get_feasibility(db: Session, feasibility_id: int, include_deleted: bool = Fa
 _SORTABLE_FIELDS = {
     "feasibility_number": FeasibilityCheck.feasibility_number,
     "status": FeasibilityCheck.status,
+    "required_by_date": FeasibilityCheck.required_by_date,
     "created_at": FeasibilityCheck.created_at,
 }
 
@@ -593,6 +607,7 @@ def decide_exception(
 
     feasibility.exception_reason = reason
     feasibility.exception_by = user_id
+    feasibility.exception_at = now_kuwait_naive()
     feasibility.updated_by = user_id
 
     if not approve:
@@ -833,17 +848,20 @@ def escalate_stale_feasibility_checks(db: Session, as_of: date | None = None) ->
 
 def escalate_expired_feasibility_checks(db: Session, as_of: datetime | None = None) -> list[FeasibilityCheck]:
     """Expires every feasibility check not yet converted to a quotation
-    by 11:59pm Kuwait time on the calendar day it was generated
-    (created_at is already a naive Kuwait-local timestamp -- see
-    models/mixins.py's TimestampMixin -- so 'the day it was generated'
-    is simply its own calendar date, no UTC conversion involved).
-    Reachable from any open status (draft, feasible, exception_pending,
-    exception_approved, exception_rejected) -- wherever it was sitting
-    in the workflow when its day ended. Closed/converted checks are
-    already terminal and untouched here; an already-expired check is
-    excluded by the status filter on the next run, same idempotent
-    pattern as escalate_stale_feasibility_checks and quotation_service.
-    escalate_expired_quotations.
+    that's past either of two independent cutoffs: 11:59pm Kuwait time
+    on the calendar day it was generated (created_at is already a naive
+    Kuwait-local timestamp -- see models/mixins.py's TimestampMixin --
+    so 'the day it was generated' is simply its own calendar date, no
+    UTC conversion involved), or its own required_by_date -- see
+    _past_required_by_date's docstring for why that second trigger
+    exists even though the same-day cutoff almost always fires first in
+    practice. Reachable from any open status (draft, feasible,
+    exception_pending, exception_approved, exception_rejected) --
+    wherever it was sitting in the workflow when either deadline passed.
+    Closed/converted checks are already terminal and untouched here; an
+    already-expired check is excluded by the status filter on the next
+    run, same idempotent pattern as escalate_stale_feasibility_checks and
+    quotation_service.escalate_expired_quotations.
 
     Meant to be run periodically -- see core/scheduler.py, which runs
     this (and the other scan/escalate checks) every 6 hours, frequent
@@ -863,16 +881,16 @@ def escalate_expired_feasibility_checks(db: Session, as_of: datetime | None = No
     expired: list[FeasibilityCheck] = []
     for feasibility in candidates:
         deadline_kuwait = _expiry_deadline_kuwait(feasibility)
-        if deadline_kuwait is None:
+        past_same_day_cutoff = deadline_kuwait is not None and now > deadline_kuwait
+        if not past_same_day_cutoff and not _past_required_by_date(feasibility, now.date()):
             continue
 
-        if now > deadline_kuwait:
-            old_status = feasibility.status
-            feasibility.status = "expired"
-            audit_service.log_update(
-                db, TABLE_NAME, feasibility.id, {"status": (old_status, "expired")}, None
-            )
-            expired.append(feasibility)
+        old_status = feasibility.status
+        feasibility.status = "expired"
+        audit_service.log_update(
+            db, TABLE_NAME, feasibility.id, {"status": (old_status, "expired")}, None
+        )
+        expired.append(feasibility)
 
     if expired:
         db.commit()
@@ -958,3 +976,42 @@ def restore_feasibility(db: Session, feasibility_id: int, user_id: int | None = 
     audit_service.log_restore(db, TABLE_NAME, feasibility_id, user_id)
     db.commit()
     return get_feasibility(db, feasibility_id)
+
+
+# A feasibility check reaching 'converted' the moment a quotation is
+# raised from it (see mark_converted) means the *normal* case has
+# nothing left to warn about by the time a quotation/order exists. These
+# are the two cases where there genuinely is still something worth
+# surfacing there instead of making a person click through to find out.
+_BLOCKER_RISK_STATUSES = {"exception_approved"}
+_BLOCKER_STALE_LINK_STATUSES = {"draft", "exception_pending", "exception_rejected", "expired"}
+
+
+def get_blocker_summary(feasibility: FeasibilityCheck) -> str | None:
+    """A one-line summary of a still-relevant feasibility concern for
+    whatever quotation/order was raised from this check -- see
+    quotation_service.get_feasibility_blocker and order_journey_service,
+    which both call this directly on the FeasibilityCheck they've
+    already loaded. Two cases produce a message:
+
+    - 'exception_approved': Sales/admin proceeded despite a shortfall --
+      the shortfall didn't go away just because the decision was made to
+      proceed anyway.
+    - Anything else that isn't a clean pass ('draft', 'exception_pending',
+      'exception_rejected', 'expired'): only reachable here once a
+      quotation/order already exists from this check (mark_converted
+      flips it to 'converted' the instant that happens), so seeing one of
+      these means the check was revived and re-run since -- the approval
+      the quotation/order relied on no longer reflects its current state.
+
+    None for 'feasible' (nothing was overridden) and 'converted' (the
+    ordinary, resolved case).
+    """
+    if feasibility.status in _BLOCKER_RISK_STATUSES:
+        return f"Approved despite a shortfall: {feasibility.exception_reason or 'see the feasibility check for details'}."
+    if feasibility.status in _BLOCKER_STALE_LINK_STATUSES:
+        return (
+            f"The feasibility check this was raised from is now '{feasibility.status}' -- "
+            "it looks like it was revived and re-run since."
+        )
+    return None

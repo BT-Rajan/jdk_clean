@@ -16,8 +16,10 @@ from app.schemas.quotation import (
     MaterialConflictCheckRequest,
     MaterialConflictOut,
     QuotationCreate,
+    QuotationFollowupIn,
     QuotationOut,
     QuotationPaymentLinkIn,
+    QuotationRenewIn,
     QuotationStatusUpdate,
     QuotationUpdate,
 )
@@ -164,6 +166,38 @@ def approve_quotation(
     return QuotationOut.from_model(quotation)
 
 
+@router.post("/{quotation_id}/follow-up", response_model=QuotationOut)
+def record_quotation_followup(
+    quotation_id: int,
+    payload: QuotationFollowupIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """The one-click "Follow up" action on the quotations list/detail --
+    logs that Sales just followed up with this customer and schedules the
+    next one (see quotation_service.record_followup)."""
+    quotation = quotation_service.record_followup(
+        db, quotation_id, next_followup_date=payload.next_followup_date, user_id=user.id
+    )
+    return QuotationOut.from_model(quotation)
+
+
+@router.post("/{quotation_id}/renew", response_model=QuotationOut)
+def renew_quotation(
+    quotation_id: int,
+    payload: QuotationRenewIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    """Explicitly extends an expired quotation's validity and reopens it
+    to 'sent' -- the deliberate way past assert_sendable's block on
+    emailing an expired quotation (see quotation_service.renew_quotation)."""
+    quotation = quotation_service.renew_quotation(
+        db, quotation_id, valid_until=payload.valid_until, user_id=user.id
+    )
+    return QuotationOut.from_model(quotation)
+
+
 @router.post("/scan-expired")
 def scan_expired_quotations(
     db: Session = Depends(get_db),
@@ -292,6 +326,7 @@ def email_quotation_pdf(
     user: User = Depends(write_guard),
 ):
     quotation = quotation_service.get_quotation(db, quotation_id)
+    quotation_service.assert_sendable(quotation)
     pdf_bytes = _render_quotation_pdf(db, quotation, None)
     filename = f"{quotation.quotation_number}.pdf"
 

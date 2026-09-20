@@ -192,7 +192,7 @@ export function PurchasingHomePage() {
                     <thead>
                       <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
                         <th className="px-6 py-4 font-medium">Material</th>
-                        <th className="px-6 py-4 font-medium">On hand</th>
+                        <th className="px-6 py-4 font-medium">Available</th>
                         <th className="px-6 py-4 font-medium">Shortfall</th>
                         <th className="px-6 py-4 font-medium">Coverage</th>
                       </tr>
@@ -205,7 +205,7 @@ export function PurchasingHomePage() {
                               {item.code} — {item.name}
                             </Link>
                           </td>
-                          <td className="px-6 py-4 text-white/60">{item.current_on_hand.toLocaleString()} {item.unit}</td>
+                          <td className="px-6 py-4 text-white/60">{item.available_quantity.toLocaleString()} {item.unit}</td>
                           <td className="px-6 py-4">
                             <Badge tone="danger">{`${item.shortfall.toLocaleString()} ${item.unit}`}</Badge>
                           </td>

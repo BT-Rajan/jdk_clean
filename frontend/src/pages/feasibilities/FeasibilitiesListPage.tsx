@@ -16,7 +16,7 @@ import { listFeasibilities } from '@/api/feasibilities'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
 import { canWriteDepartment } from '@/lib/roles'
-import { formatDateTime } from '@/lib/dateFormat'
+import { formatDate, formatDateTime } from '@/lib/dateFormat'
 
 export function FeasibilitiesListPage() {
   const { user } = useAuth()
@@ -80,7 +80,10 @@ export function FeasibilitiesListPage() {
                 <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
                   <SortableHeader label="Number" field="feasibility_number" sort={sort} onSort={toggleSort} />
                   <th className="px-6 py-4 font-medium">Customer</th>
+                  <th className="px-6 py-4 font-medium">Owner</th>
                   <SortableHeader label="Status" field="status" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Submitted" field="created_at" sort={sort} onSort={toggleSort} />
+                  <SortableHeader label="Due" field="required_by_date" sort={sort} onSort={toggleSort} />
                   <th className="px-6 py-4 font-medium">Checked</th>
                 </tr>
               </thead>
@@ -93,9 +96,12 @@ export function FeasibilitiesListPage() {
                       </Link>
                     </td>
                     <td className="px-6 py-4 text-white">{f.customer_name ?? '—'}</td>
+                    <td className="px-6 py-4 text-white/60">{f.owner_name ?? '—'}</td>
                     <td className="px-6 py-4">
                       <StatusBadge status={f.status} />
                     </td>
+                    <td className="px-6 py-4 text-white/60">{formatDate(f.created_at)}</td>
+                    <td className="px-6 py-4 text-white/60">{formatDate(f.required_by_date)}</td>
                     <td className="px-6 py-4 text-white/60">{f.checked_at ? formatDateTime(f.checked_at) : '—'}</td>
                   </tr>
                 ))}
