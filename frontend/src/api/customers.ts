@@ -83,3 +83,32 @@ export async function unverifyCustomerId(id: number): Promise<Customer> {
   const { data } = await apiClient.post<Customer>(`/api/customers/${id}/unverify-id`)
   return data
 }
+
+export async function uploadCustomerAvatar(id: number, file: File): Promise<Customer> {
+  const form = new FormData()
+  form.append('file', file)
+  // See api/auth.ts's uploadAvatar for why Content-Type must be cleared here.
+  const { data } = await apiClient.post<Customer>(`/api/customers/${id}/avatar`, form, {
+    headers: { 'Content-Type': undefined },
+  })
+  return data
+}
+
+export async function deleteCustomerAvatar(id: number): Promise<Customer> {
+  const { data } = await apiClient.delete<Customer>(`/api/customers/${id}/avatar`)
+  return data
+}
+
+/** Avatar is served behind auth, same as the id-document endpoint --
+ * fetch it as a blob rather than pointing an <img> straight at the API path. */
+export async function fetchCustomerAvatarBlob(id: number): Promise<Blob> {
+  const { data } = await apiClient.get(`/api/customers/${id}/avatar`, { responseType: 'blob' })
+  return data
+}
+
+/** Assigns (or, with null, unassigns) the salesperson who currently owns
+ * this customer's operational relationship -- Sales Head/admin only. */
+export async function assignCustomer(id: number, assignedTo: number | null): Promise<Customer> {
+  const { data } = await apiClient.post<Customer>(`/api/customers/${id}/assign`, { assigned_to: assignedTo })
+  return data
+}

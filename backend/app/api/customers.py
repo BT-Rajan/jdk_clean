@@ -17,7 +17,7 @@ from app.schemas.customer import (
     CustomerUpdate,
 )
 from app.schemas.payment import CustomerCreditStatusOut
-from app.services import customer_service, id_document_service, payment_service
+from app.services import avatar_service, customer_service, id_document_service, payment_service
 
 read_guard = require_page_access("customers", "read")
 write_guard = require_page_access("customers", "write")
@@ -27,6 +27,7 @@ write_guard = require_page_access("customers", "write")
 admin_guard = require_role("admin")
 
 ID_DOCUMENT_SUBDIR = "customer_ids"
+AVATAR_SUBDIR = "customer_avatars"
 TABLE_NAME = "customers"
 
 router = build_crud_router(
@@ -128,6 +129,43 @@ def unverify_customer_id(
 ):
     customer = customer_crud.read_one(db, customer_id, user=user)
     return id_document_service.unverify(db, customer, table_name=TABLE_NAME, user_id=user.id)
+
+
+@router.post("/{customer_id}/avatar", response_model=CustomerOut)
+async def upload_customer_avatar(
+    customer_id: int,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    customer = customer_crud.read_one(db, customer_id, user=user)
+    raw_bytes = await file.read()
+    return avatar_service.save_avatar(
+        db, customer, raw_bytes, subdir=AVATAR_SUBDIR, table_name=TABLE_NAME, user_id=user.id
+    )
+
+
+@router.delete("/{customer_id}/avatar", response_model=CustomerOut)
+def delete_customer_avatar(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(write_guard),
+):
+    customer = customer_crud.read_one(db, customer_id, user=user)
+    return avatar_service.delete_avatar(db, customer, subdir=AVATAR_SUBDIR, table_name=TABLE_NAME, user_id=user.id)
+
+
+@router.get("/{customer_id}/avatar")
+def get_customer_avatar(
+    customer_id: int,
+    db: Session = Depends(get_db),
+    user: User = Depends(read_guard),
+):
+    customer = customer_crud.read_one(db, customer_id, user=user)
+    path = avatar_service.get_avatar_path(customer, subdir=AVATAR_SUBDIR)
+    if path is None:
+        raise NotFoundError("Avatar")
+    return FileResponse(path, media_type="image/jpeg")
 
 
 def _require_can_assign(db: Session = Depends(get_db), user: User = Depends(write_guard)) -> User:

@@ -124,7 +124,18 @@ CREATE TABLE IF NOT EXISTS customers (
     -- (e.g. a business trading under a brand different from its
     -- registration papers) -- falls back to `name` everywhere.
     trade_name      VARCHAR(150) NULL,
+    -- Uploaded logo/photo -- see app/services/avatar_service.py.
+    avatar_filename VARCHAR(255) NULL,
     contact_person  VARCHAR(120) NULL,
+    -- Links an individual contact to a parent company record (self-
+    -- referential -- both rows live in this same table). See
+    -- app/crud/master_data.py CustomerCRUD._validate_parent_company.
+    parent_company_id BIGINT UNSIGNED NULL,
+    job_position    VARCHAR(120) NULL,
+    website         VARCHAR(255) NULL,
+    -- Free-form labels -- JSON array of strings, same reasoning as
+    -- `category` below (no fixed picklist, no other consumer).
+    tags            JSON NULL,
     email           VARCHAR(120) NULL,
     phone           VARCHAR(30)  NULL,
     -- Backup contact only, used if the primary is unreachable -- not
@@ -133,7 +144,13 @@ CREATE TABLE IF NOT EXISTS customers (
     alternate_email VARCHAR(120) NULL,
     billing_address VARCHAR(255) NULL,
     shipping_address VARCHAR(255) NULL,
+    -- Structured address components, additive to the free-text
+    -- billing_address/shipping_address above (still used as-is for
+    -- quotations/orders).
+    address_line1   VARCHAR(255) NULL,
+    address_line2   VARCHAR(255) NULL,
     city            VARCHAR(80)  NULL,
+    state           VARCHAR(80)  NULL,
     country         VARCHAR(80)  NULL,
     -- Free-text operational classification for filtering/reporting
     -- only -- same shape as raw_materials.category / products.category.
@@ -149,6 +166,27 @@ CREATE TABLE IF NOT EXISTS customers (
     -- requires payment_terms_days > 0, enforced in
     -- app/crud/master_data.py (CustomerCRUD) and schemas/customer.py.
     payment_terms_type ENUM('cash','advance','credit','custom') NOT NULL DEFAULT 'credit',
+    payment_method  ENUM('cash','credit_card','bank_transfer','cheque','other') NULL,
+    -- Free-text reference label only -- no pricing-rule engine exists
+    -- here to actually reprice a quotation off this.
+    pricelist       VARCHAR(100) NULL,
+    -- -- Purchase configuration -- mirrors sales config's shape but
+    -- namespaced separately (this app keeps Customer/Supplier distinct;
+    -- see app/models/customer.py).
+    group_rfq       TINYINT(1) NOT NULL DEFAULT 0,
+    buyer_id        BIGINT UNSIGNED NULL,
+    purchase_payment_terms_days SMALLINT UNSIGNED NULL,
+    purchase_payment_terms_type ENUM('cash','advance','credit','custom') NULL,
+    purchase_payment_method ENUM('cash','credit_card','bank_transfer','cheque','other') NULL,
+    receipt_reminder TINYINT(1) NOT NULL DEFAULT 0,
+    supplier_currency VARCHAR(10) NULL,
+    -- Free-text reference label only -- no tax-mapping engine exists
+    -- here to actually change tax treatment off this.
+    fiscal_position VARCHAR(120) NULL,
+    -- Internal/external key or legacy code, distinct from `code` (Civil
+    -- ID / Registration number) and customer_number (the auto-generated
+    -- internal reference) above.
+    `reference`     VARCHAR(100) NULL,
     -- Per-customer override of Settings' global large-discount approval
     -- threshold (see app/services/settings_service.py) -- e.g. a
     -- long-standing wholesale customer can be trusted with more discount
@@ -164,6 +202,25 @@ CREATE TABLE IF NOT EXISTS customers (
     onboarding_status ENUM('pending','under_review','active','on_hold','rejected') NOT NULL DEFAULT 'pending',
     onboarding_reason TEXT NULL,        -- reason recorded the last time onboarding moved to 'rejected'/'on_hold'
     notes           TEXT NULL,
+    -- -- Accounting & general ledger -- this app has no chart-of-
+    -- accounts/GL module, so these are stored reference values only
+    -- (no posting, no bank integration). bank_accounts is a JSON array
+    -- of {bank_name, account_number, iban, swift_code} objects -- see
+    -- schemas/customer.py CustomerBankAccount.
+    bank_accounts   JSON NULL,
+    account_receivable VARCHAR(50) NULL,
+    account_payable VARCHAR(50) NULL,
+    auto_post_bills ENUM('manual','automatic') NULL,
+    -- -- Invoice follow-ups & e-invoicing -- no dunning/e-invoicing
+    -- engine exists here either: these are manually-set status fields
+    -- for staff to track collections by hand, not automation. Journal
+    -- Items has no field of its own -- the detail page links out to
+    -- this customer's existing Orders/Payments activity instead.
+    follow_up_stage ENUM('none','15_days','30_days','45_days','legal') NULL,
+    follow_up_status ENUM('up_to_date','in_progress','overdue','escalated') NULL,
+    reminder_mode   ENUM('automatic','manual') NULL,
+    next_reminder_date DATE NULL,
+    followup_responsible_id BIGINT UNSIGNED NULL,
     -- Proof of `code` above -- an uploaded image or PDF, stored on disk
     -- under uploads/customer_ids/ (see id_document_service.py), this
     -- column holding only the generated filename. order_service.
@@ -180,9 +237,13 @@ CREATE TABLE IF NOT EXISTS customers (
     updated_by      BIGINT UNSIGNED NULL,
     CONSTRAINT fk_customers_id_verified_by FOREIGN KEY (id_verified_by) REFERENCES users(id),
     CONSTRAINT fk_customers_assigned_to FOREIGN KEY (assigned_to) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_customers_parent_company_id FOREIGN KEY (parent_company_id) REFERENCES customers(id) ON DELETE SET NULL,
+    CONSTRAINT fk_customers_buyer_id FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_customers_followup_responsible_id FOREIGN KEY (followup_responsible_id) REFERENCES users(id) ON DELETE SET NULL,
     INDEX idx_customers_deleted_at (deleted_at),
     INDEX idx_customers_name (name),
-    INDEX idx_customers_assigned_to (assigned_to)
+    INDEX idx_customers_assigned_to (assigned_to),
+    INDEX idx_customers_parent_company_id (parent_company_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================

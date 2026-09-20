@@ -98,7 +98,7 @@ class UserCRUD(BaseCRUD):
 class CustomerCRUD(BaseCRUD):
     model = Customer
     table_name = "customers"
-    searchable_fields = ["name", "code", "customer_number", "email", "contact_person", "phone"]
+    searchable_fields = ["name", "code", "customer_number", "email", "contact_person", "phone", "reference"]
     sortable_fields = ["name", "code", "customer_number", "created_at"]
     filterable_fields = ["status", "city", "country", "category"]
 
@@ -148,6 +148,33 @@ class CustomerCRUD(BaseCRUD):
                     f"A customer with this email already exists: {existing.name} ({existing.customer_number})."
                 )
 
+    def _validate_parent_company(self, db: Session, parent_company_id: int | None, exclude_id: int | None = None) -> None:
+        if parent_company_id is None:
+            return
+        if exclude_id is not None and parent_company_id == exclude_id:
+            raise ValidationAppError("A customer cannot be its own parent company.")
+        exists = (
+            db.query(Customer.id)
+            .filter(Customer.id == parent_company_id, Customer.deleted_at.is_(None))
+            .first()
+        )
+        if exists is None:
+            raise ValidationAppError(f"Customer {parent_company_id} is not a recognized customer.")
+
+    def _validate_user_ref(self, db: Session, user_id: int | None, label: str) -> None:
+        # Same "must exist, must be active" check api/customers.py's
+        # assign_customer already applies to assigned_to -- reused here
+        # for buyer_id/followup_responsible_id.
+        if user_id is None:
+            return
+        exists = (
+            db.query(User.id)
+            .filter(User.id == user_id, User.deleted_at.is_(None), User.is_active.is_(True))
+            .first()
+        )
+        if exists is None:
+            raise ValidationAppError(f"{label} {user_id} is not an active user.")
+
     def _check_credit_terms(self, data: dict, existing: Customer | None) -> None:
         # CustomerCreate's model_validator does this same check where
         # both fields are always present in the payload; this covers
@@ -165,6 +192,9 @@ class CustomerCRUD(BaseCRUD):
         self._check_duplicate_phone(db, data.get("phone"))
         self._check_duplicate_email(db, data.get("email"))
         self._check_credit_terms(data, None)
+        self._validate_parent_company(db, data.get("parent_company_id"))
+        self._validate_user_ref(db, data.get("buyer_id"), "Buyer")
+        self._validate_user_ref(db, data.get("followup_responsible_id"), "Follow-up responsible")
         # customer_number is an internal reference, auto-generated the
         # same way order_number/quotation_number/etc. are -- never
         # client-supplied (see schemas/customer.py CustomerCreate, which
@@ -180,6 +210,12 @@ class CustomerCRUD(BaseCRUD):
         if "payment_terms_type" in data or "payment_terms_days" in data:
             existing = self.read_one(db, id)
             self._check_credit_terms(data, existing)
+        if "parent_company_id" in data:
+            self._validate_parent_company(db, data["parent_company_id"], exclude_id=id)
+        if "buyer_id" in data:
+            self._validate_user_ref(db, data["buyer_id"], "Buyer")
+        if "followup_responsible_id" in data:
+            self._validate_user_ref(db, data["followup_responsible_id"], "Follow-up responsible")
         if data.get("code") is not None:
             # code (civil ID / registration number) is one-directional:
             # settable only while still NULL (a prospective customer
