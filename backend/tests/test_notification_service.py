@@ -7,11 +7,21 @@ already run against real data in production and aren't re-verified here.
 
 from datetime import date, datetime
 
+from app.models.department import Department
+from app.models.inventory import RawMaterialInventory
 from app.models.production_execution import ProductionExecution
 from app.models.qc_request import QcRequest
 from app.services import notification_service
 
-from .factories import make_production_order, make_production_schedule, make_product, make_qc_agent, make_user
+from .factories import (
+    make_department,
+    make_production_order,
+    make_production_schedule,
+    make_product,
+    make_qc_agent,
+    make_raw_material,
+    make_user,
+)
 
 
 def _make_overdue_qc_request(db):
@@ -81,3 +91,47 @@ def test_qc_request_not_flagged_for_review_is_not_surfaced(db):
     items = notification_service.get_notifications(db, admin)
 
     assert not any(i["type"] == "qc_request_admin_review" for i in items)
+
+
+# --- low-stock notifications reach Procurement ---------------------------------
+
+
+def _procurement_department(db):
+    """schema.sql seeds a 'procurement' department (code is UNIQUE), so reuse
+    it and only create one if the test database was built without it."""
+    return db.query(Department).filter(Department.code == "procurement").first() or make_department(
+        db, code="procurement"
+    )
+
+
+def test_procurement_user_sees_low_stock_material_with_stock_on_hand(db):
+    user = make_user(db, role="team_member", department_id=_procurement_department(db).id)
+    material = make_raw_material(db, reorder_point=50)
+    db.add(RawMaterialInventory(raw_material_id=material.id, quantity_on_hand=10))
+    db.flush()
+
+    items = notification_service.get_notifications(db, user)
+
+    assert any(i["id"] == f"low-stock-{material.id}" for i in items)
+
+
+def test_procurement_user_sees_never_stocked_material_as_low(db):
+    """No inventory row yet means 0 on hand, which is at/below any reorder
+    point -- it used to be skipped by an inner join."""
+    user = make_user(db, role="department_head", department_id=_procurement_department(db).id)
+    material = make_raw_material(db, reorder_point=5)
+
+    items = notification_service.get_notifications(db, user)
+
+    assert any(i["id"] == f"low-stock-{material.id}" for i in items)
+
+
+def test_material_above_reorder_point_is_not_low_stock(db):
+    user = make_user(db, role="team_member", department_id=_procurement_department(db).id)
+    material = make_raw_material(db, reorder_point=5)
+    db.add(RawMaterialInventory(raw_material_id=material.id, quantity_on_hand=100))
+    db.flush()
+
+    items = notification_service.get_notifications(db, user)
+
+    assert not any(i["id"] == f"low-stock-{material.id}" for i in items)

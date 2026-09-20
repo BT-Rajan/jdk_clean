@@ -1,4 +1,5 @@
 import type { User, UserRole } from '@/types/auth'
+import type { MyPermissions } from '@/types/permission'
 
 /**
  * Mirrors the write_roles guards used across the backend routers:
@@ -41,6 +42,18 @@ export function canWriteDepartment(user: User | null | undefined, department: st
   if (!user) return false
   if (user.role === 'admin' || user.role === 'manager' || user.role === 'department_head') return true
   return (user.role === 'staff' || user.role === 'team_member') && user.department_code === department
+}
+
+/**
+ * Whether the department_permissions matrix grants this user write access
+ * to a page -- the same answer the backend's require_page_access gives,
+ * so it never disagrees with the server the way a department-code guess
+ * (canWriteDepartment) can. Prefer this for gating a create button when
+ * permissions have loaded; fall back to canWriteDepartment while they
+ * haven't.
+ */
+export function canWritePage(permissions: MyPermissions | null, pageKey: string): boolean {
+  return permissions?.[pageKey] === 'write'
 }
 
 export function isAdmin(role: UserRole | undefined): boolean {

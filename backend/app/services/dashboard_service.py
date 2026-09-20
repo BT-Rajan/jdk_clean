@@ -18,7 +18,7 @@ from app.models.quotation import Quotation
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
 from app.models.user import User
-from app.services import mrp_service, settings_service
+from app.services import inventory_service, mrp_service, settings_service
 
 # The "order position" graph's bars: every order status still in flight
 # (mirrors order_service.py's OPEN_STATUSES), in the order Sales sees
@@ -150,15 +150,10 @@ def get_stats(db: Session) -> dict:
         .filter(RawMaterial.deleted_at.is_(None), RawMaterialInventory.quantity_on_hand > 0)
         .count()
     )
-    stats["low_stock_count"] = _stat(
-        db.query(RawMaterialInventory)
-        .join(RawMaterial, RawMaterialInventory.raw_material_id == RawMaterial.id)
-        .filter(
-            RawMaterial.deleted_at.is_(None),
-            RawMaterialInventory.quantity_on_hand <= RawMaterial.reorder_point,
-        )
-        .count()
-    )
+    # Same definition as the Low Stock list and the low-stock notification
+    # (active materials, a missing inventory row counts as 0 on hand), so
+    # this number can never disagree with what those show.
+    stats["low_stock_count"] = _stat(len(inventory_service.get_low_stock(db)))
 
     # Production
     active_batches = (

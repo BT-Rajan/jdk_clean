@@ -16,12 +16,15 @@ import {
 import { listPurchaseOrders } from '@/api/purchaseOrders'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
-import { canWriteDepartment } from '@/lib/roles'
+import { canWriteDepartment, canWritePage } from '@/lib/roles'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
 
 export function PurchaseOrdersListPage() {
-  const { user } = useAuth()
+  const { user, permissions } = useAuth()
+  // The matrix is what the server enforces; only fall back to the
+  // department guess while it's still loading.
+  const canCreatePo = permissions ? canWritePage(permissions, 'purchase_orders') : canWriteDepartment(user, 'procurement')
   const navigate = useNavigate()
   const fetcher = useCallback(
     (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) =>
@@ -71,7 +74,7 @@ export function PurchaseOrdersListPage() {
               <option value="cancelled">Cancelled</option>
             </SelectField>
           </div>
-          {canWriteDepartment(user, 'procurement') && <Button onClick={() => navigate('/purchase-orders/new')}>New purchase order</Button>}
+          {canCreatePo && <Button onClick={() => navigate('/purchase-orders/new')}>New purchase order</Button>}
         </div>
       </div>
 
