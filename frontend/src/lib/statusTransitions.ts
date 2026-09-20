@@ -34,8 +34,7 @@ export const SUPPLIER_ONBOARDING_STATUSES_REQUIRING_REASON: SupplierOnboardingSt
  * which status-change buttons the detail page offers -- 'converted' is
  * deliberately excluded since it's only reachable via convert-to-order. */
 export const QUOTATION_TRANSITIONS: Record<QuotationStatus, SettableQuotationStatus[]> = {
-  draft: ['sent', 'rejected'],
-  sent: ['accepted', 'rejected', 'expired'],
+  draft: ['accepted', 'rejected'],
   accepted: [],
   rejected: [],
   expired: [],

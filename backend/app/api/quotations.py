@@ -160,8 +160,8 @@ def approve_quotation(
 ):
     """Admin sign-off clearing the large-discount approval gate (Settings
     -> large_discount_approval_threshold) -- a draft quotation with a
-    large discount can't move to 'sent' until this has been called.
-    Approval also immediately sends the quotation (draft -> sent)."""
+    large discount can't be accepted until this has been called.
+    Approval only records the sign-off; the status stays 'draft'."""
     quotation = quotation_service.approve_quotation(db, quotation_id, user_id=user.id)
     return QuotationOut.from_model(quotation)
 
@@ -190,7 +190,7 @@ def renew_quotation(
     user: User = Depends(write_guard),
 ):
     """Explicitly extends an expired quotation's validity and reopens it
-    to 'sent' -- the deliberate way past assert_sendable's block on
+    to 'draft' -- the deliberate way past assert_sendable's block on
     emailing an expired quotation (see quotation_service.renew_quotation)."""
     quotation = quotation_service.renew_quotation(
         db, quotation_id, valid_until=payload.valid_until, user_id=user.id
@@ -203,7 +203,7 @@ def scan_expired_quotations(
     db: Session = Depends(get_db),
     user: User = Depends(admin_guard),
 ):
-    """Moves every 'sent' quotation whose valid_until has passed to
+    """Moves every open ('draft') quotation whose valid_until has passed to
     'expired'. Run this periodically (e.g. an external cron/scheduled
     task hitting this endpoint daily)."""
     expired = quotation_service.escalate_expired_quotations(db)

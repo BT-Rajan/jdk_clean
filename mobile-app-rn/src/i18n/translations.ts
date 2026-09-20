@@ -453,7 +453,6 @@ const en = {
   // Mirrors backend/app/models/quotation.py's QUOTATION_STATUSES exactly.
   quotationStatus: {
     draft: 'Draft',
-    sent: 'Sent',
     accepted: 'Accepted',
     rejected: 'Rejected',
     expired: 'Expired',
@@ -929,7 +928,6 @@ const ar: typeof en = {
   },
   quotationStatus: {
     draft: 'مسودة',
-    sent: 'مرسل',
     accepted: 'مقبول',
     rejected: 'مرفوض',
     expired: 'منتهي الصلاحية',

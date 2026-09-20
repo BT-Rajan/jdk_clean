@@ -47,7 +47,7 @@ MAX_LIST = 40
 MAX_HISTORY = 10
 
 ORDER_OPEN_STATUSES = ("draft", "confirmed", "in_production", "ready_to_ship")
-QUOTATION_OPEN_STATUSES = ("draft", "sent")
+QUOTATION_OPEN_STATUSES = ("draft",)
 PO_OPEN_STATUSES = ("draft", "sent", "partially_received")
 SCHEDULE_ACTIVE_STATUSES = ("planned", "in_progress", "paused")
 

@@ -38,7 +38,7 @@ def _make_quotation(db, status="draft", **overrides):
 
 
 def test_conversion_status_not_accepted(db):
-    quotation = _make_quotation(db, status="sent")
+    quotation = _make_quotation(db)
 
     status, reasons = quotation_service.get_conversion_status(quotation)
 
@@ -88,23 +88,23 @@ def test_assert_sendable_blocks_expired_quotation(db):
 
 
 def test_assert_sendable_allows_non_expired_quotation(db):
-    quotation = _make_quotation(db, status="sent")
+    quotation = _make_quotation(db)
 
     quotation_service.assert_sendable(quotation)  # must not raise
 
 
-def test_renew_quotation_extends_validity_and_reopens_to_sent(db):
+def test_renew_quotation_extends_validity_and_reopens_to_draft(db):
     quotation = _make_quotation(db, status="expired", valid_until=date(2026, 1, 8))
 
     renewed = quotation_service.renew_quotation(db, quotation.id)
 
-    assert renewed.status == "sent"
+    assert renewed.status == "draft"
     assert renewed.valid_until > date(2026, 1, 8)
     quotation_service.assert_sendable(renewed)  # no longer blocked
 
 
 def test_renew_quotation_rejects_non_expired(db):
-    quotation = _make_quotation(db, status="sent")
+    quotation = _make_quotation(db)
 
     with pytest.raises(ConflictError, match="expired"):
         quotation_service.renew_quotation(db, quotation.id)
@@ -118,13 +118,13 @@ def test_renew_quotation_rejects_a_past_valid_until(db):
 
 
 def test_followup_status_not_due_with_no_date_set(db):
-    quotation = _make_quotation(db, status="sent")
+    quotation = _make_quotation(db)
 
     assert quotation_service.get_followup_status(quotation) == "not_due"
 
 
 def test_followup_status_overdue_and_due_and_future(db):
-    quotation = _make_quotation(db, status="sent")
+    quotation = _make_quotation(db)
     today = date(2026, 6, 15)
 
     quotation.next_followup_date = date(2026, 6, 10)
@@ -144,7 +144,7 @@ def test_followup_status_completed_for_terminal_statuses(db):
 
 
 def test_record_followup_defaults_next_date_to_the_standard_interval(db):
-    quotation = _make_quotation(db, status="sent")
+    quotation = _make_quotation(db)
 
     updated = quotation_service.record_followup(db, quotation.id)
 
@@ -155,7 +155,7 @@ def test_record_followup_defaults_next_date_to_the_standard_interval(db):
 
 
 def test_record_followup_accepts_an_explicit_next_date(db):
-    quotation = _make_quotation(db, status="sent")
+    quotation = _make_quotation(db)
 
     updated = quotation_service.record_followup(db, quotation.id, next_followup_date=date(2030, 5, 1))
 

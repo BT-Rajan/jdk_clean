@@ -50,7 +50,7 @@ const FEASIBILITY_STATUS_KEYS = [
   'converted',
   'expired',
 ];
-const QUOTATION_STATUS_KEYS = ['draft', 'sent', 'accepted', 'rejected', 'expired', 'converted'];
+const QUOTATION_STATUS_KEYS = ['draft', 'accepted', 'rejected', 'expired', 'converted'];
 
 function journeyFeasibilityLabel(t: LocaleT, status: string): string {
   return FEASIBILITY_STATUS_KEYS.includes(status) ? t('feasibilityStatus', status as FeasibilityStatus) : status;

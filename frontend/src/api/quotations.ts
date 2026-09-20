@@ -88,7 +88,7 @@ export async function recordQuotationFollowup(id: number, nextFollowupDate?: str
 }
 
 /** Explicitly extends an expired quotation's validity and reopens it to
- * 'sent' -- the deliberate way past the block on emailing an expired
+ * 'draft' -- the deliberate way past the block on emailing an expired
  * quotation. Omit validUntil to default to today + 7 days. */
 export async function renewQuotation(id: number, validUntil?: string): Promise<Quotation> {
   const { data } = await apiClient.post<Quotation>(`/api/quotations/${id}/renew`, {

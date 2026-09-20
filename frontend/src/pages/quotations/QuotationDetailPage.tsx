@@ -97,7 +97,7 @@ export function QuotationDetailPage() {
     await withBusy(async () => {
       const updated = await approveQuotation(quotationId)
       setQuotation(updated)
-      setNotice('Approved and sent.')
+      setNotice('Approved.')
     })
   }
 

@@ -24,10 +24,10 @@ import type { Quotation } from '@/types/quotation'
 /** Highlights the expiry date once it's actually a live concern: red once
  * it's passed (status hasn't caught up to 'expired' yet -- the scheduled
  * scan runs every 6 hours) or amber inside 2 days of it, both only while
- * the quotation is still 'sent' -- a draft/accepted/rejected/converted
+ * the quotation is still open ('draft') -- an accepted/rejected/converted
  * quotation's own valid_until isn't something to flag. */
 function expiryClassName(q: Quotation): string {
-  if (q.status !== 'sent' || !q.valid_until) return 'text-white/60'
+  if (q.status !== 'draft' || !q.valid_until) return 'text-white/60'
   const daysLeft = (new Date(q.valid_until).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   if (daysLeft < 0) return 'font-medium text-red-300'
   if (daysLeft <= 2) return 'font-medium text-amber-300'
@@ -83,7 +83,6 @@ export function QuotationsListPage() {
             <SelectField label="Status" value={status} onChange={(e) => setStatus(e.target.value)}>
               <option value="">All statuses</option>
               <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
               <option value="accepted">Accepted</option>
               <option value="rejected">Rejected</option>
               <option value="expired">Expired</option>

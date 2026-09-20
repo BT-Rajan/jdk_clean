@@ -242,7 +242,7 @@ export interface AttentionItem {
 }
 
 const TONE_RANK: Record<AttentionTone, number> = { alert: 0, warn: 1, info: 2 }
-const OPEN_QUOTATION_STATUSES = ['draft', 'sent']
+const OPEN_QUOTATION_STATUSES = ['draft']
 const PENDING_FEASIBILITY_STATUSES = ['draft', 'exception_pending']
 const EXPIRY_WINDOW_DAYS = 7
 

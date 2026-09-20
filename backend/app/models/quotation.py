@@ -11,7 +11,7 @@ from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.product import Product
 from app.models.user import BigPK
 
-QUOTATION_STATUSES = ("draft", "sent", "accepted", "rejected", "expired", "converted")
+QUOTATION_STATUSES = ("draft", "accepted", "rejected", "expired", "converted")
 
 # Which of the admin's two (see doc_template_service.LANGUAGES) uploaded
 # quotation templates this quotation was raised in -- set at creation
@@ -21,10 +21,14 @@ QUOTATION_STATUSES = ("draft", "sent", "accepted", "rejected", "expired", "conve
 QUOTATION_LANGUAGES = ("en", "ar")
 
 # Status transitions allowed from each current status. Used by the service
-# layer to reject invalid jumps (e.g. draft -> converted directly).
+# layer to reject invalid jumps (e.g. draft -> converted directly). There
+# is no separate 'sent' step: a quotation stays 'draft' (open) until the
+# customer's answer is recorded -- accepted or rejected. 'expired' is
+# reached only by escalate_expired_quotations (an open quotation past its
+# valid_until), never by a person choosing it, and is left again only via
+# renew_quotation.
 ALLOWED_TRANSITIONS = {
-    "draft": {"sent", "rejected"},
-    "sent": {"accepted", "rejected", "expired"},
+    "draft": {"accepted", "rejected"},
     "accepted": {"converted"},
     "rejected": set(),
     "expired": set(),

@@ -216,9 +216,11 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
                 }
             )
 
-    # 7. Auto-created quotations still sitting in draft, never sent --
-    # Sales needs to review and either send or discard them, since the
-    # system drafted them but deliberately doesn't send anything itself.
+    # 7. Auto-created quotations still sitting in draft, never emailed to
+    # the customer -- Sales needs to review and either send or discard
+    # them, since the system drafted them but deliberately doesn't send
+    # anything itself. (Once emailed, a quotation just waits in draft for
+    # the customer's answer, so it drops off this list.)
     if _visible(user, ("sales",)):
         from app.models.quotation import Quotation
 
@@ -229,6 +231,7 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
                 Quotation.deleted_at.is_(None),
                 Quotation.auto_created.is_(True),
                 Quotation.status == "draft",
+                Quotation.last_emailed_at.is_(None),
             )
             .order_by(Quotation.created_at)
             .all()

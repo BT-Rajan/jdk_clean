@@ -35,9 +35,10 @@ export const quotationSchema = z.object({
 export type QuotationFormValues = z.input<typeof quotationSchema>
 export type QuotationSubmitValues = z.output<typeof quotationSchema>
 
-// 'converted' is set only by convert-to-order, never chosen directly.
+// Only accepted/rejected are chosen by hand: 'converted' is set by
+// convert-to-order and 'expired' by the scheduled scan.
 export const quotationStatusSchema = z.object({
-  status: z.enum(['sent', 'accepted', 'rejected', 'expired']),
+  status: z.enum(['accepted', 'rejected']),
 })
 
 export type QuotationStatusFormValues = z.infer<typeof quotationStatusSchema>

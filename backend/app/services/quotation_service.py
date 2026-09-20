@@ -30,19 +30,20 @@ from app.services import (
 
 TABLE_NAME = "quotations"
 
-# A quotation in either of these statuses is still a live, unresolved
-# claim on whatever raw materials its lines need -- unlike a confirmed
-# order (which already holds a real inventory_service reservation, netted
-# into quantity_available automatically), an open quotation holds nothing
-# in the ledger, so it has to be found by scanning for it explicitly. See
-# check_material_conflicts.
-_OPEN_QUOTATION_STATUSES = ("draft", "sent")
+# A quotation in this status is still a live, unresolved claim on
+# whatever raw materials its lines need -- unlike a confirmed order (which
+# already holds a real inventory_service reservation, netted into
+# quantity_available automatically), an open quotation holds nothing in the
+# ledger, so it has to be found by scanning for it explicitly. See
+# check_material_conflicts. ('draft' is the one open status: there is no
+# separate 'sent' step.)
+_OPEN_QUOTATION_STATUSES = ("draft",)
 
 # Every quotation is valid for exactly 7 calendar days from its own
 # quotation_date -- not 7*24 hours from creation time, so a quotation
 # dated today is still valid through the whole of day 7, expiring only
-# once escalate_expired_quotations finds it still 'sent' after that
-# date has passed (see that function). There is currently no business
+# once escalate_expired_quotations finds it still open ('draft') after
+# that date has passed (see that function). There is currently no business
 # feature letting Sales pick a different validity window -- valid_until
 # is always server-derived from quotation_date, in both create_quotation
 # and update_quotation, so it can never be left blank or set
@@ -57,7 +58,7 @@ FOLLOWUP_INTERVAL_DAYS = 3
 # not has already been decided, so there is nothing left to chase.
 # get_followup_status reports 'completed' for these regardless of
 # next_followup_date; record_followup refuses to log a new follow-up on
-# one (renew_quotation is the way back from 'expired' into 'sent', where
+# one (renew_quotation is the way back from 'expired' into 'draft', where
 # follow-up applies again).
 _FOLLOWUP_TERMINAL_STATUSES = ("rejected", "expired", "converted")
 
@@ -111,7 +112,7 @@ def assert_sendable(quotation: Quotation) -> None:
     email_quotation_pdf. Sending a customer a PDF that quietly no longer
     honors the price/validity it prints is exactly the mistake this
     exists to stop; renew_quotation is the explicit, deliberate way past
-    it (extends valid_until and reopens the quotation to 'sent')."""
+    it (extends valid_until and reopens the quotation to 'draft')."""
     if quotation.status == "expired":
         raise ConflictError(
             f"{quotation.quotation_number} has expired and can no longer be sent -- renew it first."
@@ -513,7 +514,10 @@ def change_status(
     quotation = get_quotation(db, quotation_id)
     assert_transition_allowed(ALLOWED_TRANSITIONS, quotation.status, new_status, "quotation")
 
-    if new_status == "sent":
+    # The large-discount gate sits on the customer's acceptance -- the first
+    # status change a quotation can make -- so a large discount can't be
+    # accepted (and so turned into an order) until an admin has approved it.
+    if new_status == "accepted":
         threshold = settings_service.get_effective_discount_approval_threshold(db, customer=quotation.customer)
         if threshold is not None and quotation.approved_at is None:
             largest = max(
@@ -523,7 +527,7 @@ def change_status(
             if largest >= threshold:
                 raise ConflictError(
                     f"This quotation has a discount of {largest}%, at or above the large-discount "
-                    f"approval threshold ({threshold}%), and needs admin approval before it can be sent."
+                    f"approval threshold ({threshold}%), and needs admin approval before it can be accepted."
                 )
 
     if new_status in STATUSES_REQUIRING_CLOSE_REASON:
@@ -573,11 +577,9 @@ def approve_quotation(db: Session, quotation_id: int, user_id: int | None = None
     actually at/above the current threshold (the threshold can change
     after the quotation was drafted; approving early never hurts).
 
-    Approval also sends the quotation: once an admin has signed off,
-    there's nothing left blocking it from going to the customer, so this
-    immediately transitions draft -> sent via change_status (reusing its
-    transition check, audit log, and deal reconciliation) rather than
-    leaving it sitting in 'draft' for a separate manual send step."""
+    Approval only records the sign-off (approved_at/approved_by): it does
+    not change the quotation's status. It stays 'draft' until the
+    customer's answer is recorded -- accepted or rejected."""
     quotation = get_quotation(db, quotation_id)
     if quotation.status != "draft":
         raise ConflictError("Only a draft quotation can be approved.")
@@ -588,7 +590,7 @@ def approve_quotation(db: Session, quotation_id: int, user_id: int | None = None
         db, TABLE_NAME, quotation_id, {"approved_at": (None, quotation.approved_at.isoformat())}, user_id
     )
     db.commit()
-    return change_status(db, quotation_id, "sent", user_id=user_id)
+    return get_quotation(db, quotation_id)
 
 
 def delete_quotation(db: Session, quotation_id: int, user_id: int | None = None) -> None:
@@ -611,15 +613,14 @@ def restore_quotation(db: Session, quotation_id: int, user_id: int | None = None
 
 
 def escalate_expired_quotations(db: Session, as_of: date | None = None) -> list[Quotation]:
-    """'expired' is a real, reachable status (ALLOWED_TRANSITIONS allows
-    'sent' -> 'expired') but nothing ever actually moved a quotation there
-    -- a sent quotation whose valid_until had passed just sat in 'sent'
-    forever unless someone happened to notice and closed it by hand. This
-    is the same 'reachable but never triggered' gap the stale-feasibility-
-    check scan already covers for a different status; this is quotations'
-    version of it. Meant to be run periodically; idempotent -- only
-    'sent' quotations past their valid_until are ever touched, and once
-    expired they're excluded by the status filter on the next run.
+    """'expired' is calendar-driven, never chosen by a person: an open
+    ('draft') quotation whose valid_until has passed would otherwise sit
+    there forever unless someone happened to notice and closed it by hand.
+    This is the same 'reachable but never triggered' gap the stale-
+    feasibility-check scan already covers for a different status; this is
+    quotations' version of it. Meant to be run periodically; idempotent --
+    only 'draft' quotations past their valid_until are ever touched, and
+    once expired they're excluded by the status filter on the next run.
     """
     today = as_of or today_kuwait()
 
@@ -627,7 +628,7 @@ def escalate_expired_quotations(db: Session, as_of: date | None = None) -> list[
         db.query(Quotation)
         .filter(
             Quotation.deleted_at.is_(None),
-            Quotation.status == "sent",
+            Quotation.status == "draft",
             Quotation.valid_until.isnot(None),
         )
         .all()
@@ -690,9 +691,9 @@ def renew_quotation(
 ) -> Quotation:
     """The explicit, deliberate way past assert_sendable's block on
     emailing an expired quotation: extends its validity and reopens it
-    to 'sent' (ALLOWED_TRANSITIONS otherwise treats 'expired' as
+    to 'draft' (ALLOWED_TRANSITIONS otherwise treats 'expired' as
     terminal -- this is a dedicated action, not a generic status jump,
-    precisely so a quotation never slides back to 'sent' by accident).
+    precisely so a quotation never slides back open by accident).
     `valid_until` defaults to today + QUOTATION_VALIDITY_DAYS and must be
     in the future either way.
     """
@@ -707,14 +708,14 @@ def renew_quotation(
 
     old_valid_until = quotation.valid_until
     quotation.valid_until = new_valid_until
-    quotation.status = "sent"
+    quotation.status = "draft"
     quotation.updated_by = user_id
     audit_service.log_update(
         db,
         TABLE_NAME,
         quotation_id,
         {
-            "status": ("expired", "sent"),
+            "status": ("expired", "draft"),
             "valid_until": (str(old_valid_until) if old_valid_until else None, str(new_valid_until)),
         },
         user_id,

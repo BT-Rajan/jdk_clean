@@ -94,7 +94,7 @@ class QuotationStatusUpdate(BaseModel):
     """'converted' is deliberately excluded: it's only ever set by
     create_order_from_quotation, which also links converted_order_id."""
 
-    status: str = Field(pattern="^(sent|accepted|rejected|expired)$")
+    status: str = Field(pattern="^(accepted|rejected)$")
     # Required by the service layer when status == 'rejected' (Sales closing
     # the quotation without an order); ignored otherwise.
     reason: str | None = None

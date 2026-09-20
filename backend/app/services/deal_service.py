@@ -125,7 +125,7 @@ def reconcile_deal_status(db: Session, deal_id: int | None, user_id: int | None 
     if any(o.status != "cancelled" for o in orders):
         return
     # A quotation still alive if it could still become an order.
-    if any(q.status in ("draft", "sent", "accepted") for q in quotations):
+    if any(q.status in ("draft", "accepted") for q in quotations):
         return
     # A feasibility check still alive if it could still become a quotation.
     if any(c.status in ("draft", "feasible", "exception_pending", "exception_approved") for c in checks):

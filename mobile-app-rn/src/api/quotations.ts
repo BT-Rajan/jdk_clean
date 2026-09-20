@@ -9,14 +9,14 @@ interface PagedResponse<T> {
 }
 
 // Mirrors backend/app/models/quotation.py's QUOTATION_STATUSES.
-export type QuotationStatus = 'draft' | 'sent' | 'accepted' | 'rejected' | 'expired' | 'converted';
-// 'converted' is deliberately excluded -- only create_order_from_quotation sets it.
-export type SettableQuotationStatus = Exclude<QuotationStatus, 'draft' | 'converted'>;
+export type QuotationStatus = 'draft' | 'accepted' | 'rejected' | 'expired' | 'converted';
+// The only status changes a person can make. 'converted' is set by
+// create_order_from_quotation and 'expired' by the scheduled scan.
+export type SettableQuotationStatus = 'accepted' | 'rejected';
 
 // Mirrors backend/app/models/quotation.py's ALLOWED_TRANSITIONS.
 export const QUOTATION_TRANSITIONS: Record<QuotationStatus, SettableQuotationStatus[]> = {
-  draft: ['sent', 'rejected'],
-  sent: ['accepted', 'rejected', 'expired'],
+  draft: ['accepted', 'rejected'],
   accepted: [],
   rejected: [],
   expired: [],
