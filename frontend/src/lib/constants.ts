@@ -1,11 +1,11 @@
 /**
- * Single source of truth for how many rows every list table shows per
- * page. Used by usePagedResource (customers, suppliers, raw materials,
- * products, quotations, orders, users) and directly by InventoryPage's
- * two tables (low stock, movements), which don't go through that hook
- * but should still match everyone else.
+ * Single source of truth for how many rows every list shows per page.
+ * Used by usePagedResource (customers, suppliers, raw materials,
+ * products, quotations, orders, users), directly by InventoryPage's
+ * tables, and by useClientPagination (the lists on the dashboard and
+ * department home pages), so they all match.
  */
-export const DEFAULT_PAGE_SIZE = 10
+export const DEFAULT_PAGE_SIZE = 5
 
 /**
  * Mirrors backend/app/core/workflow.py's MAX_BACKDATE_DAYS -- how many
