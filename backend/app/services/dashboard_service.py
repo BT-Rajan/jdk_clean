@@ -3,6 +3,12 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.sales_scope import (
+    customer_scope_filters,
+    order_scope_filters,
+    scope_by_customer,
+    scope_customer_rows,
+)
 from app.core.timezone import today_kuwait
 from app.models.customer import Customer
 from app.models.deal import Deal
@@ -49,7 +55,7 @@ def _stat(value, trend: dict | None = None) -> dict:
     return result
 
 
-def get_stats(db: Session) -> dict:
+def get_stats(db: Session, user: User | None = None) -> dict:
     """Every number and chart the Dashboard's widgets can show, computed
     fresh from the database on each call -- nothing here is mocked or
     cached client-side. Widgets the frontend doesn't have real data for
@@ -62,13 +68,15 @@ def get_stats(db: Session) -> dict:
 
     stats = {
         "customers_month": _stat(
-            db.query(Customer).filter(Customer.created_at >= month_start, Customer.deleted_at.is_(None)).count()
+            scope_customer_rows(db.query(Customer), user)
+            .filter(Customer.created_at >= month_start, Customer.deleted_at.is_(None))
+            .count()
         ),
         "quotations_month": _stat(
-            db.query(Quotation).filter(Quotation.created_at >= month_start, Quotation.deleted_at.is_(None)).count()
+            scope_by_customer(db.query(Quotation), Quotation.customer_id, user).filter(Quotation.created_at >= month_start, Quotation.deleted_at.is_(None)).count()
         ),
         "orders_month": _stat(
-            db.query(Order).filter(Order.created_at >= month_start, Order.deleted_at.is_(None)).count()
+            scope_by_customer(db.query(Order), Order.customer_id, user).filter(Order.created_at >= month_start, Order.deleted_at.is_(None)).count()
         ),
         "purchase_orders": _stat(
             db.query(PurchaseOrder)
@@ -88,13 +96,13 @@ def get_stats(db: Session) -> dict:
         ),
         "total_users": _stat(db.query(User).filter(User.deleted_at.is_(None)).count()),
         "open_deals": _stat(
-            db.query(Deal).filter(Deal.deleted_at.is_(None), Deal.status == "open").count()
+            scope_by_customer(db.query(Deal), Deal.customer_id, user).filter(Deal.deleted_at.is_(None), Deal.status == "open").count()
         ),
         "cancelled_deals": _stat(
-            db.query(Deal).filter(Deal.deleted_at.is_(None), Deal.status == "cancelled").count()
+            scope_by_customer(db.query(Deal), Deal.customer_id, user).filter(Deal.deleted_at.is_(None), Deal.status == "cancelled").count()
         ),
         "auto_created_this_month": _stat(
-            db.query(Quotation)
+            scope_by_customer(db.query(Quotation), Quotation.customer_id, user)
             .filter(
                 Quotation.deleted_at.is_(None),
                 Quotation.auto_created.is_(True),
@@ -113,6 +121,7 @@ def get_stats(db: Session) -> dict:
                 DeliveryNote.deleted_at.is_(None),
                 DeliveryNote.auto_created.is_(True),
                 DeliveryNote.created_at >= month_start,
+                *order_scope_filters(DeliveryNote.order_id, user),
             )
             .count()
         ),
@@ -123,14 +132,15 @@ def get_stats(db: Session) -> dict:
                 FeasibilityCheck.deleted_at.is_(None),
                 FeasibilityCheck.status == "exception_pending",
                 FeasibilityLine.bom_missing.is_(True),
+                *customer_scope_filters(FeasibilityCheck.customer_id, user),
             )
             .count()
         ),
         "pending_admin_reviews": _stat(
-            db.query(FeasibilityCheck)
+            scope_by_customer(db.query(FeasibilityCheck), FeasibilityCheck.customer_id, user)
             .filter(FeasibilityCheck.deleted_at.is_(None), FeasibilityCheck.admin_review_required.is_(True))
             .count()
-            + db.query(Order).filter(Order.deleted_at.is_(None), Order.admin_review_required.is_(True)).count()
+            + scope_by_customer(db.query(Order), Order.customer_id, user).filter(Order.deleted_at.is_(None), Order.admin_review_required.is_(True)).count()
             + db.query(PurchaseOrder)
             .filter(PurchaseOrder.deleted_at.is_(None), PurchaseOrder.admin_review_required.is_(True))
             .count()
@@ -180,27 +190,27 @@ def get_stats(db: Session) -> dict:
     stats["production_capacity_utilization"] = _production_capacity_utilization(db, today)
 
     graphs = {
-        "sales_trend": _weekly_order_trend(db, today),
-        "top_customers": _top_customers(db),
+        "sales_trend": _weekly_order_trend(db, today, user),
+        "top_customers": _top_customers(db, user=user),
         "po_trend": _monthly_po_trend(db, today),
         "supplier_performance": _supplier_performance(db),
         "stock_movement": _stock_movement(db, today),
         "inventory_breakdown": _inventory_breakdown(db),
         "production_timeline": _production_timeline(db, today),
         "mrp_status": _mrp_status(db),
-        "order_position": _order_position(db),
+        "order_position": _order_position(db, user),
     }
 
     return {"stats": stats, "graphs": graphs}
 
 
-def _weekly_order_trend(db: Session, today: date) -> list[dict]:
+def _weekly_order_trend(db: Session, today: date, user: User | None = None) -> list[dict]:
     points = []
     for i in range(3, -1, -1):
         week_end = today - timedelta(days=7 * i)
         week_start = week_end - timedelta(days=6)
         count = (
-            db.query(Order)
+            scope_by_customer(db.query(Order), Order.customer_id, user)
             .filter(Order.deleted_at.is_(None), Order.order_date >= week_start, Order.order_date <= week_end)
             .count()
         )
@@ -208,11 +218,11 @@ def _weekly_order_trend(db: Session, today: date) -> list[dict]:
     return points
 
 
-def _top_customers(db: Session, limit: int = 4) -> list[dict]:
+def _top_customers(db: Session, limit: int = 4, user: User | None = None) -> list[dict]:
     rows = (
         db.query(Customer.name, func.count(Order.id).label("order_count"))
         .join(Order, Order.customer_id == Customer.id)
-        .filter(Order.deleted_at.is_(None))
+        .filter(Order.deleted_at.is_(None), *customer_scope_filters(Order.customer_id, user))
         .group_by(Customer.id, Customer.name)
         .order_by(func.count(Order.id).desc())
         .limit(limit)
@@ -436,10 +446,14 @@ def _production_capacity_utilization(db: Session, today: date) -> dict:
     return _stat(f"{pct}%")
 
 
-def _order_position(db: Session) -> list[dict]:
+def _order_position(db: Session, user: User | None = None) -> list[dict]:
     rows = (
         db.query(Order.status, func.count(Order.id))
-        .filter(Order.deleted_at.is_(None), Order.status.in_(ORDER_OPEN_STATUSES))
+        .filter(
+            Order.deleted_at.is_(None),
+            Order.status.in_(ORDER_OPEN_STATUSES),
+            *customer_scope_filters(Order.customer_id, user),
+        )
         .group_by(Order.status)
         .all()
     )

@@ -3,3 +3,6 @@
 # untouched by adding a test suite. Install alongside requirements.txt:
 #   pip install -r requirements.txt -r requirements-dev.txt
 pytest==8.4.2
+
+# Needed by starlette's TestClient (tests/test_sales_salesman_scope.py drives the real HTTP API).
+httpx2==2.13.0

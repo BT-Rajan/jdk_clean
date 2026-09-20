@@ -10,6 +10,7 @@ from app.core.exceptions import NotFoundError, PermissionError_
 from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import is_within_backdate_window
 from app.models.calendar_event import CalendarEvent, CalendarEventMention
+from app.core.sales_scope import scope_by_customer
 from app.models.order import Order
 from app.models.production_schedule import ProductionSchedule
 from app.models.user import User
@@ -130,7 +131,7 @@ def delete_event(db: Session, user: User, event_id: int) -> None:
     db.commit()
 
 
-def get_day_snapshot(db: Session, target_date: date) -> dict:
+def get_day_snapshot(db: Session, target_date: date, user: User | None = None) -> dict:
     """What's already logged against `target_date` -- production batches
     scheduled/completed for that day and sales orders dated that day --
     plus whether it's still a legal target for "Log production"/"Log a
@@ -148,7 +149,7 @@ def get_day_snapshot(db: Session, target_date: date) -> dict:
         .all()
     )
     orders = (
-        db.query(Order)
+        scope_by_customer(db.query(Order), Order.customer_id, user)
         .options(joinedload(Order.customer))
         .filter(Order.deleted_at.is_(None), Order.order_date == target_date)
         .order_by(Order.id)

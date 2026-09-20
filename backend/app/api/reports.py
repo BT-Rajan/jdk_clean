@@ -48,10 +48,10 @@ def get_sales_report(
     date_from: date | None = None,
     date_to: date | None = None,
     db: Session = Depends(get_db),
-    _: User = Depends(sales_read_guard),
+    user: User = Depends(sales_read_guard),
 ):
     _validate_date_range(date_from, date_to)
-    return report_service.get_sales_report(db, months=months, date_from=date_from, date_to=date_to)
+    return report_service.get_sales_report(db, months=months, date_from=date_from, date_to=date_to, user=user)
 
 
 @router.get("/sales/drilldown", response_model=SalesDrilldownOut)
@@ -65,7 +65,7 @@ def get_sales_drilldown(
     date_to: date | None = None,
     revenue_only: bool = False,
     db: Session = Depends(get_db),
-    _: User = Depends(sales_read_guard),
+    user: User = Depends(sales_read_guard),
 ):
     items = report_service.get_sales_drilldown(
         db,
@@ -77,6 +77,7 @@ def get_sales_drilldown(
         date_from=date_from,
         date_to=date_to,
         revenue_only=revenue_only,
+        user=user,
     )
     return {"items": items, "total_count": len(items)}
 

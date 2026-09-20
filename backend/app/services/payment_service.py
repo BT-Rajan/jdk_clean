@@ -4,6 +4,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
+from app.core.sales_scope import scope_by_customer
 from app.core.timezone import now_kuwait_naive
 from app.core.workflow import assert_reason_given
 from app.models.customer import Customer
@@ -257,14 +258,14 @@ def set_payment_followup(
     return order
 
 
-def list_collection_queue(db: Session) -> list[dict]:
+def list_collection_queue(db: Session, user=None) -> list[dict]:
     """Every order with an overdue, still-outstanding balance -- the
     dedicated collection queue Finance works from. 'Overdue' is purely
     get_order_payment_status's own due-date math; a credit customer well
     within their limit can still show up here once their own payment
     terms have lapsed, same as a cash customer."""
     orders = (
-        db.query(Order)
+        scope_by_customer(db.query(Order), Order.customer_id, user)
         .filter(Order.deleted_at.is_(None), Order.status.notin_(_BALANCE_EXCLUDED_STATUSES))
         .all()
     )

@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.api.sales_scope_guard import sales_record_scope_guard
 from app.core.database import get_db
 from app.core.permissions import require_page_access
 from app.models.user import User
 from app.schemas.deal_detail import DealDetailOut
 from app.services import deal_detail_service
 
-router = APIRouter(prefix="/api/deals", tags=["deals"])
+router = APIRouter(prefix="/api/deals", tags=["deals"], dependencies=[Depends(sales_record_scope_guard)])
 
 read_guard = require_page_access("deals", "read")
 

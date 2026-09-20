@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.api.sales_scope_guard import sales_record_scope_guard
 from app.api.deps import require_role
 from app.core.database import get_db
 from app.core.permissions import require_page_access
@@ -8,7 +9,11 @@ from app.models.user import User
 from app.schemas.payment_plan import PaymentPlanCreate, PaymentPlanOut
 from app.services import payment_plan_service
 
-router = APIRouter(prefix="/api/orders/{order_id}/payment-plans", tags=["payment-plans"])
+router = APIRouter(
+    prefix="/api/orders/{order_id}/payment-plans",
+    tags=["payment-plans"],
+    dependencies=[Depends(sales_record_scope_guard)],
+)
 read_guard = require_page_access("orders", "read")
 write_guard = require_page_access("orders", "write")
 # Completing a plan is Finance's own job, same as acknowledging a

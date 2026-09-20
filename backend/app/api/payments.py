@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
+from app.api.sales_scope_guard import sales_record_scope_guard
 from app.api.deps import get_current_user, require_role
 from app.core.database import get_db
 from app.core.exceptions import PermissionError_
@@ -16,7 +17,9 @@ from app.schemas.payment import (
 )
 from app.services import order_service, payment_service
 
-router = APIRouter(prefix="/api/orders/{order_id}/payments", tags=["payments"])
+router = APIRouter(
+    prefix="/api/orders/{order_id}/payments", tags=["payments"], dependencies=[Depends(sales_record_scope_guard)]
+)
 read_guard = require_page_access("orders", "read")
 # Finance's own guard -- acknowledging a payment, overriding the
 # production gate, and setting a follow-up owner/date are Finance's job,

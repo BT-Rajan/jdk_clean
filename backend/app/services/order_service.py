@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.exceptions import AppError, ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
 from app.core.pricing import compute_document_totals, price_line
+from app.core.sales_scope import scope_by_customer
 from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed, assert_within_backdate_window
 from app.models.customer import Customer
@@ -174,8 +175,9 @@ def list_orders(
     customer_id: int | None = None,
     admin_review_required: bool | None = None,
     sort: str | None = None,
+    user=None,
 ) -> dict:
-    query = _base_query(db)
+    query = scope_by_customer(_base_query(db), Order.customer_id, user)
 
     if status:
         query = query.filter(Order.status == status)

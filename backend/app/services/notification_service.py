@@ -4,6 +4,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.timezone import today_kuwait
+from app.core.sales_scope import scope_by_customer
 from app.models.feasibility import FeasibilityCheck
 from app.models.inventory import RawMaterialInventory
 from app.models.order import Order
@@ -55,7 +56,7 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
     # infeasible result, or the check sat open past the 5-day SLA).
     if _visible(user, None):
         checks = (
-            db.query(FeasibilityCheck)
+            scope_by_customer(db.query(FeasibilityCheck), FeasibilityCheck.customer_id, user)
             .options(joinedload(FeasibilityCheck.customer))
             .filter(FeasibilityCheck.deleted_at.is_(None), FeasibilityCheck.admin_review_required.is_(True))
             .order_by(FeasibilityCheck.updated_at.desc())
@@ -83,7 +84,7 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
     # 2. Orders flagged for admin review (overdue with no delivery note / close reason).
     if _visible(user, None):
         orders = (
-            db.query(Order)
+            scope_by_customer(db.query(Order), Order.customer_id, user)
             .options(joinedload(Order.customer))
             .filter(Order.deleted_at.is_(None), Order.admin_review_required.is_(True))
             .order_by(Order.updated_at.desc())
@@ -106,7 +107,7 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
     # short on materials/capacity and hasn't been overridden or rejected yet).
     if _visible(user, ("sales",)):
         pending = (
-            db.query(FeasibilityCheck)
+            scope_by_customer(db.query(FeasibilityCheck), FeasibilityCheck.customer_id, user)
             .options(joinedload(FeasibilityCheck.customer))
             .filter(FeasibilityCheck.deleted_at.is_(None), FeasibilityCheck.status == "exception_pending")
             .order_by(FeasibilityCheck.checked_at.desc())
@@ -190,7 +191,7 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
     # actually owns product setup, not Sales.
     if _visible(user, ("warehouse",)):
         bom_gaps = (
-            db.query(FeasibilityCheck)
+            scope_by_customer(db.query(FeasibilityCheck), FeasibilityCheck.customer_id, user)
             .options(joinedload(FeasibilityCheck.customer), joinedload(FeasibilityCheck.lines))
             .filter(
                 FeasibilityCheck.deleted_at.is_(None),
@@ -225,7 +226,7 @@ def get_notifications(db: Session, user: User, limit: int = 50) -> list[dict]:
         from app.models.quotation import Quotation
 
         unreviewed = (
-            db.query(Quotation)
+            scope_by_customer(db.query(Quotation), Quotation.customer_id, user)
             .options(joinedload(Quotation.customer))
             .filter(
                 Quotation.deleted_at.is_(None),

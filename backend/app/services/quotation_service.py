@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session, joinedload
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
 from app.core.pricing import compute_document_totals, price_line
+from app.core.sales_scope import scope_by_customer
 from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.customer import Customer
@@ -301,8 +302,9 @@ def list_quotations(
     customer_id: int | None = None,
     feasibility_id: int | None = None,
     sort: str | None = None,
+    user=None,
 ) -> dict:
-    query = _base_query(db)
+    query = scope_by_customer(_base_query(db), Quotation.customer_id, user)
 
     if status:
         query = query.filter(Quotation.status == status)

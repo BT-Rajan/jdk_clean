@@ -26,6 +26,8 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import generate_support_code
+from app.core.permissions import is_team_member
+from app.core.sales_scope import scope_by_customer
 from app.models.customer import Customer
 from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory
 from app.models.order import Order
@@ -65,16 +67,16 @@ def _fmt(value: Any) -> str:
         return str(value)
 
 
-def _build_context(db: Session) -> str:
+def _build_context(db: Session, user: User | None = None) -> str:
     open_orders = (
-        db.query(Order)
+        scope_by_customer(db.query(Order), Order.customer_id, user)
         .filter(Order.deleted_at.is_(None), Order.status.in_(ORDER_OPEN_STATUSES))
         .order_by(Order.order_date.desc())
         .limit(MAX_LIST)
         .all()
     )
     open_orders_total = (
-        db.query(func.count(Order.id))
+        scope_by_customer(db.query(func.count(Order.id)), Order.customer_id, user)
         .filter(Order.deleted_at.is_(None), Order.status.in_(ORDER_OPEN_STATUSES))
         .scalar()
         or 0
@@ -133,7 +135,7 @@ def _build_context(db: Session) -> str:
     ) or "  (no active production runs)"
 
     open_quotes = (
-        db.query(Quotation)
+        scope_by_customer(db.query(Quotation), Quotation.customer_id, user)
         .filter(Quotation.deleted_at.is_(None), Quotation.status.in_(QUOTATION_OPEN_STATUSES))
         .limit(MAX_LIST)
         .all()
@@ -155,7 +157,10 @@ def _build_context(db: Session) -> str:
         for po in open_pos
     ) or "  (no open purchase orders)"
 
-    customer_count = db.query(func.count(Customer.id)).filter(Customer.deleted_at.is_(None)).scalar() or 0
+    customer_query = db.query(func.count(Customer.id)).filter(Customer.deleted_at.is_(None))
+    if user is not None and is_team_member(user):
+        customer_query = customer_query.filter(Customer.assigned_to == user.id)
+    customer_count = customer_query.scalar() or 0
     supplier_count = db.query(func.count(Supplier.id)).filter(Supplier.deleted_at.is_(None)).scalar() or 0
 
     return f"""Open sales orders — {open_orders_total} total:
@@ -293,7 +298,7 @@ def chat(db: Session, user: User, message: str, history: list[dict]) -> str:
         raise AssistantNotConfigured()
     provider = _detect_provider(api_key)
 
-    context = _build_context(db)
+    context = _build_context(db, user)
     system = _system_prompt(context, user)
     messages = [
         {"role": m["role"], "content": m["content"]} for m in history[-MAX_HISTORY:]

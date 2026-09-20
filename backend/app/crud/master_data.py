@@ -1,6 +1,5 @@
 import re
 
-from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, ValidationAppError
@@ -103,18 +102,20 @@ class CustomerCRUD(BaseCRUD):
     filterable_fields = ["status", "city", "country", "category"]
 
     def _scope_query(self, query, user: User | None = None):
-        """Ownership scoping for team_member (the flagship rule from
-        spec section 6): created_by=them OR assigned_to=them. Every
-        other role (admin, department_head, viewer, and any
-        not-yet-migrated legacy 'manager') sees whatever the page-level
-        check already allowed -- unfiltered here, see
-        app/core/permissions.py's module docstring for why department_
-        head deliberately does NOT get this restriction. `user=None`
-        (the BaseCRUD default) means "no scoping", used by internal
-        callers that already know they're allowed the record."""
+        """Ownership scoping for team_member: assigned_to = them, nothing
+        else. created_by is deliberately NOT part of it -- once the Sales
+        Manager reassigns a customer the previous salesman loses access
+        (Sales spec section 2); a salesman's own new customers stay theirs
+        because create() auto-assigns them to their creator. Every other
+        role (admin, department_head, viewer, and any not-yet-migrated
+        legacy 'manager') sees whatever the page-level check already
+        allowed -- unfiltered here, see app/core/permissions.py's module
+        docstring. `user=None` (the BaseCRUD default) means "no scoping",
+        used by internal callers that already know they're allowed the
+        record."""
         if user is None or not is_team_member(user):
             return query
-        return query.filter(or_(Customer.created_by == user.id, Customer.assigned_to == user.id))
+        return query.filter(Customer.assigned_to == user.id)
 
     def _check_duplicate_phone(self, db: Session, phone: str | None, exclude_id: int | None = None) -> None:
         if not phone:
@@ -200,6 +201,14 @@ class CustomerCRUD(BaseCRUD):
         # client-supplied (see schemas/customer.py CustomerCreate, which
         # has no such field at all).
         data = {**data, "customer_number": number_series_service.next_number(db, "CUSTOMER")}
+        # A salesman's own new customer is theirs: ownership is assigned_to
+        # only (see _scope_query), so without this it would vanish from
+        # their own list the moment it was created. A Sales Manager/admin
+        # creating one leaves it unassigned for the manager to hand out.
+        if user_id is not None and data.get("assigned_to") is None:
+            creator = db.get(User, user_id)
+            if creator is not None and is_team_member(creator):
+                data = {**data, "assigned_to": user_id}
         return super().create(db, data, user_id=user_id)
 
     def update(self, db: Session, id: int, data: dict, user_id: int | None = None) -> Customer:

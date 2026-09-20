@@ -14,6 +14,6 @@ read_guard = require_page_access("payments", "read")
 @router.get("", response_model=list[CollectionQueueRowOut])
 def list_collection_queue(
     db: Session = Depends(get_db),
-    _: User = Depends(read_guard),
+    user: User = Depends(read_guard),
 ):
-    return payment_service.list_collection_queue(db)
+    return payment_service.list_collection_queue(db, user=user)

@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.api.sales_scope_guard import sales_record_scope_guard
+from app.core.sales_scope import assert_customer_in_scope
 from app.api.common import PagedResponse
 from app.api.deps import require_role
 from app.core.database import get_db
@@ -35,7 +37,7 @@ from app.services import (
     pdf_generator,
 )
 
-router = APIRouter(prefix="/api/orders", tags=["orders"])
+router = APIRouter(prefix="/api/orders", tags=["orders"], dependencies=[Depends(sales_record_scope_guard)])
 read_guard = require_page_access("orders", "read")
 write_guard = require_page_access("orders", "write")
 admin_guard = require_role("admin")
@@ -51,7 +53,7 @@ def list_orders(
     admin_review_required: bool | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(read_guard),
+    user: User = Depends(read_guard),
 ):
     result = order_service.list_orders(
         db,
@@ -62,6 +64,7 @@ def list_orders(
         customer_id=customer_id,
         admin_review_required=admin_review_required,
         sort=sort,
+        user=user,
     )
     # One batch lookup for the whole page rather than one query per row --
     # see OrderOut.quotation_number's docstring for why this isn't just
@@ -157,6 +160,7 @@ def create_order(
     user: User = Depends(write_guard),
 ):
     data = payload.model_dump()
+    assert_customer_in_scope(db, user, data["customer_id"])
     order = order_service.create_order(db, data, user_id=user.id)
     return OrderOut.from_model(order)
 
@@ -171,6 +175,7 @@ def log_sale(
     order, confirms it, and issues a delivery note for it in a single
     call instead of working through 3 separate screens. See
     order_service.log_sale."""
+    assert_customer_in_scope(db, user, payload.customer_id)
     order = order_service.log_sale(
         db,
         payload.customer_id,
@@ -200,6 +205,8 @@ def update_order(
     user: User = Depends(write_guard),
 ):
     data = payload.model_dump(exclude_unset=True)
+    if data.get("customer_id") is not None:
+        assert_customer_in_scope(db, user, data["customer_id"])
     order = order_service.update_order(db, order_id, data, user_id=user.id)
     return OrderOut.from_model(order)
 
