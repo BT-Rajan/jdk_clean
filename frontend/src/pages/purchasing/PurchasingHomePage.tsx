@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { Alert, Badge, EmptyState, GlassCard, PageHeader, Pagination, Spinner, StatusBadge } from '@/components/ui'
 import { StatsWidget } from '@/components/dashboard/DashboardWidgets'
+import { PurchasingDashboardCharts } from './PurchasingDashboardCharts'
 import { getDashboardStats } from '@/api/dashboard'
 import { listNotifications } from '@/api/notifications'
 import { getMrpReport } from '@/api/mrp'
@@ -128,6 +129,8 @@ export function PurchasingHomePage() {
           <Spinner size={24} className="text-gold-300" />
         </div>
       )}
+
+      <PurchasingDashboardCharts />
 
       <div className="grid min-w-0 gap-6">
         <div className="min-w-0 flex flex-col gap-8">
