@@ -50,6 +50,9 @@ export function PurchasingHomePage() {
   const navigate = useNavigate()
   const { user, permissions } = useAuth()
   const canCreatePo = permissions ? canWritePage(permissions, 'purchase_orders') : canWriteDepartment(user, 'procurement')
+  // Raw material arriving with no purchase order behind it is logged as a
+  // stock receipt (Inventory -> Adjust stock), which needs inventory write.
+  const canReceiveStock = canWritePage(permissions, 'inventory')
 
   const [stats, setStats] = useState<DashboardStatsResponse | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
@@ -118,7 +121,16 @@ export function PurchasingHomePage() {
       <PageHeader
         title="Purchasing"
         subtitle="Raw-material stock position first — what's on hand, what's already coming, and what that leaves to buy."
-        actions={canCreatePo ? <Button onClick={() => navigate('/purchase-orders/new')}>New purchase order</Button> : undefined}
+        actions={
+          canCreatePo || canReceiveStock ? (
+            <>
+              {canReceiveStock && (
+                <Button variant="ghost" onClick={() => navigate('/inventory/adjust?receive=1')}>Receive stock</Button>
+              )}
+              {canCreatePo && <Button onClick={() => navigate('/purchase-orders/new')}>New purchase order</Button>}
+            </>
+          ) : undefined
+        }
       />
 
       <Alert variant="error">{statsError}</Alert>

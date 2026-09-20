@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, TextField } from '@/components/ui'
@@ -63,6 +63,10 @@ type AdjustSubmitValues = z.output<typeof adjustSchema>
 // the one exception).
 export function InventoryAdjustPage() {
   const navigate = useNavigate()
+  // ?receive=1 comes from the Purchasing overview's "Receive stock" button:
+  // start on a raw-material receipt and return to Purchasing afterwards.
+  const [searchParams] = useSearchParams()
+  const receiveMode = searchParams.get('receive') === '1'
   const [formError, setFormError] = useState<string | null>(null)
   const productsFetcher = useCallback(() => listProducts({ page: 1, page_size: 200, status: 'active' }), [])
   const materialsFetcher = useCallback(() => listRawMaterials({ page: 1, page_size: 200, status: 'active' }), [])
@@ -82,7 +86,7 @@ export function InventoryAdjustPage() {
       item_type: 'raw_material',
       item_id: 0,
       quantity: 0,
-      movement_type: 'adjustment',
+      movement_type: receiveMode ? 'receipt' : 'adjustment',
       notes: '',
       supplier_id: 0,
       unit_cost: '' as unknown as number,
@@ -110,7 +114,7 @@ export function InventoryAdjustPage() {
         received_by: isRawMaterialReceipt ? values.received_by || null : null,
         received_date: isRawMaterialReceipt ? values.received_date || null : null,
       })
-      navigate('/inventory')
+      navigate(receiveMode ? '/purchasing' : '/inventory')
     } catch (err) {
       setFormError(getApiErrorMessage(err))
     }
