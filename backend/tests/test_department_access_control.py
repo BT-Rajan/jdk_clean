@@ -110,44 +110,50 @@ def test_department_head_sees_every_customer_unfiltered(db):
     assert len(ids) >= 2  # both salesmen's customers, none excluded by ownership
 
 
-def test_team_member_sees_only_created_or_assigned_customers(db):
+def test_team_member_sees_only_assigned_customers(db):
+    """Ownership is assigned_to only (Sales spec section 2). created_by is
+    history: a customer a salesman created but that is assigned to
+    someone else is NOT theirs."""
     dept = make_department(db)
     salesman_a = make_user(db, role="team_member", department_id=dept.id)
     salesman_b = make_user(db, role="team_member", department_id=dept.id)
 
-    customer_a = make_customer(db, name="Created by A", created_by=salesman_a.id)
-    customer_b = make_customer(db, name="Created by B", created_by=salesman_b.id)
-    customer_c = make_customer(db, name="Created by Head, assigned to A", created_by=None, assigned_to=salesman_a.id)
+    assigned_to_a = make_customer(db, name="Assigned to A", created_by=None, assigned_to=salesman_a.id)
+    assigned_to_b = make_customer(db, name="Assigned to B", created_by=None, assigned_to=salesman_b.id)
+    created_by_a_but_b_owns = make_customer(
+        db, name="Created by A, assigned to B", created_by=salesman_a.id, assigned_to=salesman_b.id
+    )
+    created_by_a_unassigned = make_customer(db, name="Created by A, unassigned", created_by=salesman_a.id)
 
     result = customer_crud.read_all(db, user=salesman_a)
     visible_ids = {c.id for c in result["items"]}
 
-    assert customer_a.id in visible_ids
-    assert customer_c.id in visible_ids  # assigned to A even though created by someone else
-    assert customer_b.id not in visible_ids  # neither created by nor assigned to A
+    assert assigned_to_a.id in visible_ids
+    assert assigned_to_b.id not in visible_ids
+    assert created_by_a_but_b_owns.id not in visible_ids  # creating it is not owning it
+    assert created_by_a_unassigned.id not in visible_ids  # unassigned belongs to nobody yet
 
 
 def test_reassignment_moves_visibility_to_the_new_assignee(db):
-    """Spec section 24's exact scenario: Customer A created by Salesman A,
-    then the Sales Head reassigns it to Salesman B -- B gains access,
-    A keeps access too (still the creator, per section 18: created_by
-    never changes), and this is NOT a case of A losing access outright
-    since ownership is created_by OR assigned_to."""
+    """Customer A is assigned to Salesman A; the Sales Manager reassigns it
+    to Salesman B: B gains access, A LOSES it, the manager keeps it."""
     dept = make_department(db)
     salesman_a = make_user(db, role="team_member", department_id=dept.id)
     salesman_b = make_user(db, role="team_member", department_id=dept.id)
-    customer = make_customer(db, created_by=salesman_a.id)
+    head = make_user(db, role="department_head", department_id=dept.id)
+    customer = make_customer(db, created_by=salesman_a.id, assigned_to=salesman_a.id)
 
-    # Before reassignment: only A sees it.
-    assert customer.id in {c.id for c in customer_crud.read_all(db, user=salesman_a)["items"]}
-    assert customer.id not in {c.id for c in customer_crud.read_all(db, user=salesman_b)["items"]}
+    def sees(user):
+        return customer.id in {c.id for c in customer_crud.read_all(db, user=user)["items"]}
+
+    assert sees(salesman_a) and not sees(salesman_b) and sees(head)
 
     customer_crud.update(db, customer.id, {"assigned_to": salesman_b.id})
 
-    # After: B sees it (assigned_to), A still sees it (created_by is untouched).
-    assert customer.id in {c.id for c in customer_crud.read_all(db, user=salesman_b)["items"]}
-    assert customer.id in {c.id for c in customer_crud.read_all(db, user=salesman_a)["items"]}
-    assert customer_crud.read_one(db, customer.id).created_by == salesman_a.id
+    assert sees(salesman_b)
+    assert not sees(salesman_a)  # the previous salesman loses access, even as creator
+    assert sees(head)  # the manager retains it
+    assert customer_crud.read_one(db, customer.id).created_by == salesman_a.id  # created_by never changes
 
 
 def test_salesman_cannot_read_a_customer_by_direct_id_outside_their_scope(db):
@@ -157,15 +163,31 @@ def test_salesman_cannot_read_a_customer_by_direct_id_outside_their_scope(db):
     dept = make_department(db)
     salesman_a = make_user(db, role="team_member", department_id=dept.id)
     salesman_b = make_user(db, role="team_member", department_id=dept.id)
-    customer = make_customer(db, created_by=salesman_b.id)
+    customer = make_customer(db, created_by=salesman_b.id, assigned_to=salesman_b.id)
 
     from app.core.exceptions import NotFoundError
 
     with pytest.raises(NotFoundError):
         customer_crud.read_one(db, customer.id, user=salesman_a)
 
-    # B, the owner, can still read it directly.
+    # B, the assignee, can still read it directly.
     assert customer_crud.read_one(db, customer.id, user=salesman_b).id == customer.id
+
+
+def test_a_salesmans_new_customer_is_assigned_to_them(db):
+    """Ownership is assigned_to only, so create() must auto-assign -- else a
+    salesman's own new customer would vanish from their list."""
+    dept = make_department(db)
+    salesman = make_user(db, role="team_member", department_id=dept.id)
+    head = make_user(db, role="department_head", department_id=dept.id)
+
+    mine = customer_crud.create(db, {"customer_type": "business", "name": "Made by salesman", "payment_terms_type": "cash"}, user_id=salesman.id)
+    theirs = customer_crud.create(db, {"customer_type": "business", "name": "Made by manager", "payment_terms_type": "cash"}, user_id=head.id)
+
+    assert mine.assigned_to == salesman.id
+    assert mine.id in {c.id for c in customer_crud.read_all(db, user=salesman)["items"]}
+    assert theirs.assigned_to is None  # the manager hands these out
+    assert theirs.id not in {c.id for c in customer_crud.read_all(db, user=salesman)["items"]}
 
 
 def test_search_inherits_ownership_scoping(db):
@@ -175,7 +197,7 @@ def test_search_inherits_ownership_scoping(db):
     dept = make_department(db)
     salesman_a = make_user(db, role="team_member", department_id=dept.id)
     salesman_b = make_user(db, role="team_member", department_id=dept.id)
-    make_customer(db, name="Acme Corp", created_by=salesman_b.id)
+    make_customer(db, name="Acme Corp", created_by=salesman_b.id, assigned_to=salesman_b.id)
 
     result = customer_crud.read_all(db, search="Acme", user=salesman_a)
     assert result["total"] == 0

@@ -14,4 +14,4 @@ read_guard = require_page_access("dashboard", "read")
 
 @router.get("/stats", response_model=DashboardStatsOut)
 def get_dashboard_stats(db: Session = Depends(get_db), user: User = Depends(read_guard)):
-    return dashboard_service.get_stats(db)
+    return dashboard_service.get_stats(db, user)

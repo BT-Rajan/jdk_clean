@@ -15,7 +15,8 @@ from typing import Any
 from sqlalchemy import String, cast, or_
 from sqlalchemy.orm import Session
 
-from app.core.permissions import has_page_access
+from app.core.permissions import has_page_access, is_team_member
+from app.core.sales_scope import scope_by_customer
 from app.models.customer import Customer
 from app.models.machine import Machine
 from app.models.order import Order
@@ -75,6 +76,13 @@ def search(db: Session, user: User, query: str, limit_per_entity: int = 5) -> li
         query_obj = db.query(model).filter(or_(*conditions))
         if hasattr(model, "deleted_at"):
             query_obj = query_obj.filter(model.deleted_at.is_(None))
+        # Same ownership rules as the entity's own list endpoint -- the
+        # command palette must not be a side door around them.
+        if model is Customer:
+            if is_team_member(user):
+                query_obj = query_obj.filter(Customer.assigned_to == user.id)
+        elif model in (Quotation, Order):
+            query_obj = scope_by_customer(query_obj, model.customer_id, user)
         rows = query_obj.order_by(model.id.desc()).limit(limit_per_entity).all()
 
         for row in rows:

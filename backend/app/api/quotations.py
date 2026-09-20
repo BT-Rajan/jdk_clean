@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.api.sales_scope_guard import sales_record_scope_guard
+from app.core.sales_scope import assert_customer_in_scope
 from app.api.common import PagedResponse
 from app.api.deps import require_role
 from app.core.database import get_db
@@ -33,7 +35,7 @@ from app.services import (
     quotation_service,
 )
 
-router = APIRouter(prefix="/api/quotations", tags=["quotations"])
+router = APIRouter(prefix="/api/quotations", tags=["quotations"], dependencies=[Depends(sales_record_scope_guard)])
 read_guard = require_page_access("quotations", "read")
 write_guard = require_page_access("quotations", "write")
 admin_guard = require_role("admin")
@@ -49,7 +51,7 @@ def list_quotations(
     feasibility_id: int | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(read_guard),
+    user: User = Depends(read_guard),
 ):
     result = quotation_service.list_quotations(
         db,
@@ -60,6 +62,7 @@ def list_quotations(
         customer_id=customer_id,
         feasibility_id=feasibility_id,
         sort=sort,
+        user=user,
     )
     result["items"] = [QuotationOut.from_model(q) for q in result["items"]]
     return result
@@ -82,6 +85,16 @@ def get_quotation_history(
 ):
     quotation_service.get_quotation(db, quotation_id, include_deleted=True)  # 404s if never existed
     return audit_service.get_history(db, "quotations", quotation_id)
+
+
+def _assert_feasibility_in_scope(db: Session, user: User, feasibility_id: int) -> None:
+    """A quotation may only be raised against a feasibility check whose
+    customer is the salesman's own."""
+    from app.core.sales_scope import customer_of_feasibility
+
+    customer_id = customer_of_feasibility(db, feasibility_id)
+    if customer_id is not None:
+        assert_customer_in_scope(db, user, customer_id, "Feasibility check")
 
 
 @router.post("/material-conflicts", response_model=list[MaterialConflictOut])
@@ -108,6 +121,9 @@ def create_quotation(
     user: User = Depends(write_guard),
 ):
     data = payload.model_dump()
+    assert_customer_in_scope(db, user, data["customer_id"])
+    if data.get("feasibility_id") is not None:
+        _assert_feasibility_in_scope(db, user, data["feasibility_id"])
     quotation = quotation_service.create_quotation(db, data, user_id=user.id)
     return QuotationOut.from_model(quotation)
 
@@ -120,6 +136,10 @@ def update_quotation(
     user: User = Depends(write_guard),
 ):
     data = payload.model_dump(exclude_unset=True)
+    if data.get("customer_id") is not None:
+        assert_customer_in_scope(db, user, data["customer_id"])
+    if data.get("feasibility_id") is not None:
+        _assert_feasibility_in_scope(db, user, data["feasibility_id"])
     quotation = quotation_service.update_quotation(db, quotation_id, data, user_id=user.id)
     return QuotationOut.from_model(quotation)
 

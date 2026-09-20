@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.api.sales_scope_guard import sales_record_scope_guard
+from app.core.sales_scope import assert_customer_in_scope
 from app.api.common import PagedResponse
 from app.core.database import get_db
 from app.core.permissions import require_page_access
@@ -26,9 +28,20 @@ from app.services import (
     pdf_generator,
 )
 
-router = APIRouter(prefix="/api/delivery-notes", tags=["delivery-notes"])
+router = APIRouter(prefix="/api/delivery-notes", tags=["delivery-notes"], dependencies=[Depends(sales_record_scope_guard)])
 read_guard = require_page_access("delivery_notes", "read")
 write_guard = require_page_access("delivery_notes", "write")
+
+
+def _assert_order_in_scope(db: Session, user: User, order_id: int) -> None:
+    """A delivery note may only be raised against an order whose customer is
+    the salesman's own (the body names the order, so the path-param guard
+    can't see it)."""
+    from app.core.sales_scope import customer_of_order
+
+    customer_id = customer_of_order(db, order_id)
+    if customer_id is not None:
+        assert_customer_in_scope(db, user, customer_id, "Order")
 
 
 def _with_fulfillment(db: Session, note) -> DeliveryNoteOut:
@@ -50,10 +63,10 @@ def list_delivery_notes(
     order_id: int | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(read_guard),
+    user: User = Depends(read_guard),
 ):
     result = delivery_note_service.list_delivery_notes(
-        db, page=page, page_size=page_size, search=search, status=status, order_id=order_id, sort=sort
+        db, page=page, page_size=page_size, search=search, status=status, order_id=order_id, sort=sort, user=user
     )
     result["items"] = [DeliveryNoteOut.from_model(n) for n in result["items"]]
     return result
@@ -85,6 +98,7 @@ def create_delivery_note(
     user: User = Depends(write_guard),
 ):
     data = payload.model_dump()
+    _assert_order_in_scope(db, user, data["order_id"])
     note = delivery_note_service.create_delivery_note(db, data, user_id=user.id)
     return _with_fulfillment(db, note)
 

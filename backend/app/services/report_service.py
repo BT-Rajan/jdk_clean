@@ -3,6 +3,7 @@ from datetime import date, timedelta
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.sales_scope import customer_scope_filters, scope_by_customer
 from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.models.customer import Customer
 from app.models.inventory import FinishedGoodsInventory, RawMaterialInventory, StockMovement
@@ -13,6 +14,7 @@ from app.models.purchase_order import PURCHASE_ORDER_STATUSES, PurchaseOrder, Pu
 from app.models.quotation import Quotation
 from app.models.raw_material import RawMaterial
 from app.models.supplier import Supplier
+from app.models.user import User
 from app.services import production_execution_service
 
 # Orders in these statuses aren't real committed revenue -- a draft is
@@ -106,7 +108,11 @@ def _resolve_range(
 
 
 def get_sales_report(
-    db: Session, months: int = 12, date_from: date | None = None, date_to: date | None = None
+    db: Session,
+    months: int = 12,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    user: User | None = None,
 ) -> dict:
     """Revenue/order trend over the last `months` calendar months (or an
     explicit date_from/date_to window when given), plus a status
@@ -121,7 +127,7 @@ def get_sales_report(
     monthly = []
     for year, month in buckets:
         start, end = _month_bounds(year, month)
-        base = db.query(Order).filter(
+        base = scope_by_customer(db.query(Order), Order.customer_id, user).filter(
             Order.deleted_at.is_(None),
             Order.order_date >= start,
             Order.order_date < end,
@@ -133,7 +139,7 @@ def get_sales_report(
             .scalar()
         )
         quotation_count = (
-            db.query(Quotation)
+            scope_by_customer(db.query(Quotation), Quotation.customer_id, user)
             .filter(
                 Quotation.deleted_at.is_(None),
                 Quotation.quotation_date >= start,
@@ -154,7 +160,7 @@ def get_sales_report(
 
     by_status = []
     for status in ORDER_STATUSES:
-        q = db.query(Order).filter(
+        q = scope_by_customer(db.query(Order), Order.customer_id, user).filter(
             Order.deleted_at.is_(None),
             Order.order_date >= range_start,
             Order.order_date < range_end_exclusive,
@@ -178,6 +184,7 @@ def get_sales_report(
             Order.order_date < range_end_exclusive,
             Order.status.in_(REVENUE_STATUSES),
         )
+        .filter(*customer_scope_filters(Order.customer_id, user))
         .group_by(Customer.id, Customer.name)
         .order_by(func.sum(Order.total_amount).desc())
         .limit(10)
@@ -209,6 +216,7 @@ def get_sales_report(
             Order.order_date < range_end_exclusive,
             Order.status.in_(REVENUE_STATUSES),
         )
+        .filter(*customer_scope_filters(Order.customer_id, user))
         .group_by(Product.id, Product.code, Product.name)
         .order_by(func.sum(OrderDetail.line_total).desc())
         .limit(10)
@@ -226,7 +234,7 @@ def get_sales_report(
     ]
 
     total_quotations = (
-        db.query(Quotation)
+        scope_by_customer(db.query(Quotation), Quotation.customer_id, user)
         .filter(
             Quotation.deleted_at.is_(None),
             Quotation.quotation_date >= range_start,
@@ -235,7 +243,7 @@ def get_sales_report(
         .count()
     )
     converted_quotations = (
-        db.query(Quotation)
+        scope_by_customer(db.query(Quotation), Quotation.customer_id, user)
         .filter(
             Quotation.deleted_at.is_(None),
             Quotation.quotation_date >= range_start,
@@ -272,6 +280,7 @@ def get_sales_drilldown(
     date_from: date | None = None,
     date_to: date | None = None,
     revenue_only: bool = False,
+    user: User | None = None,
 ) -> list[dict]:
     """The individual orders behind one chart click -- a month bar, a
     status slice, a top-customer/top-product bar, or any combination.
@@ -284,7 +293,7 @@ def get_sales_drilldown(
     they make a Top customers / Top products drill-down list exactly the
     orders that bar was ranked on.
     """
-    query = db.query(Order).filter(Order.deleted_at.is_(None))
+    query = scope_by_customer(db.query(Order), Order.customer_id, user).filter(Order.deleted_at.is_(None))
     if date_from is not None:
         query = query.filter(Order.order_date >= date_from)
     if date_to is not None:

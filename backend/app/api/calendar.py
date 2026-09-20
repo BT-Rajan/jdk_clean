@@ -40,12 +40,12 @@ def mentionable_users(db: Session = Depends(get_db), _: User = Depends(get_curre
 def day_snapshot(
     target_date: date = Query(..., alias="date"),
     db: Session = Depends(get_db),
-    _: User = Depends(get_current_user),
+    user: User = Depends(get_current_user),
 ):
     """Powers the calendar's day-actions popup: what's already logged
     for this day (production batches, sales orders) plus whether it's
     still a legal target for logging something new."""
-    snapshot = calendar_service.get_day_snapshot(db, target_date)
+    snapshot = calendar_service.get_day_snapshot(db, target_date, user)
     return DaySnapshotOut(
         date=snapshot["date"],
         production=[DaySnapshotProductionOut.from_model(b) for b in snapshot["production"]],

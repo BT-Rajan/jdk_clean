@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import ConflictError, NotFoundError, ValidationAppError
 from app.core.pagination import sort_and_paginate
+from app.core.sales_scope import scope_by_customer
 from app.core.timezone import now_kuwait_naive, today_kuwait
 from app.core.workflow import assert_reason_given, assert_transition_allowed
 from app.models.customer import Customer
@@ -113,8 +114,9 @@ def list_feasibility_checks(
     status: str | None = None,
     customer_id: int | None = None,
     sort: str | None = None,
+    user=None,
 ) -> dict:
-    query = _base_query(db)
+    query = scope_by_customer(_base_query(db), FeasibilityCheck.customer_id, user)
     if status:
         query = query.filter(FeasibilityCheck.status == status)
     if customer_id:
@@ -929,11 +931,13 @@ def admin_review(db: Session, feasibility_id: int, notes: str, user_id: int | No
     return get_feasibility(db, feasibility_id)
 
 
-def list_available_for_quotation(db: Session, customer_id: int | None = None) -> list[FeasibilityCheck]:
+def list_available_for_quotation(db: Session, customer_id: int | None = None, user=None) -> list[FeasibilityCheck]:
     """List feasibility checks available for quotation generation.
     Only returns checks in quotable statuses (feasible, exception_approved)
     that haven't been converted, closed, or expired."""
-    query = _base_query(db).filter(FeasibilityCheck.status.in_(QUOTABLE_STATUSES))
+    query = scope_by_customer(_base_query(db), FeasibilityCheck.customer_id, user).filter(
+        FeasibilityCheck.status.in_(QUOTABLE_STATUSES)
+    )
     if customer_id:
         query = query.filter(FeasibilityCheck.customer_id == customer_id)
     candidates = query.order_by(FeasibilityCheck.feasibility_number.desc()).all()

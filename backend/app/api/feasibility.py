@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, Query
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.api.sales_scope_guard import sales_record_scope_guard
+from app.core.sales_scope import assert_customer_in_scope
 from app.api.common import PagedResponse
 from app.api.deps import require_role
 from app.core.database import get_db
@@ -19,7 +21,7 @@ from app.schemas.feasibility import (
 )
 from app.services import audit_service, doc_template_service, feasibility_service
 
-router = APIRouter(prefix="/api/feasibility", tags=["feasibility"])
+router = APIRouter(prefix="/api/feasibility", tags=["feasibility"], dependencies=[Depends(sales_record_scope_guard)])
 read_guard = require_page_access("feasibilities", "read")
 write_guard = require_page_access("feasibilities", "write")
 admin_guard = require_role("admin")
@@ -34,10 +36,10 @@ def list_feasibility_checks(
     customer_id: int | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(read_guard),
+    user: User = Depends(read_guard),
 ):
     result = feasibility_service.list_feasibility_checks(
-        db, page=page, page_size=page_size, search=search, status=status, customer_id=customer_id, sort=sort
+        db, page=page, page_size=page_size, search=search, status=status, customer_id=customer_id, sort=sort, user=user
     )
     result["items"] = [FeasibilityOut.from_model(f) for f in result["items"]]
     return result
@@ -47,11 +49,11 @@ def list_feasibility_checks(
 def list_available_for_quotation(
     customer_id: int | None = Query(None),
     db: Session = Depends(get_db),
-    _: User = Depends(read_guard),
+    user: User = Depends(read_guard),
 ):
     """List feasibility checks available for quotation generation.
     Only returns checks in quotable statuses that haven't been converted or closed."""
-    feasibilities = feasibility_service.list_available_for_quotation(db, customer_id=customer_id)
+    feasibilities = feasibility_service.list_available_for_quotation(db, customer_id=customer_id, user=user)
     return [FeasibilityOut.from_model(f) for f in feasibilities]
 
 
@@ -99,6 +101,7 @@ def create_feasibility(
     user: User = Depends(write_guard),
 ):
     data = payload.model_dump()
+    assert_customer_in_scope(db, user, data["customer_id"])
     feasibility = feasibility_service.create_feasibility(db, data, user_id=user.id)
     return FeasibilityOut.from_model(feasibility)
 
