@@ -10,11 +10,15 @@ export function Panel({
   title,
   hint,
   className,
+  bodyClassName,
   children,
 }: {
   title: string
   hint?: string
   className?: string
+  /** Extra classes for the content area -- e.g. a min-height, or `relative`
+   * so a chart can fill it with `absolute inset-0`. */
+  bodyClassName?: string
   children: ReactNode
 }) {
   return (
@@ -23,7 +27,7 @@ export function Panel({
         <h2 className="font-display text-base font-medium text-white">{title}</h2>
         {hint && <p className="mt-0.5 text-xs text-white/40">{hint}</p>}
       </div>
-      <div className="min-h-0 flex-1">{children}</div>
+      <div className={cn('min-h-0 flex-1', bodyClassName)}>{children}</div>
     </GlassCard>
   )
 }
@@ -59,11 +63,13 @@ export function KpiTile({
 
 const FUNNEL_MIN_WIDTH = 58 // % of the panel -- keeps the smallest stage's label readable
 
-export function SalesFunnel({ stages }: { stages: FunnelStage[] }) {
+/** `fill` spreads the stages over the height of the parent instead of
+ * stacking them at the top -- for a panel that is taller than the funnel. */
+export function SalesFunnel({ stages, fill = false }: { stages: FunnelStage[]; fill?: boolean }) {
   const max = Math.max(...stages.map((s) => s.count), 1)
 
   return (
-    <ol className="flex flex-col items-center" aria-label="Sales funnel">
+    <ol className={cn('mx-auto flex w-full max-w-[32rem] flex-col items-center', fill && 'h-full justify-around gap-1')} aria-label="Sales funnel">
       {stages.map((stage, i) => {
         const width = FUNNEL_MIN_WIDTH + (100 - FUNNEL_MIN_WIDTH) * (stage.count / max)
         const isOutcome = i === stages.length - 1
@@ -72,7 +78,7 @@ export function SalesFunnel({ stages }: { stages: FunnelStage[] }) {
             <div
               style={{ width: `${width}%` }}
               className={cn(
-                'flex min-w-[10.5rem] items-center justify-between gap-3 rounded-xl border px-3.5 py-2',
+                'flex min-w-[10.5rem] items-center justify-between gap-3 rounded-xl border px-3.5 py-1.5',
                 isOutcome
                   ? 'border-emerald-400/30 bg-emerald-400/10'
                   : 'border-gold-300/25 bg-gold-400/10',
@@ -86,7 +92,7 @@ export function SalesFunnel({ stages }: { stages: FunnelStage[] }) {
             </div>
 
             {stage.conversion && (
-              <div className="my-1.5 flex items-center gap-1.5 text-[11px] text-white/45">
+              <div className="my-1 flex items-center gap-1.5 text-[11px] text-white/45">
                 <svg viewBox="0 0 12 12" className="h-3 w-3 shrink-0 text-white/30" fill="none" aria-hidden="true">
                   <path d="M6 2v8m0 0L3 7m3 3l3-3" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>

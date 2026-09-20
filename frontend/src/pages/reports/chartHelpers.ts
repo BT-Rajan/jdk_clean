@@ -24,4 +24,20 @@ export function toNumber(value: ValueType | undefined): number {
   return typeof value === 'number' ? value : Number(value) || 0
 }
 
+/** Whole-number compact form for axis ticks and bar labels ("12.5k").
+ * Exact KWD figures always stay in the tooltip. */
+export function compact(value: number): string {
+  const abs = Math.abs(value)
+  if (abs >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
+  if (abs >= 1_000) return `${(value / 1_000).toFixed(abs >= 10_000 ? 0 : 1).replace(/\.0$/, '')}k`
+  return String(Math.round(value))
+}
+
+export function truncate(text: string, max: number): string {
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text
+}
+
+/** The one gold every revenue series (trend line, customer/product bars) uses. */
+export const REVENUE_COLOR = '#d4af6a'
+
 export type { NameType, ValueType }
