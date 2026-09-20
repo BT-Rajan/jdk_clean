@@ -5,6 +5,7 @@ from app.core.exceptions import AppError, ConflictError, NotFoundError, Validati
 from app.core.pagination import sort_and_paginate
 from app.core.timezone import now_kuwait_naive
 from app.core.workflow import assert_reason_given
+from app.models.delivery_note import DeliveryNote
 from app.models.inventory import (
     STOCK_ADJUSTMENT_REQUEST_STATUSES,
     FinishedGoodsInventory,
@@ -12,8 +13,15 @@ from app.models.inventory import (
     StockAdjustmentRequest,
     StockMovement,
 )
+from app.models.order import Order
 from app.models.product import Product
+from app.models.production_execution import ProductionExecution
+from app.models.production_order import ProductionOrder
+from app.models.production_schedule import ProductionSchedule
+from app.models.purchase_order import PurchaseOrder
+from app.models.qc_request import QcRequest
 from app.models.raw_material import RawMaterial
+from app.models.supplier_return import SupplierReturn
 from app.services import settings_service
 
 _INVENTORY_MODEL = {
@@ -500,6 +508,57 @@ _MOVEMENT_SORTABLE_FIELDS = {
     "movement_type": StockMovement.movement_type,
 }
 
+# reference_type -> (model, number/label field, route template). Direct
+# single-table lookups by id; production_execution/qc_request are handled
+# separately below since resolving them to something a user recognizes
+# means following their own production_order_id through to the owning
+# Production Order, not just naming the execution/QC row itself.
+_REFERENCE_LOOKUPS = {
+    "purchase_order": (PurchaseOrder, "po_number", "/purchase-orders/{id}"),
+    "supplier_return": (SupplierReturn, "return_number", "/supplier-returns/{id}"),
+    "order": (Order, "order_number", "/orders/{id}"),
+    "delivery_note": (DeliveryNote, "delivery_note_number", "/delivery-notes/{id}"),
+    "production_schedule": (ProductionSchedule, "batch_number", "/production/{id}"),
+    "production_order": (ProductionOrder, "production_order_number", "/production-orders/{id}"),
+}
+
+
+def _resolve_references(db: Session, movements: list[StockMovement]) -> dict[tuple[str, int], dict]:
+    """Batch-resolves each distinct (reference_type, reference_id) pair on
+    this page of movements into a human label + frontend route, the same
+    "collect ids up front, look them up in a couple of grouped queries"
+    approach report_service.get_inventory_drilldown already uses for item
+    names -- at most one extra query per reference_type actually present
+    on the page, never one query per row.
+    """
+    resolved: dict[tuple[str, int], dict] = {}
+
+    ids_by_type: dict[str, set[int]] = {}
+    for m in movements:
+        if m.reference_type and m.reference_id:
+            ids_by_type.setdefault(m.reference_type, set()).add(m.reference_id)
+
+    for ref_type, ids in ids_by_type.items():
+        if ref_type in _REFERENCE_LOOKUPS:
+            model, label_field, route_template = _REFERENCE_LOOKUPS[ref_type]
+            rows = db.query(model).filter(model.id.in_(ids)).all()
+            for row in rows:
+                resolved[(ref_type, row.id)] = {
+                    "reference_label": getattr(row, label_field),
+                    "reference_route": route_template.format(id=row.id),
+                }
+        elif ref_type in ("production_execution", "qc_request"):
+            model = ProductionExecution if ref_type == "production_execution" else QcRequest
+            rows = db.query(model).filter(model.id.in_(ids)).all()
+            for row in rows:
+                po = row.production_order
+                resolved[(ref_type, row.id)] = {
+                    "reference_label": po.production_order_number if po else None,
+                    "reference_route": f"/production-orders/{po.id}" if po else None,
+                }
+
+    return resolved
+
 
 def get_movement_history(
     db: Session,
@@ -521,9 +580,65 @@ def get_movement_history(
     if reference_id:
         query = query.filter(StockMovement.reference_id == reference_id)
 
-    return sort_and_paginate(
+    result = sort_and_paginate(
         query, StockMovement, _MOVEMENT_SORTABLE_FIELDS, sort, page, page_size, default_field="created_at"
     )
+
+    movements: list[StockMovement] = result["items"]
+
+    # Same batching for item name/route as report_service's drilldown:
+    # collect this page's ids per item_type, resolve each type in one
+    # query rather than one query per row.
+    raw_material_ids = {m.item_id for m in movements if m.item_type == "raw_material"}
+    product_ids = {m.item_id for m in movements if m.item_type == "product"}
+    raw_material_names = (
+        {r.id: r.name for r in db.query(RawMaterial).filter(RawMaterial.id.in_(raw_material_ids)).all()}
+        if raw_material_ids
+        else {}
+    )
+    product_names = (
+        {p.id: p.name for p in db.query(Product).filter(Product.id.in_(product_ids)).all()} if product_ids else {}
+    )
+    references = _resolve_references(db, movements)
+
+    items = []
+    for m in movements:
+        if m.item_type == "raw_material":
+            item_name = raw_material_names.get(m.item_id)
+            item_route = f"/raw-materials/{m.item_id}" if m.item_id in raw_material_names else None
+        else:
+            item_name = product_names.get(m.item_id)
+            item_route = f"/products/{m.item_id}" if m.item_id in product_names else None
+
+        ref = references.get((m.reference_type, m.reference_id)) if m.reference_type and m.reference_id else None
+
+        items.append(
+            {
+                "id": m.id,
+                "item_type": m.item_type,
+                "item_id": m.item_id,
+                "item_name": item_name,
+                "item_route": item_route,
+                "movement_type": m.movement_type,
+                "quantity": float(m.quantity),
+                "reference_type": m.reference_type,
+                "reference_id": m.reference_id,
+                "reference_label": ref["reference_label"] if ref else None,
+                "reference_route": ref["reference_route"] if ref else None,
+                "supplier_id": m.supplier_id,
+                "unit_cost": float(m.unit_cost) if m.unit_cost is not None else None,
+                "batch_number": m.batch_number,
+                "expiry_date": m.expiry_date,
+                "invoice_number": m.invoice_number,
+                "received_by": m.received_by,
+                "received_date": m.received_date,
+                "notes": m.notes,
+                "created_at": m.created_at,
+                "created_by": m.created_by,
+            }
+        )
+    result["items"] = items
+    return result
 
 
 _ADJUSTMENT_REQUEST_SORTABLE_FIELDS = {

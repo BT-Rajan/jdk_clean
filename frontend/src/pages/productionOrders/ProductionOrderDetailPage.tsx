@@ -583,7 +583,18 @@ export function ProductionOrderDetailPage() {
                 </Link>
               }
             />
-            <Field label="Customer" value={po.customer_name ?? '—'} />
+            <Field
+              label="Customer"
+              value={
+                po.customer_id ? (
+                  <Link to={`/customers/${po.customer_id}`} className="text-gold-300 hover:text-gold-200">
+                    {po.customer_name ?? `#${po.customer_id}`}
+                  </Link>
+                ) : (
+                  po.customer_name ?? '—'
+                )
+              }
+            />
             <Field label="Order date" value={order ? formatDate(order.order_date) : '—'} />
             <Field label="Due date" value={formatDate(po.due_date)} />
             {po.order_detail_id !== null && (
@@ -1689,6 +1700,16 @@ export function ProductionOrderDetailPage() {
           <span className="flex items-center gap-3">
             <span className="text-white/20">→</span>
             <Badge tone={qcPipelineTone}>Quality control</Badge>
+          </span>
+          <span className="flex items-center gap-3">
+            <span className="text-white/20">→</span>
+            {executions && executions.qc_released > 0 ? (
+              <Link to={`/products/${po.product_id}`}>
+                <Badge tone="success">Finished goods</Badge>
+              </Link>
+            ) : (
+              <Badge tone="neutral">Finished goods</Badge>
+            )}
           </span>
           {FUTURE_STAGES.map((stage) => (
             <span key={stage} className="flex items-center gap-3">

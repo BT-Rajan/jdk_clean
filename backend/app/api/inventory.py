@@ -17,7 +17,7 @@ from app.schemas.inventory import (
     StockLevelOut,
     StockMovementOut,
 )
-from app.services import inventory_service
+from app.services import inventory_service, mrp_service, purchase_order_service
 
 router = APIRouter(prefix="/api/inventory", tags=["inventory"])
 read_guard = require_page_access("inventory", "read")
@@ -60,10 +60,24 @@ def raw_material_stock(
     """Raw material equivalent of /finished-goods -- on hand, reserved,
     available for every active raw material. `material_type` shows
     packaging (or consumable) stock independently from ordinary raw
-    material stock instead of always mixed into one list."""
+    material stock instead of always mixed into one list. Each row also
+    carries the open-PO incoming quantity and (when there is live demand
+    and a shortfall) the MRP required quantity / shortfall."""
     result = inventory_service.get_raw_material_stock(
         db, page=page, page_size=page_size, search=search, sort=sort, low_only=low_only, material_type=material_type
     )
+    page_ids = [i["raw_material_id"] for i in result["items"]]
+    incoming = purchase_order_service.get_open_quantities_by_material(db, page_ids) if page_ids else {}
+    # MRP only reports materials with live demand *and* a shortfall --
+    # reused as-is (no re-derivation of demand/shortfall here), just
+    # looked up per material on this page.
+    requirements = {r["raw_material_id"]: r for r in mrp_service.compute_requirements(db)} if page_ids else {}
+    for item in result["items"]:
+        item["incoming_quantity"] = incoming.get(item["raw_material_id"], 0.0)
+        req = requirements.get(item["raw_material_id"])
+        if req:
+            item["required_quantity"] = req["total_required"]
+            item["shortfall"] = req["shortfall"]
     result["items"] = [RawMaterialStockItem.model_validate(i) for i in result["items"]]
     return result
 

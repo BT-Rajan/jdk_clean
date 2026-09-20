@@ -151,9 +151,13 @@ export function AppLayout({ children }: AppLayoutProps) {
         // and Purchasing respectively, so a second link to the exact same
         // route only added nav clutter (and a duplicate command-palette
         // entry) without reaching anywhere new.
-        { to: '/mrp', label: 'MRP' },
+        { to: '/production-overview', label: 'Overview' },
         { to: '/production-orders', label: 'Production orders' },
         { to: '/production', label: 'Production schedule' },
+        // Renamed from "MRP" -- same page, same route, a factory-floor
+        // term per Pass 5's terminology pass (Step 4 of the brief).
+        { to: '/mrp', label: 'Material Requirements' },
+        { to: '/qc-requests', label: 'Quality check' },
         { to: '/machines', label: 'Production Line' },
         { to: '/reconciliation', label: 'Reconciliation' },
       ],

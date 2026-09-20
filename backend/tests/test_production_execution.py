@@ -178,7 +178,7 @@ def test_material_issue_decreases_stock_and_tracks_allocation(db):
         db, item_type="raw_material", item_id=material.id, reference_type="production_execution", reference_id=execution.id
     )
     assert movements["total"] == 1
-    assert movements["items"][0].quantity == -600
+    assert movements["items"][0]["quantity"] == -600
 
 
 def test_consumption_capped_by_allocated_quantity(db):

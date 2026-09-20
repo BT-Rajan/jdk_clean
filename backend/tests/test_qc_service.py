@@ -151,7 +151,7 @@ def test_report_accepted_releases_finished_goods(db):
         db, item_type="product", item_id=product.id, reference_type="qc_request", reference_id=request.id
     )
     assert movements["total"] == 1
-    assert movements["items"][0].quantity == 500
+    assert movements["items"][0]["quantity"] == 500
 
 
 def test_report_rejected_blocks_finished_goods(db):

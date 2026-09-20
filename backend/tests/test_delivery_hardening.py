@@ -61,9 +61,9 @@ def test_issued_stock_movement_references_the_specific_delivery_note(db):
     # Two movements now trace to this note: the physical issue, and the
     # reservation it releases (see inventory_service.release_reservation's
     # own movement logging) -- both real, traceable ledger entries.
-    issue_movements = [m for m in movements["items"] if m.movement_type == "issue"]
+    issue_movements = [m for m in movements["items"] if m["movement_type"] == "issue"]
     assert len(issue_movements) == 1
-    assert issue_movements[0].quantity == -10
+    assert issue_movements[0]["quantity"] == -10
 
 
 def test_double_issue_is_rejected_and_does_not_double_deduct(db):
@@ -81,7 +81,7 @@ def test_double_issue_is_rejected_and_does_not_double_deduct(db):
     movements = inventory_service.get_movement_history(
         db, item_type="product", item_id=product.id, reference_type="delivery_note", reference_id=note.id
     )
-    issue_movements = [m for m in movements["items"] if m.movement_type == "issue"]
+    issue_movements = [m for m in movements["items"] if m["movement_type"] == "issue"]
     assert len(issue_movements) == 1
 
 

@@ -123,7 +123,7 @@ def test_adjust_stock_returns_the_movement_id(db):
 
     assert stock["movement_id"] is not None
     movements = inventory_service.get_movement_history(db, item_type="raw_material", item_id=material.id)
-    assert movements["items"][0].id == stock["movement_id"]
+    assert movements["items"][0]["id"] == stock["movement_id"]
 
 
 # ---------------------------------------------------------------------
@@ -143,8 +143,8 @@ def test_reserve_stock_logs_a_traceable_movement(db):
         db, item_type="raw_material", item_id=material.id, reference_type="order", reference_id=42
     )
     assert movements["total"] == 1
-    assert movements["items"][0].movement_type == "reserve"
-    assert movements["items"][0].quantity == 30
+    assert movements["items"][0]["movement_type"] == "reserve"
+    assert movements["items"][0]["quantity"] == 30
 
 
 def test_release_reservation_logs_a_traceable_movement(db):
@@ -159,7 +159,7 @@ def test_release_reservation_logs_a_traceable_movement(db):
         db, item_type="raw_material", item_id=material.id, reference_type="order", reference_id=42
     )
     assert movements["total"] == 1
-    assert movements["items"][0].movement_type == "release"
+    assert movements["items"][0]["movement_type"] == "release"
 
 
 def test_reserve_stock_within_available_logs_a_traceable_movement(db):
@@ -174,7 +174,7 @@ def test_reserve_stock_within_available_logs_a_traceable_movement(db):
         db, item_type="raw_material", item_id=material.id, reference_type="production_order", reference_id=7
     )
     assert movements["total"] == 1
-    assert movements["items"][0].movement_type == "reserve"
+    assert movements["items"][0]["movement_type"] == "reserve"
 
 
 # ---------------------------------------------------------------------

@@ -35,6 +35,7 @@ const SEGMENT_LABELS: Record<string, SegmentInfo> = {
   'production-overview': { label: 'Production' },
   production: { label: 'Production' },
   'production-orders': { label: 'Production orders' },
+  'qc-requests': { label: 'Quality check' },
   admin: { label: 'Admin' },
   'roles-permissions': { label: 'Roles & Permissions' },
   settings: { label: 'Settings' },

@@ -576,7 +576,18 @@ export function ProductionDetailPage() {
 
         <TabPanel id="summary" activeId={activeTab}>
           <dl className="grid grid-cols-1 gap-6 sm:grid-cols-3">
-            <Field label="Order" value={batch.order_number} />
+            <Field
+              label="Order"
+              value={
+                batch.order_id ? (
+                  <Link to={`/orders/${batch.order_id}`} className="text-gold-300 hover:text-gold-200">
+                    {batch.order_number}
+                  </Link>
+                ) : (
+                  batch.order_number
+                )
+              }
+            />
             <Field label="Machine" value={batch.machine_name} />
             <Field label="Planned quantity" value={`${batch.planned_quantity} ${batch.unit ?? ''}`} />
             <Field

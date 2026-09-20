@@ -133,9 +133,10 @@ export function InventoryAdjustPage() {
   return (
     <AppLayout>
       <PageContainer>
-        <h1 className="font-display text-2xl font-medium text-white">Adjust stock</h1>
+        <h1 className="font-display text-2xl font-medium text-white">Stock adjustment</h1>
         <p className="mt-2 text-sm text-white/50">
-          Record a receipt, issue, adjustment, or return against a product or raw material.
+          Record a receipt, issue, adjustment, or return against a product or raw material. This is for manual
+          entries only — goods received against a purchase order are received from that purchase order directly.
         </p>
         <GlassCard className="mt-8 p-8">
           <Alert variant="error">{formError}</Alert>
