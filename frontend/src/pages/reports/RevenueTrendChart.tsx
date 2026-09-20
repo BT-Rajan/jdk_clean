@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 import type { MouseEvent as ReactMouseEvent } from 'react'
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { CartesianGrid, Line, LineChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { useMediaQuery } from '@/hooks/useMediaQuery'
 import { formatCurrency } from '@/lib/currency'
 import type { SalesReportMonthly } from '@/types/reports'
@@ -21,17 +21,20 @@ const TREND_MARGIN = { top: 8, right: 12, left: 0, bottom: 0 }
  * Monthly revenue as a single line (KWD), shared by the Sales report and the
  * Sales dashboard. Always fills its parent, which needs a definite height.
  * Clicking a month calls `onSelectMonth` when provided; without it the chart
- * is read-only.
+ * is read-only. `selected` marks the month whose drill-down is open.
  */
 export function RevenueTrendChart({
   months,
   onSelectMonth,
+  selected,
 }: {
   months: SalesReportMonthly[]
   onSelectMonth?: (month: SalesReportMonthly) => void
+  selected?: { year: number; month: number } | null
 }) {
   const narrow = useMediaQuery('(max-width: 639px)')
   const yAxisWidth = narrow ? 36 : 44
+  const selectedRow = selected ? months.find((m) => m.year === selected.year && m.month === selected.month) : undefined
   const maxRevenue = useMemo(() => Math.max(0, ...months.map((m) => m.revenue)), [months])
 
   /** The month a click refers to. A mouse hover gives recharts an active
@@ -95,6 +98,17 @@ export function RevenueTrendChart({
           dot={{ r: 2.5, fill: REVENUE_COLOR, strokeWidth: 0 }}
           activeDot={{ r: 5 }}
         />
+        {selectedRow && (
+          <ReferenceDot
+            x={selectedRow.label}
+            y={selectedRow.revenue}
+            r={6}
+            fill={REVENUE_COLOR}
+            stroke="#fff"
+            strokeWidth={2}
+            ifOverflow="visible"
+          />
+        )}
       </LineChart>
     </ResponsiveContainer>
   )

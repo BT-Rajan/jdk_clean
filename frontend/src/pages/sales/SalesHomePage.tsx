@@ -4,7 +4,7 @@ import { Alert, Spinner } from '@/components/ui'
 import { getSalesReport } from '@/api/reports'
 import { getApiErrorMessage } from '@/lib/apiError'
 import { CURRENCY_CODE } from '@/lib/currency'
-import type { SalesReport } from '@/types/reports'
+import type { SalesReport, SalesReportMonthly } from '@/types/reports'
 import { customerRevenueRows, productRevenueRows } from '@/pages/reports/revenueRows'
 import { RevenueBars } from '@/pages/reports/RevenueBars'
 import { RevenueTrendChart } from '@/pages/reports/RevenueTrendChart'
@@ -12,6 +12,7 @@ import { buildFunnel, buildFunnelRecords } from '@/pages/reports/salesReportMode
 import { Panel, SalesFunnel } from '@/pages/reports/SalesReportPanels'
 import { useSalesPipeline } from '@/pages/reports/useSalesPipeline'
 import { FunnelDrilldown } from './FunnelDrilldown'
+import { MonthDrilldown } from './MonthDrilldown'
 
 const DASHBOARD_MONTHS = 12
 const RANGE_HINT = `Last ${DASHBOARD_MONTHS} months`
@@ -19,9 +20,10 @@ const RANGE_HINT = `Last ${DASHBOARD_MONTHS} months`
 /**
  * The Sales dashboard: the same funnel, revenue trend, top customers and
  * top products the Sales report shows (same API, same charts), laid out as
- * two rows that fill the screen. Clicking a funnel stage opens the records
- * behind it in a panel under the rows; the other drill-downs (month, status,
- * customer, product) live on the Sales report.
+ * two rows that fill the screen. Clicking a funnel stage or a month on the
+ * revenue trend opens the records behind it in a panel under the rows (one
+ * at a time); the other drill-downs (status, customer, product) live on the
+ * Sales report.
  */
 export function SalesHomePage() {
   const [report, setReport] = useState<SalesReport | null>(null)
@@ -29,6 +31,7 @@ export function SalesHomePage() {
   const [error, setError] = useState<string | null>(null)
   const { pipeline, loading: pipelineLoading } = useSalesPipeline({ withReadyToShip: false })
   const [selectedStage, setSelectedStage] = useState<string | null>(null)
+  const [selectedMonth, setSelectedMonth] = useState<{ year: number; month: number } | null>(null)
   const drilldownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -50,6 +53,17 @@ export function SalesHomePage() {
 
   const funnel = useMemo(() => (report ? buildFunnel(report, pipeline) : null), [report, pipeline])
   const activeStage = funnel?.find((s) => s.key === selectedStage) ?? null
+  const activeMonth = report?.monthly.find((m) => m.year === selectedMonth?.year && m.month === selectedMonth?.month) ?? null
+
+  // One drill-down open at a time: picking one closes the other.
+  const toggleStage = (key: string) => {
+    setSelectedMonth(null)
+    setSelectedStage((cur) => (cur === key ? null : key))
+  }
+  const toggleMonth = (row: SalesReportMonthly) => {
+    setSelectedStage(null)
+    setSelectedMonth((cur) => (cur?.year === row.year && cur.month === row.month ? null : { year: row.year, month: row.month }))
+  }
   const stageRecords = useMemo(
     () => (report && selectedStage ? buildFunnelRecords(selectedStage, report, pipeline) : null),
     [report, pipeline, selectedStage],
@@ -58,10 +72,10 @@ export function SalesHomePage() {
   // The panel opens below the fold on a compact screen -- bring it into view
   // so a click visibly does something.
   useEffect(() => {
-    if (!activeStage) return
+    if (!activeStage && !activeMonth) return
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     drilldownRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
-  }, [activeStage?.key])
+  }, [activeStage?.key, activeMonth?.year, activeMonth?.month])
 
   const customerRows = useMemo(() => customerRevenueRows(report?.top_customers), [report])
   const productRows = useMemo(() => productRevenueRows(report?.top_products), [report])
@@ -87,11 +101,11 @@ export function SalesHomePage() {
             <div className="grid gap-4 lg:min-h-[21.5rem] lg:flex-[1.1_1_0%] lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
               <Panel
                 title="Revenue trend"
-                hint={`${CURRENCY_CODE} per month · ${RANGE_HINT.toLowerCase()}`}
+                hint={`${CURRENCY_CODE} per month · ${RANGE_HINT.toLowerCase()} · click a month for its orders`}
                 bodyClassName="relative min-h-[15rem]"
               >
                 <div className="absolute inset-0">
-                  <RevenueTrendChart months={report.monthly} />
+                  <RevenueTrendChart months={report.monthly} onSelectMonth={toggleMonth} selected={selectedMonth} />
                 </div>
               </Panel>
 
@@ -110,7 +124,7 @@ export function SalesHomePage() {
                       stages={funnel}
                       fill
                       activeKey={selectedStage}
-                      onSelectStage={(key) => setSelectedStage((cur) => (cur === key ? null : key))}
+                      onSelectStage={toggleStage}
                     />
                   </div>
                 )}
@@ -156,6 +170,11 @@ export function SalesHomePage() {
                 rangeHint={RANGE_HINT}
                 onClose={() => setSelectedStage(null)}
               />
+            </div>
+          )}
+          {activeMonth && (
+            <div className="mt-4">
+              <MonthDrilldown ref={drilldownRef} month={activeMonth} onClose={() => setSelectedMonth(null)} />
             </div>
           )}
         </>
