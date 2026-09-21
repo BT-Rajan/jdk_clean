@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom'
 import { Button, GlassCard } from '@/components/ui'
 import type { OrderFulfillmentLine, OrderStatus } from '@/types/order'
 
@@ -8,6 +9,8 @@ interface FulfilmentCardProps {
   busy: boolean
   onMarkReadyToShip: () => void
   onCreateDeliveryNote: () => void
+  /** A delivery note already drafted for this order (the ready-to-ship automation drafts one for what is in stock). */
+  draftNote: { id: number; delivery_note_number: string } | null
   onPlanProduction: () => void
 }
 
@@ -29,6 +32,7 @@ export function FulfilmentCard({
   busy,
   onMarkReadyToShip,
   onCreateDeliveryNote,
+  draftNote,
   onPlanProduction,
 }: FulfilmentCardProps) {
   if (lines.length === 0) return null
@@ -47,7 +51,11 @@ export function FulfilmentCard({
   const canProduce = allowWrite && shortage > 0 && (status === 'confirmed' || status === 'in_production')
   const remainingTotal = sum(lines.map((l) => l.remaining_quantity))
   const canDeliver =
-    allowWrite && remainingTotal > 0 && deliverableNow > 0 && (status === 'ready_to_ship' || status === 'shipped')
+    allowWrite &&
+    !draftNote &&
+    remainingTotal > 0 &&
+    deliverableNow > 0 &&
+    (status === 'ready_to_ship' || status === 'shipped')
   const canMarkReady = allowWrite && deliverableNow > 0 && (status === 'confirmed' || status === 'in_production')
   const withUnit = (n: number) => `${n}${unit ? ` ${unit}` : ''}`
 
@@ -144,6 +152,16 @@ export function FulfilmentCard({
               {deliverableNow > 0 ? `${withUnit(deliverableNow)} can ship now` : 'Nothing in stock to ship yet'}
             </p>
           </div>
+        </div>
+      )}
+
+      {draftNote && open && (
+        <div className="border-t border-white/10 px-6 py-4 text-sm text-white/60">
+          Delivery note{' '}
+          <Link to={`/delivery-notes/${draftNote.id}`} className="font-medium text-gold-300 hover:text-gold-200">
+            {draftNote.delivery_note_number}
+          </Link>{' '}
+          is drafted for what is in stock -- review and issue it.
         </div>
       )}
 
