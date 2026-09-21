@@ -458,28 +458,11 @@ export function OrderDetailPage() {
     setBusy(true)
     setError(null)
     try {
-      // Ship what's actually in stock: when released FG covers less than
-      // is still outstanding, the note carries just that (partial
-      // delivery -- the rest goes on a later note). When stock covers
-      // everything, or nothing, lines are omitted and delivery_note_service
-      // defaults them to whatever's outstanding, as before.
-      const byProduct = new Map<number, { wanted: number; onHand: number; remaining: number }>()
-      for (const line of fulfillment) {
-        if (line.remaining_quantity <= 0) continue
-        const entry = byProduct.get(line.product_id) ?? { wanted: 0, onHand: line.available_fg, remaining: 0 }
-        entry.wanted += line.allocated_quantity
-        entry.remaining += line.remaining_quantity
-        byProduct.set(line.product_id, entry)
-      }
-      const deliverable = [...byProduct.entries()]
-        .map(([product_id, e]) => ({ product_id, quantity_delivered: Math.min(e.wanted, e.onHand) }))
-        .filter((l) => l.quantity_delivered > 0)
-      const partial = [...byProduct.values()].some((e) => Math.min(e.wanted, e.onHand) < e.remaining)
-      const note = await createDeliveryNote({
-        order_id: orderId,
-        delivery_date: todayDateInputMin,
-        lines: partial && deliverable.length > 0 ? deliverable : undefined,
-      })
+      // Lines are omitted: delivery_note_service defaults them to whatever's
+      // outstanding, capped at what's in released FG stock right now -- so a
+      // short-stock order gets a partial note (the rest follows on a later
+      // one), and this works the same for the first note or a later one.
+      const note = await createDeliveryNote({ order_id: orderId, delivery_date: todayDateInputMin })
       navigate(`/delivery-notes/${note.id}`)
     } catch (err) {
       setError(getApiErrorMessage(err))
@@ -564,7 +547,7 @@ export function OrderDetailPage() {
                   <TornPaperIcon />
                 </Button>
               )}
-              {allowWrite && (order.status === 'ready_to_ship' || order.status === 'shipped') && (
+              {allowWrite && (order.status === 'ready_to_ship' || order.status === 'shipped') && !deliveryNotes.some((n) => n.status === 'draft') && (
                 <Button
                   variant="primary"
                   size="sm"
@@ -743,6 +726,7 @@ export function OrderDetailPage() {
         busy={busy}
         onMarkReadyToShip={() => handleStatusChange('ready_to_ship')}
         onCreateDeliveryNote={handleCreateDeliveryNote}
+        draftNote={deliveryNotes.find((n) => n.status === 'draft') ?? null}
         onPlanProduction={() => setProductionOrderModalOpen(true)}
       />
 
