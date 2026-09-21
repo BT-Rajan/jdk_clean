@@ -192,6 +192,14 @@ class OrderFulfillmentLineOut(BaseModel):
     remaining_quantity: float
     available_fg: float
     fulfillable_now: float
+    # Spec section 8 (Ordered/Allocated/Produced/Delivered/Remaining):
+    # allocated == fulfillable_now, named for the fulfilment view; the
+    # produced_* figures are this order line's own production output.
+    allocated_quantity: float
+    produced_quantity: float
+    released_quantity: float
+    rejected_quantity: float
+    qc_pending_quantity: float
     shortage: float
     planned_production_quantity: float
     in_progress_production_quantity: float
