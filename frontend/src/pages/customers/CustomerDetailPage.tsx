@@ -44,8 +44,6 @@ import { listOrders } from '@/api/orders'
 import { listDeliveryNotes } from '@/api/deliveryNotes'
 import { listAssignableSalesmen } from '@/api/salesHome'
 import type { AssignableSalesman } from '@/api/salesHome'
-import { listUsers } from '@/api/users'
-import { useSelectOptions } from '@/hooks/useSelectOptions'
 import type { Customer } from '@/types/customer'
 import type { Feasibility } from '@/types/feasibility'
 import type { Quotation } from '@/types/quotation'
@@ -82,7 +80,7 @@ const FOLLOW_UP_STATUS_LABELS: Record<string, string> = {
   escalated: 'Escalated',
 }
 
-function buildTabs(activityCount: number): TabItem[] {
+function buildTabs(): TabItem[] {
   return [
     { id: 'overview', label: 'Overview' },
     { id: 'commercial', label: 'Commercial' },
@@ -90,9 +88,6 @@ function buildTabs(activityCount: number): TabItem[] {
     { id: 'followups', label: 'Follow-ups' },
     { id: 'onboarding', label: 'Onboarding' },
     { id: 'documents', label: 'Documents' },
-    // Badged with the count so a user can see there's Sales activity to
-    // look at without having to open the tab first.
-    { id: 'activity', label: 'Activity', badge: activityCount > 0 ? activityCount : undefined },
     { id: 'history', label: 'History' },
   ]
 }
@@ -149,9 +144,6 @@ export function CustomerDetailPage() {
   const [creditStatus, setCreditStatus] = useState<CustomerCreditStatus | null>(null)
   const [assignBusy, setAssignBusy] = useState(false)
 
-  // Active users, for the Salesperson/Buyer/Follow-up responsible
-  // dropdowns below -- see hooks/useSelectOptions.ts.
-  const { options: userOptions } = useSelectOptions(() => listUsers({ page: 1, page_size: 200, is_active: true }))
   // The reassign dropdown comes from the Sales lookup (Sales Manager/admin
   // can call it) -- NOT from /api/users, which is admin-only and left the
   // manager with an empty list.
@@ -161,7 +153,6 @@ export function CustomerDetailPage() {
     if (!canAssign) return
     listAssignableSalesmen().then(setSalesmen).catch(() => setSalesmen([]))
   }, [canAssign])
-  const userName = (userId: number | null) => userOptions.find((u) => u.id === userId)?.full_name ?? `User #${userId}`
 
   useEffect(() => {
     getCustomer(customerId)
@@ -366,7 +357,7 @@ export function CustomerDetailPage() {
         </dl>
       </GlassCard>
 
-      <Tabs items={buildTabs(activityCount)} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
+      <Tabs items={buildTabs()} activeId={activeTab} onChange={setActiveTab} className="mb-6" />
 
       <TabPanel id="overview" activeId={activeTab}>
         <GlassCard className="mb-6 p-8">
@@ -462,6 +453,100 @@ export function CustomerDetailPage() {
             />
           </dl>
         </GlassCard>
+        {/* The customer's work -- feasibility checks, quotations, orders and
+            deliveries -- sits right under their details, not in a tab of its
+            own (Sales spec section 5). Not a CRM timeline: just the records. */}
+        {activityCount === 0 ? (
+          <GlassCard className="p-8 text-center text-sm text-white/40">
+            No feasibility checks, quotations, orders, or deliveries on file yet.
+          </GlassCard>
+        ) : (
+          <div className="flex flex-col gap-6">
+            <ActivitySection
+              title="Feasibility checks"
+              items={feasibilityChecks}
+              count={feasibilityChecks.length}
+              renderRow={(f) => ({
+                key: f.id,
+                content: (
+                  <Link
+                    to={`/feasibilities/${f.id}`}
+                    className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
+                  >
+                    <span className="font-medium text-white">{f.feasibility_number}</span>
+                    <span className="flex items-center gap-3">
+                      <span className="text-sm text-white/40">{formatDate(f.created_at)}</span>
+                      <StatusBadge status={f.status} />
+                    </span>
+                  </Link>
+                ),
+              })}
+            />
+
+            <ActivitySection
+              title="Quotations"
+              items={quotations}
+              count={quotations.length}
+              renderRow={(q) => ({
+                key: q.id,
+                content: (
+                  <Link
+                    to={`/quotations/${q.id}`}
+                    className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
+                  >
+                    <span className="font-medium text-white">{q.quotation_number}</span>
+                    <span className="flex items-center gap-3">
+                      <span className="text-sm text-white/40">{formatCurrency(q.total_amount)}</span>
+                      <StatusBadge status={q.status} />
+                    </span>
+                  </Link>
+                ),
+              })}
+            />
+
+            <ActivitySection
+              title="Orders"
+              items={orders}
+              count={orders.length}
+              renderRow={(o) => ({
+                key: o.id,
+                content: (
+                  <Link
+                    to={`/orders/${o.id}`}
+                    className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
+                  >
+                    <span className="font-medium text-white">{o.order_number}</span>
+                    <span className="flex items-center gap-3">
+                      <span className="text-sm text-white/40">{formatCurrency(o.total_amount)}</span>
+                      <StatusBadge status={o.status} />
+                    </span>
+                  </Link>
+                ),
+              })}
+            />
+
+            <ActivitySection
+              title="Deliveries"
+              items={deliveryNotes}
+              count={deliveryNotes.length}
+              renderRow={(n) => ({
+                key: n.id,
+                content: (
+                  <Link
+                    to={`/delivery-notes/${n.id}`}
+                    className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
+                  >
+                    <span className="font-medium text-white">{n.delivery_note_number}</span>
+                    <span className="flex items-center gap-3">
+                      <span className="text-sm text-white/40">{formatDate(n.delivery_date)}</span>
+                      <StatusBadge status={n.status} />
+                    </span>
+                  </Link>
+                ),
+              })}
+            />
+          </div>
+        )}
       </TabPanel>
 
       <TabPanel id="commercial" activeId={activeTab}>
@@ -489,7 +574,7 @@ export function CustomerDetailPage() {
           </h2>
           <dl className="grid grid-cols-1 gap-6 sm:grid-cols-2">
             <Field label="Group RFQ" value={customer.group_rfq ? 'Yes' : 'No'} />
-            <Field label="Buyer" value={customer.buyer_id ? userName(customer.buyer_id) : null} />
+            <Field label="Buyer" value={customer.buyer_id ? (customer.buyer_name ?? `User #${customer.buyer_id}`) : null} />
             <Field
               label="Purchase payment terms"
               value={
@@ -630,7 +715,11 @@ export function CustomerDetailPage() {
             <Field label="Next reminder date" value={customer.next_reminder_date ? formatDate(customer.next_reminder_date) : null} />
             <Field
               label="Responsible"
-              value={customer.followup_responsible_id ? userName(customer.followup_responsible_id) : null}
+              value={
+                customer.followup_responsible_id
+                  ? (customer.followup_responsible_name ?? `User #${customer.followup_responsible_id}`)
+                  : null
+              }
             />
           </dl>
         </GlassCard>
@@ -675,100 +764,6 @@ export function CustomerDetailPage() {
           onVerify={async () => setCustomer(await verifyCustomerId(customerId))}
           onUnverify={async () => setCustomer(await unverifyCustomerId(customerId))}
         />
-      </TabPanel>
-
-      <TabPanel id="activity" activeId={activeTab}>
-        {activityCount === 0 ? (
-          <GlassCard className="p-8 text-center text-sm text-white/40">
-            No feasibility checks, quotations, orders, or deliveries on file yet.
-          </GlassCard>
-        ) : (
-          <div className="flex flex-col gap-6">
-            <ActivitySection
-              title="Feasibility checks"
-              items={feasibilityChecks}
-              count={feasibilityChecks.length}
-              renderRow={(f) => ({
-                key: f.id,
-                content: (
-                  <Link
-                    to={`/feasibilities/${f.id}`}
-                    className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
-                  >
-                    <span className="font-medium text-white">{f.feasibility_number}</span>
-                    <span className="flex items-center gap-3">
-                      <span className="text-sm text-white/40">{formatDate(f.created_at)}</span>
-                      <StatusBadge status={f.status} />
-                    </span>
-                  </Link>
-                ),
-              })}
-            />
-
-            <ActivitySection
-              title="Quotations"
-              items={quotations}
-              count={quotations.length}
-              renderRow={(q) => ({
-                key: q.id,
-                content: (
-                  <Link
-                    to={`/quotations/${q.id}`}
-                    className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
-                  >
-                    <span className="font-medium text-white">{q.quotation_number}</span>
-                    <span className="flex items-center gap-3">
-                      <span className="text-sm text-white/40">{formatCurrency(q.total_amount)}</span>
-                      <StatusBadge status={q.status} />
-                    </span>
-                  </Link>
-                ),
-              })}
-            />
-
-            <ActivitySection
-              title="Orders"
-              items={orders}
-              count={orders.length}
-              renderRow={(o) => ({
-                key: o.id,
-                content: (
-                  <Link
-                    to={`/orders/${o.id}`}
-                    className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
-                  >
-                    <span className="font-medium text-white">{o.order_number}</span>
-                    <span className="flex items-center gap-3">
-                      <span className="text-sm text-white/40">{formatCurrency(o.total_amount)}</span>
-                      <StatusBadge status={o.status} />
-                    </span>
-                  </Link>
-                ),
-              })}
-            />
-
-            <ActivitySection
-              title="Deliveries"
-              items={deliveryNotes}
-              count={deliveryNotes.length}
-              renderRow={(n) => ({
-                key: n.id,
-                content: (
-                  <Link
-                    to={`/delivery-notes/${n.id}`}
-                    className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
-                  >
-                    <span className="font-medium text-white">{n.delivery_note_number}</span>
-                    <span className="flex items-center gap-3">
-                      <span className="text-sm text-white/40">{formatDate(n.delivery_date)}</span>
-                      <StatusBadge status={n.status} />
-                    </span>
-                  </Link>
-                ),
-              })}
-            />
-          </div>
-        )}
       </TabPanel>
 
       <TabPanel id="history" activeId={activeTab}>

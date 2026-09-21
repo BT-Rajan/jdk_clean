@@ -38,7 +38,6 @@ const PATH_PREFIX_TO_PAGE_KEY: [string, string][] = [
   ['/purchase-orders', 'purchase_orders'],
   ['/supplier-returns', 'supplier_returns'],
   ['/delivery-notes', 'delivery_notes'],
-  ['/deals', 'deals'],
   ['/feasibilities', 'feasibilities'],
   ['/machines', 'machines'],
   ['/quotations', 'quotations'],

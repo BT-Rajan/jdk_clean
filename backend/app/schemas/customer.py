@@ -246,6 +246,7 @@ class CustomerOut(BaseModel):
     pricelist: str | None
     group_rfq: bool
     buyer_id: int | None
+    buyer_name: str | None = None
     purchase_payment_terms_days: int | None
     purchase_payment_terms_type: str | None
     purchase_payment_method: str | None
@@ -262,6 +263,7 @@ class CustomerOut(BaseModel):
     reminder_mode: str | None
     next_reminder_date: date | None
     followup_responsible_id: int | None
+    followup_responsible_name: str | None = None
 
     model_config = {"from_attributes": True}
 

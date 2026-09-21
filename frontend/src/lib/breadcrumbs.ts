@@ -2,9 +2,9 @@
  * kept in sync with each page's own <h1>/PageHeader title so the
  * breadcrumb trail never uses different wording than the page it points
  * to. `indexRoute: false` marks a segment that has no page of its own
- * (nothing is mounted at that exact path) -- see /deals, which only has
- * a :id detail route -- so Breadcrumbs renders it as plain text instead
- * of a dead link. */
+ * (nothing is mounted at that exact path) -- a route that only has an
+ * :id detail page -- so Breadcrumbs renders it as plain text instead of
+ * a dead link. Nothing uses this today; it's kept for the next such route. */
 interface SegmentInfo {
   label: string
   indexRoute?: false
@@ -27,7 +27,6 @@ const SEGMENT_LABELS: Record<string, SegmentInfo> = {
   'purchase-orders': { label: 'Purchase orders' },
   'supplier-returns': { label: 'Supplier returns' },
   'delivery-notes': { label: 'Delivery notes' },
-  deals: { label: 'Deals', indexRoute: false },
   feasibilities: { label: 'Feasibility checks' },
   machines: { label: 'Production Line' },
   quotations: { label: 'Quotations' },
