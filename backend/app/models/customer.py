@@ -133,6 +133,13 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     # MariaDB's 61-table limit. CustomerCRUD select-in loads it for the
     # customer list/detail instead -- see _base_query there.
     assignee: Mapped["User | None"] = relationship("User", foreign_keys=[assigned_to], lazy="select", viewonly=True)
+    # Same reasoning for the two other user references shown on the customer
+    # page (Buyer, Follow-up responsible): names come with the customer
+    # because the frontend can't resolve them from the admin-only user list.
+    buyer: Mapped["User | None"] = relationship("User", foreign_keys="Customer.buyer_id", lazy="select", viewonly=True)
+    followup_responsible: Mapped["User | None"] = relationship(
+        "User", foreign_keys="Customer.followup_responsible_id", lazy="select", viewonly=True
+    )
     # Overrides Settings' global large_discount_approval_threshold for
     # this customer only -- NULL means "use the global setting". See
     # settings_service.get_effective_discount_approval_threshold.
@@ -261,6 +268,14 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     @property
     def assigned_to_name(self) -> str | None:
         return self.assignee.full_name if self.assignee is not None else None
+
+    @property
+    def buyer_name(self) -> str | None:
+        return self.buyer.full_name if self.buyer is not None else None
+
+    @property
+    def followup_responsible_name(self) -> str | None:
+        return self.followup_responsible.full_name if self.followup_responsible is not None else None
 
     parent_company: Mapped["Customer | None"] = relationship(
         "Customer", remote_side="Customer.id", foreign_keys=[parent_company_id]

@@ -104,7 +104,9 @@ class CustomerCRUD(BaseCRUD):
     def _base_query(self, db: Session, include_deleted: bool = False):
         # One extra query per page for the owners' names (assigned_to_name)
         # instead of one per row -- and no join, see Customer.assignee.
-        return super()._base_query(db, include_deleted).options(selectinload(Customer.assignee))
+        return super()._base_query(db, include_deleted).options(
+            selectinload(Customer.assignee), selectinload(Customer.buyer), selectinload(Customer.followup_responsible)
+        )
 
     def _scope_query(self, query, user: User | None = None):
         """Ownership scoping for team_member: assigned_to = them, nothing

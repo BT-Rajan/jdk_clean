@@ -98,6 +98,7 @@ export interface Customer {
   pricelist: string | null
   group_rfq: boolean
   buyer_id: number | null
+  buyer_name: string | null
   purchase_payment_terms_days: number | null
   purchase_payment_terms_type: PaymentTermsType | null
   purchase_payment_method: PaymentMethod | null
@@ -114,6 +115,7 @@ export interface Customer {
   reminder_mode: ReminderMode | null
   next_reminder_date: string | null
   followup_responsible_id: number | null
+  followup_responsible_name: string | null
 }
 
 export interface CustomerPayload {

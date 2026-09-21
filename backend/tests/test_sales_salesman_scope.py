@@ -443,3 +443,17 @@ def test_customer_payload_names_its_salesman_and_the_list_filters_by_assignee(en
     manager.post(f"/api/customers/{env['cust_b'].id}/assign", json={"assigned_to": None})
     unassigned = _ids(manager.get("/api/customers", params={"assigned_to": "null"}))
     assert env["cust_b"].id in unassigned and env["cust_a"].id not in unassigned
+
+
+def test_customer_payload_names_buyer_and_followup_owner_without_the_admin_only_user_list(env, api, db):
+    """The customer page used to resolve these from GET /api/users
+    (admin-only), so the Sales Manager and salesmen saw 'User #12'."""
+    env["cust_a"].buyer_id = env["b"].id
+    env["cust_a"].followup_responsible_id = env["manager"].id
+    db.flush()
+    db.expire(env["cust_a"])
+
+    for viewer in (env["manager"], env["a"]):
+        body = api(viewer).get(f"/api/customers/{env['cust_a'].id}").json()
+        assert body["buyer_name"] == env["b"].full_name
+        assert body["followup_responsible_name"] == env["manager"].full_name
