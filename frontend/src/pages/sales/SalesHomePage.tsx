@@ -1,50 +1,32 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
-import { Alert, Spinner } from '@/components/ui'
-import { getSalesReport } from '@/api/reports'
+import { Alert, Button, GlassCard, PageHeader, Spinner } from '@/components/ui'
+import { getSalesHome } from '@/api/salesHome'
+import { useAuth } from '@/hooks/useAuth'
 import { getApiErrorMessage } from '@/lib/apiError'
-import { CURRENCY_CODE, formatCurrency } from '@/lib/currency'
-import type { SalesReport, SalesReportMonthly, SalesReportTopCustomer, SalesReportTopProduct } from '@/types/reports'
-import { customerRevenueRows, productRevenueRows } from '@/pages/reports/revenueRows'
-import { RevenueBars } from '@/pages/reports/RevenueBars'
-import { RevenueTrendChart } from '@/pages/reports/RevenueTrendChart'
-import { buildFunnel, buildFunnelRecords } from '@/pages/reports/salesReportModel'
-import { Panel, SalesFunnel } from '@/pages/reports/SalesReportPanels'
-import { useSalesPipeline } from '@/pages/reports/useSalesPipeline'
-import { FunnelDrilldown } from './FunnelDrilldown'
-import { OrdersDrilldown } from './OrdersDrilldown'
-
-const DASHBOARD_MONTHS = 12
-const RANGE_HINT = `Last ${DASHBOARD_MONTHS} months`
-
-/** The one drill-down that is open under the dashboard, if any. */
-type Drill =
-  | { kind: 'stage'; key: string }
-  | { kind: 'month'; year: number; month: number }
-  | { kind: 'customer'; id: number }
-  | { kind: 'product'; id: number }
+import { canWritePage } from '@/lib/roles'
+import type { SalesHome } from '@/types/salesHome'
 
 /**
- * The Sales dashboard: the same funnel, revenue trend, top customers and
- * top products the Sales report shows (same API, same charts), laid out as
- * two rows that fill the screen. Clicking a funnel stage, a month on the
- * revenue trend, a top customer or a top product opens the records behind it
- * in a panel under the rows (one at a time); the order-status drill-down
- * lives on the Sales report.
+ * The Sales workspace: what needs doing now, not a report. A salesman sees
+ * their own customers' work; the Sales Manager / admin see the whole
+ * department plus a per-salesman workload table. Everything comes from one
+ * server-side call (/api/sales/home) that is already scoped -- analytics
+ * live in Reports -> Sales Report.
  */
 export function SalesHomePage() {
-  const [report, setReport] = useState<SalesReport | null>(null)
+  const navigate = useNavigate()
+  const { permissions } = useAuth()
+  const [home, setHome] = useState<SalesHome | null>(null)
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const { pipeline, loading: pipelineLoading } = useSalesPipeline({ withReadyToShip: false })
-  const [drill, setDrill] = useState<Drill | null>(null)
-  const drilldownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let cancelled = false
-    getSalesReport({ months: DASHBOARD_MONTHS })
-      .then((res) => {
-        if (!cancelled) setReport(res)
+    getSalesHome()
+      .then((data) => {
+        if (!cancelled) setHome(data)
       })
       .catch((err) => {
         if (!cancelled) setError(getApiErrorMessage(err))
@@ -57,54 +39,34 @@ export function SalesHomePage() {
     }
   }, [])
 
-  const funnel = useMemo(() => (report ? buildFunnel(report, pipeline) : null), [report, pipeline])
-  const activeStage = drill?.kind === 'stage' ? (funnel?.find((s) => s.key === drill.key) ?? null) : null
-  const activeMonth =
-    drill?.kind === 'month' ? (report?.monthly.find((m) => m.year === drill.year && m.month === drill.month) ?? null) : null
-  const activeCustomer =
-    drill?.kind === 'customer' ? (report?.top_customers.find((c) => c.customer_id === drill.id) ?? null) : null
-  const activeProduct =
-    drill?.kind === 'product' ? (report?.top_products.find((p) => p.product_id === drill.id) ?? null) : null
-
-  // One drill-down open at a time; picking the open one again closes it.
-  const toggle = (next: Drill) =>
-    setDrill((cur) => {
-      if (!cur || cur.kind !== next.kind) return next
-      const same =
-        (cur.kind === 'stage' && next.kind === 'stage' && cur.key === next.key) ||
-        (cur.kind === 'month' && next.kind === 'month' && cur.year === next.year && cur.month === next.month) ||
-        (cur.kind === 'customer' && next.kind === 'customer' && cur.id === next.id) ||
-        (cur.kind === 'product' && next.kind === 'product' && cur.id === next.id)
-      return same ? null : next
-    })
-  const toggleMonth = (row: SalesReportMonthly) => toggle({ kind: 'month', year: row.year, month: row.month })
-  const toggleCustomer = (row: SalesReportTopCustomer) => toggle({ kind: 'customer', id: row.customer_id })
-  const toggleProduct = (row: SalesReportTopProduct) => toggle({ kind: 'product', id: row.product_id })
-
-  const stageRecords = useMemo(
-    () => (report && activeStage ? buildFunnelRecords(activeStage.key, report, pipeline) : null),
-    [report, pipeline, activeStage],
-  )
-  // The same window the report (and so each bar) was drawn from.
-  const rangeParams = report
-    ? { date_from: report.range_start.slice(0, 10), date_to: report.range_end.slice(0, 10), revenue_only: true }
-    : {}
-
-  // The panel opens below the fold on a compact screen -- bring it into view
-  // so a click visibly does something.
-  const drillId = drill ? JSON.stringify(drill) : null
-  useEffect(() => {
-    if (!drillId) return
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    drilldownRef.current?.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'start' })
-  }, [drillId])
-
-  const customerRows = useMemo(() => customerRevenueRows(report?.top_customers), [report])
-  const productRows = useMemo(() => productRevenueRows(report?.top_products), [report])
+  const isManagerView = home?.scope === 'all'
+  const tiles = home
+    ? [
+        { label: isManagerView ? 'Customers' : 'My customers', value: home.counts.customers, to: '/customers' },
+        { label: 'Open feasibility', value: home.counts.open_feasibility, to: '/feasibilities' },
+        { label: 'Open quotations', value: home.counts.open_quotations, to: '/quotations' },
+        { label: 'Active orders', value: home.counts.active_orders, to: '/orders' },
+        { label: 'Needs attention', value: home.counts.attention, to: null },
+      ]
+    : []
+  const hiddenAttention = home ? home.counts.attention - home.attention.length : 0
 
   return (
     <AppLayout>
-      <h1 className="mb-4 font-display text-3xl font-medium text-white">Sales</h1>
+      <PageHeader
+        title="Sales"
+        subtitle={isManagerView ? 'All customers and sales work across the department.' : 'Your customers and what needs doing next.'}
+        actions={
+          <>
+            {canWritePage(permissions, 'customers') && (
+              <Button variant="ghost" onClick={() => navigate('/customers/new')}>New customer</Button>
+            )}
+            {canWritePage(permissions, 'feasibilities') && (
+              <Button onClick={() => navigate('/feasibilities/new')}>New feasibility check</Button>
+            )}
+          </>
+        }
+      />
 
       <Alert variant="error">{error}</Alert>
 
@@ -112,134 +74,97 @@ export function SalesHomePage() {
         <div className="flex justify-center py-16">
           <Spinner size={24} className="text-gold-300" />
         </div>
-      ) : report && funnel ? (
-        <>
-          {/*
-             On large screens the two rows split the remaining viewport height
-             (never shorter than the funnel needs); below that everything stacks
-             and each panel takes its own natural height.
-          */}
-          <div className="flex min-w-0 flex-col gap-4 lg:h-[calc(100dvh-18.8rem)] lg:min-h-[38.5rem]">
-            <div className="grid gap-4 lg:min-h-[21.5rem] lg:flex-[1.1_1_0%] lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
-              <Panel
-                title="Revenue trend"
-                hint={`${CURRENCY_CODE} per month · ${RANGE_HINT.toLowerCase()} · click a month for its orders`}
-                bodyClassName="relative min-h-[15rem]"
-              >
-                <div className="absolute inset-0">
-                  <RevenueTrendChart months={report.monthly} onSelectMonth={toggleMonth} selected={activeMonth} />
-                </div>
-              </Panel>
-
-              <Panel
-                title="Sales funnel"
-                hint={`${RANGE_HINT} · share of each stage that moved on · click a stage for its records`}
-                bodyClassName="flex min-h-[15.5rem] flex-col"
-              >
-                {pipelineLoading ? (
-                  <div className="flex flex-1 items-center justify-center">
-                    <Spinner size={20} className="text-gold-300" />
-                  </div>
-                ) : (
-                  <div className="min-h-0 flex-1">
-                    <SalesFunnel
-                      stages={funnel}
-                      fill
-                      activeKey={activeStage?.key ?? null}
-                      onSelectStage={(key) => toggle({ kind: 'stage', key })}
-                    />
-                  </div>
-                )}
-              </Panel>
-            </div>
-
-            <div className="grid gap-4 lg:min-h-[16rem] lg:flex-1 lg:basis-0 lg:grid-cols-2">
-              <Panel
-                title="Top customers"
-                hint={`Revenue in ${CURRENCY_CODE} · ${RANGE_HINT.toLowerCase()} · click a customer for their orders`}
-                bodyClassName="relative min-h-[18rem] lg:min-h-0"
-              >
-                <div className="absolute inset-0">
-                  {customerRows.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-white/50">No revenue in this period.</p>
-                  ) : (
-                    <RevenueBars
-                      rows={customerRows}
-                      onSelect={toggleCustomer}
-                      selected={(c) => c.customer_id === activeCustomer?.customer_id}
-                    />
-                  )}
-                </div>
-              </Panel>
-
-              <Panel
-                title="Top products"
-                hint={`Revenue in ${CURRENCY_CODE} · ${RANGE_HINT.toLowerCase()} · click a product for its orders`}
-                bodyClassName="relative min-h-[18rem] lg:min-h-0"
-              >
-                <div className="absolute inset-0">
-                  {productRows.length === 0 ? (
-                    <p className="py-6 text-center text-sm text-white/50">No revenue in this period.</p>
-                  ) : (
-                    <RevenueBars
-                      rows={productRows}
-                      onSelect={toggleProduct}
-                      selected={(p) => p.product_id === activeProduct?.product_id}
-                    />
-                  )}
-                </div>
-              </Panel>
-            </div>
+      ) : home ? (
+        <div className="flex flex-col gap-6">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+            {tiles.map((tile) => {
+              const body = (
+                <>
+                  <p className="text-xs uppercase tracking-wide text-white/50">{tile.label}</p>
+                  <p className="mt-1 font-display text-3xl font-medium text-white">{tile.value}</p>
+                </>
+              )
+              return tile.to ? (
+                <Link key={tile.label} to={tile.to} className="block rounded-2xl">
+                  <GlassCard className="p-4 transition-colors hover:bg-white/10">{body}</GlassCard>
+                </Link>
+              ) : (
+                <GlassCard key={tile.label} className="p-4">{body}</GlassCard>
+              )
+            })}
           </div>
-          {activeStage && (
-            <div className="mt-4">
-              <FunnelDrilldown
-                ref={drilldownRef}
-                stage={activeStage}
-                data={stageRecords}
-                rangeHint={RANGE_HINT}
-                onClose={() => setDrill(null)}
-              />
+
+          <GlassCard className="overflow-hidden">
+            <div className="border-b border-white/10 px-6 py-4">
+              <h2 className="font-display text-lg font-medium text-white">Next actions</h2>
             </div>
+            {home.attention.length === 0 ? (
+              <p className="px-6 py-8 text-center text-sm text-white/50">Nothing needs your attention right now.</p>
+            ) : (
+              <ul className="divide-y divide-white/10">
+                {home.attention.map((item) => (
+                  <li key={`${item.kind}-${item.link}`}>
+                    <Link to={item.link} className="flex items-center justify-between gap-4 px-6 py-3 hover:bg-white/5">
+                      <div className="min-w-0">
+                        <p className="text-sm font-medium text-white">{item.title}</p>
+                        <p className="truncate text-xs text-white/50">
+                          {item.customer_name} · {item.detail}
+                        </p>
+                      </div>
+                      <span className="shrink-0 text-white/30" aria-hidden="true">›</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {hiddenAttention > 0 && (
+              <p className="border-t border-white/10 px-6 py-3 text-xs text-white/50">
+                +{hiddenAttention} more -- the most urgent are listed first.
+              </p>
+            )}
+          </GlassCard>
+
+          {isManagerView && (
+            <GlassCard className="overflow-hidden">
+              <div className="border-b border-white/10 px-6 py-4">
+                <h2 className="font-display text-lg font-medium text-white">Salesman workload</h2>
+              </div>
+              {home.salesmen.length === 0 ? (
+                <p className="px-6 py-8 text-center text-sm text-white/50">No salesmen in the Sales department yet.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10 text-left text-xs uppercase tracking-wide text-white/50">
+                        <th className="px-6 py-3 font-medium">Salesman</th>
+                        <th className="px-4 py-3 text-right font-medium">Customers</th>
+                        <th className="px-4 py-3 text-right font-medium">Open quotes</th>
+                        <th className="px-4 py-3 text-right font-medium">Active orders</th>
+                        <th className="px-6 py-3 text-right font-medium">Attention</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {home.salesmen.map((row) => (
+                        <tr key={row.user_id ?? 'unassigned'} className={row.user_id === null ? 'bg-amber-500/5' : undefined}>
+                          <td className="px-6 py-3 text-white">
+                            {row.name}
+                            {row.user_id === null && (
+                              <span className="ml-2 text-xs text-amber-200">assign these from Customers</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right text-white/80">{row.customers}</td>
+                          <td className="px-4 py-3 text-right text-white/80">{row.open_quotations}</td>
+                          <td className="px-4 py-3 text-right text-white/80">{row.active_orders}</td>
+                          <td className="px-6 py-3 text-right text-white/80">{row.attention}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </GlassCard>
           )}
-          {activeMonth && (
-            <div className="mt-4">
-              <OrdersDrilldown
-                ref={drilldownRef}
-                title={`Orders — ${activeMonth.label}`}
-                summary={`${activeMonth.order_count} ${activeMonth.order_count === 1 ? 'order' : 'orders'} · ${formatCurrency(activeMonth.revenue)} revenue · drilled down from the revenue trend above`}
-                params={{ year: activeMonth.year, month: activeMonth.month }}
-                expectedCount={activeMonth.order_count}
-                markNonRevenue
-                onClose={() => setDrill(null)}
-              />
-            </div>
-          )}
-          {activeCustomer && (
-            <div className="mt-4">
-              <OrdersDrilldown
-                ref={drilldownRef}
-                title={`Orders — ${activeCustomer.customer_name}`}
-                summary={`${activeCustomer.order_count} ${activeCustomer.order_count === 1 ? 'order' : 'orders'} · ${formatCurrency(activeCustomer.revenue)} revenue · ${RANGE_HINT.toLowerCase()} · drilled down from top customers above`}
-                params={{ customer_id: activeCustomer.customer_id, ...rangeParams }}
-                expectedCount={activeCustomer.order_count}
-                onClose={() => setDrill(null)}
-              />
-            </div>
-          )}
-          {activeProduct && (
-            <div className="mt-4">
-              <OrdersDrilldown
-                ref={drilldownRef}
-                title={`Orders — ${activeProduct.name} (${activeProduct.code})`}
-                summary={`${formatCurrency(activeProduct.revenue)} revenue from this product · ${activeProduct.quantity} units · ${RANGE_HINT.toLowerCase()} · drilled down from top products above`}
-                params={{ product_id: activeProduct.product_id, ...rangeParams }}
-                note="Totals are whole-order totals, which can include other products."
-                onClose={() => setDrill(null)}
-              />
-            </div>
-          )}
-        </>
+        </div>
       ) : null}
     </AppLayout>
   )

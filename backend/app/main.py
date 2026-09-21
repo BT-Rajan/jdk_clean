@@ -36,6 +36,7 @@ from app.api.quotations import router as quotations_router
 from app.api.raw_materials import router as raw_materials_router
 from app.api.reconciliation import router as reconciliation_router
 from app.api.reports import router as reports_router
+from app.api.sales_home import router as sales_home_router
 from app.api.search import router as search_router
 from app.api.settings import router as settings_router
 from app.api.suppliers import router as suppliers_router
@@ -134,6 +135,7 @@ app.include_router(doc_templates_router)
 app.include_router(bom_router)
 app.include_router(packaging_router)
 app.include_router(reports_router)
+app.include_router(sales_home_router)
 app.include_router(reconciliation_router)
 app.include_router(search_router)
 

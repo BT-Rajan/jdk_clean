@@ -119,17 +119,15 @@ export function AppLayout({ children }: AppLayoutProps) {
       label: 'Sales',
       to: '/sales',
       items: [
-        { to: '/feasibilities', label: 'Feasibility checks' },
+        { to: '/sales', label: 'Home' },
+        { to: '/customers', label: 'Customers' },
+        { to: '/feasibilities', label: 'Feasibility' },
         { to: '/quotations', label: 'Quotations' },
         { to: '/orders', label: 'Orders' },
-        // The single home for Delivery notes -- previously also listed
-        // under Warehouse/Inventory as "Delivery notes (view)", same
-        // route, two menu entries pointing at it.
-        { to: '/delivery-notes', label: 'Delivery notes' },
-        { to: '/customers', label: 'Customers' },
-        // Finance's own worklist of overdue, unacknowledged order
-        // balances -- see payment_service.list_collection_queue.
-        { to: '/collection-queue', label: 'Collection queue' },
+        // Delivery notes and the Collection queue are deliberately not
+        // Sales menu items: delivery is fulfilment (reached from the
+        // order's Delivery tab, and listed under Warehouse where it's
+        // dispatched) and collections are Finance's worklist.
       ],
     },
     {
@@ -167,7 +165,16 @@ export function AppLayout({ children }: AppLayoutProps) {
       to: '/warehouse',
       items: [
         { to: '/inventory', label: 'Stock levels' },
+        // Dispatch happens here; Sales reaches the same page from the
+        // order's Delivery tab.
+        { to: '/delivery-notes', label: 'Delivery notes' },
       ],
+    },
+    {
+      // Only Finance's overdue-balance worklist for now; hidden for anyone
+      // without payments access like every other nav entry.
+      label: 'Finance',
+      items: [{ to: '/collection-queue', label: 'Collection queue' }],
     },
     {
       // Previously scattered one-per-domain inside Sales/Purchasing/
