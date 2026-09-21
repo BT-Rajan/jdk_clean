@@ -64,6 +64,8 @@ export interface Customer {
    * field edit. Was already on backend CustomerOut but unused by the
    * frontend until the Salesperson widget on CustomerDetailPage. */
   assigned_to: number | null
+  /** Resolved server-side -- /api/users is admin-only, so the UI can't look it up. */
+  assigned_to_name: string | null
   credit_limit: number
   payment_terms_days: number
   payment_terms_type: PaymentTermsType

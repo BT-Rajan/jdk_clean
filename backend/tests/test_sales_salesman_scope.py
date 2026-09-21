@@ -404,3 +404,42 @@ def test_sales_home_workload_follows_a_reassignment(env, api):
     assert rows[env["a"].id]["customers"] == 0 and rows[env["a"].id]["active_orders"] == 0
     assert rows[env["b"].id]["customers"] == 2 and rows[env["b"].id]["active_orders"] == 2
     assert api(env["a"]).get("/api/sales/home").json()["counts"]["customers"] == 0
+
+
+# ---------------------------------------------------------------------
+# Assigning customers (Pass 4): the manager can actually do it
+# ---------------------------------------------------------------------
+
+
+def test_manager_can_list_assignable_salesmen_but_a_salesman_cannot(env, api):
+    response = api(env["manager"]).get("/api/sales/salesmen")
+    assert response.status_code == 200, response.text
+    ids = {row["id"] for row in response.json()}
+    assert {env["a"].id, env["b"].id} <= ids
+    assert env["manager"].id not in ids and env["admin"].id not in ids  # salesmen only
+
+    assert api(env["a"]).get("/api/sales/salesmen").status_code == 403
+
+
+def test_customers_can_only_be_assigned_to_sales_salesmen(env, api, db):
+    warehouse = db.query(Department).filter(Department.code == "warehouse").first() or make_department(db, code="warehouse")
+    outsider = make_user(db, role="team_member", department_id=warehouse.id)
+
+    response = api(env["manager"]).post(f"/api/customers/{env['cust_a'].id}/assign", json={"assigned_to": outsider.id})
+    assert response.status_code == 422, response.text
+
+    # unassigning stays allowed
+    assert api(env["manager"]).post(f"/api/customers/{env['cust_a'].id}/assign", json={"assigned_to": None}).status_code == 200
+
+
+def test_customer_payload_names_its_salesman_and_the_list_filters_by_assignee(env, api):
+    manager = api(env["manager"])
+    detail = manager.get(f"/api/customers/{env['cust_a'].id}").json()
+    assert detail["assigned_to"] == env["a"].id
+    assert detail["assigned_to_name"] == env["a"].full_name  # no /api/users lookup needed
+
+    mine = _ids(manager.get("/api/customers", params={"assigned_to": env["a"].id}))
+    assert env["cust_a"].id in mine and env["cust_b"].id not in mine
+    manager.post(f"/api/customers/{env['cust_b'].id}/assign", json={"assigned_to": None})
+    unassigned = _ids(manager.get("/api/customers", params={"assigned_to": "null"}))
+    assert env["cust_b"].id in unassigned and env["cust_a"].id not in unassigned

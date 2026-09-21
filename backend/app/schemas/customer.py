@@ -205,6 +205,9 @@ class CustomerOut(BaseModel):
     country: str | None
     category: str | None
     assigned_to: int | None
+    # The assignee's name, resolved server-side: the frontend can't look it
+    # up itself because /api/users is admin-only.
+    assigned_to_name: str | None = None
     credit_limit: float
     payment_terms_days: int
     payment_terms_type: str

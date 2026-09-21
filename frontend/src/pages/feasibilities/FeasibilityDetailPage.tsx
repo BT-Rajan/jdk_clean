@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
   Alert,
@@ -136,6 +136,7 @@ export function FeasibilityDetailPage() {
   const feasibilityId = Number(id)
   const { user } = useAuth()
   const allowWrite = canWriteDepartment(user, 'sales')
+  const navigate = useNavigate()
   const allowAdmin = isAdmin(user?.role)
 
   const [feasibility, setFeasibility] = useState<Feasibility | null>(null)
@@ -285,6 +286,9 @@ export function FeasibilityDetailPage() {
                   <Button onClick={() => setApproveOpen(true)}>Send to admin for approval</Button>
                 </>
               )}
+              {allowWrite && (f.status === 'feasible' || f.status === 'exception_approved') && resultingQuotations.length === 0 && (
+                <Button onClick={() => navigate(`/quotations/new?feasibility_id=${feasibilityId}`)}>Create quotation</Button>
+              )}
               {allowWrite && (f.status === 'feasible' || f.status === 'exception_approved' || f.status === 'exception_rejected') && (
                 <Button variant="ghost" onClick={() => setCloseOpen(true)}>Close without quotation</Button>
               )}
@@ -367,14 +371,6 @@ export function FeasibilityDetailPage() {
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-3">
           <StatusBadge status={f.status} />
-          {f.deal_number && (
-            <Link
-              to={`/deals/${f.deal_id}`}
-              className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/50 hover:border-white/20 hover:text-white/70"
-            >
-              {f.deal_number}
-            </Link>
-          )}
           {resultingQuotations.map((q) => (
             <Link key={q.id} to={`/quotations/${q.id}`} className="text-sm text-gold-300 hover:text-gold-200">
               View quotation {q.quotation_number} →

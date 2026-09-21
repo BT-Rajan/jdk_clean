@@ -286,14 +286,6 @@ export function QuotationDetailPage() {
               Material conflict acknowledged
             </span>
           )}
-          {quotation.deal_number && (
-            <Link
-              to={`/deals/${quotation.deal_id}`}
-              className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/50 hover:border-white/20 hover:text-white/70"
-            >
-              {quotation.deal_number}
-            </Link>
-          )}
           {quotation.feasibility_id && (
             <Link to={`/feasibilities/${quotation.feasibility_id}`} className="text-sm text-gold-300 hover:text-gold-200">
               View feasibility check →

@@ -37,6 +37,9 @@ class ListParams:
         product_type: str | None = Query(None),
         category: str | None = Query(None),
         department_id: int | None = Query(None),
+        # Customers only: a user id, or the literal "null" for unassigned
+        # (see BaseCRUD.read_all). A string, not an int, so "null" parses.
+        assigned_to: str | None = Query(None),
         # Users' active/inactive state is a real boolean column
         # (users.is_active), not the string status ENUM the generic
         # `status` param above assumes -- see app/crud/master_data.py's
@@ -59,6 +62,7 @@ class ListParams:
             "product_type": product_type,
             "category": category,
             "department_id": department_id,
+            "assigned_to": assigned_to,
         }
         self.filters = {k: v for k, v in raw.items() if v is not None}
 

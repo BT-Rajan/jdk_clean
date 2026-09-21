@@ -640,14 +640,6 @@ export function OrderDetailPage() {
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-4">
           <StatusBadge status={order.status} />
-          {order.deal_number && (
-            <Link
-              to={`/deals/${order.deal_id}`}
-              className="rounded-full border border-white/10 bg-white/5 px-2.5 py-1 text-xs font-medium text-white/50 hover:border-white/20 hover:text-white/70"
-            >
-              {order.deal_number}
-            </Link>
-          )}
           {order.approved_at && (
             <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200">
               Approved {formatDate(order.approved_at)}

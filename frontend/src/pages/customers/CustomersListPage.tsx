@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
   Alert,
@@ -14,9 +14,11 @@ import {
   TextField,
 } from '@/components/ui'
 import { listCustomers } from '@/api/customers'
+import { listAssignableSalesmen } from '@/api/salesHome'
+import type { AssignableSalesman } from '@/api/salesHome'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
-import { canWriteDepartment } from '@/lib/roles'
+import { canWriteDepartment, isAdmin } from '@/lib/roles'
 import { formatDate } from '@/lib/dateFormat'
 
 export function CustomersListPage() {
@@ -27,10 +29,21 @@ export function CustomersListPage() {
   // substring the same way Search does rather than offering a dropdown
   // of options that would need to be kept in sync with what's on file.
   const [categoryFilter, setCategoryFilter] = useState('')
+  // Salesman filter -- Sales Manager / admin only (a salesman only ever sees
+  // their own customers, so there's nothing to filter). The Sales Home's
+  // workload table links here with ?assigned_to=<id> or ?assigned_to=null.
+  const canSeeSalesmen = isAdmin(user?.role) || user?.role === 'department_head'
+  const [searchParams] = useSearchParams()
+  const [salesmanFilter, setSalesmanFilter] = useState(canSeeSalesmen ? (searchParams.get('assigned_to') ?? '') : '')
+  const [salesmen, setSalesmen] = useState<AssignableSalesman[]>([])
+  useEffect(() => {
+    if (!canSeeSalesmen) return
+    listAssignableSalesmen().then(setSalesmen).catch(() => setSalesmen([]))
+  }, [canSeeSalesmen])
   const fetcher = useCallback(
     (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) =>
-      listCustomers({ ...params, category: categoryFilter || undefined }),
-    [categoryFilter],
+      listCustomers({ ...params, category: categoryFilter || undefined, assigned_to: salesmanFilter || undefined }),
+    [categoryFilter, salesmanFilter],
   )
   const {
     items,
@@ -79,13 +92,27 @@ export function CustomersListPage() {
               <option value="inactive">Inactive</option>
             </SelectField>
           </div>
-          {(searchInput || categoryFilter || status) && (
+          {canSeeSalesmen && (
+            <div className="w-48">
+              <SelectField label="Salesman" value={salesmanFilter} onChange={(e) => setSalesmanFilter(e.target.value)}>
+                <option value="">All salesmen</option>
+                <option value="null">Unassigned</option>
+                {salesmen.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.full_name}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+          )}
+          {(searchInput || categoryFilter || status || salesmanFilter) && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => {
                 setSearchInput('')
                 setCategoryFilter('')
+                setSalesmanFilter('')
                 setStatus('')
               }}
             >
@@ -117,6 +144,7 @@ export function CustomersListPage() {
                 <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
                   <SortableHeader label="Code" field="code" sort={sort} onSort={toggleSort} />
                   <SortableHeader label="Name" field="name" sort={sort} onSort={toggleSort} />
+                  {canSeeSalesmen && <th className="px-6 py-4 font-medium">Salesman</th>}
                   <th className="px-6 py-4 font-medium">Contact</th>
                   <th className="px-6 py-4 font-medium">Mobile</th>
                   <th className="px-6 py-4 font-medium">Email</th>
@@ -135,6 +163,11 @@ export function CustomersListPage() {
                       </Link>
                     </td>
                     <td className="px-6 py-4 text-white">{c.trade_name || c.name}</td>
+                    {canSeeSalesmen && (
+                      <td className={c.assigned_to ? 'px-6 py-4 text-white/60' : 'px-6 py-4 text-amber-200'}>
+                        {c.assigned_to_name ?? 'Unassigned'}
+                      </td>
+                    )}
                     <td className="px-6 py-4 text-white/60">{c.contact_person || '—'}</td>
                     <td className="px-6 py-4 text-white/60">{c.phone || '—'}</td>
                     <td className="px-6 py-4 text-white/60">{c.email || '—'}</td>

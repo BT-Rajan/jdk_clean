@@ -136,6 +136,25 @@ def _attention_items(db: Session, user: User, today: date) -> list[dict]:
     return items
 
 
+def list_salesmen(db: Session) -> list[User]:
+    """The active salesmen of the Sales department -- who customers can be
+    assigned to and who the manager's workload table lists."""
+    from app.models.department import Department
+
+    return (
+        db.query(User)
+        .join(Department, Department.id == User.department_id)
+        .filter(
+            Department.code == "sales",
+            User.role.in_(SALESMAN_ROLES),
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+        )
+        .order_by(User.full_name)
+        .all()
+    )
+
+
 def _count(query) -> int:
     return query.scalar() or 0
 
@@ -207,15 +226,7 @@ def _salesman_workload(db: Session, items: list[dict]) -> list[dict]:
     for item in items:
         attention_by[item["assigned_to"]] = attention_by.get(item["assigned_to"], 0) + 1
 
-    from app.models.department import Department
-
-    salesmen = (
-        db.query(User)
-        .join(Department, Department.id == User.department_id)
-        .filter(Department.code == "sales", User.role.in_(SALESMAN_ROLES), User.is_active.is_(True))
-        .order_by(User.full_name)
-        .all()
-    )
+    salesmen = list_salesmen(db)
     rows = [
         {
             "user_id": s.id,

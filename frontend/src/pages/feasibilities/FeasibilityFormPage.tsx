@@ -1,8 +1,8 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, GlassCard, SelectField, TextareaField, TextField } from '@/components/ui'
@@ -40,6 +40,9 @@ export function FeasibilityFormPage() {
   const navigate = useNavigate()
   const [formError, setFormError] = useState<string | null>(null)
   const { options: customers } = useCustomerOptions()
+  // ?customer_id= comes from the customer page's "New feasibility check".
+  const [searchParams] = useSearchParams()
+  const presetCustomerId = Number(searchParams.get('customer_id')) || 0
   const { options: products } = useProductOptions()
   const { busy: submitting, run: runGuarded } = useAsyncGuard()
 
@@ -71,6 +74,12 @@ export function FeasibilityFormPage() {
       lines: [{ product_id: 0, quantity: 1 }],
     },
   })
+
+  useEffect(() => {
+    if (presetCustomerId && customers.some((c) => c.id === presetCustomerId)) {
+      setValue('customer_id', presetCustomerId)
+    }
+  }, [presetCustomerId, customers, setValue])
   const { fields, append, remove } = useFieldArray({ control, name: 'lines' })
 
   async function handleAddProspectiveCustomer() {

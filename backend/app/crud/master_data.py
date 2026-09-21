@@ -1,6 +1,6 @@
 import re
 
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.exceptions import ConflictError, ValidationAppError
 from app.core.permissions import is_team_member
@@ -99,7 +99,12 @@ class CustomerCRUD(BaseCRUD):
     table_name = "customers"
     searchable_fields = ["name", "code", "customer_number", "email", "contact_person", "phone", "reference"]
     sortable_fields = ["name", "code", "customer_number", "created_at"]
-    filterable_fields = ["status", "city", "country", "category"]
+    filterable_fields = ["status", "city", "country", "category", "assigned_to"]
+
+    def _base_query(self, db: Session, include_deleted: bool = False):
+        # One extra query per page for the owners' names (assigned_to_name)
+        # instead of one per row -- and no join, see Customer.assignee.
+        return super()._base_query(db, include_deleted).options(selectinload(Customer.assignee))
 
     def _scope_query(self, query, user: User | None = None):
         """Ownership scoping for team_member: assigned_to = them, nothing

@@ -42,6 +42,8 @@ import { listFeasibilities } from '@/api/feasibilities'
 import { listQuotations } from '@/api/quotations'
 import { listOrders } from '@/api/orders'
 import { listDeliveryNotes } from '@/api/deliveryNotes'
+import { listAssignableSalesmen } from '@/api/salesHome'
+import type { AssignableSalesman } from '@/api/salesHome'
 import { listUsers } from '@/api/users'
 import { useSelectOptions } from '@/hooks/useSelectOptions'
 import type { Customer } from '@/types/customer'
@@ -54,7 +56,7 @@ import { getApiErrorMessage } from '@/lib/apiError'
 import { formatCurrency } from '@/lib/currency'
 import { formatDate } from '@/lib/dateFormat'
 import { useAuth } from '@/hooks/useAuth'
-import { canWrite, isAdmin } from '@/lib/roles'
+import { canWrite, canWritePage, isAdmin } from '@/lib/roles'
 import { CUSTOMER_ONBOARDING_STATUSES_REQUIRING_REASON, CUSTOMER_ONBOARDING_TRANSITIONS } from '@/lib/statusTransitions'
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
@@ -128,7 +130,7 @@ export function CustomerDetailPage() {
   const { id } = useParams()
   const customerId = Number(id)
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, permissions } = useAuth()
 
   const [customer, setCustomer] = useState<Customer | null>(null)
   const [loading, setLoading] = useState(true)
@@ -150,6 +152,15 @@ export function CustomerDetailPage() {
   // Active users, for the Salesperson/Buyer/Follow-up responsible
   // dropdowns below -- see hooks/useSelectOptions.ts.
   const { options: userOptions } = useSelectOptions(() => listUsers({ page: 1, page_size: 200, is_active: true }))
+  // The reassign dropdown comes from the Sales lookup (Sales Manager/admin
+  // can call it) -- NOT from /api/users, which is admin-only and left the
+  // manager with an empty list.
+  const canAssign = isAdmin(user?.role) || user?.role === 'department_head'
+  const [salesmen, setSalesmen] = useState<AssignableSalesman[]>([])
+  useEffect(() => {
+    if (!canAssign) return
+    listAssignableSalesmen().then(setSalesmen).catch(() => setSalesmen([]))
+  }, [canAssign])
   const userName = (userId: number | null) => userOptions.find((u) => u.id === userId)?.full_name ?? `User #${userId}`
 
   useEffect(() => {
@@ -271,8 +282,15 @@ export function CustomerDetailPage() {
         title={customer.name}
         subtitle={customer.code ? `${customer.customer_number} · ${customer.code}` : `${customer.customer_number} · Prospective`}
         actions={
-          isAdmin(user?.role) && !justDeleted ? (
+          !justDeleted ? (
             <>
+              {canWritePage(permissions, 'feasibilities') && (
+                <Button size="sm" onClick={() => navigate(`/feasibilities/new?customer_id=${customerId}`)}>
+                  New feasibility check
+                </Button>
+              )}
+              {isAdmin(user?.role) && (
+              <>
               <Button
                 variant="primary"
                 size="sm"
@@ -291,6 +309,8 @@ export function CustomerDetailPage() {
               >
                 <DeleteIcon />
               </Button>
+              </>
+              )}
             </>
           ) : undefined
         }
@@ -360,10 +380,10 @@ export function CustomerDetailPage() {
         </GlassCard>
 
         <GlassCard className="mb-6 p-8">
-          <h2 className="mb-4 font-display text-base font-medium text-white">Salesperson</h2>
+          <h2 className="mb-4 font-display text-base font-medium text-white">Assigned salesman</h2>
           <div className="flex flex-wrap items-center gap-4">
-            <Field label="Assigned to" value={customer.assigned_to ? userName(customer.assigned_to) : 'Unassigned'} />
-            {(isAdmin(user?.role) || user?.role === 'department_head') && (
+            <Field label="Assigned to" value={customer.assigned_to ? (customer.assigned_to_name ?? `User #${customer.assigned_to}`) : 'Unassigned'} />
+            {canAssign && (
               <SelectField
                 label="Reassign"
                 className="max-w-xs"
@@ -374,7 +394,7 @@ export function CustomerDetailPage() {
                 }
               >
                 <option value="">-- Unassigned --</option>
-                {userOptions.map((u) => (
+                {salesmen.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.full_name}
                   </option>
