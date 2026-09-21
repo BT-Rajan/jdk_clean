@@ -44,7 +44,9 @@ import { canWriteDepartment, canWritePage, isAdmin } from '@/lib/roles'
 import { ORDER_STATUSES_REQUIRING_REASON, ORDER_TRANSITIONS } from '@/lib/statusTransitions'
 import { StatusTransitionButtons } from '@/components/status/StatusTransitionButtons'
 import { orderAdminReviewSchema, type OrderAdminReviewFormValues } from '@/lib/validation'
+import { FulfilmentCard } from './FulfilmentCard'
 import { OrderJourney } from './OrderJourney'
+import { OrderLifecycle } from './OrderLifecycle'
 
 /** Turns what a cancellation took down with it into a short trailing
  * clause for the status-change notice -- so cancelling an order shows
@@ -266,21 +268,11 @@ function DeliveryDateChangeModal({
   )
 }
 
-function buildTabs(counts: {
-  lines: number
-  hasFulfillment: boolean
-  productionOrders: number
-  deliveryNotes: number
-}): TabItem[] {
-  const badge = (n: number) => (n > 0 ? n : undefined)
+// Everything an operator acts on lives on the page itself (fulfilment,
+// delivery, production, payments); tabs are only for reference detail.
+function buildTabs(lineCount: number): TabItem[] {
   return [
-    { id: 'lines', label: 'Line items', badge: badge(counts.lines) },
-    // Only meaningful once the order has fulfilment rows to show.
-    ...(counts.hasFulfillment ? [{ id: 'fulfilment', label: 'Fulfilment' }] : []),
-    { id: 'production', label: 'Production', badge: badge(counts.productionOrders) },
-    { id: 'delivery', label: 'Delivery', badge: badge(counts.deliveryNotes) },
-    { id: 'payments', label: 'Payments' },
-    { id: 'journey', label: 'Journey' },
+    { id: 'pricing', label: 'Pricing', badge: lineCount > 0 ? lineCount : undefined },
     { id: 'history', label: 'History' },
   ]
 }
@@ -328,7 +320,7 @@ export function OrderDetailPage() {
   const deliveryNotesPager = useClientPagination(deliveryNotes)
   const childOrdersPager = useClientPagination(order?.child_orders)
   const [deliveryDateOpen, setDeliveryDateOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState('lines')
+  const [activeTab, setActiveTab] = useState('pricing')
 
   function load() {
     setLoading(true)
@@ -466,11 +458,28 @@ export function OrderDetailPage() {
     setBusy(true)
     setError(null)
     try {
-      // Lines are omitted -- delivery_note_service defaults them to
-      // whatever's still outstanding on the order, so this works the
-      // same whether it's the first note or another one covering the
-      // remainder of an already-'shipped' order.
-      const note = await createDeliveryNote({ order_id: orderId, delivery_date: todayDateInputMin })
+      // Ship what's actually in stock: when released FG covers less than
+      // is still outstanding, the note carries just that (partial
+      // delivery -- the rest goes on a later note). When stock covers
+      // everything, or nothing, lines are omitted and delivery_note_service
+      // defaults them to whatever's outstanding, as before.
+      const byProduct = new Map<number, { wanted: number; onHand: number; remaining: number }>()
+      for (const line of fulfillment) {
+        if (line.remaining_quantity <= 0) continue
+        const entry = byProduct.get(line.product_id) ?? { wanted: 0, onHand: line.available_fg, remaining: 0 }
+        entry.wanted += line.allocated_quantity
+        entry.remaining += line.remaining_quantity
+        byProduct.set(line.product_id, entry)
+      }
+      const deliverable = [...byProduct.entries()]
+        .map(([product_id, e]) => ({ product_id, quantity_delivered: Math.min(e.wanted, e.onHand) }))
+        .filter((l) => l.quantity_delivered > 0)
+      const partial = [...byProduct.values()].some((e) => Math.min(e.wanted, e.onHand) < e.remaining)
+      const note = await createDeliveryNote({
+        order_id: orderId,
+        delivery_date: todayDateInputMin,
+        lines: partial && deliverable.length > 0 ? deliverable : undefined,
+      })
       navigate(`/delivery-notes/${note.id}`)
     } catch (err) {
       setError(getApiErrorMessage(err))
@@ -498,16 +507,13 @@ export function OrderDetailPage() {
   }
 
   const nextStatuses = ORDER_TRANSITIONS[order.status]
-  const hasFulfillment = fulfillment.length > 0
-  const tabs = buildTabs({
-    lines: order.lines.length,
-    hasFulfillment,
-    productionOrders: productionOrders.length,
-    deliveryNotes: deliveryNotes.length,
-  })
-  // Fall back to the first tab if the active one has disappeared (e.g. Fulfilment
-  // after a status change leaves no rows).
-  const currentTab = tabs.some((t) => t.id === activeTab) ? activeTab : 'lines'
+  const tabs = buildTabs(order.lines.length)
+  // Production earns a card only when there's production to show or a
+  // shortage that calls for it -- an order fully covered by stock never
+  // sees an empty "Production orders" box.
+  const showProduction = productionOrders.length > 0 || fulfillment.some((l) => l.shortage > 0)
+  // Fall back to the first tab if the active one ever disappears.
+  const currentTab = tabs.some((t) => t.id === activeTab) ? activeTab : 'pricing'
 
   return (
     <AppLayout>
@@ -639,7 +645,7 @@ export function OrderDetailPage() {
 
       <GlassCard className="mb-6 p-8">
         <div className="mb-6 flex flex-wrap items-center gap-4">
-          <StatusBadge status={order.status} />
+          <OrderLifecycle status={order.status} />
           {order.approved_at && (
             <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-200">
               Approved {formatDate(order.approved_at)}
@@ -730,102 +736,87 @@ export function OrderDetailPage() {
         )}
       </GlassCard>
 
-      <Tabs items={tabs} activeId={currentTab} onChange={setActiveTab} className="mb-6" />
+      <FulfilmentCard
+        lines={fulfillment}
+        status={order.status}
+        allowWrite={allowWrite && !justDeleted}
+        busy={busy}
+        onMarkReadyToShip={() => handleStatusChange('ready_to_ship')}
+        onCreateDeliveryNote={handleCreateDeliveryNote}
+        onPlanProduction={() => setProductionOrderModalOpen(true)}
+      />
 
-      <TabPanel id="lines" activeId={currentTab}>
-        <GlassCard className="overflow-hidden">
-          <div className="border-b border-white/10 px-6 py-4">
-            <h2 className="font-display text-lg font-medium text-white">Line items</h2>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
-                  <th className="px-6 py-4 font-medium">Product</th>
-                  <th className="px-6 py-4 font-medium">Quantity</th>
-                  <th className="px-6 py-4 font-medium">Unit price</th>
-                  <th className="px-6 py-4 font-medium">Line total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {order.lines.map((line) => (
-                  <tr key={line.id} className="border-b border-white/5 last:border-0">
-                    <td className="px-6 py-4 text-white">
-                      {line.product_code ? `${line.product_code} — ${line.product_name}` : `#${line.product_id}`}
-                    </td>
-                    <td className="px-6 py-4 text-white/60">{line.quantity} {line.unit}</td>
-                    <td className="px-6 py-4 text-white/60">{formatCurrency(line.unit_price)}</td>
-                    <td className="px-6 py-4 text-white/60">{formatCurrency(line.line_total)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </GlassCard>
-      </TabPanel>
-
-      {hasFulfillment && (
-        <TabPanel id="fulfilment" activeId={currentTab}>
+      <div className="mb-6 flex flex-col gap-6">
+        {deliveryNotes.length > 0 && (
           <GlassCard className="overflow-hidden">
             <div className="border-b border-white/10 px-6 py-4">
-              <h2 className="font-display text-lg font-medium text-white">Fulfilment</h2>
-              <p className="mt-1 text-xs text-white/40">
-                Consumes released Finished Goods stock -- production is not owned by this order.
-              </p>
+              <h2 className="font-display text-lg font-medium text-white">
+                Delivery notes {deliveryNotes.length > 1 && <span className="text-sm text-white/40">({deliveryNotes.length})</span>}
+              </h2>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-left text-sm">
                 <thead>
                   <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
-                    <th className="px-6 py-4 font-medium">Product</th>
-                    <th className="px-6 py-4 font-medium">Ordered</th>
-                    <th className="px-6 py-4 font-medium">Delivered</th>
-                    <th className="px-6 py-4 font-medium">Remaining</th>
-                    <th className="px-6 py-4 font-medium">Released FG available</th>
-                    <th className="px-6 py-4 font-medium">Fulfillable now</th>
-                    <th className="px-6 py-4 font-medium">Shortage</th>
-                    <th className="px-6 py-4 font-medium">In pipeline</th>
+                    <th className="px-6 py-4 font-medium">Note</th>
+                    <th className="px-6 py-4 font-medium">Date</th>
+                    <th className="px-6 py-4 font-medium">Status</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {fulfillment.map((line) => (
-                    <tr key={line.order_detail_id} className="border-b border-white/5 last:border-0">
-                      <td className="px-6 py-4 text-white">
-                        {line.product_code ? `${line.product_code} — ${line.product_name}` : `#${line.product_id}`}
-                      </td>
-                      <td className="px-6 py-4 text-white/60">{line.ordered_quantity} {line.unit}</td>
-                      <td className="px-6 py-4 text-white/60">{line.delivered_quantity} {line.unit}</td>
-                      <td className="px-6 py-4 text-white/60">{line.remaining_quantity} {line.unit}</td>
-                      <td className="px-6 py-4 text-white/60">{line.available_fg} {line.unit}</td>
-                      <td className="px-6 py-4 text-white">{line.fulfillable_now} {line.unit}</td>
+                  {deliveryNotesPager.pageItems.map((n) => (
+                    <tr key={n.id} className="border-b border-white/5 last:border-0">
                       <td className="px-6 py-4">
-                        {line.shortage > 0 ? (
-                          <Badge tone="gold">{`${line.shortage} ${line.unit ?? ''} short`}</Badge>
-                        ) : (
-                          <span className="text-white/40">—</span>
-                        )}
+                        <Link to={`/delivery-notes/${n.id}`} className="font-medium text-gold-300 hover:text-gold-200">
+                          {n.delivery_note_number}
+                        </Link>
                       </td>
-                      <td className="px-6 py-4 text-white/60">
-                        {line.planned_production_quantity > 0 || line.in_progress_production_quantity > 0 ? (
-                          <>
-                            {line.planned_production_quantity > 0 && `${line.planned_production_quantity} planned`}
-                            {line.planned_production_quantity > 0 && line.in_progress_production_quantity > 0 && ', '}
-                            {line.in_progress_production_quantity > 0 && `${line.in_progress_production_quantity} in progress`}
-                          </>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
+                      <td className="px-6 py-4 text-white/60">{formatDate(n.delivery_date)}</td>
+                      <td className="px-6 py-4"><StatusBadge status={n.status} /></td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
+            <Pagination className="px-6 pb-4" {...deliveryNotesPager.pagerProps} />
           </GlassCard>
-        </TabPanel>
-      )}
+        )}
 
-      <TabPanel id="production" activeId={currentTab}>
+        {order.child_orders.length > 0 && (
+          <GlassCard className="p-6">
+            <h2 className="mb-4 font-display text-base font-medium text-white">
+              Split into <span className="text-sm text-white/40">({order.child_orders.length})</span>
+            </h2>
+            <div className="flex flex-col gap-2">
+              {childOrdersPager.pageItems.map((child) => (
+                <Link
+                  key={child.id}
+                  to={`/orders/${child.id}`}
+                  className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
+                >
+                  <span className="font-medium text-white">{child.order_number}</span>
+                  <span className="flex items-center gap-3">
+                    <span className="text-sm text-white/40">{formatCurrency(child.total_amount)}</span>
+                    <StatusBadge status={child.status} />
+                  </span>
+                </Link>
+              ))}
+            </div>
+            <Pagination className="mt-4" {...childOrdersPager.pagerProps} />
+          </GlassCard>
+        )}
+
+        {deliveryNotes.length === 0 && order.child_orders.length === 0 && (
+          <GlassCard className="p-6">
+            <p className="text-sm text-white/40">
+              No delivery notes yet -- one can be created once the order is ready to ship.
+            </p>
+          </GlassCard>
+        )}
+      </div>
+
+      {showProduction && (
+        <div className="mb-6">
         <GlassCard className="overflow-hidden">
           <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
             <h2 className="font-display text-lg font-medium text-white">
@@ -894,87 +885,50 @@ export function OrderDetailPage() {
           )}
           <Pagination className="px-6 pb-4" {...productionOrdersPager.pagerProps} />
         </GlassCard>
-      </TabPanel>
+        </div>
+      )}
 
-      <TabPanel id="delivery" activeId={currentTab} className="flex flex-col gap-6">
-        {deliveryNotes.length > 0 && (
-          <GlassCard className="overflow-hidden">
-            <div className="border-b border-white/10 px-6 py-4">
-              <h2 className="font-display text-lg font-medium text-white">
-                Delivery notes {deliveryNotes.length > 1 && <span className="text-sm text-white/40">({deliveryNotes.length})</span>}
-              </h2>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
-                    <th className="px-6 py-4 font-medium">Note</th>
-                    <th className="px-6 py-4 font-medium">Date</th>
-                    <th className="px-6 py-4 font-medium">Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {deliveryNotesPager.pageItems.map((n) => (
-                    <tr key={n.id} className="border-b border-white/5 last:border-0">
-                      <td className="px-6 py-4">
-                        <Link to={`/delivery-notes/${n.id}`} className="font-medium text-gold-300 hover:text-gold-200">
-                          {n.delivery_note_number}
-                        </Link>
-                      </td>
-                      <td className="px-6 py-4 text-white/60">{formatDate(n.delivery_date)}</td>
-                      <td className="px-6 py-4"><StatusBadge status={n.status} /></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <Pagination className="px-6 pb-4" {...deliveryNotesPager.pagerProps} />
-          </GlassCard>
-        )}
-
-        {order.child_orders.length > 0 && (
-          <GlassCard className="p-6">
-            <h2 className="mb-4 font-display text-base font-medium text-white">
-              Split into <span className="text-sm text-white/40">({order.child_orders.length})</span>
-            </h2>
-            <div className="flex flex-col gap-2">
-              {childOrdersPager.pageItems.map((child) => (
-                <Link
-                  key={child.id}
-                  to={`/orders/${child.id}`}
-                  className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-4 py-3 hover:border-white/20"
-                >
-                  <span className="font-medium text-white">{child.order_number}</span>
-                  <span className="flex items-center gap-3">
-                    <span className="text-sm text-white/40">{formatCurrency(child.total_amount)}</span>
-                    <StatusBadge status={child.status} />
-                  </span>
-                </Link>
-              ))}
-            </div>
-            <Pagination className="mt-4" {...childOrdersPager.pagerProps} />
-          </GlassCard>
-        )}
-
-        {deliveryNotes.length === 0 && order.child_orders.length === 0 && (
-          <GlassCard className="p-6">
-            <p className="text-sm text-white/40">
-              No delivery notes yet -- one can be created once the order is ready to ship.
-            </p>
-          </GlassCard>
-        )}
-      </TabPanel>
-
-      <TabPanel id="payments" activeId={currentTab} className="flex flex-col gap-6">
+      <div className="mb-6 flex flex-col gap-6">
         <PaymentsPanel orderId={orderId} orderTotal={order.total_amount} allowWrite={allowWrite} allowAdmin={allowAdmin} allowFinance={allowFinance} />
         <PaymentPlansPanel orderId={orderId} allowWrite={allowWrite} allowAdmin={allowAdmin} allowFinance={allowFinance} />
+      </div>
+
+      <Tabs items={tabs} activeId={currentTab} onChange={setActiveTab} className="mb-6" />
+
+      <TabPanel id="pricing" activeId={currentTab}>
+        <GlassCard className="overflow-hidden">
+          <div className="border-b border-white/10 px-6 py-4">
+            <h2 className="font-display text-lg font-medium text-white">Line items</h2>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b border-white/10 text-xs tracking-wide text-white/40 uppercase">
+                  <th className="px-6 py-4 font-medium">Product</th>
+                  <th className="px-6 py-4 font-medium">Quantity</th>
+                  <th className="px-6 py-4 font-medium">Unit price</th>
+                  <th className="px-6 py-4 font-medium">Line total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {order.lines.map((line) => (
+                  <tr key={line.id} className="border-b border-white/5 last:border-0">
+                    <td className="px-6 py-4 text-white">
+                      {line.product_code ? `${line.product_code} — ${line.product_name}` : `#${line.product_id}`}
+                    </td>
+                    <td className="px-6 py-4 text-white/60">{line.quantity} {line.unit}</td>
+                    <td className="px-6 py-4 text-white/60">{formatCurrency(line.unit_price)}</td>
+                    <td className="px-6 py-4 text-white/60">{formatCurrency(line.line_total)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </GlassCard>
       </TabPanel>
 
-      <TabPanel id="journey" activeId={currentTab}>
+      <TabPanel id="history" activeId={currentTab} className="flex flex-col gap-6">
         <OrderJourney orderId={orderId} />
-      </TabPanel>
-
-      <TabPanel id="history" activeId={currentTab}>
         <HistoryTimeline resourcePath="/api/orders" id={orderId} />
       </TabPanel>
 

@@ -1,6 +1,7 @@
 from datetime import date
 from typing import Any
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session, joinedload
 
 from app.core.exceptions import AppError, ConflictError, NotFoundError, ValidationAppError
@@ -20,6 +21,8 @@ from app.models.order import (
     OrderDetail,
 )
 from app.models.product import Product
+from app.models.production_execution import ProductionExecution
+from app.models.production_order import ProductionOrder
 from app.services import (
     audit_service,
     deal_service,
@@ -107,6 +110,15 @@ def get_fulfillment(db: Session, order_id: int) -> list[dict]:
     branch's own comment on reserve_stock's deliberately permissive
     stance. This is a display figure, not a second allocation engine.
 
+    Spec section 8's Ordered / Allocated / Produced / Delivered / Remaining
+    are all here, with no new storage: Allocated is fulfillable_now (what
+    this order can take from released FG right now), and Produced /
+    released / rejected / qc_pending come from the completed executions of
+    the non-cancelled production orders raised against *this order line*
+    (order_detail_id). Output of stock-only production never counts as
+    "produced for this order" -- it's general FG the moment it's released,
+    which is exactly why Allocated, not Produced, is what delivery draws on.
+
     production_order_service.get_pipeline_quantity supplies the existing
     planned/in-progress production for the same product, so a shortage
     here is never mistaken for a fresh, un-planned requirement (spec
@@ -128,6 +140,30 @@ def get_fulfillment(db: Session, order_id: int) -> list[dict]:
     ):
         delivered_by_product[product_id] = delivered_by_product.get(product_id, 0.0) + float(quantity)
 
+    produced_by_detail: dict[int, dict[str, float]] = {}
+    for detail_id, produced, released, rejected in (
+        db.query(
+            ProductionOrder.order_detail_id,
+            func.coalesce(func.sum(ProductionExecution.produced_quantity), 0),
+            func.coalesce(func.sum(ProductionExecution.released_quantity), 0),
+            func.coalesce(func.sum(ProductionExecution.rejected_quantity), 0),
+        )
+        .join(ProductionExecution, ProductionExecution.production_order_id == ProductionOrder.id)
+        .filter(
+            ProductionOrder.order_id == order.id,
+            ProductionOrder.order_detail_id.isnot(None),
+            ProductionOrder.status != "cancelled",
+            ProductionExecution.status == "completed",
+        )
+        .group_by(ProductionOrder.order_detail_id)
+        .all()
+    ):
+        produced_by_detail[detail_id] = {
+            "produced": float(produced),
+            "released": float(released),
+            "rejected": float(rejected),
+        }
+
     lines = []
     for line in order.lines:
         ordered_quantity = float(line.quantity)
@@ -137,6 +173,7 @@ def get_fulfillment(db: Session, order_id: int) -> list[dict]:
         fulfillable_now = round(min(remaining_quantity, available_fg), 4) if remaining_quantity > 0 else 0.0
         shortage = round(max(remaining_quantity - available_fg, 0.0), 4)
         pipeline = production_order_service.get_pipeline_quantity(db, line.product_id)
+        made = produced_by_detail.get(line.id, {"produced": 0.0, "released": 0.0, "rejected": 0.0})
         lines.append(
             {
                 "order_detail_id": line.id,
@@ -149,6 +186,11 @@ def get_fulfillment(db: Session, order_id: int) -> list[dict]:
                 "remaining_quantity": remaining_quantity,
                 "available_fg": available_fg,
                 "fulfillable_now": fulfillable_now,
+                "allocated_quantity": fulfillable_now,
+                "produced_quantity": round(made["produced"], 4),
+                "released_quantity": round(made["released"], 4),
+                "rejected_quantity": round(made["rejected"], 4),
+                "qc_pending_quantity": round(max(made["produced"] - made["released"] - made["rejected"], 0.0), 4),
                 "shortage": shortage,
                 "planned_production_quantity": pipeline["planned_quantity"],
                 "in_progress_production_quantity": pipeline["in_progress_quantity"],

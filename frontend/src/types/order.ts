@@ -165,6 +165,14 @@ export interface OrderFulfillmentLine {
   remaining_quantity: number
   available_fg: number
   fulfillable_now: number
+  /** What released FG stock covers for this order right now (== fulfillable_now). */
+  allocated_quantity: number
+  /** This order line's own production output (completed executions). */
+  produced_quantity: number
+  released_quantity: number
+  rejected_quantity: number
+  /** Produced but not yet released or rejected by QC. */
+  qc_pending_quantity: number
   shortage: number
   planned_production_quantity: number
   in_progress_production_quantity: number
