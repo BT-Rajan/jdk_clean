@@ -1,6 +1,7 @@
 from datetime import date, datetime
 
 from decimal import Decimal
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DECIMAL, JSON, Boolean, Date, DateTime, Enum, ForeignKey, SmallInteger, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -8,6 +9,9 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.mixins import SoftDeleteMixin, TimestampMixin
 from app.models.user import BigPK
+
+if TYPE_CHECKING:
+    from app.models.user import User
 
 # Onboarding tracks getting a new customer record fully set up and
 # reviewed after the "New customer" wizard creates it -- separate from
@@ -113,13 +117,22 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     # Who currently owns the operational relationship with this customer
     # -- set via POST /api/customers/{id}/assign (Sales Head/admin only,
     # see app/api/customers.py), never a plain field edit. A team_member
-    # (salesman) sees only customers where created_by or assigned_to is
-    # them (app/crud/master_data.py CustomerCRUD._scope_query); a
+    # (salesman) sees only customers assigned to them and nothing else
+    # (app/crud/master_data.py CustomerCRUD._scope_query; app/core/
+    # sales_scope.py for everything linked to a customer); a
     # department_head sees every customer their department's page
     # access allows, unfiltered. Distinct from created_by (below, via
     # TimestampMixin), which never changes once set -- reassigning a
     # customer changes who currently owns it, not who created it.
     assigned_to: Mapped[int | None] = mapped_column(BigPK, ForeignKey("users.id"), nullable=True)
+    # The assignee's name is served with the customer so a Sales Manager
+    # (who can't call the admin-only /api/users) still sees who owns it.
+    # Deliberately lazy="select", NOT "joined": Customer is eager-loaded
+    # by orders, deals, QC requests and more, and a joined assignee (with
+    # User's own joined relationships) multiplied those joins past
+    # MariaDB's 61-table limit. CustomerCRUD select-in loads it for the
+    # customer list/detail instead -- see _base_query there.
+    assignee: Mapped["User | None"] = relationship("User", foreign_keys=[assigned_to], lazy="select", viewonly=True)
     # Overrides Settings' global large_discount_approval_threshold for
     # this customer only -- NULL means "use the global setting". See
     # settings_service.get_effective_discount_approval_threshold.
@@ -245,6 +258,10 @@ class Customer(Base, TimestampMixin, SoftDeleteMixin):
     # Read via CustomerOut.parent_company_name (a plain @property below,
     # picked up by pydantic's from_attributes the same as any other
     # attribute) -- lazy-loaded, fine at this volume/access pattern.
+    @property
+    def assigned_to_name(self) -> str | None:
+        return self.assignee.full_name if self.assignee is not None else None
+
     parent_company: Mapped["Customer | None"] = relationship(
         "Customer", remote_side="Customer.id", foreign_keys=[parent_company_id]
     )

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import { useFieldArray, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import { PageContainer } from '@/components/layout/PageContainer'
 import { Alert, Button, ConfirmDialog, GlassCard, SelectField, Spinner, TextareaField, TextField } from '@/components/ui'
@@ -191,6 +191,16 @@ function QuotationCreateForm() {
       .catch((err) => setFormError(getApiErrorMessage(err)))
       .finally(() => setLoadingFeasibilities(false))
   }, [])
+
+  // ?feasibility_id= comes from a feasibility check's "Create quotation":
+  // once the available checks have loaded, select it exactly as if the
+  // user had picked it from the dropdown (customer and lines prefill).
+  const [searchParams] = useSearchParams()
+  const presetFeasibilityId = Number(searchParams.get('feasibility_id')) || 0
+  useEffect(() => {
+    if (!presetFeasibilityId || feasibilities.length === 0) return
+    if (feasibilities.some((f) => f.id === presetFeasibilityId)) handleFeasibilitySelect(presetFeasibilityId)
+  }, [feasibilities, presetFeasibilityId])
 
   const handleFeasibilitySelect = (feasibilityId: number) => {
     const feasibility = feasibilities.find((f) => f.id === feasibilityId)

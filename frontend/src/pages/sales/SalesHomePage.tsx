@@ -146,10 +146,15 @@ export function SalesHomePage() {
                     <tbody className="divide-y divide-white/10">
                       {home.salesmen.map((row) => (
                         <tr key={row.user_id ?? 'unassigned'} className={row.user_id === null ? 'bg-amber-500/5' : undefined}>
-                          <td className="px-6 py-3 text-white">
-                            {row.name}
+                          <td className="px-6 py-3">
+                            <Link
+                              to={`/customers?assigned_to=${row.user_id ?? 'null'}`}
+                              className="text-white hover:text-gold-200"
+                            >
+                              {row.name}
+                            </Link>
                             {row.user_id === null && (
-                              <span className="ml-2 text-xs text-amber-200">assign these from Customers</span>
+                              <span className="ml-2 text-xs text-amber-200">open to assign</span>
                             )}
                           </td>
                           <td className="px-4 py-3 text-right text-white/80">{row.customers}</td>

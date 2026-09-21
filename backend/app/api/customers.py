@@ -195,11 +195,8 @@ def assign_customer(
     assignment, and when are all already captured there."""
     customer_crud.read_one(db, customer_id, user=user)  # 404s if out of scope
     if payload.assigned_to is not None:
-        target = (
-            db.query(User)
-            .filter(User.id == payload.assigned_to, User.deleted_at.is_(None), User.is_active.is_(True))
-            .first()
-        )
-        if target is None:
-            raise ValidationAppError(f"User {payload.assigned_to} is not an active user.")
+        from app.services.sales_home_service import list_salesmen
+
+        if payload.assigned_to not in {s.id for s in list_salesmen(db)}:
+            raise ValidationAppError("Customers can only be assigned to an active salesman of the Sales department.")
     return customer_crud.update(db, customer_id, {"assigned_to": payload.assigned_to}, user_id=user.id)

@@ -82,7 +82,10 @@ class BaseCRUD(Generic[ModelType]):
         if filters:
             for field, value in filters.items():
                 if field in self.filterable_fields and hasattr(self.model, field):
-                    query = query.filter(getattr(self.model, field) == value)
+                    column = getattr(self.model, field)
+                    # "null" selects rows where a nullable column is unset
+                    # (e.g. customers not yet assigned to a salesman).
+                    query = query.filter(column.is_(None) if value == "null" else column == value)
 
         return sort_and_paginate(query, self.model, self.sortable_fields, sort, page, page_size)
 

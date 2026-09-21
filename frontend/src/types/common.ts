@@ -26,6 +26,8 @@ export interface ListQueryParams {
   role?: string
   product_type?: string
   category?: string
+  /** Customers: a user id, or "null" for unassigned. */
+  assigned_to?: string
   department_id?: number
   // Users-only: real boolean column (users.is_active), separate from the
   // generic string `status` above -- see backend/app/api/deps.py.
