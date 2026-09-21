@@ -88,10 +88,16 @@ def get_followup_status(quotation: Quotation, today: date | None = None) -> str:
 def get_conversion_status(quotation: Quotation) -> tuple[str, list[str]]:
     """'converted' | 'ready' | 'blocked', plus -- for 'blocked' -- exactly
     why order_service.create_order_from_quotation would refuse this
-    quotation right now. The same two checks that function enforces
-    (status must be 'accepted', a payment link must be set), computed
-    here once so the quotations list/detail can show it without a
-    second copy of the real gate drifting out of sync.
+    quotation right now. The same check that function enforces (status
+    must be 'accepted'), computed here once so the quotations list/detail
+    can show it without a second copy of the real gate drifting out of
+    sync.
+
+    No longer gated on a payment link (see the "Sales -> Finance Invoice
+    Handoff" design doc): the commercial handoff to Finance now happens
+    *after* the order exists, via the Invoice auto-created on order
+    confirm (see invoice_service.create_draft_invoice_for_order), not
+    before conversion.
     """
     if quotation.status == "converted":
         return "converted", []
@@ -100,10 +106,6 @@ def get_conversion_status(quotation: Quotation) -> tuple[str, list[str]]:
     if quotation.status != "accepted":
         reasons.append(
             f"Quotation must be accepted before it can be converted to an order (currently '{quotation.status}')."
-        )
-    if not quotation.payment_link:
-        reasons.append(
-            "A payment link must be entered on this quotation before it can be converted to an order."
         )
     return ("blocked", reasons) if reasons else ("ready", [])
 
@@ -301,6 +303,7 @@ def list_quotations(
     status: str | None = None,
     customer_id: int | None = None,
     feasibility_id: int | None = None,
+    assigned_to: int | None = None,
     sort: str | None = None,
     user=None,
 ) -> dict:
@@ -312,11 +315,19 @@ def list_quotations(
         query = query.filter(Quotation.customer_id == customer_id)
     if feasibility_id:
         query = query.filter(Quotation.feasibility_id == feasibility_id)
+    joined_customer = False
+    # The Sales Manager's own "this salesman's quotations" filter (see
+    # sales_home_service.list_assignable_customer_owners) -- a quotation
+    # has no owner column of its own, ownership is entirely its
+    # customer's assigned_to.
+    if assigned_to is not None:
+        query = query.join(Customer, Customer.id == Quotation.customer_id).filter(Customer.assigned_to == assigned_to)
+        joined_customer = True
     if search:
         like = f"%{search}%"
-        query = query.join(Customer).filter(
-            (Quotation.quotation_number.ilike(like)) | (Customer.name.ilike(like))
-        )
+        if not joined_customer:
+            query = query.join(Customer, Customer.id == Quotation.customer_id)
+        query = query.filter((Quotation.quotation_number.ilike(like)) | (Customer.name.ilike(like)))
 
     return sort_and_paginate(query, Quotation, _QUOTATION_SORTABLE_FIELDS, sort, page, page_size)
 
@@ -548,28 +559,6 @@ def change_status(
     if new_status in ("rejected", "expired"):
         deal_service.reconcile_deal_status(db, quotation.deal_id, user_id)
 
-    return get_quotation(db, quotation_id)
-
-
-def set_payment_link(db: Session, quotation_id: int, payment_link: str, user_id: int | None = None) -> Quotation:
-    """Records the manually-entered link to an external payment system --
-    only meaningful once the customer has actually accepted the
-    quotation, and required before order_service.create_order_from_
-    quotation will convert it to an order at all. Settable more than
-    once (e.g. Sales pastes the wrong link) as long as the quotation is
-    still 'accepted' and hasn't been converted yet."""
-    quotation = get_quotation(db, quotation_id)
-    if quotation.status != "accepted":
-        raise ConflictError(
-            f"A payment link can only be entered on an accepted quotation (current status: '{quotation.status}')."
-        )
-    old_link = quotation.payment_link
-    quotation.payment_link = payment_link
-    quotation.updated_by = user_id
-    audit_service.log_update(
-        db, TABLE_NAME, quotation_id, {"payment_link": (old_link, payment_link)}, user_id
-    )
-    db.commit()
     return get_quotation(db, quotation_id)
 
 

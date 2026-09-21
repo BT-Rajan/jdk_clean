@@ -87,12 +87,6 @@ class Order(Base, TimestampMixin, SoftDeleteMixin):
     # Set when Sales cancels this order without a delivery note ever
     # having been issued for it.
     close_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    # Copied from the source quotation at conversion time (see
-    # order_service.create_order_from_quotation / quotation_service.
-    # set_payment_link) -- this order's own snapshot, not a live join.
-    # Printed as a QR code on this order's PDF (see pdf_generator.
-    # generate_order_pdf).
-    payment_link: Mapped[str | None] = mapped_column(String(500), nullable=True)
     # Set the moment this order first reaches 'confirmed' -- drives
     # escalate_unpaid_orders' "no payment N days after confirm" check.
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

@@ -3,6 +3,12 @@ export interface SalesHomeCounts {
   open_feasibility: number
   open_quotations: number
   active_orders: number
+  /** Invoices auto-created on order confirm, not yet given a payment link. */
+  invoices_waiting_finance: number
+  /** Invoices with a live payment link, not yet fully paid. */
+  invoices_awaiting_payment: number
+  /** Paid invoices whose order hasn't shipped yet. */
+  invoices_paid_processing: number
   attention: number
 }
 

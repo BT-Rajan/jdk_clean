@@ -125,9 +125,6 @@ def _sales_chain_to_confirmed_order(api, world, product, quantity):
     quotation = quotations[0]
 
     _ok(a.post(f"/api/quotations/{quotation['id']}/status", json={"status": "accepted"}))
-    # The link to the external payment system is entered once accepted, and
-    # is required before the quotation converts to an order.
-    _ok(a.post(f"/api/quotations/{quotation['id']}/payment-link", json={"payment_link": "https://pay.example/acme"}))
     order = _ok(a.post(f"/api/orders/from-quotation/{quotation['id']}"))
     _ok(a.post(f"/api/orders/{order['id']}/status", json={"status": "confirmed"}))
     return checked, quotation, _ok(a.get(f"/api/orders/{order['id']}"))

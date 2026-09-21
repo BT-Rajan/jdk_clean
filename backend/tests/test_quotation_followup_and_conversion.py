@@ -46,17 +46,12 @@ def test_conversion_status_not_accepted(db):
     assert "must be accepted" in reasons[0]
 
 
-def test_conversion_status_accepted_without_payment_link(db):
-    quotation = _make_quotation(db, status="accepted")
-
-    status, reasons = quotation_service.get_conversion_status(quotation)
-
-    assert status == "blocked"
-    assert "payment link" in reasons[0]
-
-
 def test_conversion_status_ready(db):
-    quotation = _make_quotation(db, status="accepted", payment_link="https://pay.example/abc")
+    # No payment link gate any more -- 'accepted' alone is enough (see
+    # the "Sales -> Finance Invoice Handoff" design doc: the commercial
+    # handoff to Finance now happens after conversion, via the Invoice
+    # auto-created on order confirm, not before it).
+    quotation = _make_quotation(db, status="accepted")
 
     status, reasons = quotation_service.get_conversion_status(quotation)
 
@@ -65,7 +60,7 @@ def test_conversion_status_ready(db):
 
 
 def test_conversion_status_converted(db):
-    quotation = _make_quotation(db, status="converted", payment_link="https://pay.example/abc")
+    quotation = _make_quotation(db, status="converted")
 
     status, reasons = quotation_service.get_conversion_status(quotation)
 
@@ -73,11 +68,13 @@ def test_conversion_status_converted(db):
     assert reasons == []
 
 
-def test_create_order_from_quotation_reports_the_same_block_reason(db):
+def test_create_order_from_quotation_succeeds_once_accepted(db):
     quotation = _make_quotation(db, status="accepted")
 
-    with pytest.raises(ConflictError, match="payment link"):
-        order_service.create_order_from_quotation(db, quotation.id)
+    order = order_service.create_order_from_quotation(db, quotation.id)
+
+    assert order.status == "draft"
+    assert order.customer_id == quotation.customer_id
 
 
 def test_assert_sendable_blocks_expired_quotation(db):

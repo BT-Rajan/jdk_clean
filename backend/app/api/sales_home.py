@@ -29,10 +29,14 @@ def list_assignable_salesmen(
     db: Session = Depends(get_db),
     user: User = Depends(read_guard),
 ):
-    """Who a customer can be assigned to. Only those who can assign
-    (Sales Manager / admin) may ask -- and this is how they can: the
-    general /api/users lookup is admin-only, which left the Sales
-    Manager with an empty reassign dropdown."""
+    """Who a customer can be assigned to -- every Sales salesman, plus
+    the Sales Manager(s) themselves and every admin (see
+    sales_home_service.list_assignable_customer_owners: a manager needs
+    to pull a customer back onto their own plate or an admin's, not just
+    hand it to another salesman). Only those who can assign (Sales
+    Manager / admin) may ask -- and this is how they can: the general
+    /api/users lookup is admin-only, which left the Sales Manager with
+    an empty reassign dropdown."""
     if not (is_admin(user) or is_department_head(user)):
         raise PermissionError_()
-    return [{"id": s.id, "full_name": s.full_name} for s in sales_home_service.list_salesmen(db)]
+    return [{"id": s.id, "full_name": s.full_name} for s in sales_home_service.list_assignable_customer_owners(db)]

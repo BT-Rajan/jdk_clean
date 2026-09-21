@@ -3,9 +3,14 @@ import type { MaterialConflict, Quotation, QuotationPayload, SettableQuotationSt
 import type { Order } from '@/types/order'
 import { apiClient } from './client'
 
-export interface QuotationListParams extends ListQueryParams {
+export interface QuotationListParams extends Omit<ListQueryParams, 'assigned_to'> {
   customer_id?: number
   feasibility_id?: number
+  /** The Sales Manager's "this salesman's quotations" filter -- a user id
+   * (unlike ListQueryParams.assigned_to, which also accepts the "null"
+   * sentinel for Customers' own unassigned filter -- Quotation has no
+   * matching "unassigned" case). */
+  assigned_to?: number
 }
 
 export async function listQuotations(params: QuotationListParams): Promise<PagedResponse<Quotation>> {
@@ -51,14 +56,6 @@ export async function updateQuotation(id: number, payload: Partial<QuotationPayl
 
 export async function updateQuotationStatus(id: number, status: SettableQuotationStatus, reason?: string): Promise<Quotation> {
   const { data } = await apiClient.post<Quotation>(`/api/quotations/${id}/status`, { status, reason })
-  return data
-}
-
-/** Records the manually-entered link to an external payment system --
- * only settable while 'accepted', and required before
- * convertQuotationToOrder will convert this quotation at all. */
-export async function setQuotationPaymentLink(id: number, paymentLink: string): Promise<Quotation> {
-  const { data } = await apiClient.post<Quotation>(`/api/quotations/${id}/payment-link`, { payment_link: paymentLink })
   return data
 }
 

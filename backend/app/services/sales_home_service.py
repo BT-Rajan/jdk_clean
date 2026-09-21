@@ -22,6 +22,7 @@ from app.core.timezone import today_kuwait
 from app.models.customer import Customer
 from app.models.feasibility import OPEN_STATUSES as FEASIBILITY_OPEN_STATUSES
 from app.models.feasibility import FeasibilityCheck
+from app.models.invoice import Invoice
 from app.models.order import Order
 from app.models.quotation import Quotation
 from app.models.user import User
@@ -30,6 +31,15 @@ OPEN_QUOTATION_STATUSES = ("draft", "accepted")
 ACTIVE_ORDER_STATUSES = ("draft", "confirmed", "in_production", "ready_to_ship", "shipped")
 SALESMAN_ROLES = ("team_member", "staff")
 ATTENTION_LIST_LIMIT = 12
+
+# Invoice buckets for Sales Home's "Needs attention" -- see the "Sales ->
+# Finance Invoice Handoff" design doc's Sales Overview redesign section.
+# Deliberately not the raw INVOICE_STATUSES one-for-one: 'draft' is
+# momentary (see invoice_service.create_draft_invoice_for_order) and
+# never worth its own bucket, and 'voided'/'paid'-and-shipped invoices
+# aren't attention items at all.
+INVOICE_WAITING_FINANCE_STATUSES = ("waiting_finance", "link_generated", "qr_ready")
+INVOICE_AWAITING_PAYMENT_STATUSES = ("awaiting_payment", "partially_paid")
 
 
 def _attention_items(db: Session, user: User, today: date) -> list[dict]:
@@ -132,13 +142,40 @@ def _attention_items(db: Session, user: User, today: date) -> list[dict]:
         lambda r: f"{r.number} is still a draft",
         lambda r: f"/orders/{r.id}", 7,
     )
+    # 9. Invoices routed to Finance but no payment link generated yet.
+    add(
+        rows(Invoice, Invoice.customer_id, Invoice.invoice_number,
+             filters=[Invoice.status.in_(INVOICE_WAITING_FINANCE_STATUSES)]),
+        "invoice_waiting_finance", "Invoice awaiting Finance",
+        lambda r: f"{r.number} is routed to Finance",
+        lambda r: f"/invoices/{r.id}", 8,
+    )
+    # 10. Invoices with a live payment link, not yet fully paid.
+    add(
+        rows(Invoice, Invoice.customer_id, Invoice.invoice_number,
+             filters=[Invoice.status.in_(INVOICE_AWAITING_PAYMENT_STATUSES)]),
+        "invoice_awaiting_payment", "Awaiting payment",
+        lambda r: f"{r.number} is awaiting payment",
+        lambda r: f"/invoices/{r.id}", 9,
+    )
+    # 11. Paid invoices whose order hasn't shipped yet -- payment came in,
+    # order processing needs to move.
+    add(
+        rows(Invoice, Invoice.customer_id, Invoice.invoice_number,
+             filters=[Invoice.status == "paid", Invoice.order.has(Order.status.in_(ACTIVE_ORDER_STATUSES))]),
+        "invoice_paid_processing", "Payment received -- order processing",
+        lambda r: f"{r.number} is paid",
+        lambda r: f"/invoices/{r.id}", 10,
+    )
     items.sort(key=lambda i: (i["priority"], i["customer_name"]))
     return items
 
 
 def list_salesmen(db: Session) -> list[User]:
-    """The active salesmen of the Sales department -- who customers can be
-    assigned to and who the manager's workload table lists."""
+    """The active salesmen (team_member/staff) of the Sales department --
+    exactly the rows the manager's workload table lists, one per row. Not
+    the full set a customer may be *assigned* to any more -- see
+    list_assignable_customer_owners below for that."""
     from app.models.department import Department
 
     return (
@@ -153,6 +190,37 @@ def list_salesmen(db: Session) -> list[User]:
         .order_by(User.full_name)
         .all()
     )
+
+
+def list_assignable_customer_owners(db: Session) -> list[User]:
+    """Everyone a customer may be assigned to: the Sales department's
+    salesmen (list_salesmen above) plus its department_head(s) ("assign
+    to himself") plus every admin ("or admin") -- a manager needs to be
+    able to pull a customer back onto their own plate or an admin's, not
+    just hand it to another salesman. Unioned by id so a user who somehow
+    matches more than one clause (shouldn't normally happen) isn't
+    listed twice."""
+    from app.models.department import Department
+
+    salesmen = list_salesmen(db)
+    managers = (
+        db.query(User)
+        .join(Department, Department.id == User.department_id)
+        .filter(
+            Department.code == "sales",
+            User.role == "department_head",
+            User.is_active.is_(True),
+            User.deleted_at.is_(None),
+        )
+        .all()
+    )
+    admins = (
+        db.query(User)
+        .filter(User.role == "admin", User.is_active.is_(True), User.deleted_at.is_(None))
+        .all()
+    )
+    by_id = {u.id: u for u in (*salesmen, *managers, *admins)}
+    return sorted(by_id.values(), key=lambda u: u.full_name)
 
 
 def _count(query) -> int:
@@ -179,6 +247,23 @@ def get_sales_home(db: Session, user: User) -> dict:
             Order.deleted_at.is_(None), Order.status.in_(ACTIVE_ORDER_STATUSES)
         )
     )
+    invoices_waiting_finance = _count(
+        scope_by_customer(db.query(func.count(Invoice.id)), Invoice.customer_id, user).filter(
+            Invoice.deleted_at.is_(None), Invoice.status.in_(INVOICE_WAITING_FINANCE_STATUSES)
+        )
+    )
+    invoices_awaiting_payment = _count(
+        scope_by_customer(db.query(func.count(Invoice.id)), Invoice.customer_id, user).filter(
+            Invoice.deleted_at.is_(None), Invoice.status.in_(INVOICE_AWAITING_PAYMENT_STATUSES)
+        )
+    )
+    invoices_paid = _count(
+        scope_by_customer(db.query(func.count(Invoice.id)), Invoice.customer_id, user).filter(
+            Invoice.deleted_at.is_(None),
+            Invoice.status == "paid",
+            Invoice.order.has(Order.status.in_(ACTIVE_ORDER_STATUSES)),
+        )
+    )
 
     items = _attention_items(db, user, today)
     result = {
@@ -188,6 +273,9 @@ def get_sales_home(db: Session, user: User) -> dict:
             "open_feasibility": open_feasibility,
             "open_quotations": open_quotations,
             "active_orders": active_orders,
+            "invoices_waiting_finance": invoices_waiting_finance,
+            "invoices_awaiting_payment": invoices_awaiting_payment,
+            "invoices_paid_processing": invoices_paid,
             "attention": len(items),
         },
         "attention": [

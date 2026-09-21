@@ -57,7 +57,14 @@ INSERT INTO departments (code, name, status) VALUES
     ('sales',       'Sales',       'active'),
     ('procurement', 'Procurement', 'active'),
     ('warehouse',   'Warehouse',   'active'),
-    ('production',  'Production',  'active')
+    ('production',  'Production',  'active'),
+    -- Finance staff (Invoice payment-link generation, payment
+    -- acknowledgment, the collection queue) reuse the existing
+    -- 'payments' page_key, same guard payments.py's finance_guard
+    -- already uses -- this department just gives them somewhere to
+    -- belong (see app/core/sales_scope.py's module docstring pattern:
+    -- department gates the page, not a bespoke Invoice permission).
+    ('finance',     'Finance',     'active')
 ON DUPLICATE KEY UPDATE code = code;
 
 -- ============================================================
@@ -796,13 +803,6 @@ CREATE TABLE IF NOT EXISTS orders (
     total_amount    DECIMAL(14,2) NOT NULL DEFAULT 0,
     notes           TEXT NULL,
     close_reason    TEXT NULL,                        -- Sales' reason for cancelling without a delivery note
-    -- Manually entered (from an external payment system) once the
-    -- source quotation is 'accepted' -- copied here at conversion time
-    -- as this order's own snapshot, not a live join. Required before
-    -- create_order_from_quotation will convert a quotation at all (see
-    -- quotation_service.set_payment_link); printed as a QR code on this
-    -- order's PDF/invoice.
-    payment_link    VARCHAR(500) NULL,
     -- Set the moment this order first reaches 'confirmed' -- drives
     -- escalate_unpaid_orders' "no payment N days after confirm" check,
     -- since credit_limit/outstanding-balance alone doesn't say how long
@@ -1130,11 +1130,6 @@ CREATE TABLE IF NOT EXISTS quotations (
     feasibility_id  BIGINT UNSIGNED NULL,             -- the passed/exception-approved feasibility check this came from
     auto_created    TINYINT(1) NOT NULL DEFAULT 0,    -- true when the system drafted this from a passed feasibility check, not a person
     close_reason    TEXT NULL,                        -- Sales' reason for closing without converting to an order
-    -- Manually entered (from an external payment system) once this
-    -- quotation is 'accepted' -- see quotation_service.set_payment_link.
-    -- Required before create_order_from_quotation will convert this
-    -- quotation at all; copied onto the new order as its own snapshot.
-    payment_link    VARCHAR(500) NULL,
     -- A quotation whose discount (document-level or any single line's)
     -- is at/above Settings -> large_discount_approval_threshold can't
     -- leave 'draft' until an admin approves it.
@@ -1183,6 +1178,46 @@ CREATE TABLE IF NOT EXISTS quotation_details (
     CONSTRAINT fk_qd_quotation FOREIGN KEY (quotation_id) REFERENCES quotations(id) ON DELETE CASCADE,
     CONSTRAINT fk_qd_product FOREIGN KEY (product_id) REFERENCES products(id),
     INDEX idx_qd_quotation (quotation_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- ============================================================
+-- INVOICES (the Sales -> Finance handoff: auto-created the moment Sales
+-- confirms an order, then owned by Finance -- payment link, QR, and
+-- acknowledgement never Sales' to edit. See app/services/invoice_service.py
+-- and app/core/sales_scope.py's PATH_PARAM_RESOLVERS entry for "invoice_id".
+-- Was directly on Quotation/Order as a manually-pasted payment_link until
+-- migrations/2026-10-10_add_invoices_and_finance_department.sql.)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS invoices (
+    id                       BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    invoice_number           VARCHAR(30) NOT NULL UNIQUE,      -- generated via number_series (prefix e.g. INV-00001)
+    order_id                 BIGINT UNSIGNED NOT NULL UNIQUE,  -- one invoice per order -- see invoice_service.create_draft_invoice_for_order
+    quotation_id             BIGINT UNSIGNED NULL,             -- the order's source quotation, for Quotation -> Order -> Invoice traceability
+    customer_id              BIGINT UNSIGNED NOT NULL,          -- denormalized from orders.customer_id, so sales_scope's customer-scoping helpers work on Invoice unchanged
+    status                   ENUM('draft','waiting_finance','link_generated','qr_ready','awaiting_payment','partially_paid','paid','voided') NOT NULL DEFAULT 'draft',
+    -- Bumped every time Finance (re)generates the payment link -- lets a
+    -- stale printed invoice be told apart from the current one (see
+    -- invoice_service.generate_payment_link).
+    version                  INT UNSIGNED NOT NULL DEFAULT 0,
+    payment_link_url         VARCHAR(500) NULL,
+    payment_link_ref         VARCHAR(120) NULL,   -- MyFatoorah's own InvoiceId for this link
+    payment_link_expires_at  DATETIME NULL,
+    qr_data_url              MEDIUMTEXT NULL,      -- base64 PNG data URL encoding payment_link_url, derived automatically -- never hand-edited
+    voided_at                DATETIME NULL,
+    voided_by                BIGINT UNSIGNED NULL,
+    voided_reason            TEXT NULL,
+    deleted_at               DATETIME NULL,
+    created_at               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_by                BIGINT UNSIGNED NULL,
+    updated_at               DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    updated_by                BIGINT UNSIGNED NULL,
+    CONSTRAINT fk_invoices_order FOREIGN KEY (order_id) REFERENCES orders(id),
+    CONSTRAINT fk_invoices_quotation FOREIGN KEY (quotation_id) REFERENCES quotations(id),
+    CONSTRAINT fk_invoices_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
+    CONSTRAINT fk_invoices_voided_by FOREIGN KEY (voided_by) REFERENCES users(id),
+    INDEX idx_invoices_customer (customer_id),
+    INDEX idx_invoices_status (status),
+    INDEX idx_invoices_deleted_at (deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
@@ -1697,6 +1732,7 @@ INSERT IGNORE INTO number_series (doc_type, prefix, next_number, padding) VALUES
     ('BOM', 'BOM', 1, 5),
     ('PRODUCTION_ORDER', 'PRO', 1, 5),
     ('QC_REQUEST', 'QCR', 1, 5),
-    ('QC_SAMPLE', 'SMP', 1, 5);
+    ('QC_SAMPLE', 'SMP', 1, 5),
+    ('INVOICE', 'INV', 1, 5);
 
 SET FOREIGN_KEY_CHECKS = 1;

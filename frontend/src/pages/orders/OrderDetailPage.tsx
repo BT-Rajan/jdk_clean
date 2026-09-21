@@ -28,6 +28,7 @@ import { createDeliveryNote, listDeliveryNotes } from '@/api/deliveryNotes'
 import { listProductionOrders } from '@/api/productionOrders'
 import { listQcRequests } from '@/api/qcRequests'
 import { todayDateInputMin } from '@/lib/validation'
+import { InvoicePanel } from './InvoicePanel'
 import { PaymentsPanel } from './PaymentsPanel'
 import { PaymentPlansPanel } from './PaymentPlansPanel'
 import { CreateProductionOrderModal } from './CreateProductionOrderModal'
@@ -873,6 +874,7 @@ export function OrderDetailPage() {
       )}
 
       <div className="mb-6 flex flex-col gap-6">
+        <InvoicePanel orderId={orderId} allowFinance={allowFinance} />
         <PaymentsPanel orderId={orderId} orderTotal={order.total_amount} allowWrite={allowWrite} allowAdmin={allowAdmin} allowFinance={allowFinance} />
         <PaymentPlansPanel orderId={orderId} allowWrite={allowWrite} allowAdmin={allowAdmin} allowFinance={allowFinance} />
       </div>

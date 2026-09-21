@@ -46,6 +46,12 @@ export function SalesHomePage() {
         { label: 'Open feasibility', value: home.counts.open_feasibility, to: '/feasibilities' },
         { label: 'Open quotations', value: home.counts.open_quotations, to: '/quotations' },
         { label: 'Active orders', value: home.counts.active_orders, to: '/orders' },
+        // The Sales -> Finance handoff, broken out by stage -- see the
+        // "Sales -> Finance Invoice Handoff" design doc's Sales Overview
+        // redesign section.
+        { label: 'Invoice -> Finance', value: home.counts.invoices_waiting_finance, to: '/invoices' },
+        { label: 'Awaiting payment', value: home.counts.invoices_awaiting_payment, to: '/invoices' },
+        { label: 'Payment received', value: home.counts.invoices_paid_processing, to: '/invoices' },
         { label: 'Needs attention', value: home.counts.attention, to: null },
       ]
     : []
@@ -158,8 +164,24 @@ export function SalesHomePage() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-right text-white/80">{row.customers}</td>
-                          <td className="px-4 py-3 text-right text-white/80">{row.open_quotations}</td>
-                          <td className="px-4 py-3 text-right text-white/80">{row.active_orders}</td>
+                          <td className="px-4 py-3 text-right text-white/80">
+                            {row.user_id !== null ? (
+                              <Link to={`/quotations?assigned_to=${row.user_id}`} className="hover:text-gold-200">
+                                {row.open_quotations}
+                              </Link>
+                            ) : (
+                              row.open_quotations
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right text-white/80">
+                            {row.user_id !== null ? (
+                              <Link to={`/orders?assigned_to=${row.user_id}`} className="hover:text-gold-200">
+                                {row.active_orders}
+                              </Link>
+                            ) : (
+                              row.active_orders
+                            )}
+                          </td>
                           <td className="px-6 py-3 text-right text-white/80">{row.attention}</td>
                         </tr>
                       ))}

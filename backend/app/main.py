@@ -18,6 +18,7 @@ from app.api.doc_templates import router as doc_templates_router
 from app.api.email_templates import router as email_templates_router
 from app.api.feasibility import router as feasibility_router
 from app.api.inventory import router as inventory_router
+from app.api.invoices import router as invoices_router
 from app.api.machines import router as machines_router
 from app.api.mrp import router as mrp_router
 from app.api.notifications import router as notifications_router
@@ -43,6 +44,7 @@ from app.api.suppliers import router as suppliers_router
 from app.api.supplier_materials import router as supplier_materials_router
 from app.api.supplier_returns import router as supplier_returns_router
 from app.api.users import router as users_router
+from app.api.webhooks import router as webhooks_router
 from app.core.config import get_settings
 from app.core.exceptions import register_exception_handlers
 from app.core.request_logging import install_request_logging
@@ -120,6 +122,8 @@ app.include_router(communication_router)
 app.include_router(feasibility_router)
 app.include_router(quotations_router)
 app.include_router(orders_router)
+app.include_router(invoices_router)
+app.include_router(webhooks_router)
 app.include_router(payments_router)
 app.include_router(payment_plans_router)
 app.include_router(collection_queue_router)

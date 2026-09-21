@@ -56,6 +56,14 @@ const STATUS_TONES: Record<string, Tone> = {
   not_due: 'neutral',
   due: 'gold',
   overdue: 'danger',
+  // Invoice statuses (see types/invoice.ts) -- 'draft' is shared above.
+  waiting_finance: 'gold',
+  link_generated: 'gold',
+  qr_ready: 'gold',
+  awaiting_payment: 'info',
+  partially_paid: 'gold',
+  paid: 'success',
+  voided: 'danger',
 }
 
 export function Badge({ children, tone = 'neutral', className }: BadgeProps) {

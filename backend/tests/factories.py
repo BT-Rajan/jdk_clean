@@ -19,9 +19,11 @@ from app.models.customer import Customer
 from app.models.delivery_note import DeliveryNote, DeliveryNoteLine
 from app.models.department import Department
 from app.models.department_permission import DepartmentPermission
+from app.models.invoice import Invoice
 from app.models.machine import Machine
 from app.models.order import Order, OrderDetail
 from app.models.product import Product
+from app.models.quotation import Quotation, QuotationDetail
 from app.models.product_packaging import ProductPackagingLine
 from app.models.production_order import ProductionOrder
 from app.models.production_schedule import ProductionSchedule
@@ -391,6 +393,64 @@ def make_order(
         )
     db.flush()
     return order
+
+
+def make_invoice(db: Session, order_id: int, customer_id: int, status: str = "waiting_finance", **overrides) -> Invoice:
+    """Bypasses invoice_service.create_draft_invoice_for_order -- most
+    scope tests only need a row that already exists in a given status,
+    not the order-confirm hook that normally creates one."""
+    n = _n()
+    invoice = Invoice(
+        invoice_number=overrides.pop("invoice_number", f"TESTINV-{n}"),
+        order_id=order_id,
+        customer_id=customer_id,
+        status=status,
+        **overrides,
+    )
+    db.add(invoice)
+    db.flush()
+    return invoice
+
+
+def make_quotation(
+    db: Session,
+    customer_id: int,
+    lines: list[dict] | None = None,
+    status: str = "draft",
+    **overrides,
+) -> Quotation:
+    """lines: [{"product_id", "quantity", "unit_price"}]. Defaults to one
+    line of 10 units at 5.0 each against a freshly made product if none
+    given -- mirrors make_order's own shape."""
+    n = _n()
+    if lines is None:
+        product = make_product(db)
+        lines = [{"product_id": product.id, "quantity": 10, "unit_price": 5.0}]
+
+    subtotal = sum(float(line["quantity"]) * float(line["unit_price"]) for line in lines)
+    quotation = Quotation(
+        quotation_number=overrides.pop("quotation_number", f"TESTQ-{n}"),
+        customer_id=customer_id,
+        quotation_date=overrides.pop("quotation_date", date(2026, 1, 1)),
+        status=status,
+        subtotal_amount=subtotal,
+        total_amount=subtotal,
+        **overrides,
+    )
+    db.add(quotation)
+    db.flush()
+    for line in lines:
+        db.add(
+            QuotationDetail(
+                quotation_id=quotation.id,
+                product_id=line["product_id"],
+                quantity=line["quantity"],
+                unit_price=line["unit_price"],
+                line_total=float(line["quantity"]) * float(line["unit_price"]),
+            )
+        )
+    db.flush()
+    return quotation
 
 
 def make_delivery_note(

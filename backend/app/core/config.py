@@ -67,6 +67,19 @@ class Settings(BaseSettings):
     SMTP_FROM_NAME: str = ""
     SMTP_USE_TLS: bool = True
 
+    # MyFatoorah (see app/services/myfatoorah_service.py) -- generates the
+    # payment link + QR on an Invoice once Finance requests one. Defaults
+    # to MyFatoorah's own test environment; point MYFATOORAH_BASE_URL at
+    # https://api.myfatoorah.com and set a live MYFATOORAH_API_KEY for
+    # production. Leaving MYFATOORAH_API_KEY empty makes
+    # myfatoorah_service refuse to generate a link (fails loudly rather
+    # than silently no-op), same philosophy as SMTP_HOST above.
+    MYFATOORAH_API_KEY: str = ""
+    MYFATOORAH_BASE_URL: str = "https://apitest.myfatoorah.com"
+    # How many days out a generated link's payment_link_expires_at is set
+    # to when MyFatoorah's own response doesn't hand one back.
+    MYFATOORAH_LINK_EXPIRY_DAYS: int = 7
+
     @property
     def database_url(self) -> str:
         return (

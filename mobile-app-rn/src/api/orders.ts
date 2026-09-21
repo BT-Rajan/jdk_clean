@@ -63,9 +63,6 @@ export interface Order {
   total_amount: number;
   notes: string | null;
   close_reason: string | null;
-  /** Copied from the source quotation at conversion time. Printed as a
-   * QR code on this order's PDF. */
-  payment_link: string | null;
   /** Set the moment this order first reaches 'confirmed'. */
   confirmed_at: string | null;
   admin_review_required: boolean;

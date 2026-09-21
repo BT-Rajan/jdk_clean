@@ -27,6 +27,7 @@ from app.services import (
     audit_service,
     deal_service,
     inventory_service,
+    invoice_service,
     number_series_service,
     production_order_service,
     settings_service,
@@ -216,6 +217,7 @@ def list_orders(
     status: str | None = None,
     customer_id: int | None = None,
     admin_review_required: bool | None = None,
+    assigned_to: int | None = None,
     sort: str | None = None,
     user=None,
 ) -> dict:
@@ -227,6 +229,12 @@ def list_orders(
         query = query.filter(Order.customer_id == customer_id)
     if admin_review_required is not None:
         query = query.filter(Order.admin_review_required == admin_review_required)
+    if assigned_to is not None:
+        # The Sales Manager's own "this salesman's orders" filter -- an
+        # order has no owner column of its own, ownership is entirely
+        # its customer's assigned_to (see sales_home_service.
+        # list_assignable_customer_owners).
+        query = query.join(Customer, Customer.id == Order.customer_id).filter(Customer.assigned_to == assigned_to)
     if search:
         # Matches Order Number, Client Name, Client ID (customer_number)
         # and Quotation Number -- the quotation link is a reverse FK
@@ -243,7 +251,9 @@ def list_orders(
             .filter(Quotation.converted_order_id == Order.id, Quotation.quotation_number.ilike(like))
             .exists()
         )
-        query = query.join(Customer).filter(
+        if assigned_to is None:
+            query = query.join(Customer)
+        query = query.filter(
             Order.order_number.ilike(like)
             | Customer.name.ilike(like)
             | Customer.customer_number.ilike(like)
@@ -750,6 +760,13 @@ def change_status(
 
     if new_status in STATUSES_REQUIRING_CLOSE_REASON:
         assert_reason_given(reason, "A reason is required to cancel an order.")
+        if new_status == "cancelled":
+            # An invoice already awaiting or receiving payment is a live
+            # commercial commitment Finance is acting on -- Sales cancelling
+            # the order out from under it would leave that payment request
+            # looking active for a sale that no longer exists (gap 12).
+            # Finance has to void it first.
+            invoice_service.assert_cancellable(db, order)
 
     old_status = order.status
 
@@ -993,6 +1010,10 @@ def change_status(
     db.commit()
 
     if new_status == "confirmed":
+        # The Sales -> Finance handoff: Sales just confirmed, so a Draft
+        # Invoice is created and routed to Finance right here -- never a
+        # separate action Sales has to remember to take (gap 1).
+        invoice_service.create_draft_invoice_for_order(db, order_id, user_id)
         _maybe_auto_schedule_production(db, order_id, user_id)
         _maybe_send_confirmation_email(db, order_id, user_id)
     elif new_status == "ready_to_ship":
@@ -1000,6 +1021,12 @@ def change_status(
     elif new_status == "cancelled":
         cancellation_effects["cancelled_production_batches"] = _cancel_active_production_batches(
             db, order_id, user_id
+        )
+        # Only ever reaches an invoice still pre-payment -- the guard
+        # above already refused this transition outright once a payment
+        # request was live (gap 12).
+        invoice_service.void_for_order_cancellation(
+            db, order_id, reason or "Order cancelled.", user_id
         )
         deal_service.reconcile_deal_status(db, order.deal_id, user_id)
 
@@ -1181,10 +1208,10 @@ def split_order(db: Session, order_id: int, lines: list[dict], user_id: int | No
         approved_at=order.approved_at,
         approved_by=order.approved_by,
         # Same underlying sale/payment obligation as the parent -- the
-        # split is a fulfillment detail, not a new commitment, so both
-        # the invoice QR code and escalate_unpaid_orders' clock should
-        # carry over rather than restart.
-        payment_link=order.payment_link,
+        # split is a fulfillment detail, not a new commitment, so
+        # escalate_unpaid_orders' clock carries over rather than
+        # restarting (the invoice itself is cloned below, once `child`
+        # has an id -- see invoice_service.clone_invoice_for_split_order).
         confirmed_at=order.confirmed_at,
         parent_order_id=order.id,
         created_by=user_id,
@@ -1212,6 +1239,7 @@ def split_order(db: Session, order_id: int, lines: list[dict], user_id: int | No
     # normal order reaching 'ready_to_ship' would trigger fires for each,
     # so both are immediately actionable rather than needing a person to
     # notice and create one by hand.
+    invoice_service.clone_invoice_for_split_order(db, order.id, child.id, user_id)
     _maybe_auto_create_delivery_note(db, child.id, user_id)
     if not parent_fully_split:
         _maybe_auto_create_delivery_note(db, order.id, user_id)
@@ -1669,7 +1697,6 @@ def create_order_from_quotation(db: Session, quotation_id: int, user_id: int | N
         subtotal_amount=quotation.subtotal_amount,
         total_amount=quotation.total_amount,
         notes=f"Converted from quotation {quotation.quotation_number}.",
-        payment_link=quotation.payment_link,
         created_by=user_id,
     )
     order.lines = [OrderDetail(**line) for line in lines]

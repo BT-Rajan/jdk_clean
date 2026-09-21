@@ -22,7 +22,6 @@ import {
   deleteQuotation,
   downloadQuotationPdf,
   checkMaterialConflicts,
-  setQuotationPaymentLink,
   Quotation,
   QuotationLineInput,
   QuotationStatus,
@@ -85,8 +84,6 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
   const [converting, setConverting] = useState(false);
   const [downloading, setDownloading] = useState(false);
   const [statusBusy, setStatusBusy] = useState(false);
-  const [paymentLinkInput, setPaymentLinkInput] = useState('');
-  const [savingPaymentLink, setSavingPaymentLink] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -118,10 +115,6 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
       setEditing(true);
     }
   }, [startInEdit, quotation]);
-
-  useEffect(() => {
-    setPaymentLinkInput(quotation?.payment_link ?? '');
-  }, [quotation?.id, quotation?.payment_link]);
 
   // A product already picked on another line shouldn't be offered again
   // -- every product should appear at most once in a quotation. Mirrors
@@ -247,20 +240,6 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
       setError(err?.message ?? t('quotationDetail', 'saveError'));
     } finally {
       setStatusBusy(false);
-    }
-  }
-
-  async function handleSavePaymentLink() {
-    if (!quotation || !paymentLinkInput.trim()) return;
-    setError(null);
-    setSavingPaymentLink(true);
-    try {
-      const updated = await setQuotationPaymentLink(quotation.id, paymentLinkInput.trim());
-      setQuotation(updated);
-    } catch (err: any) {
-      setError(err?.message ?? t('quotationDetail', 'saveError'));
-    } finally {
-      setSavingPaymentLink(false);
     }
   }
 
@@ -540,39 +519,14 @@ export function QuotationDetailScreen({ route, navigation }: Props) {
 
             {quotation.status === 'accepted' && (
               <View style={{ marginTop: 20 }}>
-                <Text style={styles.sectionTitle}>{t('quotationDetail', 'paymentLinkTitle')}</Text>
-                <Text style={styles.notesText}>{t('quotationDetail', 'paymentLinkHint')}</Text>
-                <View style={{ marginTop: 10, gap: 10 }}>
-                  <TextField
-                    label={t('quotationDetail', 'paymentLinkLabel')}
-                    value={paymentLinkInput}
-                    onChangeText={setPaymentLinkInput}
-                    autoCapitalize="none"
-                    placeholder="https://…"
-                  />
-                  <Button
-                    variant="ghost"
-                    onPress={handleSavePaymentLink}
-                    isLoading={savingPaymentLink}
-                    disabled={!paymentLinkInput.trim()}
-                    style={{ width: '100%' }}
-                  >
-                    {quotation.payment_link ? t('quotationDetail', 'updatePaymentLink') : t('quotationDetail', 'savePaymentLink')}
-                  </Button>
-                </View>
-
                 <Button
                   variant="success"
                   onPress={handleConvert}
                   isLoading={converting}
-                  disabled={!quotation.payment_link}
-                  style={{ marginTop: 16, width: '100%' }}
+                  style={{ width: '100%' }}
                 >
                   {t('quotationDetail', 'convertToOrder')}
                 </Button>
-                {!quotation.payment_link && (
-                  <Text style={styles.warnText}>{t('quotationDetail', 'paymentLinkRequiredHint')}</Text>
-                )}
               </View>
             )}
 

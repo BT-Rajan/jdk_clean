@@ -20,7 +20,6 @@ from app.schemas.quotation import (
     QuotationCreate,
     QuotationFollowupIn,
     QuotationOut,
-    QuotationPaymentLinkIn,
     QuotationRenewIn,
     QuotationStatusUpdate,
     QuotationUpdate,
@@ -49,6 +48,11 @@ def list_quotations(
     status: str | None = Query(None),
     customer_id: int | None = Query(None),
     feasibility_id: int | None = Query(None),
+    # The Sales Manager's "this salesman's quotations" filter -- see
+    # sales_home_service.list_assignable_customer_owners. Harmless for a
+    # scoped salesman to pass: scope_by_customer already restricts them
+    # to their own customers regardless of what this asks for.
+    assigned_to: int | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
     user: User = Depends(read_guard),
@@ -61,6 +65,7 @@ def list_quotations(
         status=status,
         customer_id=customer_id,
         feasibility_id=feasibility_id,
+        assigned_to=assigned_to,
         sort=sort,
         user=user,
     )
@@ -154,21 +159,6 @@ def update_status(
     quotation = quotation_service.change_status(
         db, quotation_id, payload.status, reason=payload.reason, user_id=user.id
     )
-    return QuotationOut.from_model(quotation)
-
-
-@router.post("/{quotation_id}/payment-link", response_model=QuotationOut)
-def set_payment_link(
-    quotation_id: int,
-    payload: QuotationPaymentLinkIn,
-    db: Session = Depends(get_db),
-    user: User = Depends(write_guard),
-):
-    """Records the manually-entered link to an external payment system --
-    only settable while 'accepted', and required before this quotation
-    can be converted to an order (see order_service.
-    create_order_from_quotation)."""
-    quotation = quotation_service.set_payment_link(db, quotation_id, payload.payment_link, user_id=user.id)
     return QuotationOut.from_model(quotation)
 
 

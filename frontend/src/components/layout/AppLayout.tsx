@@ -124,6 +124,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         { to: '/feasibilities', label: 'Feasibility' },
         { to: '/quotations', label: 'Quotations' },
         { to: '/orders', label: 'Orders' },
+        { to: '/invoices', label: 'Invoices' },
         // Delivery notes and the Collection queue are deliberately not
         // Sales menu items: delivery is fulfilment (reached from the
         // order's Delivery tab, and listed under Warehouse where it's
@@ -171,10 +172,16 @@ export function AppLayout({ children }: AppLayoutProps) {
       ],
     },
     {
-      // Only Finance's overdue-balance worklist for now; hidden for anyone
-      // without payments access like every other nav entry.
+      // Finance's own worklist -- invoices awaiting a payment link plus
+      // the overdue-balance queue. Invoices is listed under Sales too
+      // (same route, same 'orders' page key -- see lib/pagePermissions);
+      // repeating it here means Finance finds it without hunting through
+      // Sales' own menu.
       label: 'Finance',
-      items: [{ to: '/collection-queue', label: 'Collection queue' }],
+      items: [
+        { to: '/invoices', label: 'Invoices' },
+        { to: '/collection-queue', label: 'Collection queue' },
+      ],
     },
     {
       // Previously scattered one-per-domain inside Sales/Purchasing/

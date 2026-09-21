@@ -42,6 +42,13 @@ const PATH_PREFIX_TO_PAGE_KEY: [string, string][] = [
   ['/machines', 'machines'],
   ['/quotations', 'quotations'],
   ['/orders', 'orders'],
+  // Invoices are the Sales -> Finance handoff for an order -- reuses the
+  // same 'orders' page key rather than a new permission (Finance's own
+  // extra actions -- generate/regenerate link, void -- are separately
+  // gated on 'payments' write, same guard payments.py's finance_guard
+  // already uses). See the design doc's decision not to add an
+  // 'invoices' page_key.
+  ['/invoices', 'orders'],
   // Reuses the same 'production' page key as /production -- Production
   // Orders are part of the same Production section the backend's
   // department_permissions matrix already governs, not a separate

@@ -6,6 +6,11 @@ class SalesHomeCounts(BaseModel):
     open_feasibility: int
     open_quotations: int
     active_orders: int
+    # Invoice-derived buckets -- see sales_home_service's
+    # INVOICE_WAITING_FINANCE_STATUSES / INVOICE_AWAITING_PAYMENT_STATUSES.
+    invoices_waiting_finance: int
+    invoices_awaiting_payment: int
+    invoices_paid_processing: int
     attention: int
 
 

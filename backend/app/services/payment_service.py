@@ -10,7 +10,7 @@ from app.core.workflow import assert_reason_given
 from app.models.customer import Customer
 from app.models.order import Order
 from app.models.payment import Payment
-from app.services import audit_service
+from app.services import audit_service, invoice_service
 
 TABLE_NAME = "payments"
 
@@ -333,6 +333,11 @@ def create_payment(
     audit_service.log_create(db, TABLE_NAME, payment.id, user_id)
     db.commit()
     db.refresh(payment)
+    # Only moves the invoice forward when this payment was auto-acknowledged
+    # (Finance logging it directly) -- a bare Sales claim doesn't touch
+    # Invoice status until someone actually acknowledges it, below.
+    if auto_acknowledge:
+        invoice_service.sync_status_from_payments(db, order_id, user_id)
     return get_payment(db, payment.id)
 
 
@@ -354,6 +359,7 @@ def acknowledge_payment(db: Session, order_id: int, payment_id: int, user_id: in
     )
     db.commit()
     db.refresh(payment)
+    invoice_service.sync_status_from_payments(db, order_id, user_id)
     return get_payment(db, payment.id)
 
 
@@ -370,3 +376,4 @@ def delete_payment(db: Session, order_id: int, payment_id: int, user_id: int | N
     payment.updated_by = user_id
     audit_service.log_delete(db, TABLE_NAME, payment_id, user_id)
     db.commit()
+    invoice_service.sync_status_from_payments(db, order_id, user_id)

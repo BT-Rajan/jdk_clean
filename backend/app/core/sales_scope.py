@@ -137,6 +137,12 @@ def customer_of_deal(db: Session, deal_id: int) -> int | None:
     return db.query(Deal.customer_id).filter(Deal.id == deal_id).scalar()
 
 
+def customer_of_invoice(db: Session, invoice_id: int) -> int | None:
+    from app.models.invoice import Invoice
+
+    return db.query(Invoice.customer_id).filter(Invoice.id == invoice_id).scalar()
+
+
 # path-parameter name -> (resolver, resource label for the 404). Soft-deleted
 # rows are resolved too so restore endpoints are covered.
 PATH_PARAM_RESOLVERS = {
@@ -145,4 +151,5 @@ PATH_PARAM_RESOLVERS = {
     "feasibility_id": (customer_of_feasibility, "Feasibility check"),
     "note_id": (customer_of_delivery_note, "Delivery note"),
     "deal_id": (customer_of_deal, "Deal"),
+    "invoice_id": (customer_of_invoice, "Invoice"),
 }

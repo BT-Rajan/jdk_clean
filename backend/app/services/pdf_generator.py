@@ -113,11 +113,12 @@ def _signature_block(styles, signer_name: str | None, signature_path: Path | Non
 
 
 def _payment_qr_block(styles, payment_link: str) -> list:
-    """Flowables for the "scan to pay" QR code -- order.payment_link is
-    a manually-entered link to an external payment system (see
-    quotation_service.set_payment_link / order_service.
-    create_order_from_quotation), required before this order could even
-    exist, so it's always available by the time this PDF is generated."""
+    """Flowables for the "scan to pay" QR code -- called only from
+    generate_invoice_pdf below, once Finance has generated a MyFatoorah
+    payment link for the invoice (see invoice_service.generate_payment_link
+    / myfatoorah_service.create_payment_link). generate_invoice_pdf's own
+    caller (api/invoices.py) already refuses to render a PDF before that
+    link exists, so `payment_link` here is always set."""
     small_muted = ParagraphStyle("QrMuted", parent=styles["Normal"], fontSize=8, textColor=colors.grey)
 
     qr_image = qrcode.make(payment_link)
@@ -371,7 +372,67 @@ def generate_order_pdf(order, company_settings: dict | None = None, signer=None)
         footer_note="This is a system-generated order confirmation.",
         signer_name=signer_name,
         signature_path=signature_path,
-        payment_link=order.payment_link,
+    )
+
+
+def generate_invoice_pdf(invoice, company_settings: dict | None = None, signer=None) -> bytes:
+    """`invoice` is an Invoice ORM instance with `.order` (itself with
+    `.customer` and `.lines`, each line with `.product`) already loaded --
+    see invoice_service._base_query. The QR/"scan to pay" block that used
+    to print on the order's own PDF (back when payment_link lived on
+    Order -- see orders.payment_link's old docstring) now prints here
+    instead, since the payment link is Finance's, not Sales', and the
+    Invoice is the document that actually carries it."""
+    order = invoice.order
+    customer = order.customer
+    party_lines = [f"<b>{customer.name}</b>" if customer else "<b>Customer</b>"]
+    if customer:
+        if customer.billing_address:
+            party_lines.append(customer.billing_address)
+        if customer.city or customer.country:
+            party_lines.append(", ".join(filter(None, [customer.city, customer.country])))
+        if customer.email:
+            party_lines.append(customer.email)
+        if customer.phone:
+            party_lines.append(customer.phone)
+
+    meta_lines = [
+        f"Order: {order.order_number}",
+        f"Invoice Date: {_fmt_date(invoice.created_at.date())}",
+        f"Status: {invoice.status.upper().replace('_', ' ')}",
+    ]
+
+    rows = []
+    for idx, line in enumerate(order.lines, start=1):
+        product = line.product
+        rows.append(
+            [
+                str(idx),
+                f"{product.code} - {product.name}" if product else str(line.product_id),
+                f"{float(line.quantity):g}",
+                product.unit if product else "",
+                _fmt_money(line.unit_price),
+                _fmt_money(line.line_total),
+            ]
+        )
+
+    signer_name, signature_path = signer or (None, None)
+    return _render_document(
+        doc_label="INVOICE",
+        doc_number=invoice.invoice_number,
+        company_settings=company_settings,
+        party_lines=party_lines,
+        meta_lines=meta_lines,
+        table_header=["#", "Product", "Qty", "Unit", "Unit Price", "Line Total"],
+        rows=rows,
+        col_widths=[8 * mm, 75 * mm, 18 * mm, 18 * mm, 27 * mm, 28 * mm],
+        total_label="Total",
+        total_value=_fmt_money(order.total_amount),
+        notes=None,
+        footer_note="This is a system-generated invoice. Scan the QR code below to pay.",
+        signer_name=signer_name,
+        signature_path=signature_path,
+        payment_link=invoice.payment_link_url,
     )
 
 
