@@ -16,13 +16,14 @@ covered end to end -- not just the service functions underneath.
   * Other departments' users and admin are NOT scoped.
 """
 
-from datetime import date, datetime
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.timezone import today_kuwait
 from app.main import app
 from app.models.department import Department
 from app.models.department_permission import DepartmentPermission
@@ -38,6 +39,10 @@ from .factories import (
     make_product,
     make_user,
 )
+
+# Dated relative to today so the fixtures never age out of the report window
+# or turn "overdue" into "not yet due" -- 40 days back is past any default terms.
+ORDER_DATE = today_kuwait() - timedelta(days=40)
 
 SALES_PAGES = ("dashboard", "customers", "deals", "feasibilities", "quotations", "orders", "delivery_notes", "payments")
 
@@ -63,16 +68,18 @@ def _records_for(db, customer):
     feasibility = FeasibilityCheck(
         feasibility_number=f"TESTFEAS-{n}",
         customer_id=customer.id,
-        required_by_date=date(2026, 12, 31),
+        required_by_date=today_kuwait() + timedelta(days=90),
         status="exception_pending",
-        checked_at=datetime(2026, 9, 20, 9, 0),
+        checked_at=datetime.now(),
     )
     quotation = Quotation(
-        quotation_number=f"TESTQ-{n}", customer_id=customer.id, quotation_date=date(2026, 9, 1)
+        quotation_number=f"TESTQ-{n}", customer_id=customer.id, quotation_date=today_kuwait()
     )
     db.add_all([feasibility, quotation])
     db.flush()
-    order = make_order(db, customer.id, status="confirmed", admin_review_required=True)
+    order = make_order(
+        db, customer.id, status="confirmed", admin_review_required=True, order_date=ORDER_DATE
+    )
     note = make_delivery_note(db, order.id)
     return {"feasibility": feasibility, "quotation": quotation, "order": order, "note": note}
 
@@ -192,17 +199,17 @@ def test_salesman_a_cannot_create_records_against_customer_b(env, api, db):
     cust_b = env["cust_b"].id
 
     attempts = [
-        ("/api/orders", {"customer_id": cust_b, "order_date": "2026-09-20", "lines": [line]}),
+        ("/api/orders", {"customer_id": cust_b, "order_date": today_kuwait().isoformat(), "lines": [line]}),
         ("/api/orders/log", {"customer_id": cust_b, "lines": [line]}),
         (
             "/api/quotations",
-            {"customer_id": cust_b, "quotation_date": "2026-09-20", "language": "en", "lines": [line]},
+            {"customer_id": cust_b, "quotation_date": today_kuwait().isoformat(), "language": "en", "lines": [line]},
         ),
         (
             "/api/feasibility",
-            {"customer_id": cust_b, "required_by_date": "2026-12-31", "lines": [{"product_id": product.id, "quantity": 1}]},
+            {"customer_id": cust_b, "required_by_date": (today_kuwait() + timedelta(days=90)).isoformat(), "lines": [{"product_id": product.id, "quantity": 1}]},
         ),
-        ("/api/delivery-notes", {"order_id": env["rec_b"]["order"].id, "delivery_date": "2026-09-20"}),
+        ("/api/delivery-notes", {"order_id": env["rec_b"]["order"].id, "delivery_date": today_kuwait().isoformat()}),
         (f"/api/orders/from-quotation/{env['rec_b']['quotation'].id}", None),
     ]
     for url, body in attempts:
@@ -272,7 +279,7 @@ def test_salesman_a_dashboard_reports_notifications_and_collections_are_only_as_
     client = api(env["a"])
 
     # Calendar day snapshot lists only A's orders for the day.
-    snapshot = client.get("/api/calendar/day-snapshot", params={"date": "2026-01-01"})
+    snapshot = client.get("/api/calendar/day-snapshot", params={"date": ORDER_DATE.isoformat()})
     assert snapshot.status_code == 200, snapshot.text
     assert {s["id"] for s in snapshot.json()["sales"]} == {env["rec_a"]["order"].id}
 
@@ -358,3 +365,42 @@ def test_admin_and_other_departments_are_not_scoped(env, api, db):
     client = api(warehouse_user)
     assert {env["rec_a"]["order"].id, env["rec_b"]["order"].id} <= _ids(client.get("/api/orders"))
     assert {env["rec_a"]["note"].id, env["rec_b"]["note"].id} <= _ids(client.get("/api/delivery-notes"))
+
+
+# ---------------------------------------------------------------------
+# Sales Home (/api/sales/home): scoped counts, next actions, manager table
+# ---------------------------------------------------------------------
+
+
+def test_sales_home_is_scoped_for_a_salesman_and_department_wide_for_the_manager(env, api):
+    a_home = api(env["a"]).get("/api/sales/home")
+    assert a_home.status_code == 200, a_home.text
+    body = a_home.json()
+    assert body["scope"] == "own"
+    assert body["salesmen"] == []  # a salesman never sees the workload table
+    assert body["counts"]["customers"] == 1
+    assert body["counts"]["active_orders"] == 1
+    assert body["counts"]["open_quotations"] == 1
+    assert body["counts"]["open_feasibility"] == 1
+    # A's next actions mention A's records only.
+    links = {item["link"] for item in body["attention"]}
+    assert f"/feasibilities/{env['rec_a']['feasibility'].id}" in links  # exception decision needed
+    assert f"/feasibilities/{env['rec_b']['feasibility'].id}" not in links
+    assert all(item["customer_name"] == "Customer A Ltd" for item in body["attention"])
+
+    m_home = api(env["manager"]).get("/api/sales/home").json()
+    assert m_home["scope"] == "all"
+    assert m_home["counts"]["customers"] >= 2
+    rows = {row["user_id"]: row for row in m_home["salesmen"]}
+    assert rows[env["a"].id]["customers"] == 1 and rows[env["a"].id]["active_orders"] == 1
+    assert rows[env["b"].id]["customers"] == 1 and rows[env["b"].id]["active_orders"] == 1
+    assert rows[env["a"].id]["attention"] >= 1
+    assert env["manager"].id not in rows  # the manager isn't a row in their own workload table
+
+
+def test_sales_home_workload_follows_a_reassignment(env, api):
+    api(env["manager"]).post(f"/api/customers/{env['cust_a'].id}/assign", json={"assigned_to": env["b"].id})
+    rows = {row["user_id"]: row for row in api(env["manager"]).get("/api/sales/home").json()["salesmen"]}
+    assert rows[env["a"].id]["customers"] == 0 and rows[env["a"].id]["active_orders"] == 0
+    assert rows[env["b"].id]["customers"] == 2 and rows[env["b"].id]["active_orders"] == 2
+    assert api(env["a"]).get("/api/sales/home").json()["counts"]["customers"] == 0
