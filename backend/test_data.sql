@@ -21,11 +21,15 @@
 -- or collided with. Tables this file doesn't reference are left alone.
 
 -- Login as any of these once loaded (all use the same password):
---   demo_admin       / Demo@12345   (role: admin)
---   demo_manager     / Demo@12345   (role: manager)
---   demo_sales       / Demo@12345   (role: staff, department: sales)
---   demo_procurement / Demo@12345   (role: staff, department: procurement)
---   demo_warehouse   / Demo@12345   (role: staff, department: warehouse)
+--   demo_admin        / Demo@12345   (role: admin)
+--   demo_manager       / Demo@12345   (role: manager)
+--   demo_sales         / Demo@12345   (role: staff, department: sales)
+--   demo_procurement   / Demo@12345   (role: staff, department: procurement)
+--   demo_warehouse     / Demo@12345   (role: staff, department: warehouse)
+--   demo_sales_manager / Demo@12345   (role: department_head, department: sales -- the Sales Manager)
+--   demo_salesman1     / Demo@12345   (role: team_member, department: sales -- owns Gulf Fabrication Co. + Kuwait Steel Traders)
+--   demo_salesman2     / Demo@12345   (role: team_member, department: sales -- owns Al Salem Contracting)
+--   demo_finance       / Demo@12345   (role: team_member, department: finance -- payments/invoices)
 -- Change these passwords once you're done testing.
 
 SET FOREIGN_KEY_CHECKS = 0;
@@ -35,6 +39,7 @@ SET NAMES utf8mb4;
 -- keeping it FK-safe means this also works if checks are ever left on).
 -- Safe to re-run: everything below is truncated before insert, same as
 -- running this against a genuinely fresh database.
+TRUNCATE TABLE invoices;
 TRUNCATE TABLE quotation_details;
 TRUNCATE TABLE quotations;
 TRUNCATE TABLE order_details;
@@ -59,6 +64,7 @@ TRUNCATE TABLE suppliers;
 TRUNCATE TABLE customers;
 TRUNCATE TABLE refresh_tokens;
 TRUNCATE TABLE audit_log;
+TRUNCATE TABLE department_permissions;
 TRUNCATE TABLE users;
 TRUNCATE TABLE settings;
 
@@ -73,10 +79,68 @@ INSERT INTO users (id, username, email, password_hash, full_name, phone, avatar_
 INSERT INTO users (id, username, email, password_hash, full_name, phone, avatar_filename, department_id, signature_filename, role, is_active, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (4, 'demo_procurement', 'demo.procurement@jdk-test.local', '$2b$12$sMuhFv0neMvZ9E6RWUVMMOh9uitgB/fysAlNAEJFasp7S9a.DAxnG', 'Demo Procurement Lead', NULL, NULL, (SELECT id FROM departments WHERE code = 'procurement'), NULL, 'staff', 1, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
 INSERT INTO users (id, username, email, password_hash, full_name, phone, avatar_filename, department_id, signature_filename, role, is_active, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (5, 'demo_warehouse', 'demo.warehouse@jdk-test.local', '$2b$12$sMuhFv0neMvZ9E6RWUVMMOh9uitgB/fysAlNAEJFasp7S9a.DAxnG', 'Demo Warehouse Lead', NULL, NULL, (SELECT id FROM departments WHERE code = 'warehouse'), NULL, 'staff', 1, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
 
--- customers (3 rows)
-INSERT INTO customers (id, code, name, contact_person, email, phone, billing_address, shipping_address, city, country, credit_limit, payment_terms_days, status, notes, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (1, 'CUST-001', 'Gulf Fabrication Co.', NULL, 'ap@gulf-fab-test.local', '+965-2222-0001', NULL, NULL, NULL, NULL, 50000, 30, 'active', NULL, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
-INSERT INTO customers (id, code, name, contact_person, email, phone, billing_address, shipping_address, city, country, credit_limit, payment_terms_days, status, notes, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (2, 'CUST-002', 'Kuwait Steel Traders', NULL, 'accounts@kw-steel-test.local', '+965-2222-0002', NULL, NULL, NULL, NULL, 15000, 30, 'active', NULL, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
-INSERT INTO customers (id, code, name, contact_person, email, phone, billing_address, shipping_address, city, country, credit_limit, payment_terms_days, status, notes, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (3, 'CUST-003', 'Al Salem Contracting', NULL, 'finance@alsalem-test.local', '+965-2222-0003', NULL, NULL, NULL, NULL, 8000, 30, 'active', NULL, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
+-- Sales Manager + two salesmen + a Finance user (4 rows) -- added to
+-- exercise sales_scope.py's customer-ownership scoping, the manager
+-- reassignment (incl. to self/admin) work, and the Sales -> Finance
+-- Invoice handoff. Current role values (department_head/team_member),
+-- not the legacy manager/staff the 5 rows above still use.
+INSERT INTO users (id, username, email, password_hash, full_name, phone, avatar_filename, department_id, signature_filename, role, is_active, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (6, 'demo_sales_manager', 'demo.sales.manager@jdk-test.local', '$2b$12$sMuhFv0neMvZ9E6RWUVMMOh9uitgB/fysAlNAEJFasp7S9a.DAxnG', 'Demo Sales Manager', NULL, NULL, (SELECT id FROM departments WHERE code = 'sales'), NULL, 'department_head', 1, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
+INSERT INTO users (id, username, email, password_hash, full_name, phone, avatar_filename, department_id, signature_filename, role, is_active, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (7, 'demo_salesman1', 'demo.salesman1@jdk-test.local', '$2b$12$sMuhFv0neMvZ9E6RWUVMMOh9uitgB/fysAlNAEJFasp7S9a.DAxnG', 'Demo Salesman One', NULL, NULL, (SELECT id FROM departments WHERE code = 'sales'), NULL, 'team_member', 1, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
+INSERT INTO users (id, username, email, password_hash, full_name, phone, avatar_filename, department_id, signature_filename, role, is_active, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (8, 'demo_salesman2', 'demo.salesman2@jdk-test.local', '$2b$12$sMuhFv0neMvZ9E6RWUVMMOh9uitgB/fysAlNAEJFasp7S9a.DAxnG', 'Demo Salesman Two', NULL, NULL, (SELECT id FROM departments WHERE code = 'sales'), NULL, 'team_member', 1, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
+INSERT INTO users (id, username, email, password_hash, full_name, phone, avatar_filename, department_id, signature_filename, role, is_active, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (9, 'demo_finance', 'demo.finance@jdk-test.local', '$2b$12$sMuhFv0neMvZ9E6RWUVMMOh9uitgB/fysAlNAEJFasp7S9a.DAxnG', 'Demo Finance Clerk', NULL, NULL, (SELECT id FROM departments WHERE code = 'finance'), NULL, 'team_member', 1, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
+
+-- department_permissions -- ungoverned by default (see
+-- app/core/permissions.py's module docstring: no row means 'none'), so
+-- every non-admin demo user above needs an explicit grant to do
+-- anything at all. 'payments' (Finance's own guard for
+-- acknowledge/override/followup and, as of the Invoice handoff,
+-- generate-link/void) deliberately stays off Sales -- that's the whole
+-- point of the handoff.
+INSERT INTO department_permissions (department_id, page_key, access_level) VALUES
+    ((SELECT id FROM departments WHERE code = 'sales'), 'dashboard', 'write'),
+    ((SELECT id FROM departments WHERE code = 'sales'), 'customers', 'write'),
+    ((SELECT id FROM departments WHERE code = 'sales'), 'deals', 'write'),
+    ((SELECT id FROM departments WHERE code = 'sales'), 'feasibilities', 'write'),
+    ((SELECT id FROM departments WHERE code = 'sales'), 'quotations', 'write'),
+    ((SELECT id FROM departments WHERE code = 'sales'), 'orders', 'write'),
+    ((SELECT id FROM departments WHERE code = 'sales'), 'products', 'read'),
+    ((SELECT id FROM departments WHERE code = 'sales'), 'delivery_notes', 'read'),
+    ((SELECT id FROM departments WHERE code = 'procurement'), 'dashboard', 'write'),
+    ((SELECT id FROM departments WHERE code = 'procurement'), 'suppliers', 'write'),
+    ((SELECT id FROM departments WHERE code = 'procurement'), 'raw_materials', 'write'),
+    ((SELECT id FROM departments WHERE code = 'procurement'), 'purchase_orders', 'write'),
+    ((SELECT id FROM departments WHERE code = 'procurement'), 'supplier_returns', 'write'),
+    ((SELECT id FROM departments WHERE code = 'procurement'), 'products', 'read'),
+    ((SELECT id FROM departments WHERE code = 'procurement'), 'inventory', 'read'),
+    ((SELECT id FROM departments WHERE code = 'procurement'), 'mrp', 'read'),
+    ((SELECT id FROM departments WHERE code = 'warehouse'), 'dashboard', 'write'),
+    ((SELECT id FROM departments WHERE code = 'warehouse'), 'inventory', 'write'),
+    ((SELECT id FROM departments WHERE code = 'warehouse'), 'delivery_notes', 'write'),
+    ((SELECT id FROM departments WHERE code = 'warehouse'), 'machines', 'write'),
+    ((SELECT id FROM departments WHERE code = 'warehouse'), 'orders', 'read'),
+    ((SELECT id FROM departments WHERE code = 'warehouse'), 'production', 'read'),
+    ((SELECT id FROM departments WHERE code = 'finance'), 'dashboard', 'write'),
+    ((SELECT id FROM departments WHERE code = 'finance'), 'payments', 'write'),
+    ((SELECT id FROM departments WHERE code = 'finance'), 'orders', 'read'),
+    ((SELECT id FROM departments WHERE code = 'finance'), 'customers', 'read');
+
+-- customers (3 rows). customer_number is a later-added NOT NULL column
+-- (migrations/2026-09-15_add_customer_number_and_auto_supplier_code.sql)
+-- not present when this file's original dump was generated -- reusing
+-- `code` for it here. id_verified=1 so a demo salesman can confirm a
+-- *new* order against these credit customers without also having to
+-- walk through the id-verification flow first (see order_service.
+-- get_confirm_block_reasons).
+INSERT INTO customers (id, customer_number, code, name, contact_person, email, phone, billing_address, shipping_address, city, country, credit_limit, payment_terms_days, status, id_verified, notes, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (1, 'CUST-001', 'CUST-001', 'Gulf Fabrication Co.', NULL, 'ap@gulf-fab-test.local', '+965-2222-0001', NULL, NULL, NULL, NULL, 50000, 30, 'active', 1, NULL, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
+INSERT INTO customers (id, customer_number, code, name, contact_person, email, phone, billing_address, shipping_address, city, country, credit_limit, payment_terms_days, status, id_verified, notes, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (2, 'CUST-002', 'CUST-002', 'Kuwait Steel Traders', NULL, 'accounts@kw-steel-test.local', '+965-2222-0002', NULL, NULL, NULL, NULL, 15000, 30, 'active', 1, NULL, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
+INSERT INTO customers (id, customer_number, code, name, contact_person, email, phone, billing_address, shipping_address, city, country, credit_limit, payment_terms_days, status, id_verified, notes, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (3, 'CUST-003', 'CUST-003', 'Al Salem Contracting', NULL, 'finance@alsalem-test.local', '+965-2222-0003', NULL, NULL, NULL, NULL, 8000, 30, 'active', 1, NULL, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
+
+-- Ownership for sales_scope.py's salesman scoping (see users 7/8 above):
+-- Salesman One owns Gulf Fabrication + Kuwait Steel, Salesman Two owns
+-- Al Salem -- so both demo_salesman1 and demo_salesman2 have something
+-- to see, and demo_sales_manager sees all three regardless.
+UPDATE customers SET assigned_to = 7 WHERE id IN (1, 2);
+UPDATE customers SET assigned_to = 8 WHERE id = 3;
 
 -- suppliers (2 rows)
 INSERT INTO suppliers (id, code, name, contact_person, email, phone, address, city, country, payment_terms_days, mode_of_supply, rating, status, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (1, 'SUP-001', 'Gulf Metal Supply', NULL, 'sales@gulf-metal-test.local', '+965-2333-0001', NULL, NULL, NULL, 30, NULL, NULL, 'active', '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
@@ -102,11 +166,13 @@ INSERT INTO bom_lines (id, parent_product_id, component_type, component_id, quan
 INSERT INTO bom_lines (id, parent_product_id, component_type, component_id, quantity, unit, scrap_percent, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (2, 2, 'raw_material', 2, 3.5, 'kg', 3, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
 INSERT INTO bom_lines (id, parent_product_id, component_type, component_id, quantity, unit, scrap_percent, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (3, 2, 'raw_material', 3, 0.2, 'litre', 2, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
 
--- supplier_materials (4 rows)
-INSERT INTO supplier_materials (id, supplier_id, raw_material_id, max_supply_quantity, lead_time_days, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (1, 1, 1, 5000, 7, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
-INSERT INTO supplier_materials (id, supplier_id, raw_material_id, max_supply_quantity, lead_time_days, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (2, 1, 2, 1000, 10, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
-INSERT INTO supplier_materials (id, supplier_id, raw_material_id, max_supply_quantity, lead_time_days, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (3, 2, 2, 800, 5, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
-INSERT INTO supplier_materials (id, supplier_id, raw_material_id, max_supply_quantity, lead_time_days, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (4, 2, 3, 2000, 4, '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
+-- supplier_materials (4 rows). onboarded_at is a later-added NOT NULL
+-- column (see app/models/supplier_material.py) not present in the
+-- original generated dump.
+INSERT INTO supplier_materials (id, supplier_id, raw_material_id, max_supply_quantity, lead_time_days, onboarded_at, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (1, 1, 1, 5000, 7, '2026-08-01', '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
+INSERT INTO supplier_materials (id, supplier_id, raw_material_id, max_supply_quantity, lead_time_days, onboarded_at, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (2, 1, 2, 1000, 10, '2026-08-01', '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
+INSERT INTO supplier_materials (id, supplier_id, raw_material_id, max_supply_quantity, lead_time_days, onboarded_at, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (3, 2, 2, 800, 5, '2026-08-01', '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
+INSERT INTO supplier_materials (id, supplier_id, raw_material_id, max_supply_quantity, lead_time_days, onboarded_at, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (4, 2, 3, 2000, 4, '2026-08-01', '2026-08-01 10:46:45', NULL, '2026-08-01 10:46:45', NULL, NULL);
 
 -- deals (8 rows)
 INSERT INTO deals (id, deal_number, customer_id, furthest_stage, status, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (1, 'DEAL-00001', 1, 'delivery', 'open', '2026-08-01 10:46:45', 3, '2026-08-01 10:46:46', 5, NULL);
@@ -169,7 +235,11 @@ INSERT INTO delivery_note_lines (id, delivery_note_id, product_id, quantity_deli
 -- quotations (7 rows)
 INSERT INTO quotations (id, quotation_number, customer_id, deal_id, quotation_date, valid_until, status, subtotal_amount, discount_percent, discount_amount, total_amount, notes, converted_order_id, feasibility_id, auto_created, close_reason, approved_at, approved_by, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (1, 'QTN-00001', 1, 1, '2026-08-01', NULL, 'converted', 4500, 0, 0, 4500, 'Auto-created from feasibility check FSB-00001.', 1, 1, 1, NULL, NULL, NULL, '2026-08-01 10:46:46', 3, '2026-08-01 10:46:46', 3, NULL);
 INSERT INTO quotations (id, quotation_number, customer_id, deal_id, quotation_date, valid_until, status, subtotal_amount, discount_percent, discount_amount, total_amount, notes, converted_order_id, feasibility_id, auto_created, close_reason, approved_at, approved_by, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (2, 'QTN-00002', 2, 2, '2026-08-01', NULL, 'converted', 900, 0, 0, 900, 'Auto-created from feasibility check FSB-00002.', 2, 2, 1, NULL, NULL, NULL, '2026-08-01 10:46:46', 3, '2026-08-01 10:46:46', 3, NULL);
-INSERT INTO quotations (id, quotation_number, customer_id, deal_id, quotation_date, valid_until, status, subtotal_amount, discount_percent, discount_amount, total_amount, notes, converted_order_id, feasibility_id, auto_created, close_reason, approved_at, approved_by, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (3, 'QTN-00003', 1, 3, '2026-08-01', NULL, 'sent', 1200, 0, 0, 1200, 'Auto-created from feasibility check FSB-00003.', NULL, 3, 1, NULL, NULL, NULL, '2026-08-01 10:46:46', 2, '2026-08-01 10:46:47', 3, NULL);
+-- Was status 'sent' in the original generated dump -- that status was
+-- removed (migrations/2026-10-09_remove_quotation_sent_status.sql
+-- folds it into 'draft', the same open/awaiting-answer state); using
+-- 'sent' here now fails to load at all against the current schema.
+INSERT INTO quotations (id, quotation_number, customer_id, deal_id, quotation_date, valid_until, status, subtotal_amount, discount_percent, discount_amount, total_amount, notes, converted_order_id, feasibility_id, auto_created, close_reason, approved_at, approved_by, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (3, 'QTN-00003', 1, 3, '2026-08-01', NULL, 'draft', 1200, 0, 0, 1200, 'Auto-created from feasibility check FSB-00003.', NULL, 3, 1, NULL, NULL, NULL, '2026-08-01 10:46:46', 2, '2026-08-01 10:46:47', 3, NULL);
 INSERT INTO quotations (id, quotation_number, customer_id, deal_id, quotation_date, valid_until, status, subtotal_amount, discount_percent, discount_amount, total_amount, notes, converted_order_id, feasibility_id, auto_created, close_reason, approved_at, approved_by, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (4, 'QTN-00004', 2, 5, '2026-08-01', NULL, 'converted', 2250, 0, 0, 2250, 'Auto-created from feasibility check FSB-00005.', 3, 5, 1, NULL, NULL, NULL, '2026-08-01 10:46:47', 3, '2026-08-01 10:46:47', 3, NULL);
 INSERT INTO quotations (id, quotation_number, customer_id, deal_id, quotation_date, valid_until, status, subtotal_amount, discount_percent, discount_amount, total_amount, notes, converted_order_id, feasibility_id, auto_created, close_reason, approved_at, approved_by, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (5, 'QTN-00005', 3, 6, '2026-08-01', NULL, 'draft', 900, 0, 0, 900, 'Auto-created from feasibility check FSB-00006.', NULL, 6, 1, NULL, NULL, NULL, '2026-08-01 10:46:47', 3, '2026-08-01 10:46:47', NULL, NULL);
 INSERT INTO quotations (id, quotation_number, customer_id, deal_id, quotation_date, valid_until, status, subtotal_amount, discount_percent, discount_amount, total_amount, notes, converted_order_id, feasibility_id, auto_created, close_reason, approved_at, approved_by, created_at, created_by, updated_at, updated_by, deleted_at) VALUES (6, 'QTN-00006', 1, 7, '2026-08-01', '2026-08-31', 'draft', 1800, 20, 360, 1440, 'Bulk order -- customer negotiated a steep discount, needs sign-off.', NULL, NULL, 0, NULL, NULL, NULL, '2026-08-01 10:46:47', 3, '2026-08-01 10:46:47', NULL, NULL);
