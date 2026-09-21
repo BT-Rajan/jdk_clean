@@ -109,11 +109,12 @@ export function AccessControlTab() {
       <GlassCard className="p-8">
         <h2 className="font-display text-lg font-medium text-white">Access control</h2>
         <p className="mt-1 text-sm text-white/50">
-          Governs what a <span className="text-white/70">staff</span> user can see and do, based on their
-          department. Admins and managers always have full access to everything; viewers always have read-only
-          access to everything -- neither is affected by this grid. A page with neither box checked is completely
-          hidden from that department until you grant it here. Departments themselves are managed under{' '}
-          <span className="text-white/70">Master Data -&gt; People &amp; Organization -&gt; Departments</span>.
+          Governs what a <span className="text-white/70">Department Head</span> or{' '}
+          <span className="text-white/70">Team Member</span> can see and do, based on their department. Admins
+          always have full access to everything; viewers always have read-only access to everything -- neither is
+          affected by this grid. A page with neither box checked is completely hidden from that department until
+          you grant it here. Departments themselves are managed under{' '}
+          <span className="text-white/70">Admin -&gt; Departments</span>.
         </p>
 
         <div className="mt-6 overflow-x-auto">
