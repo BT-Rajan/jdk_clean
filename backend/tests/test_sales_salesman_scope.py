@@ -411,12 +411,16 @@ def test_sales_home_workload_follows_a_reassignment(env, api):
 # ---------------------------------------------------------------------
 
 
-def test_manager_can_list_assignable_salesmen_but_a_salesman_cannot(env, api):
+def test_manager_can_list_assignable_users_but_a_salesman_cannot(env, api):
+    """/api/sales/salesmen is who a customer may be assigned to -- every
+    Sales salesman, plus the Sales Manager(s) themselves and every admin
+    (see sales_home_service.list_assignable_customer_owners and
+    test_sales_manager_assignment.py for the assignment behavior this
+    list backs)."""
     response = api(env["manager"]).get("/api/sales/salesmen")
     assert response.status_code == 200, response.text
     ids = {row["id"] for row in response.json()}
-    assert {env["a"].id, env["b"].id} <= ids
-    assert env["manager"].id not in ids and env["admin"].id not in ids  # salesmen only
+    assert {env["a"].id, env["b"].id, env["manager"].id, env["admin"].id} <= ids
 
     assert api(env["a"]).get("/api/sales/salesmen").status_code == 403
 

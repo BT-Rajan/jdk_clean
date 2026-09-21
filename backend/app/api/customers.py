@@ -195,8 +195,14 @@ def assign_customer(
     assignment, and when are all already captured there."""
     customer_crud.read_one(db, customer_id, user=user)  # 404s if out of scope
     if payload.assigned_to is not None:
-        from app.services.sales_home_service import list_salesmen
+        from app.services.sales_home_service import list_assignable_customer_owners
 
-        if payload.assigned_to not in {s.id for s in list_salesmen(db)}:
-            raise ValidationAppError("Customers can only be assigned to an active salesman of the Sales department.")
+        # A salesman, the Sales Manager themselves, or an admin -- see
+        # list_assignable_customer_owners's own docstring. Not just
+        # "another salesman": the manager needs to be able to pull a
+        # customer back onto their own plate or hand it to an admin too.
+        if payload.assigned_to not in {u.id for u in list_assignable_customer_owners(db)}:
+            raise ValidationAppError(
+                "Customers can only be assigned to an active Sales salesman, the Sales Manager, or an admin."
+            )
     return customer_crud.update(db, customer_id, {"assigned_to": payload.assigned_to}, user_id=user.id)

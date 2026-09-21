@@ -3,8 +3,13 @@ import type { Order, OrderFulfillmentLine, OrderPayload, SettableOrderStatus, Sp
 import type { OrderJourney } from '@/types/orderJourney'
 import { apiClient } from './client'
 
-export interface OrderListParams extends ListQueryParams {
+export interface OrderListParams extends Omit<ListQueryParams, 'assigned_to'> {
   customer_id?: number
+  /** The Sales Manager's "this salesman's orders" filter -- a user id
+   * (unlike ListQueryParams.assigned_to, which also accepts the "null"
+   * sentinel for Customers' own unassigned filter -- Order has no
+   * matching "unassigned" case). */
+  assigned_to?: number
 }
 
 export async function listOrders(params: OrderListParams): Promise<PagedResponse<Order>> {

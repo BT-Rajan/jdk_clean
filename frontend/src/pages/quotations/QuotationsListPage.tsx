@@ -1,5 +1,5 @@
-import { useCallback, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useCallback, useEffect, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { AppLayout } from '@/components/layout/AppLayout'
 import {
   Alert,
@@ -13,9 +13,11 @@ import {
   StatusBadge,
 } from '@/components/ui'
 import { listQuotations, recordQuotationFollowup } from '@/api/quotations'
+import { listAssignableSalesmen } from '@/api/salesHome'
+import type { AssignableSalesman } from '@/api/salesHome'
 import { usePagedResource } from '@/hooks/usePagedResource'
 import { useAuth } from '@/hooks/useAuth'
-import { canWriteDepartment } from '@/lib/roles'
+import { canWriteDepartment, isAdmin } from '@/lib/roles'
 import { formatDate } from '@/lib/dateFormat'
 import { formatCurrency } from '@/lib/currency'
 import { getApiErrorMessage } from '@/lib/apiError'
@@ -39,9 +41,21 @@ export function QuotationsListPage() {
   const navigate = useNavigate()
   const [followupBusyId, setFollowupBusyId] = useState<number | null>(null)
   const [followupError, setFollowupError] = useState<string | null>(null)
+  // Salesman filter -- Sales Manager / admin only (a salesman only ever
+  // sees their own quotations already, via sales_scope). The Sales
+  // Home workload table links here with ?assigned_to=<id>.
+  const canSeeSalesmen = isAdmin(user?.role) || user?.role === 'department_head'
+  const [searchParams] = useSearchParams()
+  const [salesmanFilter, setSalesmanFilter] = useState(canSeeSalesmen ? (searchParams.get('assigned_to') ?? '') : '')
+  const [salesmen, setSalesmen] = useState<AssignableSalesman[]>([])
+  useEffect(() => {
+    if (!canSeeSalesmen) return
+    listAssignableSalesmen().then(setSalesmen).catch(() => setSalesmen([]))
+  }, [canSeeSalesmen])
   const fetcher = useCallback(
-    (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) => listQuotations(params),
-    [],
+    (params: { page: number; page_size?: number; search?: string; status?: string; sort?: string }) =>
+      listQuotations({ ...params, assigned_to: salesmanFilter ? Number(salesmanFilter) : undefined }),
+    [salesmanFilter],
   )
   const {
     items,
@@ -89,6 +103,18 @@ export function QuotationsListPage() {
               <option value="converted">Converted</option>
             </SelectField>
           </div>
+          {canSeeSalesmen && (
+            <div className="w-48">
+              <SelectField label="Salesman" value={salesmanFilter} onChange={(e) => setSalesmanFilter(e.target.value)}>
+                <option value="">All salesmen</option>
+                {salesmen.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.full_name}
+                  </option>
+                ))}
+              </SelectField>
+            </div>
+          )}
           {canWriteDepartment(user, 'sales') && <Button onClick={() => navigate('/quotations/new')}>New quotation</Button>}
         </div>
       </div>

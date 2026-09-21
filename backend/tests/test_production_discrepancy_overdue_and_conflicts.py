@@ -29,6 +29,35 @@ def _next_working_day(db):
     return settings_service.next_working_day(TODAY, settings_service.get_working_days(db))
 
 
+def _next_working_day_on_or_after(db, from_date):
+    """Like settings_service.next_working_day, but `from_date` itself is
+    eligible (that function always excludes its own `today` argument) --
+    used here to nudge an arbitrary offset date onto a real working day
+    without changing which day it lands near."""
+    working_days = settings_service.get_working_days(db)
+    d = from_date
+    while d.weekday() not in working_days:
+        d += timedelta(days=1)
+    return d
+
+
+def _previous_working_day_on_or_before(db, from_date):
+    """The machine-capacity check only ever finds free hours on a working
+    day (see capacity_service.capacity_available_in_window) -- a batch
+    scheduled on a non-working day always reads as 0h available, whatever
+    the machine's own capacity. A fixed `TODAY - timedelta(days=N)` offset
+    (the factory's default working week excludes Friday/Saturday -- see
+    settings_service.DEFAULTS['factory_working_days']) can land on one of
+    those depending on what day the suite happens to run, which is exactly
+    what made this file flaky. This walks back to a real working day
+    instead."""
+    working_days = settings_service.get_working_days(db)
+    d = from_date
+    while d.weekday() not in working_days:
+        d -= timedelta(days=1)
+    return d
+
+
 def _ready_batch(db, planned_quantity=10, scheduled_start=None, scheduled_end=None, machine=None):
     machine = machine or make_machine(db, capacity_hours_per_day=800)
     material = make_raw_material(db)
@@ -121,14 +150,22 @@ def test_days_overdue_none_when_not_past_scheduled_end(db):
 
 
 def test_days_overdue_positive_once_past_scheduled_end(db):
-    batch, _machine = _ready_batch(db, scheduled_start=TODAY - timedelta(days=3), scheduled_end=TODAY - timedelta(days=3))
-    assert production_service.get_days_overdue(batch, today=TODAY) == 3
+    # `today` is a free parameter to get_days_overdue below, so the
+    # window only needs to land on a real working day -- the "3 days
+    # overdue" being tested is constructed relative to it, not to the
+    # real wall-clock TODAY (see _previous_working_day_on_or_before).
+    scheduled_end = _previous_working_day_on_or_before(db, TODAY - timedelta(days=3))
+    reference_today = scheduled_end + timedelta(days=3)
+    batch, _machine = _ready_batch(db, scheduled_start=scheduled_end, scheduled_end=scheduled_end)
+    assert production_service.get_days_overdue(batch, today=reference_today) == 3
 
 
 def test_days_overdue_none_once_completed(db):
-    batch, _machine = _ready_batch(db, scheduled_start=TODAY - timedelta(days=3), scheduled_end=TODAY - timedelta(days=3))
+    scheduled_end = _previous_working_day_on_or_before(db, TODAY - timedelta(days=3))
+    reference_today = scheduled_end + timedelta(days=3)
+    batch, _machine = _ready_batch(db, scheduled_start=scheduled_end, scheduled_end=scheduled_end)
     completed = production_service.change_status(db, batch.id, "completed", produced_quantity=10)
-    assert production_service.get_days_overdue(completed, today=TODAY) is None
+    assert production_service.get_days_overdue(completed, today=reference_today) is None
 
 
 def test_list_batches_overdue_filter(db):
@@ -210,10 +247,12 @@ def test_updating_batch_into_a_conflicting_machine_window_is_rejected(db):
 def test_no_machine_conflict_for_non_overlapping_windows(db):
     machine = make_machine(db, capacity_hours_per_day=800)
     start = _next_working_day(db)
+    # +10 days is far enough to never overlap batch_a's own window either
+    # way, but could itself land on a non-working day -- nudge it onto a
+    # real one so _ready_batch's own readiness check doesn't see 0h free.
+    other_start = _next_working_day_on_or_after(db, start + timedelta(days=10))
     batch_a, _ = _ready_batch(db, scheduled_start=start, scheduled_end=start, machine=machine)
-    batch_b, _ = _ready_batch(
-        db, scheduled_start=start + timedelta(days=10), scheduled_end=start + timedelta(days=10), machine=machine
-    )
+    batch_b, _ = _ready_batch(db, scheduled_start=other_start, scheduled_end=other_start, machine=machine)
 
     assert production_service.get_machine_conflicts(db, batch_a) == []
     assert production_service.get_machine_conflicts(db, batch_b) == []

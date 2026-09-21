@@ -51,6 +51,11 @@ def list_orders(
     status: str | None = Query(None),
     customer_id: int | None = Query(None),
     admin_review_required: bool | None = Query(None),
+    # The Sales Manager's "this salesman's orders" filter -- see
+    # sales_home_service.list_assignable_customer_owners. Harmless for a
+    # scoped salesman to pass: scope_by_customer already restricts them
+    # to their own customers regardless of what this asks for.
+    assigned_to: int | None = Query(None),
     sort: str | None = Query(None),
     db: Session = Depends(get_db),
     user: User = Depends(read_guard),
@@ -63,6 +68,7 @@ def list_orders(
         status=status,
         customer_id=customer_id,
         admin_review_required=admin_review_required,
+        assigned_to=assigned_to,
         sort=sort,
         user=user,
     )
